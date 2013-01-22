@@ -124,12 +124,12 @@ int maxerr, nrerr, reverse, dotrunc, abwrerr, sparse, nosparse;
 int verbose, quiet, interact, force;
 unsigned char* buf;
 char *lname, *iname, *oname, *bbname = NULL;
-off_t ipos, opos, xfer, lxfer, sxfer, fxfer, maxxfer, init_opos, ilen, estxfer;
+off_t ipos, opos, xfer, lxfer, sxfer, fxfer, maxxfer, init_opos, ilen, olen, estxfer;
 
 int ides, odes, identical, pres, falloc;
 int o_dir_in, o_dir_out, dosplice;
 char i_chr, o_chr;
-char i_repeat, i_rep_init;
+char i_repeat, i_rep_init, o_noextend;
 int i_rep_zero;
 
 FILE *logfd;
@@ -353,6 +353,48 @@ void input_length()
 			estxfer/1024, iname);
 	preparegraph();
 }
+
+int output_length()
+{
+	struct stat stbuf;
+	if (o_chr)
+		return -1;
+	if (fstat(odes, &stbuf))
+		return -1;
+	if (S_ISLNK(stbuf.st_mode))
+		return -1;
+	if (S_ISCHR(stbuf.st_mode)) {
+		o_chr = 1;
+		return -1;
+	}
+	if (S_ISBLK(stbuf.st_mode)) {
+		/* Do magic to figure size of block dev */
+		off_t p = lseek(odes, 0, SEEK_CUR);
+		if (p == -1)
+			return -1;
+		olen = lseek(odes, 0, SEEK_END) + 1;
+		lseek(odes, p, SEEK_SET);
+	} else {
+		off_t diff;
+		olen = stbuf.st_size;
+		if (!olen)
+			return -1;
+		diff = olen - stbuf.st_blocks*512;
+		if (diff >= 4096 && (float)diff/ilen > 0.05 && !quiet)
+		       fplog(stderr, "dd_rescue: (info) %s is sparse (%i%%) %s\n", oname, (int)(100.0*diff/olen), (sparse? "": ", consider -a"));
+	}
+	if (!olen)
+		return -1;
+	if (!reverse) {
+		maxxfer = olen - opos;
+		fplog(stderr, "dd_rescue: (info) limit max xfer to %LikB\n",
+			maxxfer/1024);
+	} else if (opos > olen)
+		opos = olen;
+	return 0;
+}
+
+
 
 static void sparse_output_warn()
 {
@@ -1010,10 +1052,12 @@ void printhelp()
 	fprintf(stderr, "         -B hardbs  fallback block size in case of errs (def=%i, %i for -d),\n", BUF_HARDBLOCKSIZE, DIO_HARDBLOCKSIZE);
 	fprintf(stderr, "         -e maxerr  exit after maxerr errors (def=0=infinite),\n");
 	fprintf(stderr, "         -m maxxfer maximum amount of data to be transfered (def=0=inf),\n");
+	fprintf(stderr,	"	  -M         avoid extending outfile,\n");
 	fprintf(stderr, "         -y syncfrq frequency of fsync calls on outfile (def=512*softbs),\n");
 	fprintf(stderr, "         -l logfile name of a file to log errors and summary to (def=\"\"),\n");
 	fprintf(stderr, "         -o bbfile  name of a file to log bad blocks numbers (def=\"\"),\n");
 	fprintf(stderr, "         -r         reverse direction copy (def=forward),\n");
+	fprintf(stderr, "         -R         repeatedly write same block (default if infile is /dev/zero),\n");
 	fprintf(stderr, "         -t         truncate output file (def=no),\n");
 #ifdef O_DIRECT
 	fprintf(stderr, "         -d/D       use O_DIRECT for input/output (def=no),\n");
@@ -1092,14 +1136,16 @@ int main(int argc, char* argv[])
 	i_chr = 0; o_chr = 0;
 
 	i_repeat = 0; i_rep_init = 0; i_rep_zero = 0;
+	o_noextend = 0;
 
 #ifdef _SC_PAGESIZE
 	pagesize = sysconf(_SC_PAGESIZE);
 #endif
 
-	while ((c = getopt(argc, argv, ":rtfihqvVwaAdDkpPb:B:m:e:s:S:l:o:y:")) != -1) {
+	while ((c = getopt(argc, argv, ":rtfihqvVwaAdDkMRpPb:B:m:e:s:S:l:o:y:")) != -1) {
 		switch (c) {
 			case 'r': reverse = 1; break;
+			case 'R': i_repeat = 1; break;
 			case 't': dotrunc = O_TRUNC; break;
 			case 'i': interact = 1; force = 0; break;
 			case 'f': interact = 0; force = 1; break;
@@ -1122,6 +1168,7 @@ int main(int argc, char* argv[])
 			case 'b': softbs = (int)readint(optarg); break;
 			case 'B': hardbs = (int)readint(optarg); break;
 			case 'm': maxxfer = readint(optarg); break;
+			case 'M': o_noextend = 1; break;
 			case 'e': maxerr = (int)readint(optarg); break;
 			case 'y': syncsz = readint(optarg); break;
 			case 's': ipos = readint(optarg); break;
@@ -1371,6 +1418,13 @@ int main(int argc, char* argv[])
 		reverse = 0;
 	}
 
+	
+	if (o_noextend) {
+		if (output_length() == -1) {
+			fplog(stderr, "dd_rescue: (fatal): asked not to extend output file but can't determine size\n");
+			cleanup(); exit(19);
+		}
+	}
 	input_length();
 #if 0
 	fplog(stderr, "dd_rescue: (info): copy %Li bytes from file %s (%Li) to %s\n",
