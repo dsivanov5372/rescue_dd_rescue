@@ -21,22 +21,13 @@
 #include <unistd.h>
 #include <time.h>
 
-#define INTERNAL_SEED 0
-#define EXTERNAL_SEED 1
-
 typedef unsigned char u8;
-
-static int frandom_bufsize = 256;
-static int frandom_chunklimit = 0; /* =0 means unlimited */
 
 
 struct frandom_state
 {
 	u8 S[256]; /* The state array */
-	u8 i;        
-	u8 j;
-
-	char *buf;
+	u8 i, j;        
 };
 
 static struct frandom_state *erandom_state;
@@ -50,7 +41,14 @@ static inline void swap_byte(u8 *a, u8 *b)
 	*b = swapByte;
 }
 
-static void get_random_bytes(char *buf, size_t len)
+static inline void swap_byte_notmp(u8 *a, u8 *b)
+{
+	*a -= *b;
+	*b += *a;
+	*a = *b - *a;
+}
+
+static void get_random_bytes(u8 *buf, size_t len)
 {
 	int i;
 	int *lbuf = (int*)buf;
@@ -63,22 +61,22 @@ static void init_rand_state(struct frandom_state *state, int seedval)
 {
 	unsigned int i, j, k;
 	u8 *S;
-	char *seed = state->buf;
+	u8 seedbuf[256];
 
 	if (!seedval)
 		seedval = time(0) - getpid();
 	srand(seedval);
-	get_random_bytes(seed, 256);
+	get_random_bytes(seedbuf, 256);
 
 	S = state->S;
-	for (i=0; i<256; i++)
-		*S++=i;
+	for (i=0; i<256; ++i)
+		*S++ = i;
 
-	j=0;
+	j = 0;
 	S = state->S;
 
-	for (i=0; i<256; i++) {
-		j = (j + S[i] + *seed++) & 0xff;
+	for (i=0; i<256; ++i) {
+		j = (j + S[i] + seedbuf[i]) & 0xff;
 		swap_byte(&S[i], &S[j]);
 	}
 
@@ -86,8 +84,8 @@ static void init_rand_state(struct frandom_state *state, int seedval)
 	   generated. So we do it:
 	*/
 
-	i=0; j=0;
-	for (k=0; k<256; k++) {
+	i = 0; j = 0;
+	for (k=0; k<256; ++k) {
 		i = (i + 1) & 0xff;
 		j = (j + S[i]) & 0xff;
 		swap_byte(&S[i], &S[j]);
@@ -97,22 +95,15 @@ static void init_rand_state(struct frandom_state *state, int seedval)
 	state->j = j;
 }
 
-int frandom_init(int seed)
+int frandom_init(int seedval)
 {
-  
 	struct frandom_state *state;
 
 	state = malloc(sizeof(struct frandom_state));
 	if (!state)
 		return -ENOMEM;
 
-	state->buf = malloc(frandom_bufsize);
-	if (!state->buf) {
-		free(state);
-		return -ENOMEM;
-	}
-
-	init_rand_state(state, seed);
+	init_rand_state(state, seedval);
 	erandom_state = state;
 
 	return 0; /* Success */
@@ -120,65 +111,35 @@ int frandom_init(int seed)
 
 int frandom_release()
 {
-
 	struct frandom_state *state = erandom_state;
 	if (!state)
 		return -ENOMEM;
 
-	free(state->buf);
 	free(state);
-  
 	return 0;
 }
 
 ssize_t get_frandom_bytes(char *buf, size_t count)
 {
 	struct frandom_state *state = erandom_state;
-	ssize_t ret;
-	int dobytes, k;
-	char *localbuf;
-
-	unsigned int i;
-	unsigned int j;
 	u8 *S;
+	unsigned int i, j;
+	const ssize_t ret = count;
 
 	if (!state)
 		frandom_init(0);		
-  
-	if ((frandom_chunklimit > 0) && (count > frandom_chunklimit))
-		count = frandom_chunklimit;
-
-	ret = count; /* It's either everything or an error... */
   
 	i = state->i;
 	j = state->j;
 	S = state->S;  
 
-	while (count) {
-		if (count > frandom_bufsize)
-			dobytes = frandom_bufsize;
-		else
-			dobytes = count;
-
-		localbuf = state->buf;
-
-		for (k=0; k<dobytes; k++) {
-			i = (i + 1) & 0xff;
-			j = (j + S[i]) & 0xff;
-			swap_byte(&S[i], &S[j]);
-			*localbuf++ = S[(S[i] + S[j]) & 0xff];
-		}
- 
-		if (memcpy(buf, state->buf, dobytes) == NULL) {
-			ret = -EFAULT;
-			goto out;
-		}
-
-		buf += dobytes;
-		count -= dobytes;
+	while (count--) {
+		i = (i + 1) & 0xff;
+		j = (j + S[i]) & 0xff;
+		swap_byte(&S[i], &S[j]);
+		*buf++ = S[(S[i] + S[j]) & 0xff];
 	}
 
- out:
 	state->i = i;     
 	state->j = j;
 
