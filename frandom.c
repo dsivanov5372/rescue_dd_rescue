@@ -169,7 +169,7 @@ ssize_t get_frandom_bytes(char *buf, size_t count)
 			*localbuf++ = S[(S[i] + S[j]) & 0xff];
 		}
  
-		if (memcpy(buf, state->buf, dobytes)) {
+		if (memcpy(buf, state->buf, dobytes) == NULL) {
 			ret = -EFAULT;
 			goto out;
 		}

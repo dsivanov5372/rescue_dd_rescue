@@ -118,7 +118,12 @@ _syscall6(long, splice, int, fdin, loff_t*, off_in, int, fdout, loff_t*, off_out
 # endif
 #endif
 
+/* frandom.c */
+ssize_t get_frandom_bytes(char* bf, size_t count);
+int frandom_init(int seed);
+int frandom_release();
 
+/* Global vars and options */
 unsigned int softbs, hardbs, syncfreq;
 int maxerr, nrerr, reverse, dotrunc, abwrerr, sparse, nosparse;
 int verbose, quiet, interact, force;
@@ -131,6 +136,7 @@ int o_dir_in, o_dir_out, dosplice;
 char i_chr, o_chr;
 char i_repeat, i_rep_init, o_noextend;
 int i_rep_zero;
+char prng_libc, prng_frnd;
 
 FILE *logfd;
 struct timeval starttime, lasttime, currenttime;
@@ -245,7 +251,7 @@ static int openfile(const char* const fname, const int flags)
 static void check_seekable(const int id, const int od)
 {
 	errno = 0;
-	if (lseek(id, (off_t)0, SEEK_SET) != 0) {
+	if (!i_chr && lseek(id, (off_t)0, SEEK_SET) != 0) {
 		fplog(stderr, "dd_rescue: (warning): input  file is not seekable!\n");
 		fplog(stderr, "dd_rescue: (warning): %s\n", strerror(errno));
 		i_chr = 1;
@@ -381,13 +387,13 @@ int output_length()
 			return -1;
 		diff = olen - stbuf.st_blocks*512;
 		if (diff >= 4096 && (float)diff/ilen > 0.05 && !quiet)
-		       fplog(stderr, "dd_rescue: (info) %s is sparse (%i%%) %s\n", oname, (int)(100.0*diff/olen), (sparse? "": ", consider -a"));
+		       fplog(stderr, "dd_rescue: (info): %s is sparse (%i%%) %s\n", oname, (int)(100.0*diff/olen), (sparse? "": ", consider -a"));
 	}
 	if (!olen)
 		return -1;
 	if (!reverse) {
 		maxxfer = olen - opos;
-		fplog(stderr, "dd_rescue: (info) limit max xfer to %LikB\n",
+		fplog(stderr, "dd_rescue: (info): limit max xfer to %LikB\n",
 			maxxfer/1024);
 	} else if (opos > olen)
 		opos = olen;
@@ -631,7 +637,23 @@ int cleanup()
 		copytimes(iname, oname);
 	if (oname)
 		free(oname);
+	if (prng_frnd)
+		frandom_release();
 	return errs;
+}
+
+ssize_t fill_rand(void *bf, size_t ln)
+{
+	int i;
+	int* buf = (int*)bf;
+	for (i = 0; i < ln/sizeof(int); ++i)
+		buf[i] = rand();
+	return ln;
+}
+
+ssize_t fill_frand(void *bf, size_t ln)
+{
+	return get_frandom_bytes(bf, ln);
 }
 
 /** is the block zero ? */
@@ -656,6 +678,10 @@ inline ssize_t mypread(int fd, void* bf, size_t sz, off_t off)
 		else
 			i_rep_init = 1;
 	}
+	if (prng_libc)
+		return fill_rand(bf, sz);
+	if (prng_frnd)
+		return fill_frand(bf, sz);
 	if (i_chr) 
 		return read(fd, bf, sz);
 	else
@@ -1078,6 +1104,8 @@ void printhelp()
 	fprintf(stderr, "         -v         verbose operation,\n");
 	fprintf(stderr, "         -V         display version and exit,\n");
 	fprintf(stderr, "         -h         display this help and exit.\n");
+	fprintf(stderr, "Instead of infile, -z SEED or -Z SEED may be specified, taking the the PRNG\n");
+	fprintf(stderr, " from libc or frandom as data source. SEED = 0 means time(0)-getpid().\n");
 	fprintf(stderr, "Sizes may be given in units b(=512), k(=1024), M(=1024^2) or G(1024^3) bytes\n");
 	fprintf(stderr, "This program is useful to rescue data in case of I/O errors, because\n");
 	fprintf(stderr, " it does not necessarily abort or truncate the output.\n");
@@ -1121,6 +1149,7 @@ int main(int argc, char* argv[])
 #ifdef O_DIRECT
 	void *mp;
 #endif
+	int prng_seed = 0;
 
   	/* defaults */
 	softbs = 0; hardbs = 0; /* marker for defaults */
@@ -1137,12 +1166,13 @@ int main(int argc, char* argv[])
 
 	i_repeat = 0; i_rep_init = 0; i_rep_zero = 0;
 	o_noextend = 0;
+	prng_libc = 0; prng_frnd = 0;
 
 #ifdef _SC_PAGESIZE
 	pagesize = sysconf(_SC_PAGESIZE);
 #endif
 
-	while ((c = getopt(argc, argv, ":rtfihqvVwaAdDkMRpPb:B:m:e:s:S:l:o:y:")) != -1) {
+	while ((c = getopt(argc, argv, ":rtfihqvVwaAdDkMRpPb:B:m:e:s:S:l:o:y:z:Z:")) != -1) {
 		switch (c) {
 			case 'r': reverse = 1; break;
 			case 'R': i_repeat = 1; break;
@@ -1175,6 +1205,8 @@ int main(int argc, char* argv[])
 			case 'S': opos = readint(optarg); break;
 			case 'l': lname = optarg; break;
 			case 'o': bbname = optarg; break;
+			case 'z': prng_seed = readint(optarg); prng_libc = 1; break;
+			case 'Z': prng_seed = readint(optarg); prng_frnd = 1; break;
 			case ':': fplog (stderr, "dd_rescue: (fatal): option %c requires an argument!\n", optopt); 
 				printhelp();
 				exit(11); break;
@@ -1187,8 +1219,14 @@ int main(int argc, char* argv[])
 	}
   
 	init_opos = opos;
-	if (optind < argc) 
+	
+	if (prng_libc)
+		iname = "PRNG_libc";
+	else if (prng_frnd)
+		iname = "PRNG_frnd";
+	else if (optind < argc)
 		iname = argv[optind++];
+
 	if (optind < argc) 
 		oname = strdup(argv[optind++]);
 	if (optind < argc) {
@@ -1305,12 +1343,21 @@ int main(int argc, char* argv[])
 		cleanup(); exit(19);
 	}
 	/* Open input and output files */
-	ides = openfile(iname, O_RDONLY | o_dir_in);
-	if (ides < 0) {
-		fplog(stderr, "dd_rescue: (fatal): %s: %s\n", iname, strerror(errno));
-		cleanup(); exit(22);
+	if (prng_libc || prng_frnd) {
+		if (!prng_seed)
+			prng_seed = time(0) - getpid();
+		i_chr = 1; /* ides = 0; */
+		if (prng_libc)
+			srand(prng_seed);
+		else
+			frandom_init(prng_seed);
+	} else {
+		ides = openfile(iname, O_RDONLY | o_dir_in);
+		if (ides < 0) {
+			fplog(stderr, "dd_rescue: (fatal): %s: %s\n", iname, strerror(errno));
+			cleanup(); exit(22);
+		}
 	}
-
 	/* Overwrite? */
 	/* Special case '-': stdout */
 	if (strcmp(oname, "-"))
