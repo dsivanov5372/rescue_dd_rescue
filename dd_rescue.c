@@ -129,6 +129,8 @@ off_t ipos, opos, xfer, lxfer, sxfer, fxfer, maxxfer, init_opos, ilen, estxfer;
 int ides, odes, identical, pres, falloc;
 int o_dir_in, o_dir_out, dosplice;
 char i_chr, o_chr;
+char i_repeat, i_rep_init;
+int i_rep_zero;
 
 FILE *logfd;
 struct timeval starttime, lasttime, currenttime;
@@ -593,15 +595,25 @@ int cleanup()
 /** is the block zero ? */
 static int blockiszero(const unsigned char* blk, const int ln)
 {
+	if (i_repeat && i_rep_zero)
+		return i_rep_zero;
 	unsigned long* ptr = (unsigned long*)blk;
 	while ((ptr-(unsigned long*)blk) < ln/sizeof(unsigned long))
 		if (*(ptr++)) 
-			return (sizeof(unsigned long)*(ptr-(unsigned long*)blk));
+			return i_rep_zero = (sizeof(unsigned long)*(ptr-(unsigned long*)blk));
+	if (i_repeat)
+		i_rep_zero = ln;
 	return ln;
 }
 
 inline ssize_t mypread(int fd, void* bf, size_t sz, off_t off)
 {
+	if (i_repeat) {
+		if (i_rep_init)
+			return sz;
+		else
+			i_rep_init = 1;
+	}
 	if (i_chr) 
 		return read(fd, bf, sz);
 	else
@@ -1079,6 +1091,8 @@ int main(int argc, char* argv[])
 	ides = -1; odes = -1; logfd = 0; nrerr = 0; buf = 0;
 	i_chr = 0; o_chr = 0;
 
+	i_repeat = 0; i_rep_init = 0; i_rep_zero = 0;
+
 #ifdef _SC_PAGESIZE
 	pagesize = sysconf(_SC_PAGESIZE);
 #endif
@@ -1208,6 +1222,9 @@ int main(int argc, char* argv[])
 #endif
 
 	memset(buf, 0, softbs);
+	/* Optimization: Don't reread from /dev/zero over and over ... */
+	if (!strcmp(iname, "/dev/zero"))
+		i_repeat = 1;
 
 	/* Special case '.': same as iname (w/o path) */
 	if (!strcmp(oname, ".")) {

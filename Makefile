@@ -2,13 +2,14 @@
 # (c) garloff@suse.de, 99/10/09, GNU GPL
 # $Id$
 
-VERSION = 1.28
+VERSION = 1.29
 
 DESTDIR = 
 
 CC = gcc
 RPM_OPT_FLAGS = -Os -Wall -g
 CFLAGS = $(RPM_OPT_FLAGS) $(EXTRA_CFLAGS)
+CFLAGS_OPT = $(CFLAGS) -O3 -funroll-loops -ftree-vectorize
 INSTALL = install
 INSTALLFLAGS = -s
 prefix = $(DESTDIR)/usr
@@ -17,7 +18,7 @@ INSTALLDIR = $(DESTDIR)/bin
 #MYDIR = dd_rescue-$(VERSION)
 MYDIR = dd_rescue
 TARGETS = dd_rescue
-OBJECTS = dd_rescue.o
+OBJECTS = dd_rescue.o frandom.o
 DOCDIR = $(prefix)/share/doc/packages
 INSTASROOT = -o root -g root
 LIBDIR = /usr/lib
@@ -33,17 +34,20 @@ endif
 
 default: $(TARGETS)
 
-libfalloc: dd_rescue.c
-	$(CC) $(CFLAGS) -DHAVE_FALLOCATE=1 -DHAVE_LIBFALLOCATE=1 $(DEFINES) $< -o dd_rescue -lfallocate
+frandom.o: frandom.c
+	$(CC) $(CFLAGS_OPT) -c $<
 
-libfalloc-static: dd_rescue.c
-	$(CC) $(CFLAGS) -DHAVE_FALLOCATE=1 -DHAVE_LIBFALLOCATE=1 $(DEFINES) $< -o dd_rescue $(LIBDIR)/libfallocate.a
+libfalloc: dd_rescue.c frandom.o
+	$(CC) $(CFLAGS) -DHAVE_FALLOCATE=1 -DHAVE_LIBFALLOCATE=1 $(DEFINES) $^ -o dd_rescue -lfallocate
 
-falloc: dd_rescue.c
-	$(CC) $(CFLAGS) -DHAVE_FALLOCATE=1 $(DEFINES) $< -o dd_rescue
+libfalloc-static: dd_rescue.c frandom.o
+	$(CC) $(CFLAGS) -DHAVE_FALLOCATE=1 -DHAVE_LIBFALLOCATE=1 $(DEFINES) $^ -o dd_rescue $(LIBDIR)/libfallocate.a
 
-dd_rescue: dd_rescue.c
-	$(CC) $(CFLAGS) $(DEFINES) $< $(OUT)
+falloc: dd_rescue.c frandom.o
+	$(CC) $(CFLAGS) -DHAVE_FALLOCATE=1 $(DEFINES) $^ -o dd_rescue
+
+dd_rescue: dd_rescue.c frandom.o
+	$(CC) $(CFLAGS) $(DEFINES) $^ $(OUT)
 
 strip: dd_rescue
 	strip -S $<
