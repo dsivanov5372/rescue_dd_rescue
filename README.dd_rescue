@@ -128,6 +128,13 @@ dd_rescue has a few nifty features:
 * When overwriting a file with itself (but with some offsets, i.e.
   moving data inside a file), dd_rescue figures out whether it
   needs to do this backwards (-r) to not end up destroying the data.
+* Since 1.29, it has a repeat mode (-R) that allows duplicating one
+  block (of softbs size) many times. This is turned on automatically
+  when infile is /dev/zero (performance optimization).
+* Since 1.29, you can overwrite files with random numbers from userspace
+  PRNG (libc or included frandom) which is 10x faster than urandom.
+  With (new) option -M, the output file won't be extended.
+
 
 
 Copyright
