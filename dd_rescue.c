@@ -38,7 +38,6 @@
  * - Optional colors
  * - Use dlopen to open libfallocate rather than linking to it ...
  * - Display more infos on errors by collecting info from syslog
- * - Option to use frandom as virtual input device (Thomas)
  * - Option to avoid overwriting identical output to be nice to SSD (Thomas)
  */
 
@@ -836,6 +835,22 @@ int copyfile_hardbs(const off_t max)
 			/* Some errnos are fatal */
 			exitfatalerr(eno);
 			/* Non fatal error */
+			/* This is the case, where we were not called from copyfile_softbs and thus have to assume harmless EOF */
+			if (softbs <= hardbs && eno == 0) {
+				int ret;
+				/* But first: write available data and advance (optimization) */
+				if ((ret = partialwrite(rd)) < 0)
+					return ret;
+				else
+					errs += ret;
+				xfer += rd; sxfer += rd;
+				if (reverse) { 
+					ipos -= rd; opos -= rd; 
+				} else { 
+					ipos += rd; opos += rd; 
+				}
+				continue;
+			}					
 			/* Real error on small blocks: Don't retry */
 			nrerr++; 
 			fplog(stderr, "dd_rescue: (warning): read %s (%.1fk): %s!\n", 
@@ -1308,7 +1323,7 @@ int main(int argc, char* argv[])
 
 	memset(buf, 0, softbs);
 	/* Optimization: Don't reread from /dev/zero over and over ... */
-	if (!strcmp(iname, "/dev/zero"))
+	if (!dosplice && !strcmp(iname, "/dev/zero"))
 		i_repeat = 1;
 
 	/* Special case '.': same as iname (w/o path) */
@@ -1347,6 +1362,7 @@ int main(int argc, char* argv[])
 		if (!prng_seed)
 			prng_seed = time(0) - getpid();
 		i_chr = 1; /* ides = 0; */
+		dosplice = 0; sparse = 0;
 		if (prng_libc)
 			srand(prng_seed);
 		else
@@ -1461,7 +1477,7 @@ int main(int argc, char* argv[])
 		
 	if (dosplice) {
 		if (!quiet)
-			fplog(stderr, "dd_rescue: (info): splice copy, ignoring -a, -r, -y\n");
+			fplog(stderr, "dd_rescue: (info): splice copy, ignoring -a, -r, -y, -R\n");
 		reverse = 0;
 	}
 

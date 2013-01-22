@@ -45,13 +45,13 @@ static inline void swap_byte_notmp(u8 *a, u8 *b)
 {
 	*a -= *b;
 	*b += *a;
-	*a = *b - *a;
+	*a  = *b - *a;
 }
 
 static void get_random_bytes(u8 *buf, size_t len)
 {
-	int i;
 	int *lbuf = (int*)buf;
+	int i;
 	for (i = 0; i < len/sizeof(int); ++i)
 		lbuf[i] = rand();
 }
