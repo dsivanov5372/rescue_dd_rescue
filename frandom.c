@@ -112,7 +112,7 @@ int frandom_init(int seed)
 		return -ENOMEM;
 	}
 
-	init_rand_state(state, EXTERNAL_SEED);
+	init_rand_state(state, seed);
 	erandom_state = state;
 
 	return 0; /* Success */
