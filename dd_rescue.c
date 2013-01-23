@@ -119,7 +119,8 @@ _syscall6(long, splice, int, fdin, loff_t*, off_in, int, fdout, loff_t*, off_out
 
 /* frandom.c */
 ssize_t get_frandom_bytes(char* bf, size_t count);
-int frandom_init(int seed);
+int frandom_init(unsigned char *sbf);
+int frandom_init_lrand(int seed);
 int frandom_release();
 
 /* fwd decls */
@@ -132,16 +133,18 @@ char reverse, abwrerr, sparse, nosparse;
 char verbose, quiet, interact, force;
 unsigned char *buf, *buf2;
 char *lname, *iname, *oname, *bbname = NULL;
-off_t ipos, opos, xfer, lxfer, sxfer, fxfer, maxxfer, init_opos, ilen, olen, estxfer;
+off_t ipos, opos, xfer, lxfer, sxfer, fxfer, maxxfer, axfer, init_opos, ilen, olen, estxfer;
 
 int ides, odes;
 int o_dir_in, o_dir_out;
 char identical, preserve, falloc, dosplice;
 char i_chr, o_chr;
 char i_repeat, i_rep_init;
-int i_rep_zero;
-char prng_libc, prng_frnd;
+int i_rep_zero, prng_seed;
 char noextend, avoidwrite;
+char prng_libc, prng_frnd;
+char* prng_sfile;
+
 
 FILE *logfd;
 struct timeval starttime, lasttime, currenttime;
@@ -238,7 +241,7 @@ static int openfile(const char* const fname, const int flags)
 {
 	int fdes;
 	if (!strcmp(fname, "-")) {
-		if (flags & O_WRONLY) 
+		if (flags & O_WRONLY || flags & O_RDWR)
 			fdes = 1;  /* stdout */
 		else 
 			fdes = 0;  /* stdin */
@@ -347,7 +350,7 @@ void input_length()
 			return;
 		diff = ilen - stbuf.st_blocks*512;
 		if (diff >= 4096 && (float)diff/ilen > 0.05 && !quiet)
-		       fplog(stderr, "dd_rescue: (info) %s is sparse (%i%%) %s\n", iname, (int)(100.0*diff/ilen), (sparse? "": ", consider -a"));
+		       fplog(stderr, "dd_rescue: (info): %s is sparse (%i%%) %s\n", iname, (int)(100.0*diff/ilen), (sparse? "": ", consider -a"));
 	}
 	if (!ilen)
 		return;
@@ -360,7 +363,7 @@ void input_length()
 	if (estxfer < 0)
 		estxfer = 0;
 	if (!quiet)
-		fplog(stderr, "dd_rescue: (info) expect to copy %LikB from %s\n",
+		fplog(stderr, "dd_rescue: (info): expect to copy %LikB from %s\n",
 			estxfer/1024, iname);
 	preparegraph();
 }
@@ -406,11 +409,12 @@ int output_length()
 		}			
 		if (!maxxfer || maxxfer > newmax) {
 			maxxfer = newmax;
-			fplog(stderr, "dd_rescue: (info): limit max xfer to %LikB\n",
-				maxxfer/1024);
+			if (!quiet)
+				fplog(stderr, "dd_rescue: (info): limit max xfer to %LikB\n",
+					maxxfer/1024);
 		}
 	} else if (opos > olen) {
-		fplog(stderr, "dd_rescue: (warn): change output position %LikB to endpos %Likb due to -M\n",
+		fplog(stderr, "dd_rescue: (warning): change output position %LikB to endpos %Likb due to -M\n",
 			opos/1024, olen/1024);
 		opos = olen;
 	}
@@ -558,8 +562,10 @@ void printreport()
 	FILE *report = (!quiet || nrerr)? stderr: 0;
 	if (report) {
 		fplog(report, "dd_rescue: (info): Summary for %s -> %s:\n", iname, oname);
-		fprintf(stderr, "%s%s%s%s", down, down, down, down);
+		fprintf(report, "%s%s%s%s", down, down, down, down);
 		printstatus(report, logfd, 0, 1);
+		if (avoidwrite) 
+			fplog(report, "dd_rescue: (info): Avoided %LikB of writes\n", axfer/1024);
 	}
 }
 
@@ -609,6 +615,13 @@ static int mayexpandfile()
 		return 0;		
 }
 
+#define ZFREE(ptr)	\
+	do {		\
+	  if(ptr)	\
+	    free(ptr);	\
+	  ptr = 0;	\
+	} while(0)
+
 int cleanup()
 {
 	int rc, errs = 0;
@@ -647,16 +660,12 @@ int cleanup()
 	}
 	if (logfd)
 		fclose(logfd);
-	if (buf2)
-		free(buf2);
-	if (buf)
-		free(buf);
-	if (graph)
-		free(graph);
+	ZFREE(buf2);
+	ZFREE(buf);
+	ZFREE(graph);
 	if (preserve)
 		copytimes(iname, oname);
-	if (oname)
-		free(oname);
+	ZFREE(oname);
 	if (prng_frnd)
 		frandom_release();
 	return errs;
@@ -719,8 +728,10 @@ inline ssize_t mypwrite(int fd, void* bf, size_t sz, off_t off)
 				return pwrite(fd, bf, sz, off);
 			if (memcmp(bf, buf2, ln))
 				return pwrite(fd, bf, sz, off);
-			else
+			else {
+				axfer += ln;
 				return ln;
+			}
 		} else
 			return pwrite(fd, bf, sz, off);
 	}
@@ -1093,6 +1104,49 @@ static off_t readint(const char* const ptr)
 	return (off_t)res;
 }
 
+void init_random()
+{
+	if (prng_sfile) {
+		int ln, fd = -1;
+		unsigned char sbf[256];
+		if (!strcmp(prng_sfile, "-")) {
+			fd = 0;
+			if (verbose)
+				fplog(stderr, "dd_rescue: (info): reading random seed from <stdin> ...\n");
+		} else
+			fd = open(prng_sfile, O_RDONLY);
+		if (fd == -1) {
+			fplog(stderr, "dd_rescue: (fatal): Could not open \"%s\" for random seed!\n", prng_sfile);
+			/* ERROR */
+			cleanup(); exit(28);
+		}
+		if (prng_libc) {
+			unsigned int* sval = (unsigned int*)sbf;
+			ln = read(fd, sbf, 4);
+			if (ln != 4) {
+				fplog(stderr, "dd_rescue: (fatal): failed to read 4 bytes from \"%s\"!\n", prng_sfile);
+				cleanup(); exit(29);
+			}
+			srand(*sval);
+		} else {
+			ln = read(fd, sbf, 256);
+			if (ln != 256) {
+				fplog(stderr, "dd_rescue: (fatal): failed to read 256 bytes from \"%s\"!\n", prng_sfile);
+				cleanup(); exit(29);
+			}
+			frandom_init(sbf);
+		}
+	} else {
+		if (!prng_seed)
+			prng_seed = time(0) - getpid();
+		if (prng_libc)
+			srand(prng_seed);
+		else
+			frandom_init_lrand(prng_seed);
+	}
+}
+
+
 void printversion()
 {
 	fprintf(stderr, "\ndd_rescue Version %s, garloff@suse.de, GNU GPL\n", VERSION);
@@ -1173,6 +1227,10 @@ void printinfo(FILE* const file)
 	      YESNO(reverse), YESNO(dotrunc), YESNO(interact));
 	fplog(file, "dd_rescue: (info): abort on Write errs: %s, spArse write: %s\n",
 	      YESNO(abwrerr), (sparse? "yes": (nosparse? "never": "if err")));
+	fplog(file, "dd_rescue: (info): preserve: %s, splice: %s, avoidWrite: %s\n",
+	      YESNO(preserve), YESNO(dosplice), YESNO(avoidwrite));
+	fplog(file, "dd_rescue: (info): fallocate: %s, Repeat: %s, O_DIRECT: %s/%s\n",
+	      YESNO(falloc), YESNO(i_repeat), YESNO(o_dir_in), YESNO(o_dir_out));
 	/*
 	fplog(file, "dd_rescue: (info): verbose: %s, quiet: %s\n", 
 	      YESNO(verbose), YESNO(quiet));
@@ -1209,12 +1267,23 @@ unsigned char* zalloc_buf(unsigned int bs)
 	memset(ptr, 0, bs);
 	return ptr;
 }
+
+/** Heuristic: strings starting with - or a digit are numbers, ev.thing else a filename. A pure "-" is a filename. */
+int is_filename(char* arg)
+{
+	if (!arg)
+		return 0;
+	if (!strcmp(arg, "-"))
+		return 1;
+	if (isdigit(arg[0]) || arg[0] == '-')
+		return 0;
+	return 1;
+}
 	
 int main(int argc, char* argv[])
 {
 	int c;
 	off_t syncsz = -1;
-	int prng_seed = 0;
 
   	/* defaults */
 	softbs = 0; hardbs = 0; /* marker for defaults */
@@ -1225,13 +1294,14 @@ int main(int argc, char* argv[])
 	dosplice = 0; falloc = 0;
 
 	/* Initialization */
-	sxfer = 0; fxfer = 0; lxfer = 0; xfer = 0;
+	sxfer = 0; fxfer = 0; lxfer = 0; xfer = 0; axfer = 0;
 	ides = -1; odes = -1; logfd = 0; nrerr = 0; buf = 0; buf2 = 0;
 	i_chr = 0; o_chr = 0;
 
 	i_repeat = 0; i_rep_init = 0; i_rep_zero = 0;
-	prng_libc = 0; prng_frnd = 0;
 	noextend = 0; avoidwrite = 0;
+	prng_libc = 0; prng_frnd = 0;
+	prng_seed = 0; prng_sfile = 0;
 
 #ifdef _SC_PAGESIZE
 	pagesize = sysconf(_SC_PAGESIZE);
@@ -1271,8 +1341,8 @@ int main(int argc, char* argv[])
 			case 'S': opos = readint(optarg); break;
 			case 'l': lname = optarg; break;
 			case 'o': bbname = optarg; break;
-			case 'z': prng_seed = readint(optarg); prng_libc = 1; break;
-			case 'Z': prng_seed = readint(optarg); prng_frnd = 1; break;
+			case 'z': prng_libc = 1; if (is_filename(optarg)) prng_sfile = optarg; else prng_seed = readint(optarg); break;
+			case 'Z': prng_frnd = 1; if (is_filename(optarg)) prng_sfile = optarg; else prng_seed = readint(optarg); break;
 			case ':': fplog (stderr, "dd_rescue: (fatal): option %c requires an argument!\n", optopt); 
 				printhelp();
 				exit(11); break;
@@ -1324,7 +1394,8 @@ int main(int argc, char* argv[])
 		else
 			hardbs = BUF_HARDBLOCKSIZE;
 	}
-	fplog(stderr, "dd_rescue: (info): Using softbs=%lu, hardbs=%lu\n", softbs, hardbs);
+	if (!quiet)
+		fplog(stderr, "dd_rescue: (info): Using softbs=%lu, hardbs=%lu\n", softbs, hardbs);
 
 	/* sanity checks */
 #ifdef O_DIRECT
@@ -1359,14 +1430,17 @@ int main(int argc, char* argv[])
 		ipos = 0;
 
 	if (dosplice && avoidwrite) {
-		fplog(stderr, "dd_rescue: (info): disable write avoidance (-W) for splice copy\n");
+		fplog(stderr, "dd_rescue: (warning): disable write avoidance (-W) for splice copy\n");
 		avoidwrite = 0;
 	}
 	buf = zalloc_buf(softbs);
 
 	/* Optimization: Don't reread from /dev/zero over and over ... */
-	if (!dosplice && !strcmp(iname, "/dev/zero"))
+	if (!dosplice && !strcmp(iname, "/dev/zero")) {
+		if (!i_repeat && verbose)
+			fplog(stderr, "dd_rescue: (info): turning on repeat (-R) for /dev/zero\n");
 		i_repeat = 1;
+	}
 
 	/* Special case '.': same as iname (w/o path) */
 	if (!strcmp(oname, ".")) {
@@ -1397,22 +1471,17 @@ int main(int argc, char* argv[])
 	identical = check_identical(iname, oname);
 	if (identical && dotrunc && !force) {
 		fplog(stderr, "dd_rescue: (fatal): infile and outfile are identical and trunc turned on!\n");
-		cleanup(); exit(19);
+		cleanup(); exit(14);
 	}
 	/* Open input and output files */
 	if (prng_libc || prng_frnd) {
-		if (!prng_seed)
-			prng_seed = time(0) - getpid();
+		init_random();
 		i_chr = 1; /* ides = 0; */
 		dosplice = 0; sparse = 0;
-		if (prng_libc)
-			srand(prng_seed);
-		else
-			frandom_init(prng_seed);
 	} else {
 		ides = openfile(iname, O_RDONLY | o_dir_in);
 		if (ides < 0) {
-			fplog(stderr, "dd_rescue: (fatal): %s: %s\n", iname, strerror(errno));
+			fplog(stderr, "dd_rescue: (fatal): could not open %s: %s\n", iname, strerror(errno));
 			cleanup(); exit(22);
 		}
 	}
@@ -1421,14 +1490,14 @@ int main(int argc, char* argv[])
 	if (strcmp(oname, "-"))
 		odes = open(oname, O_WRONLY | o_dir_out, 0640);
 	else {
-		odes = 0;
+		odes = 1;
 		o_chr = 1;
 	}
 
-	if (odes > 0) 
+	if (odes > 1) 
 		close(odes);
 
-	if (odes > 0 && interact) {
+	if (odes > 1 && interact) {
 		int a;
 		do {
 			fprintf(stderr, "dd_rescue: (question): %s existing %s [y/n] ?", 
@@ -1441,11 +1510,11 @@ int main(int argc, char* argv[])
 		}
 	}
 	if (o_chr && avoidwrite) {
-		fplog(stderr, "dd_rescue: (info): Disabling -Write avoidance b/c ofile is not seekable\n");
+		fplog(stderr, "dd_rescue: (warning): Disabling -Write avoidance b/c ofile is not seekable\n");
 		avoidwrite = 0;
 	}
 		
-	if (odes != 0) {
+	if (odes != 1) {
 		if (avoidwrite) {
 			buf2 = zalloc_buf(softbs);
 			odes = openfile(oname, O_RDWR | O_CREAT | o_dir_out /*| O_EXCL*/ | dotrunc);
@@ -1466,13 +1535,12 @@ int main(int argc, char* argv[])
 	sparse_output_warn();
 	if (o_chr) {
 		if (!nosparse)
-			fprintf(stderr, "dd_rescue: (warning): Don't use sparse writes for non-seekable output\n");
+			fprintf(stderr, "dd_rescue: (warning): Not using sparse writes for non-seekable output\n");
 		nosparse = 1; sparse = 0; dosplice = 0;
 		if (avoidwrite) {
-			fplog(stderr, "dd_rescue: (info): Disabling -Write avoidance b/c ofile is not seekable\n");
+			fplog(stderr, "dd_rescue: (warning): Disabling -Write avoidance b/c ofile is not seekable\n");
 			avoidwrite = 0;
-			if (buf2)
-				free(buf2);
+			ZFREE(buf2);
 		}
 	}
 
@@ -1538,11 +1606,10 @@ int main(int argc, char* argv[])
 		
 	if (dosplice) {
 		if (!quiet)
-			fplog(stderr, "dd_rescue: (info): splice copy, ignoring -a, -r, -y, -R\n");
+			fplog(stderr, "dd_rescue: (info): splice copy, ignoring -a, -r, -y, -R, -W\n");
 		reverse = 0;
 	}
 
-	
 	if (noextend) {
 		if (output_length() == -1) {
 			fplog(stderr, "dd_rescue: (fatal): asked not to extend output file but can't determine size\n");
@@ -1550,10 +1617,7 @@ int main(int argc, char* argv[])
 		}
 	}
 	input_length();
-#if 0
-	fplog(stderr, "dd_rescue: (info): copy %Li bytes from file %s (%Li) to %s\n",
-		estxfer, iname, ilen, oname);
-#endif
+
 #ifdef HAVE_FALLOCATE
 	if (falloc)
 		do_fallocate();
