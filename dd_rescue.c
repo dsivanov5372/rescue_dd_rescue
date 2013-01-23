@@ -124,18 +124,21 @@ int frandom_release();
 
 /* Global vars and options */
 unsigned int softbs, hardbs, syncfreq;
-int maxerr, nrerr, reverse, dotrunc, abwrerr, sparse, nosparse;
-int verbose, quiet, interact, force;
-unsigned char* buf;
+int maxerr, nrerr, dotrunc;
+char reverse, abwrerr, sparse, nosparse;
+char verbose, quiet, interact, force;
+unsigned char *buf, *buf2;
 char *lname, *iname, *oname, *bbname = NULL;
 off_t ipos, opos, xfer, lxfer, sxfer, fxfer, maxxfer, init_opos, ilen, olen, estxfer;
 
-int ides, odes, identical, pres, falloc;
-int o_dir_in, o_dir_out, dosplice;
+int ides, odes;
+int o_dir_in, o_dir_out;
+char identical, preserve, falloc, dosplice;
 char i_chr, o_chr;
-char i_repeat, i_rep_init, o_noextend;
+char i_repeat, i_rep_init;
 int i_rep_zero;
 char prng_libc, prng_frnd;
+char noextend, avoidwrite;
 
 FILE *logfd;
 struct timeval starttime, lasttime, currenttime;
@@ -628,11 +631,13 @@ int cleanup()
 	}
 	if (logfd)
 		fclose(logfd);
+	if (buf2)
+		free(buf2);
 	if (buf)
 		free(buf);
 	if (graph)
 		free(graph);
-	if (pres)
+	if (preserve)
 		copytimes(iname, oname);
 	if (oname)
 		free(oname);
@@ -1093,12 +1098,12 @@ void printhelp()
 	fprintf(stderr, "         -B hardbs  fallback block size in case of errs (def=%i, %i for -d),\n", BUF_HARDBLOCKSIZE, DIO_HARDBLOCKSIZE);
 	fprintf(stderr, "         -e maxerr  exit after maxerr errors (def=0=infinite),\n");
 	fprintf(stderr, "         -m maxxfer maximum amount of data to be transfered (def=0=inf),\n");
-	fprintf(stderr,	"	  -M         avoid extending outfile,\n");
+	fprintf(stderr,	"         -M         avoid extending outfile,\n");
 	fprintf(stderr, "         -y syncfrq frequency of fsync calls on outfile (def=512*softbs),\n");
 	fprintf(stderr, "         -l logfile name of a file to log errors and summary to (def=\"\"),\n");
 	fprintf(stderr, "         -o bbfile  name of a file to log bad blocks numbers (def=\"\"),\n");
 	fprintf(stderr, "         -r         reverse direction copy (def=forward),\n");
-	fprintf(stderr, "         -R         repeatedly write same block (default if infile is /dev/zero),\n");
+	fprintf(stderr, "         -R         repeatedly write same block (def if infile is /dev/zero),\n");
 	fprintf(stderr, "         -t         truncate output file (def=no),\n");
 #ifdef O_DIRECT
 	fprintf(stderr, "         -d/D       use O_DIRECT for input/output (def=no),\n");
@@ -1110,6 +1115,7 @@ void printhelp()
 	fprintf(stderr, "         -P         use fallocate to preallocate target space\n");
 #endif
 	fprintf(stderr, "         -w         abort on Write errors (def=no),\n");
+	fprintf(stderr, "         -W         read target block and avoid Writes if identical (def=no),\n");
 	fprintf(stderr, "         -a         spArse file writing (def=no),\n");
 	fprintf(stderr, "         -A         Always write blocks, zeroed if err (def=no),\n");
 	fprintf(stderr, "         -i         interactive: ask before overwriting data (def=no),\n");
@@ -1157,37 +1163,55 @@ void breakhandler(int sig)
 	raise(sig);
 }
 
+unsigned char* zalloc_buf(unsigned int bs)
+{
+	unsigned char *ptr;
+#ifdef O_DIRECT
+	void *mp;
+	if (posix_memalign(&mp, pagesize, bs)) {
+		fplog(stderr, "dd_rescue: (fatal): allocation of aligned buffer failed!\n");
+		cleanup(); exit(18);
+	}
+	ptr = mp;
+#else
+	ptr = malloc(bs);
+	if (!ptr) {
+		fplog(stderr, "dd_rescue: (fatal): allocation of buffer failed!\n");
+		cleanup(); exit(18);
+	}
+#endif
+	memset(ptr, 0, bs);
+	return ptr;
+}
+	
 int main(int argc, char* argv[])
 {
 	int c;
 	off_t syncsz = -1;
-#ifdef O_DIRECT
-	void *mp;
-#endif
 	int prng_seed = 0;
 
   	/* defaults */
 	softbs = 0; hardbs = 0; /* marker for defaults */
 	maxerr = 0; ipos = (off_t)-1; opos = (off_t)-1; maxxfer = 0; 
 	reverse = 0; dotrunc = 0; abwrerr = 0; sparse = 0; nosparse = 0;
-	verbose = 0; quiet = 0; interact = 0; force = 0; pres = 0;
+	verbose = 0; quiet = 0; interact = 0; force = 0; preserve = 0;
 	lname = 0; iname = 0; oname = 0; o_dir_in = 0; o_dir_out = 0;
 	dosplice = 0; falloc = 0;
 
 	/* Initialization */
 	sxfer = 0; fxfer = 0; lxfer = 0; xfer = 0;
-	ides = -1; odes = -1; logfd = 0; nrerr = 0; buf = 0;
+	ides = -1; odes = -1; logfd = 0; nrerr = 0; buf = 0; buf2 = 0;
 	i_chr = 0; o_chr = 0;
 
 	i_repeat = 0; i_rep_init = 0; i_rep_zero = 0;
-	o_noextend = 0;
 	prng_libc = 0; prng_frnd = 0;
+	noextend = 0; avoidwrite = 0;
 
 #ifdef _SC_PAGESIZE
 	pagesize = sysconf(_SC_PAGESIZE);
 #endif
 
-	while ((c = getopt(argc, argv, ":rtfihqvVwaAdDkMRpPb:B:m:e:s:S:l:o:y:z:Z:")) != -1) {
+	while ((c = getopt(argc, argv, ":rtfihqvVwWaAdDkMRpPb:B:m:e:s:S:l:o:y:z:Z:")) != -1) {
 		switch (c) {
 			case 'r': reverse = 1; break;
 			case 'R': i_repeat = 1; break;
@@ -1201,11 +1225,12 @@ int main(int argc, char* argv[])
 #ifdef HAVE_SPLICE
 			case 'k': dosplice = 1; break;
 #endif				  
-			case 'p': pres = 1; break;
+			case 'p': preserve = 1; break;
 			case 'P': falloc = 1; break;
 			case 'a': sparse = 1; nosparse = 0; break;
 			case 'A': nosparse = 1; sparse = 0; break;
 			case 'w': abwrerr = 1; break;
+			case 'W': avoidwrite = 1; break;
 			case 'h': printhelp(); exit(0); break;
 			case 'V': printversion(); exit(0); break;
 			case 'v': quiet = 0; verbose = 1; break;
@@ -1213,7 +1238,7 @@ int main(int argc, char* argv[])
 			case 'b': softbs = (int)readint(optarg); break;
 			case 'B': hardbs = (int)readint(optarg); break;
 			case 'm': maxxfer = readint(optarg); break;
-			case 'M': o_noextend = 1; break;
+			case 'M': noextend = 1; break;
 			case 'e': maxerr = (int)readint(optarg); break;
 			case 'y': syncsz = readint(optarg); break;
 			case 's': ipos = readint(optarg); break;
@@ -1307,21 +1332,14 @@ int main(int argc, char* argv[])
 	if (ipos == (off_t)-1) 
 		ipos = 0;
 
-#ifdef O_DIRECT
-	if (posix_memalign(&mp, pagesize, softbs)) {
-		fplog(stderr, "dd_rescue: (fatal): allocation of aligned buffer failed!\n");
-		cleanup(); exit(18);
+	if (dosplice && avoidwrite) {
+		fplog(stderr, "dd_rescue: (info): disable write avoidance (-W) for splice copy\n");
+		avoidwrite = 0;
 	}
-	buf = mp;
-#else
-	buf = malloc(softbs);
-	if (!buf) {
-		fplog(stderr, "dd_rescue: (fatal): allocation of buffer failed!\n");
-		cleanup(); exit(18);
-	}
-#endif
+	buf = zalloc_buf(softbs);
+	if (avoidwrite)
+		buf2 = zalloc_buf(softbs);
 
-	memset(buf, 0, softbs);
 	/* Optimization: Don't reread from /dev/zero over and over ... */
 	if (!dosplice && !strcmp(iname, "/dev/zero"))
 		i_repeat = 1;
@@ -1403,7 +1421,7 @@ int main(int argc, char* argv[])
 		cleanup(); exit(24);
 	}
 
-	if (pres)
+	if (preserve)
 		copyperm(ides, odes);
 			
 	check_seekable(ides, odes);
@@ -1482,7 +1500,7 @@ int main(int argc, char* argv[])
 	}
 
 	
-	if (o_noextend) {
+	if (noextend) {
 		if (output_length() == -1) {
 			fplog(stderr, "dd_rescue: (fatal): asked not to extend output file but can't determine size\n");
 			cleanup(); exit(19);
