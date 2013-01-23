@@ -394,11 +394,14 @@ int output_length()
 	if (!olen)
 		return -1;
 	if (!reverse) {
+		/* FIXME: Only recude maxxfer, don't increase. Test for neagtive */
 		maxxfer = olen - opos;
 		fplog(stderr, "dd_rescue: (info): limit max xfer to %LikB\n",
 			maxxfer/1024);
-	} else if (opos > olen)
+	} else if (opos > olen) {
+		/* TODO: Warn! */
 		opos = olen;
+	}
 	return 0;
 }
 
