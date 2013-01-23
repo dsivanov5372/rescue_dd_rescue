@@ -46,6 +46,9 @@ Why?
 * If you have one spot of bad sectors within the partition, it might be a
   good idea, to approach this spot from both sides. Reverse direction copy
   is helpful.
+  dd_rhelp (included in dd_rescue packages) does automate this approach.
+  The GNU ddrescue tool that is a redesigned dd_rescue and also has 
+  automation for this built-in.
 * The two block sizes are a performance optimization. Large block sizes
   result in superior performance, but in case of errors, you want to try
   to salvage every single sector. So hardbs is best be set to the hardware
@@ -88,16 +91,13 @@ positioning. However, your kernel might not support it, so you might be
 unable to copy partitions larger then 2GB into a file.
 This program has been written using Linux and only tested on a couple of
 Linux systems. It should be possible to port it easily to other Un*x
-platforms, but I have not tried.
+platforms, and I occasionally get hints from users of other *nix like
+systems that I take into account. Still, my own testing is limited to Linux.
 Currently, the escape sequence for moving the cursor up is hard coded in the
 sources. It's fine for most terminal emulations (including vt100 and linux),
 but it should use the terminal description database instead.
-Due to the way the program works (input and output are always written to the
-designated position, i.e. a seek() is done before the I/O operation is
-actually performed), char devices can not be read from or written to.
-Therefore you can't redirect output to stdout.
-This limitation has been lifted in version 1.10; though with non-seekable
-in- and our output, you can't recover from errors on that channel.
+Since dd_rescue-1.10, non-seekable input or output files are supported,
+but there's of course limitations to recover errors in such cases.
 
 
 Goodies
@@ -134,6 +134,11 @@ dd_rescue has a few nifty features:
 * Since 1.29, you can overwrite files with random numbers from userspace
   PRNG (libc or included frandom) which is 10x faster than urandom.
   With (new) option -M, the output file won't be extended.
+* Option -W (since 1.30) tries to avoid writes: If the block in the
+  target file/partition is already identical to the source, no actual
+  write operation is performed. This can be useful, when write are
+  very expensive or have other effects that you want to avoid (e.g.
+  reducing lifetime of SSDs).
 
 
 

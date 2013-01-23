@@ -122,6 +122,9 @@ ssize_t get_frandom_bytes(char* bf, size_t count);
 int frandom_init(int seed);
 int frandom_release();
 
+/* fwd decls */
+int cleanup();
+
 /* Global vars and options */
 unsigned int softbs, hardbs, syncfreq;
 int maxerr, nrerr, dotrunc;
@@ -260,7 +263,7 @@ static void check_seekable(const int id, const int od)
 	} //else
 	//	lseek(id, (off_t)0, SEEK_SET);
 	errno = 0;
-	if (lseek(od, (off_t)0, SEEK_SET) != 0) {
+	if (!o_chr && lseek(od, (off_t)0, SEEK_SET) != 0) {
 		fplog(stderr, "dd_rescue: (warning): output file is not seekable!\n");
 		fplog(stderr, "dd_rescue: (warning): %s\n", strerror(errno));
 		o_chr = 1;
@@ -398,6 +401,7 @@ int output_length()
 		off_t newmax = olen - opos;
 		if (newmax < 0) {
 			fplog(stderr, "dd_rescue: (fatal): output position is beyond end of file but -M specified!\n");
+			cleanup();
 			exit(19);
 		}			
 		if (!maxxfer || maxxfer > newmax) {
@@ -612,7 +616,8 @@ int cleanup()
 		/* Make sure, the output file is expanded to the last (first) position
 	 	 * FIXME: 0 byte writes do NOT expand file -- mayexpandfile() will
 		 * take care of that. */
-		pwrite(odes, buf, 0, opos);
+		if (!avoidwrite) 
+			pwrite(odes, buf, 0, opos);
 		rc = fsync(odes);
 		if (rc && !o_chr) {
 			fplog(stderr, "dd_rescue: (warning): fsync %s (%.1fk): %s!\n", 
@@ -707,8 +712,18 @@ inline ssize_t mypwrite(int fd, void* bf, size_t sz, off_t off)
 {
 	if (o_chr)
 		return write(fd, bf, sz);
-	else
-		return pwrite(fd, bf, sz, off);
+	else {
+		if (avoidwrite) {
+			ssize_t ln = pread(fd, buf2, sz, off);
+			if (ln < sz)
+				return pwrite(fd, bf, sz, off);
+			if (memcmp(bf, buf2, ln))
+				return pwrite(fd, bf, sz, off);
+			else
+				return ln;
+		} else
+			return pwrite(fd, bf, sz, off);
+	}
 }
 
 
@@ -1348,8 +1363,6 @@ int main(int argc, char* argv[])
 		avoidwrite = 0;
 	}
 	buf = zalloc_buf(softbs);
-	if (avoidwrite)
-		buf2 = zalloc_buf(softbs);
 
 	/* Optimization: Don't reread from /dev/zero over and over ... */
 	if (!dosplice && !strcmp(iname, "/dev/zero"))
@@ -1407,8 +1420,10 @@ int main(int argc, char* argv[])
 	/* Special case '-': stdout */
 	if (strcmp(oname, "-"))
 		odes = open(oname, O_WRONLY | o_dir_out, 0640);
-	else 
+	else {
 		odes = 0;
+		o_chr = 1;
+	}
 
 	if (odes > 0) 
 		close(odes);
@@ -1425,8 +1440,19 @@ int main(int argc, char* argv[])
 			cleanup(); exit(23);
 		}
 	}
+	if (o_chr && avoidwrite) {
+		fplog(stderr, "dd_rescue: (info): Disabling -Write avoidance b/c ofile is not seekable\n");
+		avoidwrite = 0;
+	}
+		
+	if (odes != 0) {
+		if (avoidwrite) {
+			buf2 = zalloc_buf(softbs);
+			odes = openfile(oname, O_RDWR | O_CREAT | o_dir_out /*| O_EXCL*/ | dotrunc);
+		} else
+			odes = openfile(oname, O_WRONLY | O_CREAT | o_dir_out /*| O_EXCL*/ | dotrunc);
+	}
 
-	odes = openfile(oname, O_WRONLY | O_CREAT | o_dir_out /*| O_EXCL*/ | dotrunc);
 	if (odes < 0) {
 		fplog(stderr, "dd_rescue: (fatal): %s: %s\n", oname, strerror(errno));
 		cleanup(); exit(24);
@@ -1442,6 +1468,12 @@ int main(int argc, char* argv[])
 		if (!nosparse)
 			fprintf(stderr, "dd_rescue: (warning): Don't use sparse writes for non-seekable output\n");
 		nosparse = 1; sparse = 0; dosplice = 0;
+		if (avoidwrite) {
+			fplog(stderr, "dd_rescue: (info): Disabling -Write avoidance b/c ofile is not seekable\n");
+			avoidwrite = 0;
+			if (buf2)
+				free(buf2);
+		}
 	}
 
 	/* special case: reverse with ipos == 0 means ipos = end_of_file */
