@@ -630,7 +630,7 @@ int cleanup()
 	 	 * FIXME: 0 byte writes do NOT expand file -- mayexpandfile() will
 		 * take care of that. */
 		if (!avoidwrite) 
-			pwrite(odes, buf, 0, opos);
+			rc = pwrite(odes, buf, 0, opos);
 		rc = fsync(odes);
 		if (rc && !o_chr) {
 			fplog(stderr, "dd_rescue: (warning): fsync %s (%.1fk): %s!\n", 
@@ -951,7 +951,7 @@ int copyfile_hardbs(const off_t max)
 int copyfile_softbs(const off_t max)
 {
 	ssize_t toread;
-	int errs = 0; int eno;
+	int errs = 0, rc; int eno;
 	errno = 0;
 #if 0	
 	fprintf(stderr, "%s%s%s%s copyfile (ipos=%.1fk, xfer=%.1fk, max=%.1fk, bs=%i)                         ##\n%s%s%s%s",
@@ -962,7 +962,7 @@ int copyfile_softbs(const off_t max)
 	/* expand file to AT LEAST the right length 
 	 * FIXME: 0 byte writes do NOT expand file */
 	if (!o_chr)
-		pwrite(odes, buf, 0, opos);
+		rc = pwrite(odes, buf, 0, opos);
 	while ((toread = blockxfer(max, softbs)) > 0) {
 		int err;
 		ssize_t rd = readblock(toread);
@@ -1205,8 +1205,9 @@ void printhelp()
 	fprintf(stderr, "         -v         verbose operation,\n");
 	fprintf(stderr, "         -V         display version and exit,\n");
 	fprintf(stderr, "         -h         display this help and exit.\n");
-	fprintf(stderr, "Instead of infile, -z SEED or -Z SEED may be specified, taking the the PRNG\n");
-	fprintf(stderr, " from libc or frandom as data source. SEED = 0 means time(0)-getpid().\n");
+	fprintf(stderr, "Instead of infile, -z SEED or -Z SEED or -z/Z SEEDFILE may be specified, taking the\n");
+	fprintf(stderr, " PRNG from libc or frandom (RC4 based) as data source. SEED = 0 means time(0)-getpid();\n");
+	fprintf(stderr, " using /dev/urandom as SEEDFILE gives good pseudo random numbers.\n");
 	fprintf(stderr, "Sizes may be given in units b(=512), k(=1024), M(=1024^2) or G(1024^3) bytes\n");
 	fprintf(stderr, "This program is useful to rescue data in case of I/O errors, because\n");
 	fprintf(stderr, " it does not necessarily abort or truncate the output.\n");
