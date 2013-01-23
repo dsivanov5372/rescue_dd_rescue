@@ -132,8 +132,9 @@ dd_rescue has a few nifty features:
   block (of softbs size) many times. This is turned on automatically
   when infile is /dev/zero (performance optimization).
 * Since 1.29, you can overwrite files with random numbers from userspace
-  PRNG (libc or included frandom) which is 10x faster than urandom.
-  With (new) option -M, the output file won't be extended.
+  PRNG (libc or included RC4 based frandom) which is 10x faster than 
+  urandom. Using -Z /dev/urandom gives decent quality PRNGs.
+* With option -M (new 1.29), the output file won't be extended.
 * Option -W (since 1.30) tries to avoid writes: If the block in the
   target file/partition is already identical to the source, no actual
   write operation is performed. This can be useful, when write are
@@ -144,7 +145,8 @@ dd_rescue has a few nifty features:
 
 Copyright
 ---------
-This little program is protected by the GNU General Public License (GPL). 
+This little program is protected by the GNU General Public License (GPL) 
+v2 or v3.
 (See the file COPYING, which probably exists a few hundred times on your
  computer. If not: I will send you one.)
 To summarize:
