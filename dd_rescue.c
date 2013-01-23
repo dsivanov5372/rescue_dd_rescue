@@ -395,11 +395,19 @@ int output_length()
 		return -1;
 	if (!reverse) {
 		/* FIXME: Only recude maxxfer, don't increase. Test for neagtive */
-		maxxfer = olen - opos;
-		fplog(stderr, "dd_rescue: (info): limit max xfer to %LikB\n",
-			maxxfer/1024);
+		off_t newmax = olen - opos;
+		if (newmax < 0) {
+			fplog(stderr, "dd_rescue: (fatal): output position is beyond end of file but -M specified!\n");
+			exit(19);
+		}			
+		if (!maxxfer || maxxfer > newmax) {
+			maxxfer = newmax;
+			fplog(stderr, "dd_rescue: (info): limit max xfer to %LikB\n",
+				maxxfer/1024);
+		}
 	} else if (opos > olen) {
-		/* TODO: Warn! */
+		fplog(stderr, "dd_rescue: (warn): change output position %LikB to endpos %Likb due to -M\n",
+			opos/1024, olen/1024);
 		opos = olen;
 	}
 	return 0;
