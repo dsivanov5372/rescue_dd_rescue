@@ -1,6 +1,7 @@
 README file for dd_rescue
 =========================
-(c) garloff@suse.de, 10/99, GNU GPL
+(c) garloff@suse.de, 10/99, GNU GPL 
+(c) kurt@garloff.de  2011-2012, GNU GPL v2 or v3
 
 
 Description of dd_rescue
@@ -47,7 +48,7 @@ Why?
   good idea, to approach this spot from both sides. Reverse direction copy
   is helpful.
   dd_rhelp (included in dd_rescue packages) does automate this approach.
-  The GNU ddrescue tool that is a redesigned dd_rescue and also has 
+  There is a GNU ddrescue tool that is a redesigned dd_rescue and also has 
   automation for this built-in.
 * The two block sizes are a performance optimization. Large block sizes
   result in superior performance, but in case of errors, you want to try
@@ -146,7 +147,7 @@ dd_rescue has a few nifty features:
 Copyright
 ---------
 This little program is protected by the GNU General Public License (GPL) 
-v2 or v3.
+v2 or v3 - at your option.
 (See the file COPYING, which probably exists a few hundred times on your
  computer. If not: I will send you one.)
 To summarize:

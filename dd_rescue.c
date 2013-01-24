@@ -25,10 +25,9 @@
  *  more details.
  *
  * You should have received a copy of the GNU General Public License along with
- * this program; if not, write to the Free Software Foundation, Inc., 59 Temple
- * Place, Suite 330, Boston, MA  02111-1307  USA
- *
-*/
+ * this program; if not, write to the Free Software Foundation, Inc., 
+ * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301,  USA.
+ */
 
 /**
  * TODO:
@@ -1149,7 +1148,7 @@ void init_random()
 
 void printversion()
 {
-	fprintf(stderr, "\ndd_rescue Version %s, garloff@suse.de, GNU GPL\n", VERSION);
+	fprintf(stderr, "\ndd_rescue Version %s, kurt@garloff.de, GNU GPL v2/v3\n", VERSION);
 	fprintf(stderr, " (%s)\n", ID);
 	fprintf(stderr, " (compiled %s %s by %s)\n", __DATE__, __TIME__, __COMPILER__);
 	fprintf(stderr, " (features: ");
@@ -1165,6 +1164,8 @@ void printversion()
 	fprintf(stderr, "splice ");
 #endif
 	fprintf(stderr, ")\n");
+	fprintf(stderr, "dd_rescue is free software. It's protected by the terms of GNU GPL v2 or v3\n");
+	fprintf(stderr, " (at your option).\n");
 }
 
 void printhelp()
