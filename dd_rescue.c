@@ -117,10 +117,10 @@ _syscall6(long, splice, int, fdin, loff_t*, off_in, int, fdout, loff_t*, off_out
 #endif
 
 /* frandom.c */
-ssize_t get_frandom_bytes(char* bf, size_t count);
-int frandom_init(unsigned char *sbf);
-int frandom_init_lrand(int seed);
-int frandom_release();
+ssize_t get_frandom_bytes(void *rstate, char *buf, size_t count);
+int frandom_release(void* rstate);
+void* frandom_init_lrand(int seedval);
+void* frandom_init(unsigned char* seedbf);
 
 /* fwd decls */
 int cleanup();
@@ -666,7 +666,7 @@ int cleanup()
 		copytimes(iname, oname);
 	ZFREE(oname);
 	if (prng_frnd)
-		frandom_release();
+		frandom_release(0);
 	return errs;
 }
 
@@ -681,7 +681,7 @@ ssize_t fill_rand(void *bf, size_t ln)
 
 ssize_t fill_frand(void *bf, size_t ln)
 {
-	return get_frandom_bytes(bf, ln);
+	return get_frandom_bytes(0, bf, ln);
 }
 
 /** is the block zero ? */

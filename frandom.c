@@ -30,7 +30,7 @@ struct frandom_state
 	u8 i, j;        
 };
 
-static struct frandom_state *erandom_state;
+static struct frandom_state *int_random_state;
 
 static inline void swap_byte(u8 *a, u8 *b)
 {
@@ -51,7 +51,7 @@ static inline void swap_byte_notmp(u8 *a, u8 *b)
 
 
 
-static void init_rand_state(struct frandom_state *state, u8* seedbf)
+void init_rand_state(struct frandom_state *state, u8* seedbf)
 {
 	unsigned int i, j, k;
 	u8 *S;
@@ -82,16 +82,17 @@ static void init_rand_state(struct frandom_state *state, u8* seedbf)
 	state->j = j;
 }
 
-int frandom_init(unsigned char* seedbf)
+void* frandom_init(unsigned char* seedbf)
 {
 	struct frandom_state *state;
 
 	state = malloc(sizeof(struct frandom_state));
 	if (!state)
-		return -ENOMEM;
+		return NULL;
 
 	init_rand_state(state, seedbf);
-	erandom_state = state;
+	if (!int_random_state)
+		int_random_state = state;
 
 	return 0; /* Success */
 }
@@ -104,7 +105,7 @@ static void get_libc_rand_bytes(u8 *buf, size_t len)
 		lbuf[i] = rand();
 }
 
-int frandom_init_lrand(int seedval)
+void* frandom_init_lrand(int seedval)
 {
 	u8 seedbuf[256];
 
@@ -115,25 +116,31 @@ int frandom_init_lrand(int seedval)
 	return frandom_init(seedbuf);
 }
 
-int frandom_release()
+int frandom_release(void* rstate)
 {
-	struct frandom_state *state = erandom_state;
+	struct frandom_state *state = rstate;
+	if (!state)
+		state = int_random_state;	
 	if (!state)
 		return -ENOMEM;
 
 	free(state);
+	if (state == int_random_state)
+		int_random_state = 0;
 	return 0;
 }
 
-ssize_t get_frandom_bytes(char *buf, size_t count)
+ssize_t get_frandom_bytes(void *rstate, char *buf, size_t count)
 {
-	struct frandom_state *state = erandom_state;
+	struct frandom_state *state = rstate;
 	u8 *S;
 	unsigned int i, j;
 	const ssize_t ret = count;
 
 	if (!state)
-		frandom_init_lrand(0);
+		state = int_random_state;
+	if (!state)
+		state = frandom_init_lrand(0);
   
 	i = state->i;
 	j = state->j;
