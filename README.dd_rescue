@@ -146,17 +146,24 @@ dd_rescue has a few nifty features:
 
 Copyright
 ---------
-This little program is protected by the GNU General Public License (GPL) 
+This program is protected by the GNU General Public License (GPL) 
 v2 or v3 - at your option.
 (See the file COPYING, which probably exists a few hundred times on your
- computer. If not: I will send you one.)
+ computer. If not: I will send you one or you can ask the FSF to do so.)
 To summarize:
-* You are free to use this program for anything you like. However, if you
-  release a program that uses code from this program, your program must be
-  released under the terms of the GNU GPL again.
-* You are allowed to put this program on CDs or other media and charge a 
-  fee for copying and distributing it. You have to provide the source code
-  (or a written offer to provide it) and the GPL text, too, then.
+* You are free to use this program for anything you like. (You are still
+  bound by the law of course, but the license does not put any additional
+  restrictions.) 
+* You are allowed to distribute this program and e.g. put it on a CD or 
+  other media and charge a fee for copying and distributing it. You have 
+  to provide the source code (or a written offer to provide it) and the 
+  GPL text, too, then and provide the same rights to your recipients
+  that you received by the GNU GPL. (You redistribute under the terms
+  of the GNU GPL.)
+* You can study and/or modify the program to meet your desires.
+  You may distribute modified versions under the terms of the GNU GPL
+  again. (If you base any work on this program and you distribute
+  your work, you *must* do so under the terms of the GNU GPL.)
 * There is no warranty whatsoever for this program. If it crashes your
   disks, it's at your risk.
 * This summary does not replace reading the GNU GPL itself.
