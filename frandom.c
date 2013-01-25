@@ -16,10 +16,11 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <sys/types.h>
 #include <asm/errno.h>
 #include <unistd.h>
 #include <time.h>
+
+#include "frandom.h"
 
 typedef unsigned char u8;
 

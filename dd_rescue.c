@@ -82,6 +82,9 @@
 #include <utime.h>
 #include <sys/time.h>
 #include <sys/stat.h>
+
+#include "frandom.h"
+
 #ifdef HAVE_GETOPT_H
 #include <getopt.h>
 #endif
@@ -115,12 +118,6 @@ _syscall6(long, splice, int, fdin, loff_t*, off_in, int, fdout, loff_t*, off_out
 #  endif
 # endif
 #endif
-
-/* frandom.c */
-ssize_t get_frandom_bytes(void *rstate, char *buf, size_t count);
-int frandom_release(void* rstate);
-void* frandom_init_lrand(int seedval);
-void* frandom_init(unsigned char* seedbf);
 
 /* fwd decls */
 int cleanup();
