@@ -35,9 +35,7 @@ static struct frandom_state *int_random_state;
 
 static inline void swap_byte(u8 *a, u8 *b)
 {
-	u8 swapByte; 
-  
-	swapByte = *a; 
+	u8 swapByte = *a; 
 	*a = *b;      
 	*b = swapByte;
 }
@@ -48,8 +46,6 @@ static inline void swap_byte_notmp(u8 *a, u8 *b)
 	*b += *a;
 	*a  = *b - *a;
 }
-
-
 
 
 void init_rand_state(struct frandom_state *state, u8* seedbf)
@@ -135,7 +131,7 @@ ssize_t get_frandom_bytes(void *rstate, char *buf, size_t count)
 {
 	struct frandom_state *state = rstate;
 	u8 *S;
-	unsigned int i, j;
+	unsigned char i, j;
 	const ssize_t ret = count;
 
 	if (!state)
@@ -148,10 +144,10 @@ ssize_t get_frandom_bytes(void *rstate, char *buf, size_t count)
 	S = state->S;  
 
 	while (count--) {
-		i = (i + 1) & 0xff;
-		j = (j + S[i]) & 0xff;
+		i = (i + 1);
+		j = (j + S[i]);
 		swap_byte(&S[i], &S[j]);
-		*buf++ = S[(S[i] + S[j]) & 0xff];
+		*buf++ = S[(unsigned char)(S[i] + S[j])];
 	}
 
 	state->i = i;     
