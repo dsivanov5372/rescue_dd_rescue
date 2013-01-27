@@ -22,6 +22,13 @@
 
 #include "frandom.h"
 
+#if defined(__arm__) /* || ... */
+# define INT_IS_FASTER
+/* # warning Using INT */
+#else
+/* # warning Using CHAR */
+#endif
+
 typedef unsigned char u8;
 
 
@@ -50,18 +57,19 @@ static inline void swap_byte_notmp(u8 *a, u8 *b)
 
 void init_rand_state(struct frandom_state *state, u8* seedbf)
 {
-	unsigned int i, j, k;
+	unsigned int k;
+	unsigned char i, j;
 	u8 *S;
 	S = state->S;
-	for (i=0; i<256; ++i)
-		*S++ = i;
+	for (k=0; k<256; ++k)
+		*S++ = k;
 
 	j = 0;
 	S = state->S;
 
-	for (i=0; i<256; ++i) {
-		j = (j + S[i] + seedbf[i]) & 0xff;
-		swap_byte(&S[i], &S[j]);
+	for (k=0; k<256; ++k) {
+		j = (j + S[k] + seedbf[k]) & 0xff;
+		swap_byte(&S[k], &S[j]);
 	}
 
 	/* It's considered good practice to discard the first 256 bytes
@@ -70,8 +78,8 @@ void init_rand_state(struct frandom_state *state, u8* seedbf)
 
 	i = 0; j = 0;
 	for (k=0; k<256; ++k) {
-		i = (i + 1) & 0xff;
-		j = (j + S[i]) & 0xff;
+		i = (i + 1);
+		j = (j + S[i]);
 		swap_byte(&S[i], &S[j]);
 	}
 
@@ -131,7 +139,11 @@ ssize_t get_frandom_bytes(void *rstate, char *buf, size_t count)
 {
 	struct frandom_state *state = rstate;
 	u8 *S;
+#ifdef INT_IS_FASTER
+	unsigned int i, j;
+#else
 	unsigned char i, j;
+#endif
 	const ssize_t ret = count;
 
 	if (!state)
@@ -144,10 +156,17 @@ ssize_t get_frandom_bytes(void *rstate, char *buf, size_t count)
 	S = state->S;  
 
 	while (count--) {
-		i = (i + 1);
-		j = (j + S[i]);
+#ifdef INT_IS_FASTER
+		i = (i + 1) & 0xff;
+		j = (j + S[i]) & 0xff;
+		swap_byte(&S[i], &S[j]);
+		*buf++ = S[(S[i] + S[j]) & 0xff];
+#else
+		i = i + 1;
+		j = j + S[i];
 		swap_byte(&S[i], &S[j]);
 		*buf++ = S[(unsigned char)(S[i] + S[j])];
+#endif
 	}
 
 	state->i = i;     
