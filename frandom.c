@@ -42,7 +42,7 @@ static struct frandom_state *int_random_state;
 
 static inline void swap_byte(u8 *a, u8 *b)
 {
-	u8 swapByte = *a; 
+	const u8 swapByte = *a; 
 	*a = *b;      
 	*b = swapByte;
 }
