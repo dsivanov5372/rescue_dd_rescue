@@ -141,6 +141,8 @@ char noextend, avoidwrite;
 char prng_libc, prng_frnd;
 char* prng_sfile;
 
+void *prng_state, *prng_state2;
+
 
 FILE *logfd;
 struct timeval starttime, lasttime, currenttime;
@@ -662,8 +664,14 @@ int cleanup()
 	if (preserve)
 		copytimes(iname, oname);
 	ZFREE(oname);
-	if (prng_frnd)
-		frandom_release(0);
+	if (prng_state2) {
+		frandom_release(prng_state2);
+		prng_state2 = 0;
+	}
+	if (prng_state) {
+		frandom_release(prng_state);
+		prng_state = 0;
+	}
 	return errs;
 }
 
@@ -676,9 +684,9 @@ ssize_t fill_rand(void *bf, size_t ln)
 	return ln;
 }
 
-ssize_t fill_frand(void *bf, size_t ln)
+inline ssize_t fill_frand(void *bf, size_t ln)
 {
-	return get_frandom_bytes(0, bf, ln);
+	return frandom_bytes(prng_state, bf, ln);
 }
 
 /** is the block zero ? */
@@ -1130,7 +1138,7 @@ void init_random()
 				fplog(stderr, "dd_rescue: (fatal): failed to read 256 bytes from \"%s\"!\n", prng_sfile);
 				cleanup(); exit(29);
 			}
-			frandom_init(sbf);
+			prng_state = frandom_init(sbf);
 		}
 	} else {
 		if (!prng_seed)
@@ -1138,7 +1146,7 @@ void init_random()
 		if (prng_libc)
 			srand(prng_seed);
 		else
-			frandom_init_lrand(prng_seed);
+			prng_state = frandom_init_lrand(prng_seed);
 	}
 }
 
@@ -1301,6 +1309,7 @@ int main(int argc, char* argv[])
 	noextend = 0; avoidwrite = 0;
 	prng_libc = 0; prng_frnd = 0;
 	prng_seed = 0; prng_sfile = 0;
+	prng_state = 0; prng_state2 = 0;
 
 #ifdef _SC_PAGESIZE
 	pagesize = sysconf(_SC_PAGESIZE);

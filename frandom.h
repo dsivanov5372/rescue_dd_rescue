@@ -6,9 +6,11 @@
 #include <sys/types.h>
 
 /* frandom.c */
-ssize_t get_frandom_bytes(void *rstate, char *buf, size_t count);
+ssize_t frandom_bytes(void *rstate, unsigned char *buf, size_t count);
+ssize_t frandom_bytes_inv(void *rstate, unsigned char *buf, size_t count);
 int frandom_release(void* rstate);
 void* frandom_init_lrand(int seedval);
 void* frandom_init(unsigned char* seedbf);
+void* frandom_stdup(void* rstate);
 
 #endif

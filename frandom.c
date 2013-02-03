@@ -24,9 +24,9 @@
 
 #if defined(__arm__) /* || ... */
 # define INT_IS_FASTER
-/* # warning Using INT */
+//# warning Using INT
 #else
-/* # warning Using CHAR */
+//# warning Using CHAR
 #endif
 
 typedef unsigned char u8;
@@ -102,6 +102,15 @@ void* frandom_init(unsigned char* seedbf)
 	return state; /* Success */
 }
 
+void* frandom_stdup(void* fst)
+{
+	struct frandom_state *newst = malloc(sizeof(struct frandom_state));
+	if (!newst)
+		return 0;
+	memcpy(newst, fst, sizeof(struct frandom_state));
+	return newst;
+}
+
 static void get_libc_rand_bytes(u8 *buf, size_t len)
 {
 	int *lbuf = (int*)buf;
@@ -135,7 +144,7 @@ int frandom_release(void* rstate)
 	return 0;
 }
 
-ssize_t get_frandom_bytes(void *rstate, char *buf, size_t count)
+ssize_t frandom_bytes(void *rstate, u8 *buf, size_t count)
 {
 	struct frandom_state *state = rstate;
 	u8 *S;
@@ -166,6 +175,47 @@ ssize_t get_frandom_bytes(void *rstate, char *buf, size_t count)
 		j = j + S[i];
 		swap_byte(&S[i], &S[j]);
 		*buf++ = S[(unsigned char)(S[i] + S[j])];
+#endif
+	}
+
+	state->i = i;     
+	state->j = j;
+
+	return ret;
+}
+
+
+ssize_t frandom_bytes_inv(void *rstate, u8 *buf, size_t count)
+{
+	struct frandom_state *state = rstate;
+	u8 *S;
+#ifdef INT_IS_FASTER
+	unsigned int i, j;
+#else
+	unsigned char i, j;
+#endif
+	const ssize_t ret = count;
+
+	if (!state)
+		state = int_random_state;
+	if (!state)
+		state = frandom_init_lrand(0);
+  
+	i = state->i;
+	j = state->j;
+	S = state->S;  
+
+	while (count--) {
+#ifdef INT_IS_FASTER
+		i = (i + 1) & 0xff;
+		j = (j + S[i]) & 0xff;
+		swap_byte(&S[i], &S[j]);
+		*buf++ = S[(S[i] + S[j]) & 0xff] ^ 0xff;
+#else
+		i = i + 1;
+		j = j + S[i];
+		swap_byte(&S[i], &S[j]);
+		*buf++ = S[(unsigned char)(S[i] + S[j])] ^ 0xff;
 #endif
 	}
 
