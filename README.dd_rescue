@@ -141,7 +141,20 @@ dd_rescue has a few nifty features:
   write operation is performed. This can be useful, when write are
   very expensive or have other effects that you want to avoid (e.g.
   reducing lifetime of SSDs).
-
+* The option -3 (new in 1.31) does overwrite a disk/partition/file/...
+  three times; the first time with frandom generated random numbers,
+  the second time with the bitwise inversed of the first pass and the
+  third time with zeros. (Zero in the final pass is good for SSDs...)
+  Overwriting a disk with -3 /dev/urandom should provide a very good
+  protection level against data being recoverable. When overwriting
+  files, the option -M will probably be handy -- please note however
+  that overwriting files this way may or may not be a safe deletion,
+  depending on how the filesystem handles overwrites. (And for flash
+  devices, the FTL may also do reallocations that prevents in place
+  overwriting of data. TRIM and SECURITY_ERASE (see man hdparm) should
+  be used instead or in addition there.)
+  This option has been designed to meet the BSI GSDS M7.15 criteria
+  for safe deletion of data.
 
 
 Copyright

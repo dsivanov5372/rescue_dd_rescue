@@ -1100,23 +1100,27 @@ int copyfile_splice(const off_t max)
 
 int tripleoverwrite(const off_t max)
 {
-	int ret, rc;
+	int ret = 0;
 	off_t orig_opos = opos;
 	void* prng_state2 = frandom_stdup(prng_state);
 	clock_t orig_startclock = startclock;
 	struct timeval orig_starttime;
 	memcpy(&orig_starttime, &starttime, sizeof(starttime));
-	fplog(stderr, "%s%s%s%sdd_rescue: (info): Triple overwrite (BSI M7.15): first pass ... (frandom)      \n\n\n\n\n", up, up, up, up);
-	ret = copyfile_softbs(max);
-	rc = fsync(odes);
+	fprintf(stderr, "%s%s%s%sdd_rescue: (info): Triple overwrite (BSI M7.15): first pass ... (frandom)      \n\n\n\n\n", up, up, up, up);
+	ret += copyfile_softbs(max);
+	fprintf(stderr, "syncing ... \n%s", up);
+	ret += fsync(odes);
+	/* TODO: better error handling */
 	frandom_release(prng_state);
 	prng_state = prng_state2; prng_state2 = 0;
 	bsim715_2ndpass = 1;
 	opos = orig_opos; xfer = 0; ipos = 0;
 	startclock = clock(); gettimeofday(&starttime, NULL);
-	fplog(stderr, "dd_rescue: (info): Triple overwrite (BSI M7.15): second pass ... (frandom_inv)\n\n\n\n\n");
-	ret = copyfile_softbs(max);
-	rc = fsync(odes);
+	fprintf(stderr, "dd_rescue: (info): Triple overwrite (BSI M7.15): second pass ... (frandom_inv)\n\n\n\n\n");
+	ret += copyfile_softbs(max);
+	fprintf(stderr, "syncing ... \n%s", up);
+	ret += fsync(odes);
+	/* TODO: better error handling */
 	frandom_release(prng_state); prng_state = 0;
 	bsim715_2ndpass = 0;
 	memset(buf, 0, softbs); 
@@ -1124,11 +1128,14 @@ int tripleoverwrite(const off_t max)
 	i_repeat = 1; i_rep_init = 1;
 	opos = orig_opos; xfer = 0; ipos = 0;
 	startclock = clock(); gettimeofday(&starttime, NULL);
-	fplog(stderr, "dd_rescue: (info): Triple overwrite (BSI M7.15): third pass ... \n\n\n\n\n");
-	ret = copyfile_softbs(max);
+	fprintf(stderr, "dd_rescue: (info): Triple overwrite (BSI M7.15): third pass ... \n\n\n\n\n");
+	ret += copyfile_softbs(max);
 	startclock = orig_startclock;
 	memcpy(&starttime, &orig_starttime, sizeof(starttime));
 	xfer = sxfer;
+	if (ret)
+		fplog(stderr, "dd_rescue: (warning): There were %i errors! %s may not be safely overwritten!\n", ret, oname);
+	//fprintf(stderr, "syncing ... \n%s", up);
 	return ret;
 }
 
