@@ -24,9 +24,9 @@
 
 #if defined(__arm__) /* || ... */
 # define INT_IS_FASTER
-//# warning Using INT
+/* # warning Using INT */
 #else
-//# warning Using CHAR
+/* # warning Using CHAR */
 #endif
 
 typedef unsigned char u8;
@@ -102,13 +102,19 @@ void* frandom_init(unsigned char* seedbf)
 	return state; /* Success */
 }
 
-void* frandom_stdup(void* fst)
+void* frandom_stdup(const void* fst)
 {
 	struct frandom_state *newst = malloc(sizeof(struct frandom_state));
 	if (!newst)
 		return 0;
 	memcpy(newst, fst, sizeof(struct frandom_state));
 	return newst;
+}
+
+void* frandom_stcopy(void* target, const void* fst)
+{
+	memcpy(target, fst, sizeof(struct frandom_state));
+	return target;
 }
 
 static void get_libc_rand_bytes(u8 *buf, size_t len)

@@ -8,7 +8,7 @@
  * for rescueing data of crashed disk, and that's the reason it has been
  * written by me.
  *
- * Copyright (C) Kurt Garloff <kurt@garloff.de>, 11/1997 -- 05/2012
+ * Copyright (C) Kurt Garloff <kurt@garloff.de>, 11/1997 -- 02/2013
  *
  * Improvements from LAB Valentin, see
  * http://www.kalysto.org/utilities/dd_rhelp/index.en.html
@@ -37,7 +37,6 @@
  * - Optional colors
  * - Use dlopen to open libfallocate rather than linking to it ...
  * - Display more infos on errors by collecting info from syslog
- * - Option to avoid overwriting identical output to be nice to SSD (Thomas)
  */
 
 #ifndef VERSION
@@ -139,6 +138,7 @@ char i_repeat, i_rep_init;
 int i_rep_zero, prng_seed;
 char noextend, avoidwrite;
 char prng_libc, prng_frnd;
+char bsim715;
 char* prng_sfile;
 
 void *prng_state, *prng_state2;
@@ -563,7 +563,7 @@ void printreport()
 		fprintf(report, "%s%s%s%s", down, down, down, down);
 		printstatus(report, logfd, 0, 1);
 		if (avoidwrite) 
-			fplog(report, "dd_rescue: (info): Avoided %LikB of writes\n", axfer/1024);
+			fplog(report, "dd_rescue: (info): Avoided %LikB of writes (performed %LikB)\n", axfer/1024, (sxfer-axfer)/1024);
 	}
 }
 
@@ -1214,6 +1214,7 @@ void printhelp()
 	fprintf(stderr, "Instead of infile, -z SEED or -Z SEED or -z/Z SEEDFILE may be specified, taking the\n");
 	fprintf(stderr, " PRNG from libc or frandom (RC4 based) as data source. SEED = 0 means time(0)-getpid();\n");
 	fprintf(stderr, " using /dev/urandom as SEEDFILE gives good pseudo random numbers.\n");
+	fprintf(stderr, "Likewise, -3 SEED or SEEDFILE will overwrite the target 3 times (BSI GSDS M7.15).\n\n");
 	fprintf(stderr, "Sizes may be given in units b(=512), k(=1024), M(=1024^2) or G(1024^3) bytes\n");
 	fprintf(stderr, "This program is useful to rescue data in case of I/O errors, because\n");
 	fprintf(stderr, " it does not necessarily abort or truncate the output.\n");
@@ -1306,7 +1307,7 @@ int main(int argc, char* argv[])
 	i_chr = 0; o_chr = 0;
 
 	i_repeat = 0; i_rep_init = 0; i_rep_zero = 0;
-	noextend = 0; avoidwrite = 0;
+	noextend = 0; avoidwrite = 0; bsim715 = 0;
 	prng_libc = 0; prng_frnd = 0;
 	prng_seed = 0; prng_sfile = 0;
 	prng_state = 0; prng_state2 = 0;
@@ -1315,7 +1316,7 @@ int main(int argc, char* argv[])
 	pagesize = sysconf(_SC_PAGESIZE);
 #endif
 
-	while ((c = getopt(argc, argv, ":rtfihqvVwWaAdDkMRpPb:B:m:e:s:S:l:o:y:z:Z:")) != -1) {
+	while ((c = getopt(argc, argv, ":rtfihqvVwWaAdDkMRpPb:B:m:e:s:S:l:o:y:z:Z:3:")) != -1) {
 		switch (c) {
 			case 'r': reverse = 1; break;
 			case 'R': i_repeat = 1; break;
@@ -1351,6 +1352,7 @@ int main(int argc, char* argv[])
 			case 'o': bbname = optarg; break;
 			case 'z': prng_libc = 1; if (is_filename(optarg)) prng_sfile = optarg; else prng_seed = readint(optarg); break;
 			case 'Z': prng_frnd = 1; if (is_filename(optarg)) prng_sfile = optarg; else prng_seed = readint(optarg); break;
+			case '3': prng_frnd = 1; if (is_filename(optarg)) prng_sfile = optarg; else prng_seed = readint(optarg); bsim715 = 1; break;
 			case ':': fplog (stderr, "dd_rescue: (fatal): option %c requires an argument!\n", optopt); 
 				printhelp();
 				exit(11); break;

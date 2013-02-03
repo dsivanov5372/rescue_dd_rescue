@@ -2,7 +2,7 @@
 # (c) garloff@suse.de, 99/10/09, GNU GPL
 # $Id$
 
-VERSION = 1.30
+VERSION = 1.31
 
 DESTDIR = 
 
