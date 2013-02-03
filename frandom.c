@@ -99,7 +99,7 @@ void* frandom_init(unsigned char* seedbf)
 	if (!int_random_state)
 		int_random_state = state;
 
-	return 0; /* Success */
+	return state; /* Success */
 }
 
 static void get_libc_rand_bytes(u8 *buf, size_t len)
