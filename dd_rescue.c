@@ -37,6 +37,7 @@
  * - Optional colors
  * - Use dlopen to open libfallocate rather than linking to it ...
  * - Display more infos on errors by collecting info from syslog
+ * - Allow seoncdary output file
  */
 
 #ifndef VERSION
@@ -125,7 +126,7 @@ int cleanup();
 unsigned int softbs, hardbs, syncfreq;
 int maxerr, nrerr, dotrunc;
 char reverse, abwrerr, sparse, nosparse;
-char verbose, quiet, interact, force;
+char verbose, quiet, interact, force, in_report;
 unsigned char *buf, *buf2;
 char *lname, *iname, *oname, *bbname = NULL;
 off_t ipos, opos, xfer, lxfer, sxfer, fxfer, maxxfer, axfer, init_opos, ilen, olen, estxfer;
@@ -138,7 +139,7 @@ char i_repeat, i_rep_init;
 int i_rep_zero, prng_seed;
 char noextend, avoidwrite;
 char prng_libc, prng_frnd;
-char bsim715;
+char bsim715, bsim715_2ndpass;
 char* prng_sfile;
 
 void *prng_state, *prng_state2;
@@ -306,8 +307,12 @@ void updgraph(int err)
 		return;
 	if (err)
 		graph[off] = 'x';
-	else
-		graph[off] = '-';
+	else {
+		if (bsim715_2ndpass)
+			graph[off] = '.';
+		else
+			graph[off] = '-';
+	}
 }
 
 /** Tries to determine size of input file */
@@ -398,7 +403,6 @@ int output_length()
 	if (!olen)
 		return -1;
 	if (!reverse) {
-		/* FIXME: Only recude maxxfer, don't increase. Test for neagtive */
 		off_t newmax = olen - opos;
 		if (newmax < 0) {
 			fplog(stderr, "dd_rescue: (fatal): output position is beyond end of file but -M specified!\n");
@@ -418,7 +422,6 @@ int output_length()
 	}
 	return 0;
 }
-
 
 
 static void sparse_output_warn()
@@ -493,13 +496,18 @@ void doprint(FILE* const file, const int bs, const clock_t cl,
 			avgrate,
 			100.0*(cl-startclock)/(CLOCKS_PER_SEC*t1));
 	if (estxfer && avgrate > 0) {
-		int sec = (estxfer-xfer)/(1024*avgrate);
+		int sec;
+		if (in_report)
+			sec = 0.5 + t1;
+		else
+			sec = 0.5 + (estxfer-xfer)/(1024*avgrate);
 		int hour = sec / 3600;
 		int min = (sec % 3600) / 60;
 		sec = sec % 60;
 		updgraph(0);
-		fprintf(file, "             %s %3i%%  ETA: %2i:%02i:%02i \n",
-			graph, (int)(100*xfer/estxfer), hour, min, sec);
+		fprintf(file, "             %s %3i%%  %s: %2i:%02i:%02i \n",
+			graph, (int)(100*xfer/estxfer), (in_report? "TOT": "ETA"), 
+			hour, min, sec);
 	} else
 		fprintf(file, "\n");
 
@@ -558,6 +566,7 @@ void printreport()
 {
 	/* report */
 	FILE *report = (!quiet || nrerr)? stderr: 0;
+	in_report = 1;
 	if (report) {
 		fplog(report, "dd_rescue: (info): Summary for %s -> %s:\n", iname, oname);
 		fprintf(report, "%s%s%s%s", down, down, down, down);
@@ -684,11 +693,6 @@ ssize_t fill_rand(void *bf, size_t ln)
 	return ln;
 }
 
-inline ssize_t fill_frand(void *bf, size_t ln)
-{
-	return frandom_bytes(prng_state, bf, ln);
-}
-
 /** is the block zero ? */
 static int blockiszero(const unsigned char* blk, const int ln)
 {
@@ -713,8 +717,12 @@ inline ssize_t mypread(int fd, void* bf, size_t sz, off_t off)
 	}
 	if (prng_libc)
 		return fill_rand(bf, sz);
-	if (prng_frnd)
-		return fill_frand(bf, sz);
+	if (prng_frnd) {
+		if (!bsim715_2ndpass)
+			return frandom_bytes(prng_state, bf, sz);
+		else
+			return frandom_bytes_inv(prng_state, bf, sz);
+	}
 	if (i_chr) 
 		return read(fd, bf, sz);
 	else
@@ -965,7 +973,7 @@ int copyfile_softbs(const off_t max)
 #endif
 	/* expand file to AT LEAST the right length 
 	 * FIXME: 0 byte writes do NOT expand file */
-	if (!o_chr)
+	if (!o_chr && !avoidwrite)
 		rc = pwrite(odes, buf, 0, opos);
 	while ((toread = blockxfer(max, softbs)) > 0) {
 		int err;
@@ -1090,6 +1098,40 @@ int copyfile_splice(const off_t max)
 }
 #endif
 
+int tripleoverwrite(const off_t max)
+{
+	int ret, rc;
+	off_t orig_opos = opos;
+	void* prng_state2 = frandom_stdup(prng_state);
+	clock_t orig_startclock = startclock;
+	struct timeval orig_starttime;
+	memcpy(&orig_starttime, &starttime, sizeof(starttime));
+	fplog(stderr, "%s%s%s%sdd_rescue: (info): Triple overwrite (BSI M7.15): first pass ... (frandom)      \n\n\n\n\n", up, up, up, up);
+	ret = copyfile_softbs(max);
+	rc = fsync(odes);
+	frandom_release(prng_state);
+	prng_state = prng_state2; prng_state2 = 0;
+	bsim715_2ndpass = 1;
+	opos = orig_opos; xfer = 0; ipos = 0;
+	startclock = clock(); gettimeofday(&starttime, NULL);
+	fplog(stderr, "dd_rescue: (info): Triple overwrite (BSI M7.15): second pass ... (frandom_inv)\n\n\n\n\n");
+	ret = copyfile_softbs(max);
+	rc = fsync(odes);
+	frandom_release(prng_state); prng_state = 0;
+	bsim715_2ndpass = 0;
+	memset(buf, 0, softbs); 
+	iname = "FRND+invFRND+ZERO";
+	i_repeat = 1; i_rep_init = 1;
+	opos = orig_opos; xfer = 0; ipos = 0;
+	startclock = clock(); gettimeofday(&starttime, NULL);
+	fplog(stderr, "dd_rescue: (info): Triple overwrite (BSI M7.15): third pass ... \n\n\n\n\n");
+	ret = copyfile_softbs(max);
+	startclock = orig_startclock;
+	memcpy(&starttime, &orig_starttime, sizeof(starttime));
+	xfer = sxfer;
+	return ret;
+}
+
 static off_t readint(const char* const ptr)
 {
 	char *es; double res;
@@ -1211,10 +1253,10 @@ void printhelp()
 	fprintf(stderr, "         -v         verbose operation,\n");
 	fprintf(stderr, "         -V         display version and exit,\n");
 	fprintf(stderr, "         -h         display this help and exit.\n");
-	fprintf(stderr, "Instead of infile, -z SEED or -Z SEED or -z/Z SEEDFILE may be specified, taking the\n");
-	fprintf(stderr, " PRNG from libc or frandom (RC4 based) as data source. SEED = 0 means time(0)-getpid();\n");
-	fprintf(stderr, " using /dev/urandom as SEEDFILE gives good pseudo random numbers.\n");
-	fprintf(stderr, "Likewise, -3 SEED or SEEDFILE will overwrite the target 3 times (BSI GSDS M7.15).\n\n");
+	fprintf(stderr, "Instead of infile, -z/Z SEED or -z/Z SEEDFILE may be specified, taking the PRNG\n");
+	fprintf(stderr, " from libc or frandom (RC4 based) as input. SEED = 0 means time(0)-getpid();\n");
+	fprintf(stderr, " Using /dev/urandom as SEEDFILE gives good pseudo random numbers.\n");
+	fprintf(stderr, "Likewise, -3 SEED/SEEDFILE will overwrite ofile 3 times (r,r,0, BSI GSDS M7.15).\n\n");
 	fprintf(stderr, "Sizes may be given in units b(=512), k(=1024), M(=1024^2) or G(1024^3) bytes\n");
 	fprintf(stderr, "This program is useful to rescue data in case of I/O errors, because\n");
 	fprintf(stderr, " it does not necessarily abort or truncate the output.\n");
@@ -1307,7 +1349,8 @@ int main(int argc, char* argv[])
 	i_chr = 0; o_chr = 0;
 
 	i_repeat = 0; i_rep_init = 0; i_rep_zero = 0;
-	noextend = 0; avoidwrite = 0; bsim715 = 0;
+	noextend = 0; avoidwrite = 0;
+	bsim715 = 0; bsim715_2ndpass = 0;
 	prng_libc = 0; prng_frnd = 0;
 	prng_seed = 0; prng_sfile = 0;
 	prng_state = 0; prng_state2 = 0;
@@ -1639,6 +1682,14 @@ int main(int argc, char* argv[])
 			printinfo(logfd);
 	}
 
+	if (bsim715 && avoidwrite) {
+		fplog(stderr, "dd_rescue: (warning): won't avoid writes for -3\n");
+		avoidwrite = 0;
+	}
+	if (bsim715 && o_chr) {
+		fplog(stderr, "dd_rescue: (warning): triple overwrite with non-seekable output!\n");
+	}
+
 	/* Install signal handler */
 	signal(SIGHUP , breakhandler);
 	signal(SIGINT , breakhandler);
@@ -1655,16 +1706,20 @@ int main(int argc, char* argv[])
 		printstatus(stderr, 0, softbs, 0);
 	}
 
+	if (bsim715) {
+		c = tripleoverwrite(maxxfer);
+	} else {
 #ifdef HAVE_SPLICE
-	if (dosplice)
-		c = copyfile_splice(maxxfer);
-	else 
+		if (dosplice)
+			c = copyfile_splice(maxxfer);
+		else 
 #endif
-	{
-		if (softbs > hardbs)
-			c = copyfile_softbs(maxxfer);
-		else
-			c = copyfile_hardbs(maxxfer);
+		{
+			if (softbs > hardbs)
+				c = copyfile_softbs(maxxfer);
+			else
+				c = copyfile_hardbs(maxxfer);
+		}
 	}
 
 	gettimeofday(&currenttime, NULL);
