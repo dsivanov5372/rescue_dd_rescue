@@ -139,7 +139,7 @@ char i_repeat, i_rep_init;
 int i_rep_zero, prng_seed;
 char noextend, avoidwrite;
 char prng_libc, prng_frnd;
-char bsim715, bsim715_2ndpass;
+char bsim715, bsim715_4, bsim715_2ndpass;
 char* prng_sfile;
 
 void *prng_state, *prng_state2;
@@ -1121,14 +1121,25 @@ int tripleoverwrite(const off_t max)
 	fprintf(stderr, "syncing ... \n%s", up);
 	ret += fsync(odes);
 	/* TODO: better error handling */
-	frandom_release(prng_state); prng_state = 0;
 	bsim715_2ndpass = 0;
+	if (bsim715_4) {
+		frandom_bytes(prng_state, buf, 16);
+		fprintf(stderr, "dd_rescue: (info): Triple overwrite (BSI M7.15): third pass ... (frandom) \n\n\n\n\n");
+		opos = orig_opos; xfer = 0; ipos = 0;
+		startclock = clock(); gettimeofday(&starttime, NULL);
+		ret += copyfile_softbs(max);
+		fprintf(stderr, "syncing ... \n%s", up);
+		ret += fsync(odes);
+		bsim715_2ndpass = 1;
+		iname = "FRND+invFRND+FRND2+ZERO";
+	} else
+		iname = "FRND+invFRND+ZERO";
+	fprintf(stderr, "dd_rescue: (info): Triple overwrite (BSI M7.15): last pass ... (zeros) \n\n\n\n\n");
+	frandom_release(prng_state); prng_state = 0;
 	memset(buf, 0, softbs); 
-	iname = "FRND+invFRND+ZERO";
 	i_repeat = 1; i_rep_init = 1;
 	opos = orig_opos; xfer = 0; ipos = 0;
 	startclock = clock(); gettimeofday(&starttime, NULL);
-	fprintf(stderr, "dd_rescue: (info): Triple overwrite (BSI M7.15): third pass ... \n\n\n\n\n");
 	ret += copyfile_softbs(max);
 	startclock = orig_startclock;
 	memcpy(&starttime, &orig_starttime, sizeof(starttime));
@@ -1263,7 +1274,8 @@ void printhelp()
 	fprintf(stderr, "Instead of infile, -z/Z SEED or -z/Z SEEDFILE may be specified, taking the PRNG\n");
 	fprintf(stderr, " from libc or frandom (RC4 based) as input. SEED = 0 means time(0)-getpid();\n");
 	fprintf(stderr, " Using /dev/urandom as SEEDFILE gives good pseudo random numbers.\n");
-	fprintf(stderr, "Likewise, -3 SEED/SEEDFILE will overwrite ofile 3 times (r,r,0, BSI GSDS M7.15).\n\n");
+	fprintf(stderr, "Likewise, -3 SEED/SEEDFILE will overwrite ofile 3 times (r,ir,0, BSI M7.15).\n");
+	fprintf(stderr, " With -4 SEED/SEEDFILE you get an additional random pass (r,ir,r2,0).\n\n");
 	fprintf(stderr, "Sizes may be given in units b(=512), k(=1024), M(=1024^2) or G(1024^3) bytes\n");
 	fprintf(stderr, "This program is useful to rescue data in case of I/O errors, because\n");
 	fprintf(stderr, " it does not necessarily abort or truncate the output.\n");
@@ -1357,7 +1369,7 @@ int main(int argc, char* argv[])
 
 	i_repeat = 0; i_rep_init = 0; i_rep_zero = 0;
 	noextend = 0; avoidwrite = 0;
-	bsim715 = 0; bsim715_2ndpass = 0;
+	bsim715 = 0; bsim715_4 = 0; bsim715_2ndpass = 0;
 	prng_libc = 0; prng_frnd = 0;
 	prng_seed = 0; prng_sfile = 0;
 	prng_state = 0; prng_state2 = 0;
@@ -1366,7 +1378,7 @@ int main(int argc, char* argv[])
 	pagesize = sysconf(_SC_PAGESIZE);
 #endif
 
-	while ((c = getopt(argc, argv, ":rtfihqvVwWaAdDkMRpPb:B:m:e:s:S:l:o:y:z:Z:3:")) != -1) {
+	while ((c = getopt(argc, argv, ":rtfihqvVwWaAdDkMRpPb:B:m:e:s:S:l:o:y:z:Z:3:4:")) != -1) {
 		switch (c) {
 			case 'r': reverse = 1; break;
 			case 'R': i_repeat = 1; break;
@@ -1403,6 +1415,7 @@ int main(int argc, char* argv[])
 			case 'z': prng_libc = 1; if (is_filename(optarg)) prng_sfile = optarg; else prng_seed = readint(optarg); break;
 			case 'Z': prng_frnd = 1; if (is_filename(optarg)) prng_sfile = optarg; else prng_seed = readint(optarg); break;
 			case '3': prng_frnd = 1; if (is_filename(optarg)) prng_sfile = optarg; else prng_seed = readint(optarg); bsim715 = 1; break;
+			case '4': prng_frnd = 1; if (is_filename(optarg)) prng_sfile = optarg; else prng_seed = readint(optarg); bsim715 = 1; bsim715_4 = 1; break;
 			case ':': fplog (stderr, "dd_rescue: (fatal): option %c requires an argument!\n", optopt); 
 				printhelp();
 				exit(11); break;

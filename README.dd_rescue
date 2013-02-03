@@ -153,8 +153,9 @@ dd_rescue has a few nifty features:
   devices, the FTL may also do reallocations that prevents in place
   overwriting of data. TRIM and SECURITY_ERASE (see man hdparm) should
   be used instead or in addition there.)
-  This option has been designed to meet the BSI GSDS M7.15 criteria
-  for safe deletion of data.
+  There's also a variant with 3xrandom numbers and a final zeroing
+  (option -4); this option has been designed to meet the BSI GSDS 
+  M7.15 criteria for safe deletion of data.
   https://www.bsi.bund.de/ContentBSI/grundschutz/baustein-datenschutz/html/m07015.html
 
 
