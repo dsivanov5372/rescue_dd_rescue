@@ -13,5 +13,6 @@ void* frandom_init_lrand(int seedval);
 void* frandom_init(unsigned char* seedbf);
 void* frandom_stdup(const void* rstate);
 void* frandom_stcopy(void* tostate, const void* fromstate);
+unsigned int frandom_getseedval();
 
 #endif

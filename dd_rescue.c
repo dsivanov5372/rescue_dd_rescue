@@ -1202,7 +1202,7 @@ void init_random()
 		}
 	} else {
 		if (!prng_seed)
-			prng_seed = time(0) - getpid();
+			prng_seed = frandom_getseedval();
 		if (prng_libc)
 			srand(prng_seed);
 		else
@@ -1272,7 +1272,7 @@ void printhelp()
 	fprintf(stderr, "         -V         display version and exit,\n");
 	fprintf(stderr, "         -h         display this help and exit.\n");
 	fprintf(stderr, "Instead of infile, -z/Z SEED or -z/Z SEEDFILE may be specified, taking the PRNG\n");
-	fprintf(stderr, " from libc or frandom (RC4 based) as input. SEED = 0 means time(0)-getpid();\n");
+	fprintf(stderr, " from libc or frandom (RC4 based) as input. SEED = 0 means a time based seed;\n");
 	fprintf(stderr, " Using /dev/urandom as SEEDFILE gives good pseudo random numbers.\n");
 	fprintf(stderr, "Likewise, -3 SEED/SEEDFILE will overwrite ofile 3 times (r,ir,0, BSI M7.15).\n");
 	fprintf(stderr, " With -4 SEED/SEEDFILE you get an additional random pass (r,ir,r2,0).\n\n");

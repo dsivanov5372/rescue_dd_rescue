@@ -19,6 +19,7 @@
 #include <asm/errno.h>
 #include <unistd.h>
 #include <time.h>
+#include <sys/time.h>
 
 #include "frandom.h"
 
@@ -125,12 +126,20 @@ static void get_libc_rand_bytes(u8 *buf, size_t len)
 		lbuf[i] = rand();
 }
 
+unsigned int frandom_getseedval()
+{
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	return (tv.tv_usec << 2) ^ tv.tv_sec ^ getpid();
+}
+
+
 void* frandom_init_lrand(int seedval)
 {
 	u8 seedbuf[256];
 
 	if (!seedval)
-		seedval = time(0) - getpid();
+		seedval = frandom_getseedval();
 	srand(seedval);
 	get_libc_rand_bytes(seedbuf, 256);
 	return frandom_init(seedbuf);
