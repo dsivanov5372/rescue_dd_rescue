@@ -130,7 +130,7 @@ unsigned int frandom_getseedval()
 {
 	struct timeval tv;
 	gettimeofday(&tv, NULL);
-	return (tv.tv_usec << 2) ^ tv.tv_sec ^ getpid();
+	return (tv.tv_usec << 12) ^ tv.tv_sec ^ getpid();
 }
 
 
