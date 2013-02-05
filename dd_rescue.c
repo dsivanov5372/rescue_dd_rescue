@@ -80,6 +80,7 @@
 #include <signal.h>
 #include <time.h>
 #include <utime.h>
+#include <limits.h>
 #include <sys/time.h>
 #include <sys/stat.h>
 
@@ -140,6 +141,7 @@ int i_rep_zero, prng_seed;
 char noextend, avoidwrite;
 char prng_libc, prng_frnd;
 char bsim715, bsim715_4, bsim715_2ndpass;
+char extend;
 char* prng_sfile;
 
 void *prng_state, *prng_state2;
@@ -441,7 +443,7 @@ static void sparse_output_warn()
 			fplog(stderr, "dd_rescue: (warning): %s is a block device; -a not recommended; -A recommended\n", oname);
 		return;
 	}
-	eff_opos = opos == -1? ipos: opos;
+	eff_opos = opos == -INT_MAX? ipos: opos;
 	if (sparse && (eff_opos < stbuf.st_size))
 		fplog(stderr, "dd_rescue: (warning): write into %s (@%li/%li): sparse not recommended\n", 
 				oname, eff_opos, stbuf.st_size);
@@ -1245,6 +1247,7 @@ void printhelp()
 	fprintf(stderr, "         -e maxerr  exit after maxerr errors (def=0=infinite),\n");
 	fprintf(stderr, "         -m maxxfer maximum amount of data to be transfered (def=0=inf),\n");
 	fprintf(stderr,	"         -M         avoid extending outfile,\n");
+	fprintf(stderr,	"         -x         count opos from the end of outfile (eXtend)\n");
 	fprintf(stderr, "         -y syncfrq frequency of fsync calls on outfile (def=512*softbs),\n");
 	fprintf(stderr, "         -l logfile name of a file to log errors and summary to (def=\"\"),\n");
 	fprintf(stderr, "         -o bbfile  name of a file to log bad blocks numbers (def=\"\"),\n");
@@ -1356,7 +1359,7 @@ int main(int argc, char* argv[])
 
   	/* defaults */
 	softbs = 0; hardbs = 0; /* marker for defaults */
-	maxerr = 0; ipos = (off_t)-1; opos = (off_t)-1; maxxfer = 0; 
+	maxerr = 0; ipos = (off_t)-INT_MAX; opos = (off_t)-INT_MAX; maxxfer = 0; 
 	reverse = 0; dotrunc = 0; abwrerr = 0; sparse = 0; nosparse = 0;
 	verbose = 0; quiet = 0; interact = 0; force = 0; preserve = 0;
 	lname = 0; iname = 0; oname = 0; o_dir_in = 0; o_dir_out = 0;
@@ -1370,6 +1373,7 @@ int main(int argc, char* argv[])
 	i_repeat = 0; i_rep_init = 0; i_rep_zero = 0;
 	noextend = 0; avoidwrite = 0;
 	bsim715 = 0; bsim715_4 = 0; bsim715_2ndpass = 0;
+	extend = 0;
 	prng_libc = 0; prng_frnd = 0;
 	prng_seed = 0; prng_sfile = 0;
 	prng_state = 0; prng_state2 = 0;
@@ -1378,7 +1382,7 @@ int main(int argc, char* argv[])
 	pagesize = sysconf(_SC_PAGESIZE);
 #endif
 
-	while ((c = getopt(argc, argv, ":rtfihqvVwWaAdDkMRpPb:B:m:e:s:S:l:o:y:z:Z:3:4:")) != -1) {
+	while ((c = getopt(argc, argv, ":rtfihqvVwWaAdDkMRpPb:B:m:e:s:S:l:o:y:z:Z:3:4:x")) != -1) {
 		switch (c) {
 			case 'r': reverse = 1; break;
 			case 'R': i_repeat = 1; break;
@@ -1412,6 +1416,7 @@ int main(int argc, char* argv[])
 			case 'S': opos = readint(optarg); break;
 			case 'l': lname = optarg; break;
 			case 'o': bbname = optarg; break;
+			case 'x': extend = 1; break;
 			case 'z': prng_libc = 1; if (is_filename(optarg)) prng_sfile = optarg; else prng_seed = readint(optarg); break;
 			case 'Z': prng_frnd = 1; if (is_filename(optarg)) prng_sfile = optarg; else prng_seed = readint(optarg); break;
 			case '3': prng_frnd = 1; if (is_filename(optarg)) prng_sfile = optarg; else prng_seed = readint(optarg); bsim715 = 1; break;
@@ -1499,7 +1504,7 @@ int main(int argc, char* argv[])
 		syncfreq = (syncsz + softbs - 1) / softbs;
 
 	/* Have those been set by cmdline params? */
-	if (ipos == (off_t)-1) 
+	if (ipos == (off_t)-INT_MAX) 
 		ipos = 0;
 
 	if (dosplice && avoidwrite) {
@@ -1628,7 +1633,7 @@ int main(int argc, char* argv[])
 			fprintf(stderr, "dd_rescue: (info): ipos set to the end: %.1fk\n", 
 			        (float)ipos/1024);
 		/* if opos not set, assume same position */
-		if (opos == (off_t)-1) 
+		if (opos == (off_t)-INT_MAX) 
 			opos = ipos;
 		/* if explicitly set to zero, assume end of _existing_ file */
 		if (opos == 0) {
@@ -1647,14 +1652,8 @@ int main(int argc, char* argv[])
 	}
 
 	/* if opos not set, assume same position */
-	if (opos == (off_t)-1) 
+	if (opos == (off_t)-INT_MAX)
 		opos = ipos;
-
-	if (ipos < 0 || opos < 0) {
-		fplog(stderr, "dd_rescue: (fatal): negative position requested (%.1fk)\n", (float)ipos/1024);
-		cleanup(); exit(25);
-	}
-
 
 	if (identical) {
 		fplog(stderr, "dd_rescue: (warning): infile and outfile are identical!\n");
@@ -1683,13 +1682,21 @@ int main(int argc, char* argv[])
 		reverse = 0;
 	}
 
-	if (noextend) {
+	if (noextend || extend) {
 		if (output_length() == -1) {
-			fplog(stderr, "dd_rescue: (fatal): asked not to extend output file but can't determine size\n");
+			fplog(stderr, "dd_rescue: (fatal): asked to (not) extend output file but can't determine size\n");
 			cleanup(); exit(19);
 		}
+		if (extend)
+			opos += olen;
 	}
 	input_length();
+
+	if (ipos < 0 || opos < 0) {
+		fplog(stderr, "dd_rescue: (fatal): negative position requested (%.1fk)\n", (float)ipos/1024);
+		cleanup(); exit(25);
+	}
+
 
 #ifdef HAVE_FALLOCATE
 	if (falloc)
