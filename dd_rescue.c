@@ -37,7 +37,7 @@
  * - Optional colors
  * - Use dlopen to open libfallocate rather than linking to it ...
  * - Display more infos on errors by collecting info from syslog
- * - Allow seoncdary output file
+ * - Allow seoncdary output files
  */
 
 #ifndef VERSION
@@ -85,6 +85,7 @@
 #include <sys/stat.h>
 
 #include "frandom.h"
+#include "list.h"
 
 #ifdef HAVE_GETOPT_H
 #include <getopt.h>
@@ -153,6 +154,13 @@ struct timezone tz;
 clock_t startclock;
 
 unsigned int pagesize = 4096;
+
+/* multiple output files */
+typedef char* charp;
+LISTDECL(charp);
+LISTDECL(int);
+LISTTYPE(charp) *onames;
+LISTTYPE(int) *ofds;
 
 #ifndef UP
 # define UP "\x1b[A"
@@ -683,6 +691,8 @@ int cleanup()
 		frandom_release(prng_state);
 		prng_state = 0;
 	}
+	LISTTREEDEL(onames, charp);
+	LISTTREEDEL(ofds, int);
 	return errs;
 }
 
@@ -1270,6 +1280,7 @@ void printhelp()
 	fprintf(stderr, "         -i         interactive: ask before overwriting data (def=no),\n");
 	fprintf(stderr, "         -f         force: skip some sanity checks (def=no),\n");
 	fprintf(stderr, "         -p         preserve: preserve ownership / perms (def=no),\n");
+	fprintf(stderr, "         -Y oname   Secondary output file (multiple possible)\n");
 	fprintf(stderr, "         -q         quiet operation,\n");
 	fprintf(stderr, "         -v         verbose operation,\n");
 	fprintf(stderr, "         -V         display version and exit,\n");
@@ -1382,7 +1393,7 @@ int main(int argc, char* argv[])
 	pagesize = sysconf(_SC_PAGESIZE);
 #endif
 
-	while ((c = getopt(argc, argv, ":rtfihqvVwWaAdDkMRpPb:B:m:e:s:S:l:o:y:z:Z:3:4:x")) != -1) {
+	while ((c = getopt(argc, argv, ":rtfihqvVwWaAdDkMRpPb:B:m:e:s:S:l:o:y:z:Z:3:4:xY:")) != -1) {
 		switch (c) {
 			case 'r': reverse = 1; break;
 			case 'R': i_repeat = 1; break;
@@ -1417,6 +1428,7 @@ int main(int argc, char* argv[])
 			case 'l': lname = optarg; break;
 			case 'o': bbname = optarg; break;
 			case 'x': extend = 1; break;
+			case 'Y': LISTAPPEND(onames, optarg, charp); break;
 			case 'z': prng_libc = 1; if (is_filename(optarg)) prng_sfile = optarg; else prng_seed = readint(optarg); break;
 			case 'Z': prng_frnd = 1; if (is_filename(optarg)) prng_sfile = optarg; else prng_seed = readint(optarg); break;
 			case '3': prng_frnd = 1; if (is_filename(optarg)) prng_sfile = optarg; else prng_seed = readint(optarg); bsim715 = 1; break;
