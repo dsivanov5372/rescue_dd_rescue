@@ -575,8 +575,11 @@ void printreport()
 	FILE *report = (!quiet || nrerr)? stderr: 0;
 	in_report = 1;
 	if (report) {
-		fplog(report, "dd_rescue: (info): Summary for %s -> %s:\n", iname, oname);
-		fprintf(report, "%s%s%s%s", down, down, down, down);
+		fplog(report, "dd_rescue: (info): Summary for %s -> %s", iname, oname);
+		LISTTYPE(charp) *onm;
+		LISTFOREACH(onames, onm)
+			fplog(report, "; %s", LISTDATA(onm));
+		fprintf(report, ":\n%s%s%s%s", down, down, down, down);
 		printstatus(report, logfd, 0, 1);
 		if (avoidwrite) 
 			fplog(report, "dd_rescue: (info): Avoided %LikB of writes (performed %LikB)\n", axfer/1024, (sxfer-axfer)/1024);
@@ -672,7 +675,7 @@ int sync_close(int fd, char* nm, char chr)
 int cleanup()
 {
 	int rc, errs = 0;
-	sync_close(odes, oname, o_chr);
+	errs += sync_close(odes, oname, o_chr);
 	if (ides != -INT_MAX) {
 		rc = close(ides);
 		if (rc) {
@@ -687,7 +690,7 @@ int cleanup()
 	LISTTYPE(char) *ochr = ochrs;
 	LISTTYPE(int) *ofd = ofds;
 	while (onm) {
-		sync_close(LISTDATA(ofd), LISTDATA(onm), LISTDATA(ochr));
+		rc = sync_close(LISTDATA(ofd), LISTDATA(onm), LISTDATA(ochr));
 		onm  = LISTNEXT(onm); ochr = LISTNEXT(ochr); ofd  = LISTNEXT(ofd);
 	}
 	ZFREE(buf2);
