@@ -159,8 +159,10 @@ unsigned int pagesize = 4096;
 typedef char* charp;
 LISTDECL(charp);
 LISTDECL(int);
+LISTDECL(char);
 LISTTYPE(charp) *onames;
 LISTTYPE(int) *ofds;
+LISTTYPE(char) *ochrs;
 
 #ifndef UP
 # define UP "\x1b[A"
@@ -264,23 +266,18 @@ static int openfile(const char* const fname, const int flags)
 	return fdes;
 }
 
-/** Checks whether files are seekable */
-static void check_seekable(const int id, const int od)
+/** Checks whether file is seekable */
+static void check_seekable(const int fd, char *ischr, char* msg)
 {
 	errno = 0;
-	if (!i_chr && lseek(id, (off_t)0, SEEK_SET) != 0) {
-		fplog(stderr, "dd_rescue: (warning): input  file is not seekable!\n");
-		fplog(stderr, "dd_rescue: (warning): %s\n", strerror(errno));
-		i_chr = 1;
+	if (!*ischr && lseek(fd, (off_t)0, SEEK_SET) != 0) {
+		if (msg) {
+			fplog(stderr, "dd_rescue: (warning): file %s is not seekable!\n", msg);
+			fplog(stderr, "dd_rescue: (warning): %s\n", strerror(errno));
+		}
+		*ischr = 1;
 	} //else
 	//	lseek(id, (off_t)0, SEEK_SET);
-	errno = 0;
-	if (!o_chr && lseek(od, (off_t)0, SEEK_SET) != 0) {
-		fplog(stderr, "dd_rescue: (warning): output file is not seekable!\n");
-		fplog(stderr, "dd_rescue: (warning): %s\n", strerror(errno));
-		o_chr = 1;
-	} //else
-	//	lseek(od, (off_t)0, SEEK_SET);
 	errno = 0;
 }
 
@@ -617,20 +614,53 @@ int copytimes(const char* inm, const char* onm)
 	return err;
 }
 
-static int mayexpandfile()
-{	
+static int mayexpandfile(char* onm)
+{
 	struct stat st;
 	off_t maxopos = opos;
 	if (init_opos > opos)
 		maxopos = init_opos;
-	stat(oname, &st);
+	stat(onm, &st);
 	if (!S_ISREG(st.st_mode))
 		return 0;
 	if (st.st_size < maxopos)
-		return truncate(oname, maxopos);
+		return truncate(onm, maxopos);
 	else 
 		return 0;		
 }
+
+int sync_close(int fd, char* nm, char chr)
+{
+	int rc, err = 0;
+	if (fd != -INT_MAX) {
+		/* Make sure, the output file is expanded to the last (first) position
+	 	 * FIXME: 0 byte writes do NOT expand file -- mayexpandfile() will
+		 * take care of that. */
+		if (!avoidwrite) 
+			rc = pwrite(fd, buf, 0, opos);
+		rc = fsync(fd);
+		if (rc && !chr) {
+			fplog(stderr, "dd_rescue: (warning): fsync %s (%.1fk): %s!\n", 
+			      nm, (float)opos/1024, strerror(errno));
+			++err;
+			errno = 0;
+		}
+		rc = close(fd); 
+		if (rc) {
+			fplog(stderr, "dd_rescue: (warning): close %s (%.1fk): %s!\n", 
+			      nm, (float)opos/1024, strerror(errno));
+			++err;
+		}
+		if (sparse) {
+			rc = mayexpandfile(nm);
+			if (rc)
+				fplog(stderr, "dd_rescue: (warning): seek %s (%1.fk): %s!\n",
+				      nm, (float)opos/1024, strerror(errno));
+		}
+
+	}
+	return err;
+}			 
 
 #define ZFREE(ptr)	\
 	do {		\
@@ -642,32 +672,8 @@ static int mayexpandfile()
 int cleanup()
 {
 	int rc, errs = 0;
-	if (odes != -1) {
-		/* Make sure, the output file is expanded to the last (first) position
-	 	 * FIXME: 0 byte writes do NOT expand file -- mayexpandfile() will
-		 * take care of that. */
-		if (!avoidwrite) 
-			rc = pwrite(odes, buf, 0, opos);
-		rc = fsync(odes);
-		if (rc && !o_chr) {
-			fplog(stderr, "dd_rescue: (warning): fsync %s (%.1fk): %s!\n", 
-			      oname, (float)opos/1024, strerror(errno));
-			++errs;
-			errno = 0;
-		}
-		rc = close(odes); 
-		if (rc) {
-			fplog(stderr, "dd_rescue: (warning): close %s (%.1fk): %s!\n", 
-			      oname, (float)opos/1024, strerror(errno));
-			++errs;
-		}
-		if (sparse)
-			rc = mayexpandfile();
-			if (rc)
-				fplog(stderr, "dd_rescue: (warning): seek %s (%1.fk): %s!\n",
-				      oname, (float)opos/1024, strerror(errno));
-	}
-	if (ides != -1) {
+	sync_close(odes, oname, o_chr);
+	if (ides != -INT_MAX) {
 		rc = close(ides);
 		if (rc) {
 			fplog(stderr, "dd_rescue: (warning): close %s (%.1fk): %s!\n", 
@@ -677,11 +683,22 @@ int cleanup()
 	}
 	if (logfd)
 		fclose(logfd);
+	LISTTYPE(charp) *onm = onames;
+	LISTTYPE(char) *ochr = ochrs;
+	LISTTYPE(int) *ofd = ofds;
+	while (onm) {
+		sync_close(LISTDATA(ofd), LISTDATA(onm), LISTDATA(ochr));
+		onm  = LISTNEXT(onm); ochr = LISTNEXT(ochr); ofd  = LISTNEXT(ofd);
+	}
 	ZFREE(buf2);
 	ZFREE(buf);
 	ZFREE(graph);
 	if (preserve)
 		copytimes(iname, oname);
+	LISTTYPE(charp) *onms;
+	LISTFOREACH(onames, onms)
+		if (preserve)
+			copytimes(iname, LISTDATA(onms));
 	ZFREE(oname);
 	if (prng_state2) {
 		frandom_release(prng_state2);
@@ -693,6 +710,7 @@ int cleanup()
 	}
 	LISTTREEDEL(onames, charp);
 	LISTTREEDEL(ofds, int);
+	LISTTREEDEL(ochrs, char);
 	return errs;
 }
 
@@ -796,6 +814,29 @@ ssize_t writeblock(const int towrite)
 		}
 		nrerr++;
 	}
+	int oldeno = errno;
+	char oldochr = o_chr;
+	LISTTYPE(int) *ofptr = ofds;
+	LISTTYPE(char) *ochp = ochrs;
+	LISTTYPE(charp) *onms = onames;
+	while (ofptr) {
+		ssize_t e2, w2 = 0;
+		o_chr = LISTDATA(ochp);
+		do {
+			w2 += (e2 = mypwrite(LISTDATA(ofptr), buf+w2, towrite-w2, opos+w2-reverse*towrite));
+			if (e2 == -1) 
+				w2++;
+		} while ((e2 == -1 && (errno == EINTR || errno == EAGAIN))
+			  || (w2 < towrite && e2 > 0 && errno == 0));
+		if (w2 < towrite && e2 != 0) 
+			fplog(stderr, "dd_rescue: (warning): 2ndary write %s (%.1fk): %s\n",
+			      LISTDATA(onms), (float)opos/1024, strerror(errno));
+		ofptr = LISTNEXT(ofptr);
+		ochp  = LISTNEXT(ochp);
+		onms  = LISTNEXT(onms);
+	}
+	o_chr = oldochr;
+	errno = oldeno;	
 	return (/*err == -1? err:*/ wr);
 }
 
@@ -1090,6 +1131,7 @@ int copyfile_splice(const off_t max)
 			close(fd_pipe[0]); close(fd_pipe[1]);
 			return 0;
 		}
+		/* TODO: Can we implement several outfile with splice? */
 		while (rd) {
 			ssize_t wr = splice(fd_pipe[0], NULL, odes, &opos, rd,
 					SPLICE_F_MOVE | SPLICE_F_MORE);
@@ -1506,6 +1548,11 @@ int main(int argc, char* argv[])
 		hardbs = softbs;
 	}
 
+	if (onames && dosplice) {
+		fplog(stderr, "dd_rescue: (warning): disabling splice copy for several out files\n");
+		dosplice = 0;
+	}
+
 	/* Set sync frequency */
 	/*
 	if (syncsz == -1)
@@ -1620,7 +1667,8 @@ int main(int argc, char* argv[])
 	if (preserve)
 		copyperm(ides, odes);
 			
-	check_seekable(ides, odes);
+	check_seekable(ides, &i_chr, "input");
+	check_seekable(odes, &o_chr, "output");
 
 	sparse_output_warn();
 	if (o_chr) {
@@ -1727,6 +1775,17 @@ int main(int argc, char* argv[])
 	}
 	if (bsim715 && o_chr) {
 		fplog(stderr, "dd_rescue: (warning): triple overwrite with non-seekable output!\n");
+	}
+
+	LISTTYPE(charp) *onm;
+	LISTFOREACH(onames, onm) {
+		char ochr = 0;
+		int ofd = openfile(LISTDATA(onm), (avoidwrite? O_RDWR: O_WRONLY) | O_CREAT | o_dir_out | dotrunc);
+		LISTAPPEND(ofds, ofd, int);
+		check_seekable(ofd, &ochr, NULL);
+		LISTAPPEND(ochrs, ochr, char);
+		if (preserve)
+			copyperm(ides, ofd);
 	}
 
 	/* Install signal handler */
