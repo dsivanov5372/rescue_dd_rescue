@@ -1162,11 +1162,14 @@ int tripleoverwrite(const off_t max)
 	void* prng_state2 = frandom_stdup(prng_state);
 	clock_t orig_startclock = startclock;
 	struct timeval orig_starttime;
+	LISTTYPE(int) *ofd;
 	memcpy(&orig_starttime, &starttime, sizeof(starttime));
 	fprintf(stderr, "%s%s%s%sdd_rescue: (info): Triple overwrite (BSI M7.15): first pass ... (frandom)      \n\n\n\n\n", up, up, up, up);
 	ret += copyfile_softbs(max);
 	fprintf(stderr, "syncing ... \n%s", up);
 	ret += fsync(odes);
+	LISTFOREACH(ofds, ofd)
+		fsync(LISTDATA(ofd));
 	/* TODO: better error handling */
 	frandom_release(prng_state);
 	prng_state = prng_state2; prng_state2 = 0;
@@ -1177,6 +1180,8 @@ int tripleoverwrite(const off_t max)
 	ret += copyfile_softbs(max);
 	fprintf(stderr, "syncing ... \n%s", up);
 	ret += fsync(odes);
+	LISTFOREACH(ofds, ofd)
+		fsync(LISTDATA(ofd));
 	/* TODO: better error handling */
 	bsim715_2ndpass = 0;
 	if (bsim715_4) {
@@ -1187,6 +1192,8 @@ int tripleoverwrite(const off_t max)
 		ret += copyfile_softbs(max);
 		fprintf(stderr, "syncing ... \n%s", up);
 		ret += fsync(odes);
+		LISTFOREACH(ofds, ofd)
+			fsync(LISTDATA(ofd));
 		bsim715_2ndpass = 1;
 		iname = "FRND+invFRND+FRND2+ZERO";
 	} else
