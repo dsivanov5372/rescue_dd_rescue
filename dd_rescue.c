@@ -635,7 +635,7 @@ static int mayexpandfile(char* onm)
 int sync_close(int fd, char* nm, char chr)
 {
 	int rc, err = 0;
-	if (fd != -INT_MAX) {
+	if (fd != -1) {
 		/* Make sure, the output file is expanded to the last (first) position
 	 	 * FIXME: 0 byte writes do NOT expand file -- mayexpandfile() will
 		 * take care of that. */
@@ -1134,7 +1134,7 @@ int copyfile_splice(const off_t max)
 			close(fd_pipe[0]); close(fd_pipe[1]);
 			return 0;
 		}
-		/* TODO: Can we implement several outfile with splice? */
+		/* TODO: Can we implement several outfiles with splice? */
 		while (rd) {
 			ssize_t wr = splice(fd_pipe[0], NULL, odes, &opos, rd,
 					SPLICE_F_MOVE | SPLICE_F_MORE);
@@ -1771,6 +1771,7 @@ int main(int argc, char* argv[])
 #ifdef HAVE_FALLOCATE
 	if (falloc)
 		do_fallocate();
+	/* TODO: fallocate for secondary outfiles */
 #endif
 
 	if (verbose) {
