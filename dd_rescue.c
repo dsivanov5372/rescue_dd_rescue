@@ -37,7 +37,6 @@
  * - Optional colors
  * - Use dlopen to open libfallocate rather than linking to it ...
  * - Display more infos on errors by collecting info from syslog
- * - Allow seoncdary output files
  */
 
 #ifndef VERSION
@@ -455,15 +454,13 @@ static void sparse_output_warn()
 }
 
 #ifdef HAVE_FALLOCATE
-static void do_fallocate()
+static void do_fallocate(int fd, char* onm)
 {
 	struct stat stbuf;
 	off_t to_falloc, alloced;
-	if (o_chr)
-		return;
 	if (!estxfer)
 		return;
-	if (fstat(odes, &stbuf))
+	if (fstat(fd, &stbuf))
 		return;
 	if (!S_ISREG(stbuf.st_mode))
 		return;
@@ -472,13 +469,13 @@ static void do_fallocate()
 	if (to_falloc <= 0)
 		return;
 #ifdef HAVE_LIBFALLOCATE
-	if (linux_fallocate64(odes, FALLOC_FL_KEEP_SIZE, 
+	if (linux_fallocate64(fd, FALLOC_FL_KEEP_SIZE, 
 			      opos, to_falloc))
 #else
-	if (fallocate64(odes, 1, opos, to_falloc))
+	if (fallocate64(fd, 1, opos, to_falloc))
 #endif
 	       fplog(stderr, "dd_rescue: (warning): fallocate %s (%Li, %Li) failed: %s\n",
-			       oname, opos, to_falloc, strerror(errno));
+			       onm, opos, to_falloc, strerror(errno));
 }
 #endif
 
@@ -1762,9 +1759,8 @@ int main(int argc, char* argv[])
 
 
 #ifdef HAVE_FALLOCATE
-	if (falloc)
-		do_fallocate();
-	/* TODO: fallocate for secondary outfiles */
+	if (falloc && !o_chr)
+		do_fallocate(odes, oname);
 #endif
 
 	if (verbose) {
@@ -1788,6 +1784,10 @@ int main(int argc, char* argv[])
 		check_seekable(oft->fd, &(oft->cdev), NULL);
 		if (preserve)
 			copyperm(ides, oft->fd);
+#ifdef HAVE_FALLOCATE
+		if (falloc && !oft->cdev)
+			do_fallocate(oft->fd, oft->name);
+#endif
 	}
 
 	/* Install signal handler */
