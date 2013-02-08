@@ -156,13 +156,13 @@ clock_t startclock;
 unsigned int pagesize = 4096;
 
 /* multiple output files */
-typedef char* charp;
-LISTDECL(charp);
-LISTDECL(int);
-LISTDECL(char);
-LISTTYPE(charp) *onames;
-LISTTYPE(int) *ofds;
-LISTTYPE(char) *ochrs;
+typedef struct _ofile {
+	char* name;
+	int fd;
+	char cdev;
+} ofile_t;
+LISTDECL(ofile_t);
+LISTTYPE(ofile_t) *ofiles;
 
 #ifndef UP
 # define UP "\x1b[A"
@@ -576,9 +576,9 @@ void printreport()
 	in_report = 1;
 	if (report) {
 		fplog(report, "dd_rescue: (info): Summary for %s -> %s", iname, oname);
-		LISTTYPE(charp) *onm;
-		LISTFOREACH(onames, onm)
-			fplog(report, "; %s", LISTDATA(onm));
+		LISTTYPE(ofile_t) *of;
+		LISTFOREACH(ofiles, of)
+			fplog(report, "; %s", LISTDATA(of).name);
 		fprintf(report, ":\n%s%s%s%s", down, down, down, down);
 		printstatus(report, logfd, 0, 1);
 		if (avoidwrite) 
@@ -676,7 +676,7 @@ int cleanup()
 {
 	int rc, errs = 0;
 	errs += sync_close(odes, oname, o_chr);
-	if (ides != -INT_MAX) {
+	if (ides != -1) {
 		rc = close(ides);
 		if (rc) {
 			fplog(stderr, "dd_rescue: (warning): close %s (%.1fk): %s!\n", 
@@ -686,22 +686,19 @@ int cleanup()
 	}
 	if (logfd)
 		fclose(logfd);
-	LISTTYPE(charp) *onm = onames;
-	LISTTYPE(char) *ochr = ochrs;
-	LISTTYPE(int) *ofd = ofds;
-	while (onm) {
-		rc = sync_close(LISTDATA(ofd), LISTDATA(onm), LISTDATA(ochr));
-		onm  = LISTNEXT(onm); ochr = LISTNEXT(ochr); ofd  = LISTNEXT(ofd);
+	LISTTYPE(ofile_t) *of;
+	LISTFOREACH(ofiles, of) {
+		ofile_t *oft = &(LISTDATA(of));
+		rc = sync_close(oft->fd, oft->name, oft->cdev);
 	}
 	ZFREE(buf2);
 	ZFREE(buf);
 	ZFREE(graph);
 	if (preserve)
 		copytimes(iname, oname);
-	LISTTYPE(charp) *onms;
-	LISTFOREACH(onames, onms)
+	LISTFOREACH(ofiles, of)
 		if (preserve)
-			copytimes(iname, LISTDATA(onms));
+			copytimes(iname, LISTDATA(of).name);
 	ZFREE(oname);
 	if (prng_state2) {
 		frandom_release(prng_state2);
@@ -711,9 +708,7 @@ int cleanup()
 		frandom_release(prng_state);
 		prng_state = 0;
 	}
-	LISTTREEDEL(onames, charp);
-	LISTTREEDEL(ofds, int);
-	LISTTREEDEL(ochrs, char);
+	LISTTREEDEL(ofiles, ofile_t);
 	return errs;
 }
 
@@ -819,24 +814,20 @@ ssize_t writeblock(const int towrite)
 	}
 	int oldeno = errno;
 	char oldochr = o_chr;
-	LISTTYPE(int) *ofptr = ofds;
-	LISTTYPE(char) *ochp = ochrs;
-	LISTTYPE(charp) *onms = onames;
-	while (ofptr) {
+	LISTTYPE(ofile_t) *of;
+	LISTFOREACH(ofiles, of) {
 		ssize_t e2, w2 = 0;
-		o_chr = LISTDATA(ochp);
+		ofile_t *oft = &(LISTDATA(of));
+		o_chr = oft->cdev;
 		do {
-			w2 += (e2 = mypwrite(LISTDATA(ofptr), buf+w2, towrite-w2, opos+w2-reverse*towrite));
+			w2 += (e2 = mypwrite(oft->fd, buf+w2, towrite-w2, opos+w2-reverse*towrite));
 			if (e2 == -1) 
 				w2++;
 		} while ((e2 == -1 && (errno == EINTR || errno == EAGAIN))
 			  || (w2 < towrite && e2 > 0 && errno == 0));
 		if (w2 < towrite && e2 != 0) 
 			fplog(stderr, "dd_rescue: (warning): 2ndary write %s (%.1fk): %s\n",
-			      LISTDATA(onms), (float)opos/1024, strerror(errno));
-		ofptr = LISTNEXT(ofptr);
-		ochp  = LISTNEXT(ochp);
-		onms  = LISTNEXT(onms);
+			      oft->name, (float)opos/1024, strerror(errno));
 	}
 	o_chr = oldochr;
 	errno = oldeno;	
@@ -1162,14 +1153,14 @@ int tripleoverwrite(const off_t max)
 	void* prng_state2 = frandom_stdup(prng_state);
 	clock_t orig_startclock = startclock;
 	struct timeval orig_starttime;
-	LISTTYPE(int) *ofd;
+	LISTTYPE(ofile_t) *of;
 	memcpy(&orig_starttime, &starttime, sizeof(starttime));
 	fprintf(stderr, "%s%s%s%sdd_rescue: (info): Triple overwrite (BSI M7.15): first pass ... (frandom)      \n\n\n\n\n", up, up, up, up);
 	ret += copyfile_softbs(max);
 	fprintf(stderr, "syncing ... \n%s", up);
 	ret += fsync(odes);
-	LISTFOREACH(ofds, ofd)
-		fsync(LISTDATA(ofd));
+	LISTFOREACH(ofiles, of)
+		fsync(LISTDATA(of).fd);
 	/* TODO: better error handling */
 	frandom_release(prng_state);
 	prng_state = prng_state2; prng_state2 = 0;
@@ -1180,8 +1171,8 @@ int tripleoverwrite(const off_t max)
 	ret += copyfile_softbs(max);
 	fprintf(stderr, "syncing ... \n%s", up);
 	ret += fsync(odes);
-	LISTFOREACH(ofds, ofd)
-		fsync(LISTDATA(ofd));
+	LISTFOREACH(ofiles, of)
+		fsync(LISTDATA(of).fd);
 	/* TODO: better error handling */
 	bsim715_2ndpass = 0;
 	if (bsim715_4) {
@@ -1192,8 +1183,8 @@ int tripleoverwrite(const off_t max)
 		ret += copyfile_softbs(max);
 		fprintf(stderr, "syncing ... \n%s", up);
 		ret += fsync(odes);
-		LISTFOREACH(ofds, ofd)
-			fsync(LISTDATA(ofd));
+		LISTFOREACH(ofiles, of)
+			fsync(LISTDATA(of).fd);
 		bsim715_2ndpass = 1;
 		iname = "FRND+invFRND+FRND2+ZERO";
 	} else
@@ -1441,6 +1432,8 @@ int main(int argc, char* argv[])
 	prng_seed = 0; prng_sfile = 0;
 	prng_state = 0; prng_state2 = 0;
 
+	ofiles = NULL;
+
 #ifdef _SC_PAGESIZE
 	pagesize = sysconf(_SC_PAGESIZE);
 #endif
@@ -1480,7 +1473,7 @@ int main(int argc, char* argv[])
 			case 'l': lname = optarg; break;
 			case 'o': bbname = optarg; break;
 			case 'x': extend = 1; break;
-			case 'Y': LISTAPPEND(onames, optarg, charp); break;
+			case 'Y': do { ofile_t of; of.name = optarg; of.fd = -1; of.cdev = 0; LISTAPPEND(ofiles, of, ofile_t); } while (0); break;
 			case 'z': prng_libc = 1; if (is_filename(optarg)) prng_sfile = optarg; else prng_seed = readint(optarg); break;
 			case 'Z': prng_frnd = 1; if (is_filename(optarg)) prng_sfile = optarg; else prng_seed = readint(optarg); break;
 			case '3': prng_frnd = 1; if (is_filename(optarg)) prng_sfile = optarg; else prng_seed = readint(optarg); bsim715 = 1; break;
@@ -1558,7 +1551,7 @@ int main(int argc, char* argv[])
 		hardbs = softbs;
 	}
 
-	if (onames && dosplice) {
+	if (ofiles && dosplice) {
 		fplog(stderr, "dd_rescue: (warning): disabling splice copy for several out files\n");
 		dosplice = 0;
 	}
@@ -1788,15 +1781,13 @@ int main(int argc, char* argv[])
 		fplog(stderr, "dd_rescue: (warning): triple overwrite with non-seekable output!\n");
 	}
 
-	LISTTYPE(charp) *onm;
-	LISTFOREACH(onames, onm) {
-		char ochr = 0;
-		int ofd = openfile(LISTDATA(onm), (avoidwrite? O_RDWR: O_WRONLY) | O_CREAT | o_dir_out | dotrunc);
-		LISTAPPEND(ofds, ofd, int);
-		check_seekable(ofd, &ochr, NULL);
-		LISTAPPEND(ochrs, ochr, char);
+	LISTTYPE(ofile_t) *of;
+	LISTFOREACH(ofiles, of) {
+		ofile_t *oft = &(LISTDATA(of));
+		oft->fd = openfile(oft->name, (avoidwrite? O_RDWR: O_WRONLY) | O_CREAT | o_dir_out | dotrunc);
+		check_seekable(oft->fd, &(oft->cdev), NULL);
 		if (preserve)
-			copyperm(ides, ofd);
+			copyperm(ides, oft->fd);
 	}
 
 	/* Install signal handler */
