@@ -1446,10 +1446,10 @@ char* dirappfile(char* onm)
 		if (lastchr == '/') 
 			return retstrdupcat3(onm, 0, iname);
 		else if ((lastchr == '.') &&
-			  (oln > 1 && oname[oln-2] == '/'))
+			  (oln > 1 && onm[oln-2] == '/'))
 			return retstrdupcat3(onm, -1, iname);
 		else if ((lastchr == '.') &&
-			   (oln > 2 && oname[oln-2] == '.' && oname[oln-3] == '/'))
+			   (oln > 2 && onm[oln-2] == '.' && onm[oln-3] == '/'))
 			return retstrdupcat3(onm, '/', iname);
 		else { /* Not clear by name, so test */
 			struct stat stbuf;
