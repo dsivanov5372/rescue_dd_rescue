@@ -580,7 +580,8 @@ void printreport()
 		LISTTYPE(ofile_t) *of;
 		LISTFOREACH(ofiles, of)
 			fplog(report, "; %s", LISTDATA(of).name);
-		fprintf(logfd, ":\n");
+		if (logfd > 0)
+			fprintf(logfd, ":\n");
 		fprintf(report, ":\n%s%s%s%s", down, down, down, down);
 		printstatus(report, logfd, 0, 1);
 		if (avoidwrite) 
@@ -669,7 +670,7 @@ int sync_close(int fd, char* nm, char chr)
 
 #define ZFREE(ptr)	\
 	do {		\
-	  if(ptr)	\
+	  if (ptr)	\
 	    free(ptr);	\
 	  ptr = 0;	\
 	} while(0)
