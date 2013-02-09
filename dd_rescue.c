@@ -163,6 +163,10 @@ typedef struct _ofile {
 LISTDECL(ofile_t);
 LISTTYPE(ofile_t) *ofiles;
 
+typedef char* charp;
+LISTDECL(charp);
+LISTTYPE(charp) *freenames;
+
 #ifndef UP
 # define UP "\x1b[A"
 # define DOWN "\n"
@@ -576,6 +580,7 @@ void printreport()
 		LISTTYPE(ofile_t) *of;
 		LISTFOREACH(ofiles, of)
 			fplog(report, "; %s", LISTDATA(of).name);
+		fprintf(logfd, ":\n");
 		fprintf(report, ":\n%s%s%s%s", down, down, down, down);
 		printstatus(report, logfd, 0, 1);
 		if (avoidwrite) 
@@ -696,7 +701,6 @@ int cleanup()
 	LISTFOREACH(ofiles, of)
 		if (preserve)
 			copytimes(iname, LISTDATA(of).name);
-	ZFREE(oname);
 	if (prng_state2) {
 		frandom_release(prng_state2);
 		prng_state2 = 0;
@@ -706,6 +710,12 @@ int cleanup()
 		prng_state = 0;
 	}
 	LISTTREEDEL(ofiles, ofile_t);
+	LISTTYPE(charp) *onl;
+	LISTFOREACH(freenames, onl) {
+		free(LISTDATA(onl));
+		LISTDATA(onl) = 0;
+	}
+	LISTTREEDEL(freenames, charp);
 	return errs;
 }
 
@@ -1402,7 +1412,53 @@ int is_filename(char* arg)
 		return 0;
 	return 1;
 }
-	
+
+char* retstrdupcat3(const char* dir, char dirsep, const char* inm)
+{
+	const char* ibase = basename(inm);
+	const int dlen = strlen(dir) + (dirsep>0? 1: dirsep);
+	char* ret = malloc(dlen + strlen(inm) + 1);
+	strcpy(ret, dir);
+	if (dirsep > 0) {
+		ret[dlen-1] = dirsep;
+		ret[dlen] = 0;
+	}
+	strcpy(ret+dlen, ibase);
+	LISTAPPEND(freenames, ret, charp);
+	return ret;
+}
+		
+
+/** Fix output filename if it's a directory */
+char* dirappfile(char* onm)
+{
+	size_t oln = strlen(onm);
+	if (!strcmp(onm, ".")) {
+		char* ret = strdup(basename(iname));
+		LISTAPPEND(freenames, ret, charp);
+		return ret;
+	}
+	if (oln > 0) {
+		char lastchr = onm[oln-1];
+		if (lastchr == '/') 
+			return retstrdupcat3(onm, 0, iname);
+		else if ((lastchr == '.') &&
+			  (oln > 1 && oname[oln-2] == '/'))
+			return retstrdupcat3(onm, -1, iname);
+		else if ((lastchr == '.') &&
+			   (oln > 2 && oname[oln-2] == '.' && oname[oln-3] == '/'))
+			return retstrdupcat3(onm, '/', iname);
+		else { /* Not clear by name, so test */
+			struct stat stbuf;
+			int err = stat(onm, &stbuf);
+			if (!err && S_ISDIR(stbuf.st_mode))
+				return retstrdupcat3(onm, '/', iname);
+		}
+	}
+	return onm;
+}
+
+
 int main(int argc, char* argv[])
 {
 	int c;
@@ -1496,7 +1552,7 @@ int main(int argc, char* argv[])
 		iname = argv[optind++];
 
 	if (optind < argc) 
-		oname = strdup(argv[optind++]);
+		oname = argv[optind++];
 	if (optind < argc) {
 		fplog(stderr, "dd_rescue: (fatal): spurious options: %s ...\n", argv[optind]);
 		printhelp();
@@ -1579,33 +1635,11 @@ int main(int argc, char* argv[])
 		i_repeat = 1;
 	}
 
-	/* Special case '.': same as iname (w/o path) */
-	if (!strcmp(oname, ".")) {
-		free(oname);
-		oname = strdup(basename(iname));
-	} else { /* Is oname a directory? */
-		size_t oln = strlen(oname);
-		if (oln > 0) {
-			char lastchr = oname[oln-1];
-			if (lastchr == '/')
-				oname = safe_strcat(oname, basename(iname));
-			else if ((lastchr == '.') &&
-				  ((oln > 1 && oname[oln-2] == '/') ||
-				   (oln > 2 && oname[oln-2] == '.' && oname[oln-3] == '/'))) {
-					oname = safe_strcat(oname, "/");
-					oname = safe_strcat(oname, basename(iname));
-			} else { /* Not clear by name, so test */
-				struct stat stbuf;
-				int err = stat(oname, &stbuf);
-				if (!err && S_ISDIR(stbuf.st_mode)) {
-					oname = safe_strcat(oname, "/");
-					oname = safe_strcat(oname, basename(iname));
-				}
-			}
-		}
-	}
+	/* Properly append input basename if output name is dir */
+	oname = dirappfile(oname);
 
 	identical = check_identical(iname, oname);
+
 	if (identical && dotrunc && !force) {
 		fplog(stderr, "dd_rescue: (fatal): infile and outfile are identical and trunc turned on!\n");
 		cleanup(); exit(14);
@@ -1779,7 +1813,12 @@ int main(int argc, char* argv[])
 
 	LISTTYPE(ofile_t) *of;
 	LISTFOREACH(ofiles, of) {
+		int id;
 		ofile_t *oft = &(LISTDATA(of));
+		oft->name = dirappfile(oft->name);
+		id = check_identical(iname, oft->name);
+		if (id)
+			fplog(stderr, "dd_rescue: (warning): Input file and secondary output file %s are identical!\n", oft->name);
 		oft->fd = openfile(oft->name, (avoidwrite? O_RDWR: O_WRONLY) | O_CREAT | o_dir_out | dotrunc);
 		check_seekable(oft->fd, &(oft->cdev), NULL);
 		if (preserve)
