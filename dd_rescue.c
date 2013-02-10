@@ -378,9 +378,8 @@ void input_length()
 	if (!quiet)
 		fplog(stderr, "dd_rescue: (info): expect to copy %LikB from %s\n",
 			estxfer/1024, iname);
-	if (graph)
-		free(graph);
-	preparegraph();
+	if (!graph)
+		preparegraph();
 }
 
 int output_length()
