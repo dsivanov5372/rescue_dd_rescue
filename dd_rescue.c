@@ -1116,26 +1116,26 @@ int copyfile_splice(const off_t max)
 {
 	ssize_t toread;
 	int fd_pipe[2];
+	LISTTYPE(ofile_t) *oft;
 	if (pipe(fd_pipe) < 0)
 		return copyfile_softbs(max);
 	while ((toread	= blockxfer(max, softbs)) > 0) {
+		off_t old_ipos = ipos, old_opos = opos;
 		ssize_t rd = splice(ides, &ipos, fd_pipe[1], NULL, toread,
 					SPLICE_F_MOVE | SPLICE_F_MORE);
 		if (rd < 0) {
-			close(fd_pipe[0]); close(fd_pipe[1]);
 			if (!quiet)
 				fplog(stderr, "dd_rescue: (info): %s (%.1fk): fall back to userspace copy\n%s%s%s%s", 
 				      iname, (float)ipos/1024, down, down, down, down);
+			close(fd_pipe[0]); close(fd_pipe[1]);
 			return copyfile_softbs(max);
 		}
 		if (rd == 0) {
 			if (!quiet)
 				fplog(stderr, "dd_rescue: (info): read %s (%.1fk): EOF (splice)\n", 
 				      iname, (float)ipos/1024);
-			close(fd_pipe[0]); close(fd_pipe[1]);
-			return 0;
+			break;
 		}
-		/* TODO: Can we implement several outfiles with splice? */
 		while (rd) {
 			ssize_t wr = splice(fd_pipe[0], NULL, odes, &opos, rd,
 					SPLICE_F_MOVE | SPLICE_F_MORE);
@@ -1145,6 +1145,37 @@ int copyfile_splice(const off_t max)
 			}
 			rd -= wr; xfer += wr; sxfer += wr;
 		}
+		off_t new_ipos = ipos, new_opos = opos;
+		LISTFOREACH(ofiles, oft) {
+			ipos = old_ipos; opos = old_opos;
+			rd = splice(ides, &ipos, fd_pipe[1], NULL, toread,
+					SPLICE_F_MOVE | SPLICE_F_MORE);
+			/* Simplify error handling, it worked before ... */
+			if (rd <= 0) {
+				fplog(stderr, "dd_rescue: (error): Confused: splice() failed unexpectedly: %s\n%s%s%s%s",
+					strerror(errno), down, down, down, down);
+				/* We should abort here .... */
+				ipos = new_ipos; opos = new_opos;
+				continue;
+			}
+			while (rd) {
+				ssize_t wr = splice(fd_pipe[0], NULL, LISTDATA(oft).fd, &opos, rd,
+						SPLICE_F_MOVE | SPLICE_F_MORE);
+				if (wr < 0) {	
+					fplog(stderr, "dd_rescue: (error): Confused: splice() failed unexpectedly: %s\n%s%s%s%s",
+						strerror(errno), down, down, down, down);
+					/* We should abort here .... */
+					ipos = new_ipos; opos = new_opos;
+					continue;
+				}
+			rd -= wr;
+			}
+		}
+		if (ipos != new_ipos || opos != new_opos) {
+			fplog(stderr, "dd_rescue: (error): Confused: splice progress inconsistent: %zi %zi %zi %zi\n%s%s%s%s",
+				ipos, new_ipos, opos, new_opos, down, down, down, down);
+			ipos = new_ipos; opos = new_opos;
+		}	
 		advancepos(0, 0);
 		if (syncfreq && !(xfer % (syncfreq*softbs)))
 			printstatus((quiet? 0: stderr), 0, softbs, 1);
@@ -1607,10 +1638,12 @@ int main(int argc, char* argv[])
 		hardbs = softbs;
 	}
 
+	/*
 	if (ofiles && dosplice) {
 		fplog(stderr, "dd_rescue: (warning): disabling splice copy for several out files\n");
 		dosplice = 0;
 	}
+	*/
 
 	/* Set sync frequency */
 	/*
