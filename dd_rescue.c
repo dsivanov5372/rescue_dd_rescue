@@ -1638,13 +1638,6 @@ int main(int argc, char* argv[])
 		hardbs = softbs;
 	}
 
-	/*
-	if (ofiles && dosplice) {
-		fplog(stderr, "dd_rescue: (warning): disabling splice copy for several out files\n");
-		dosplice = 0;
-	}
-	*/
-
 	/* Set sync frequency */
 	/*
 	if (syncsz == -1)
