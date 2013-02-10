@@ -1256,7 +1256,7 @@ void init_random()
 				fplog(stderr, "dd_rescue: (fatal): failed to read 4 bytes from \"%s\"!\n", prng_sfile);
 				cleanup(); exit(29);
 			}
-			srand(*sval);
+			srand(*sval); rand();
 		} else {
 			ln = read(fd, sbf, 256);
 			if (ln != 256) {
@@ -1268,9 +1268,9 @@ void init_random()
 	} else {
 		if (!prng_seed)
 			prng_seed = frandom_getseedval();
-		if (prng_libc)
-			srand(prng_seed);
-		else
+		if (prng_libc) {
+			srand(prng_seed); rand();
+		} else
 			prng_state = frandom_init_lrand(prng_seed);
 	}
 }

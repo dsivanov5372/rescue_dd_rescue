@@ -140,7 +140,7 @@ void* frandom_init_lrand(int seedval)
 
 	if (!seedval)
 		seedval = frandom_getseedval();
-	srand(seedval);
+	srand(seedval); rand();
 	get_libc_rand_bytes(seedbuf, 256);
 	return frandom_init(seedbuf);
 }
