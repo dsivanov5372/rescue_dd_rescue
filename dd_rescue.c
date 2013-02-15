@@ -37,6 +37,7 @@
  * - Optional colors
  * - Use dlopen to open libfallocate rather than linking to it ...
  * - Display more infos on errors by collecting info from syslog
+ * - A man page ...
  */
 
 #ifndef VERSION
@@ -86,7 +87,7 @@
 #include "frandom.h"
 #include "list.h"
 
-#ifdef HAVE_GETOPT_H
+#ifndef LACK_GETOPT_LONG
 #include <getopt.h>
 #endif
 // hack around buggy splice definition(!)
@@ -243,12 +244,6 @@ static int check_identical(const char* const in, const char* const on)
 	    istat.st_dev == ostat.st_dev)
 		return 1;
 	return 0;
-}
-
-static char* safe_strcat(char* base, const char* toapp)
-{
-	char* str = realloc(base, strlen(base) + strlen(toapp) + 1);
-	return strcat(str, toapp);
 }
 
 static int openfile(const char* const fname, const int flags)
@@ -1328,6 +1323,31 @@ void printversion()
 	fprintf(stderr, " (at your option).\n");
 }
 
+
+#ifndef LACK_GETOPT_LONG
+struct option longopts[] = { 	{"help", 0, NULL, 'h'}, {"verbose", 0, NULL, 'v'}, 
+				{"quiet", 0, NULL, 'q'}, {"version", 0, NULL, 'V'},
+				{"ipos", 1, NULL, 's'}, {"opos", 1, NULL, 'S'},
+				{"softbs", 1, NULL, 'b'}, {"hardbs", 1, NULL, 'B'},
+				{"maxerr", 1, NULL, 'e'}, {"maxxfer", 1, NULL, 'm'},
+				{"noextend", 0, NULL, 'M'}, {"extend", 0, NULL, 'x'},
+				{"syncfreq", 1, NULL, 'y'}, {"logfile", 1, NULL, 'l'},
+				{"bbfile", 1, NULL, 'o'}, {"reverse", 0, NULL, 'r'},
+				{"repeat", 0, NULL, 'R'}, {"truncate", 0, NULL, 't'},
+				{"odir_in", 0, NULL, 'd'}, {"odir_out", 0, NULL, 'D'},
+				{"splice", 0, NULL, 'k'}, {"fallocate", 0, NULL, 'P'},
+				{"abort_we", 0, NULL, 'w'}, {"avoidwrite", 0, NULL, 'W'},
+				{"sparse", 0, NULL, 'a'}, {"alwayswrite", 0, NULL, 'A'},
+				{"interactive", 0, NULL, 'i'}, {"force", 0, NULL, 'f'},
+				{"preserve", 0, NULL, 'p'}, {"outfile", 1, NULL, 'Y'},
+				{"random", 1, NULL, 'z'}, {"frandom", 1, NULL, 'Z'},
+ 				{"shred3", 1, NULL, '3'}, {"shred4", 1, NULL, '4'},
+				
+				{NULL, 0, NULL, 0},
+};
+#endif
+
+
 void printhelp()
 {
 	printversion();
@@ -1523,8 +1543,12 @@ int main(int argc, char* argv[])
 #ifdef _SC_PAGESIZE
 	pagesize = sysconf(_SC_PAGESIZE);
 #endif
-
-	while ((c = getopt(argc, argv, ":rtfihqvVwWaAdDkMRpPb:B:m:e:s:S:l:o:y:z:Z:3:4:xY:")) != -1) {
+#ifdef LACK_GETOPT_LONG
+	while ((c = getopt(argc, argv, ":rtfihqvVwWaAdDkMRpPb:B:m:e:s:S:l:o:y:z:Z:3:4:xY:")) != -1) 
+#else
+	while ((c = getopt_long(argc, argv, ":rtfihqvVwWaAdDkMRpPb:B:m:e:s:S:l:o:y:z:Z:3:4:xY:", longopts, NULL)) != -1) 
+#endif
+	{
 		switch (c) {
 			case 'r': reverse = 1; break;
 			case 'R': i_repeat = 1; break;
