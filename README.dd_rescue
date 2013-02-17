@@ -157,6 +157,7 @@ dd_rescue has a few nifty features:
   (option -4); this option has been designed to meet the BSI GSDS 
   M7.15 criteria for safe deletion of data.
   https://www.bsi.bund.de/ContentBSI/grundschutz/baustein-datenschutz/html/m07015.html
+  Alternatively you can shorten it to just one frandom pass with -2 (since 1.33,).
 * Starting with 1.32, you can write the data to multiple output files
   at once (option -Y); it can be used more than once.
   Also, if you want to concatenate data from multiple input files,
