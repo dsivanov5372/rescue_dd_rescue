@@ -141,7 +141,7 @@ char i_repeat, i_rep_init;
 int i_rep_zero, prng_seed;
 char noextend, avoidwrite;
 char prng_libc, prng_frnd;
-char bsim715, bsim715_4, bsim715_2ndpass;
+char bsim715, bsim715_4, bsim715_2, bsim715_2ndpass;
 char extend;
 char* prng_sfile;
 
@@ -1200,30 +1200,33 @@ int tripleoverwrite(const off_t max)
 	frandom_release(prng_state);
 	prng_state = prng_state2; prng_state2 = 0;
 	bsim715_2ndpass = 1;
-	opos = orig_opos; xfer = 0; ipos = 0;
-	startclock = clock(); gettimeofday(&starttime, NULL);
-	fprintf(stderr, "dd_rescue: (info): Triple overwrite (BSI M7.15): second pass ... (frandom_inv)\n\n\n\n\n");
-	ret += copyfile_softbs(max);
-	fprintf(stderr, "syncing ... \n%s", up);
-	ret += fsync(odes);
-	LISTFOREACH(ofiles, of)
-		fsync(LISTDATA(of).fd);
-	/* TODO: better error handling */
-	bsim715_2ndpass = 0;
-	if (bsim715_4) {
-		frandom_bytes(prng_state, buf, 16);
-		fprintf(stderr, "dd_rescue: (info): Triple overwrite (BSI M7.15): third pass ... (frandom) \n\n\n\n\n");
+	if (!bsim715_2) {
 		opos = orig_opos; xfer = 0; ipos = 0;
 		startclock = clock(); gettimeofday(&starttime, NULL);
+		fprintf(stderr, "dd_rescue: (info): Triple overwrite (BSI M7.15): second pass ... (frandom_inv)\n\n\n\n\n");
 		ret += copyfile_softbs(max);
 		fprintf(stderr, "syncing ... \n%s", up);
 		ret += fsync(odes);
 		LISTFOREACH(ofiles, of)
 			fsync(LISTDATA(of).fd);
-		bsim715_2ndpass = 1;
-		iname = "FRND+invFRND+FRND2+ZERO";
+		/* TODO: better error handling */
+		bsim715_2ndpass = 0;
+		if (bsim715_4) {
+			frandom_bytes(prng_state, buf, 16);
+			fprintf(stderr, "dd_rescue: (info): Triple overwrite (BSI M7.15): third pass ... (frandom) \n\n\n\n\n");
+			opos = orig_opos; xfer = 0; ipos = 0;
+			startclock = clock(); gettimeofday(&starttime, NULL);
+			ret += copyfile_softbs(max);
+			fprintf(stderr, "syncing ... \n%s", up);
+			ret += fsync(odes);
+			LISTFOREACH(ofiles, of)
+				fsync(LISTDATA(of).fd);
+			bsim715_2ndpass = 1;
+			iname = "FRND+invFRND+FRND2+ZERO";
+		} else
+			iname = "FRND+invFRND+ZERO";
 	} else
-		iname = "FRND+invFRND+ZERO";
+		iname = "FRND+ZERO";
 	fprintf(stderr, "dd_rescue: (info): Triple overwrite (BSI M7.15): last pass ... (zeros) \n\n\n\n\n");
 	frandom_release(prng_state); prng_state = 0;
 	memset(buf, 0, softbs); 
@@ -1342,6 +1345,7 @@ struct option longopts[] = { 	{"help", 0, NULL, 'h'}, {"verbose", 0, NULL, 'v'},
 				{"preserve", 0, NULL, 'p'}, {"outfile", 1, NULL, 'Y'},
 				{"random", 1, NULL, 'z'}, {"frandom", 1, NULL, 'Z'},
  				{"shred3", 1, NULL, '3'}, {"shred4", 1, NULL, '4'},
+ 				{"shred2", 1, NULL, '2'},
 				
 				{NULL, 0, NULL, 0},
 };
@@ -1392,7 +1396,8 @@ void printhelp()
 	fprintf(stderr, " from libc or frandom (RC4 based) as input. SEED = 0 means a time based seed;\n");
 	fprintf(stderr, " Using /dev/urandom as SEEDFILE gives good pseudo random numbers.\n");
 	fprintf(stderr, "Likewise, -3 SEED/SEEDFILE will overwrite ofile 3 times (r,ir,0, BSI M7.15).\n");
-	fprintf(stderr, " With -4 SEED/SEEDFILE you get an additional random pass (r,ir,r2,0).\n\n");
+	fprintf(stderr, " With -4 SEED/SEEDFILE you get an additional random pass (r,ir,r2,0).\n");
+	fprintf(stderr, " With -2 SEED/SEEDFILE you only get one random pass (r,0).\n\n");
 	fprintf(stderr, "Sizes may be given in units b(=512), k(=1024), M(=1024^2) or G(1024^3) bytes\n");
 	fprintf(stderr, "This program is useful to rescue data in case of I/O errors, because\n");
 	fprintf(stderr, " it does not necessarily abort or truncate the output.\n");
@@ -1532,7 +1537,7 @@ int main(int argc, char* argv[])
 
 	i_repeat = 0; i_rep_init = 0; i_rep_zero = 0;
 	noextend = 0; avoidwrite = 0;
-	bsim715 = 0; bsim715_4 = 0; bsim715_2ndpass = 0;
+	bsim715 = 0; bsim715_4 = 0; bsim715_2 = 0; bsim715_2ndpass = 0;
 	extend = 0;
 	prng_libc = 0; prng_frnd = 0;
 	prng_seed = 0; prng_sfile = 0;
@@ -1544,9 +1549,9 @@ int main(int argc, char* argv[])
 	pagesize = sysconf(_SC_PAGESIZE);
 #endif
 #ifdef LACK_GETOPT_LONG
-	while ((c = getopt(argc, argv, ":rtfihqvVwWaAdDkMRpPb:B:m:e:s:S:l:o:y:z:Z:3:4:xY:")) != -1) 
+	while ((c = getopt(argc, argv, ":rtfihqvVwWaAdDkMRpPb:B:m:e:s:S:l:o:y:z:Z:2:3:4:xY:")) != -1) 
 #else
-	while ((c = getopt_long(argc, argv, ":rtfihqvVwWaAdDkMRpPb:B:m:e:s:S:l:o:y:z:Z:3:4:xY:", longopts, NULL)) != -1) 
+	while ((c = getopt_long(argc, argv, ":rtfihqvVwWaAdDkMRpPb:B:m:e:s:S:l:o:y:z:Z:2:3:4:xY:", longopts, NULL)) != -1) 
 #endif
 	{
 		switch (c) {
@@ -1586,6 +1591,7 @@ int main(int argc, char* argv[])
 			case 'Y': do { ofile_t of; of.name = optarg; of.fd = -1; of.cdev = 0; LISTAPPEND(ofiles, of, ofile_t); } while (0); break;
 			case 'z': prng_libc = 1; if (is_filename(optarg)) prng_sfile = optarg; else prng_seed = readint(optarg); break;
 			case 'Z': prng_frnd = 1; if (is_filename(optarg)) prng_sfile = optarg; else prng_seed = readint(optarg); break;
+			case '2': prng_frnd = 1; if (is_filename(optarg)) prng_sfile = optarg; else prng_seed = readint(optarg); bsim715 = 1; bsim715_2 = 1; break;
 			case '3': prng_frnd = 1; if (is_filename(optarg)) prng_sfile = optarg; else prng_seed = readint(optarg); bsim715 = 1; break;
 			case '4': prng_frnd = 1; if (is_filename(optarg)) prng_sfile = optarg; else prng_seed = readint(optarg); bsim715 = 1; bsim715_4 = 1; break;
 			case ':': fplog (stderr, "dd_rescue: (fatal): option %c requires an argument!\n", optopt); 
