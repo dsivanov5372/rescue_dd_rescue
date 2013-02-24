@@ -127,7 +127,7 @@ int cleanup();
 /* Global vars and options */
 unsigned int softbs, hardbs, syncfreq;
 int maxerr, nrerr, dotrunc;
-char reverse, abwrerr, sparse, nosparse;
+char trunclast, reverse, abwrerr, sparse, nosparse;
 char verbose, quiet, interact, force, in_report;
 unsigned char *buf, *buf2;
 char *lname, *iname, *oname, *bbname = NULL;
@@ -625,7 +625,7 @@ static int mayexpandfile(char* onm)
 	stat(onm, &st);
 	if (!S_ISREG(st.st_mode))
 		return 0;
-	if (st.st_size < maxopos)
+	if (st.st_size < maxopos || trunclast)
 		return truncate(onm, maxopos);
 	else 
 		return 0;		
@@ -658,7 +658,8 @@ int sync_close(int fd, char* nm, char chr)
 			if (rc)
 				fplog(stderr, "dd_rescue: (warning): seek %s (%1.fk): %s!\n",
 				      nm, (float)opos/1024, strerror(errno));
-		}
+		} else if (trunclast && !reverse)
+			truncate(nm, opos);
 
 	}
 	return err;
@@ -1345,7 +1346,7 @@ struct option longopts[] = { 	{"help", 0, NULL, 'h'}, {"verbose", 0, NULL, 'v'},
 				{"preserve", 0, NULL, 'p'}, {"outfile", 1, NULL, 'Y'},
 				{"random", 1, NULL, 'z'}, {"frandom", 1, NULL, 'Z'},
  				{"shred3", 1, NULL, '3'}, {"shred4", 1, NULL, '4'},
- 				{"shred2", 1, NULL, '2'},
+ 				{"shred2", 1, NULL, '2'}, {"trunclast", 1, NULL, 'T'},
 				
 				{NULL, 0, NULL, 0},
 };
@@ -1371,6 +1372,7 @@ void printhelp()
 	fprintf(stderr, "         -r         reverse direction copy (def=forward),\n");
 	fprintf(stderr, "         -R         repeatedly write same block (def if infile is /dev/zero),\n");
 	fprintf(stderr, "         -t         truncate output file (def=no),\n");
+	fprintf(stderr, "         -T         truncate output file at last pos (def=no),\n");
 #ifdef O_DIRECT
 	fprintf(stderr, "         -d/D       use O_DIRECT for input/output (def=no),\n");
 #endif
@@ -1415,7 +1417,7 @@ void printinfo(FILE* const file)
 	fplog(file, "dd_rescue: (info): Logfile: %s, Maxerr: %li\n",
 	      (lname? lname: "(none)"), maxerr);
 	fplog(file, "dd_rescue: (info): Reverse: %s, Trunc: %s, interactive: %s\n",
-	      YESNO(reverse), YESNO(dotrunc), YESNO(interact));
+	      YESNO(reverse), (dotrunc? "yes": (trunclast? "last": "no")), YESNO(interact));
 	fplog(file, "dd_rescue: (info): abort on Write errs: %s, spArse write: %s\n",
 	      YESNO(abwrerr), (sparse? "yes": (nosparse? "never": "if err")));
 	fplog(file, "dd_rescue: (info): preserve: %s, splice: %s, avoidWrite: %s\n",
@@ -1525,7 +1527,7 @@ int main(int argc, char* argv[])
   	/* defaults */
 	softbs = 0; hardbs = 0; /* marker for defaults */
 	maxerr = 0; ipos = (off_t)-INT_MAX; opos = (off_t)-INT_MAX; maxxfer = 0; 
-	reverse = 0; dotrunc = 0; abwrerr = 0; sparse = 0; nosparse = 0;
+	reverse = 0; dotrunc = 0; trunclast = 0; abwrerr = 0; sparse = 0; nosparse = 0;
 	verbose = 0; quiet = 0; interact = 0; force = 0; preserve = 0;
 	lname = 0; iname = 0; oname = 0; o_dir_in = 0; o_dir_out = 0;
 	dosplice = 0; falloc = 0;
@@ -1549,15 +1551,16 @@ int main(int argc, char* argv[])
 	pagesize = sysconf(_SC_PAGESIZE);
 #endif
 #ifdef LACK_GETOPT_LONG
-	while ((c = getopt(argc, argv, ":rtfihqvVwWaAdDkMRpPb:B:m:e:s:S:l:o:y:z:Z:2:3:4:xY:")) != -1) 
+	while ((c = getopt(argc, argv, ":rtTfihqvVwWaAdDkMRpPb:B:m:e:s:S:l:o:y:z:Z:2:3:4:xY:")) != -1) 
 #else
-	while ((c = getopt_long(argc, argv, ":rtfihqvVwWaAdDkMRpPb:B:m:e:s:S:l:o:y:z:Z:2:3:4:xY:", longopts, NULL)) != -1) 
+	while ((c = getopt_long(argc, argv, ":rtTfihqvVwWaAdDkMRpPb:B:m:e:s:S:l:o:y:z:Z:2:3:4:xY:", longopts, NULL)) != -1) 
 #endif
 	{
 		switch (c) {
 			case 'r': reverse = 1; break;
 			case 'R': i_repeat = 1; break;
 			case 't': dotrunc = O_TRUNC; break;
+			case 'T': trunclast = 1; break;
 			case 'i': interact = 1; force = 0; break;
 			case 'f': interact = 0; force = 1; break;
 #ifdef O_DIRECT
@@ -1868,6 +1871,8 @@ int main(int argc, char* argv[])
 	if (bsim715 && o_chr) {
 		fplog(stderr, "dd_rescue: (warning): triple overwrite with non-seekable output!\n");
 	}
+	if (reverse && trunclast)
+		ftruncate(odes, opos);
 
 	LISTTYPE(ofile_t) *of;
 	LISTFOREACH(ofiles, of) {
@@ -1885,6 +1890,8 @@ int main(int argc, char* argv[])
 		if (falloc && !oft->cdev)
 			do_fallocate(oft->fd, oft->name);
 #endif
+		if (reverse && trunclast)
+			ftruncate(oft->fd, opos);
 	}
 
 	/* Install signal handler */
