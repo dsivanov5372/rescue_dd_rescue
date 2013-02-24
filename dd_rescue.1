@@ -1,0 +1,42 @@
+.\" $Id$
+.
+.TH dd_rescue 1 "2013-02-24" "Kurt Garloff" "Rescue copy tool"
+.
+.SH NAME
+dd_rescue \- Rescue copy tool
+.
+.SH SYNOPSIS
+.na
+.nh
+.B dd_rescue
+[options] infile outfile
+.
+.br
+.B dd_rescue
+[options] [-2/-3/-4/-z/-Z seed/seedfile] outfile
+.
+.SH DESCRIPTION
+.B dd_rescue
+is a tool that copies data from a source (file, block device, pipe, ...) 
+to one (or several) output file(s). It can use large blocks (softbs sized)
+to copy quickly and \-\- if the source is seekable \-\- fall back to smaller
+blocks (hardbs) if the input file is seekable.
+.PP
+.B dd_rescue
+can copy in reverse direction as well, allowing to approach a bad spot in 
+from the other direction. As trying to read over a bad spot of significant size
+can take very long (and potentially cause further damage), this is an important
+optimization when recovering data. The
+.B dd_rhelp
+tool takes advantage of this and automates data recovery.
+.
+.B dd_rescue
+does not (by default) truncate the output file or overwrite data in the output
+file that could not be read from the input file (so preexisting good data will
+remain intact).
+.PP
+.B dd_rescue
+by default reports on progress, and optionally also writes into a logfile.
+.B dd_rescue
+has a wealth of options that influence the way the copying is performed.
+
