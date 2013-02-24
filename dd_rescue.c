@@ -1347,7 +1347,12 @@ struct option longopts[] = { 	{"help", 0, NULL, 'h'}, {"verbose", 0, NULL, 'v'},
 				{"random", 1, NULL, 'z'}, {"frandom", 1, NULL, 'Z'},
  				{"shred3", 1, NULL, '3'}, {"shred4", 1, NULL, '4'},
  				{"shred2", 1, NULL, '2'}, {"trunclast", 1, NULL, 'T'},
-				
+				/* GNU ddrescue compat */
+				{"block-size", 1, NULL, 'B'}, {"input-position", 1, NULL, 's'},
+				{"output-position", 1, NULL, 'S'}, {"max-size", 1, NULL, 'm'},
+				/* dd like args */
+				{"bs", 1, NULL, 'b'}, /* seek and skip refer to obs/ibs, thus no direct corresp. */
+				/* END */	
 				{NULL, 0, NULL, 0},
 };
 #endif
