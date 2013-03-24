@@ -1352,7 +1352,8 @@ struct option longopts[] = { 	{"help", 0, NULL, 'h'}, {"verbose", 0, NULL, 'v'},
 				{"block-size", 1, NULL, 'B'}, {"input-position", 1, NULL, 's'},
 				{"output-position", 1, NULL, 'S'}, {"max-size", 1, NULL, 'm'},
 				/* dd like args */
-				{"bs", 1, NULL, 'b'}, /* seek and skip refer to obs/ibs, thus no direct corresp. */
+				{"bs", 1, NULL, 'b'},	/* seek and skip refer to obs/ibs, thus no direct corresp. */
+				{"of", 1, NULL, 'Y'},	/* short form of outfile */
 				/* END */	
 				{NULL, 0, NULL, 0},
 };

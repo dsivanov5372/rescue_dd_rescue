@@ -15,6 +15,10 @@ dd_rescue \- Rescue copy tool
 .B dd_rescue
 [options] [-2/-3/-4/-z/-Z seed/seedfile] outfile
 .
+.br
+.B dd_rescue
+[options] [--shred2/--shred3/--shred4/--random/--frandom seed/seedfile] outfile
+.
 .SH DESCRIPTION
 .B dd_rescue
 is a tool that copies data from a source (file, block device, pipe, ...) 
@@ -38,5 +42,27 @@ remain intact).
 .B dd_rescue
 by default reports on progress, and optionally also writes into a logfile.
 .B dd_rescue
-has a wealth of options that influence the way the copying is performed.
+has a wealth of options that influence its behaviour, such as the possibility
+to use direct IO for input/output, to use fallocate() to preallocate space
+for the output file, using splice copy (in kernel zerocopy) for efficiency,
+looking for empty blocks to create sparse files, or using a pseudo random
+number generator (PRNG) to quickly overwrite data with random numbers.
+.PP
+If input and output files are seekable (block devices or regular files),
+.B dd_rescue
+does copy with large blocks (softbs) to increase the performance. When
+a read error is encountered,
+.B dd_rescue
+falls back to reading smaller blocks (hardbs), to allow to recover the maximum
+amount of data. If blocks can still not be read,
+.B dd_rescue
+by default skips over them also in the output file, avoiding to overwrite
+data that might have been copied there successfully in a previous run.
+(Option -A / --alwayswrite changes this.).
+.
+.SH OPTIONS
+...
+.SH EXAMPLES
+...
+.SH REFERENCES
 
