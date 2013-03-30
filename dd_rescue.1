@@ -480,7 +480,7 @@ error condition or that copying of the file has not been entirely successful.
 
 .SH EXAMPLES
 .TP
-.BI dd_rescue -k -P -p -t infile outfile
+.BI dd_rescue\ \-k\ \-P\ \-p\ \-t\ infile\ outfile
 copies
 .IR infile
 to
@@ -489,13 +489,15 @@ and does truncate the output file on opening (so deleting any previous data
 in it), copies mode, times, ownerships at the end, uses fallocate to
 reserve the space for the output file and uses efficient in kernel splice
 copy method.
-.BI dd_rescue -A -d -D -b 512 /dev/sda /dev/sda
+.TP
+.BI dd_rescue\ \-A\ \-d\ \-D\ \-b\ 512\ /dev/sda\ /dev/sda
 reads the contents of every sector of disk sda and writes it back to the
 same location. Typical hard disks reallocate flaky and faulty sectors on 
 writes, so this operation may result in the complete disk being usable
 again when there were errors before. Unreadable blocks however will contain
 zeroes after this.
-.BI dd_rescue -2 /dev/urandom -M outfile
+.TP
+.BI dd_rescue\ \-2\ /dev/urandom\ \-M\ outfile
 overwrites the file
 .IR outfile
 twice; once with good pseudo random numbers and then with zeroes.
@@ -538,7 +540,10 @@ on SSDs may have similar effects.
 dd_rescue does not automate the recovery of faulty files or partitions
 by automatically keeping a list of copied sectors and approaching bad spots
 from both sides. There is a helper script dd_rhelp from LAB Valentin that
-does this.
+does this. Integration of such a mode into 
+.B dd_rescue
+is non-trivial and due to the complexity of the source code probably
+will never happen.
 .br
 There also is a tool, GNU ddrescue, that is a reimplementation of this
 tool and which contains the capabilities to automate recovery of bad
@@ -548,6 +553,8 @@ files in the way dd_rhelp does.
 .BR README.dd_rhelp 
 .BR wipe (1)
 .BR shred (1)
+.BR ddrescue (1)
+.BR dd (1)
 .SH AUTHOR
 Kurt Garloff <kurt@garloff.de>
 .SH COPYRIGHT
