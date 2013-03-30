@@ -108,7 +108,7 @@ to ask before overwriting existing files.
 .
 .SS Block sizes
 .TP 8
-.BI \-b\  softbs \fR,\ \fB\-\-softbs= softbs
+.BI \-b\  softbs \fR,\ \fB\-\-softbs= softbs \fR,\ \fB\-\-bs= softbs
 sets the (larger) blocksize to
 .IR softbs  
 bytes.
@@ -117,7 +117,7 @@ will transfer chunks of that size unless a read error is encountered (or the
 end of the input file or the maximum transfer size has been reached).
 The default value for this is 64k for buffered I/O and 1M for direct I/O.
 .TP 8
-.BI \-B\  hardbs \fR,\ \fB\-\-hardbs= hardbs
+.BI \-B\  hardbs \fR,\ \fB\-\-hardbs= hardbs \fR,\ \fB\-\-block\-size= hardbs
 sets the (smaller) fallback blocksize to
 .IR hardbs
 bytes. When
@@ -147,7 +147,7 @@ copy operation.
 .
 .SS Positions and length
 .TP 8
-.BI \-s\  ipos \fR,\ \fB\-\-ipos= ipos
+.BI \-s\  ipos \fR,\ \fB\-\-ipos= ipos \fR,\ \fB\-\-input\-position= ipos
 sets the starting position of the 
 .IR infile
 to
@@ -164,7 +164,7 @@ of 0 is treated specially, meaning the end of file.
 .br
 Negative positions result in an error message.
 .TP 8
-.BI \-S\  opos \fR,\ \fB\-\-opos= opos
+.BI \-S\  opos \fR,\ \fB\-\-opos= opos \fR,\ \fB\-\-output\-position= opos
 sets the starting position of the
 .IR outfile
 to
@@ -185,7 +185,7 @@ If the output file does not exist, an error will be reported and
 .B dd_rescue
 aborted.
 .TP 8
-.BI \-m\  maxxfer \fR,\ \fB\-\-maxxfer= maxxfer
+.BI \-m\  maxxfer \fR,\ \fB\-\-maxxfer= maxxfer \fR,\ \fB\-\-max\-size= maxxfer
 specifies the maximum number of bytes (suffixes apply, but it's NOT
 counted in blocks) that 
 .B dd_rescue 
@@ -222,7 +222,153 @@ This is because for buffered writes, errors can't be detected and
 located reliably anyway. Also, write errors are not often reported
 to userspace, as hard drives e.g. reallocate bad blocks on writes
 and the OS block layer typically also does some retries on write
-operations.
+operations. Note that 
+.B dd_rescue
+does exit if writes to the output file result in the Operating
+System reporting that no space is left.
+.SS Sparse files and write avoidance
+.TP 8
+.BR \-A ", " \-\-alwayswrite
+changes the behaviour of
+.B dd_rescue
+to write zeroes to the output file when the input file could not
+be read. By default, it just skips over, leaving whatever content
+was in the output file at the file position before. The default
+behaviour may be desired, if e.g. previous copy operations may have
+resulted in good data being in place; it may be undesired if the
+output file may contain garbage (or sensitive information) that should
+rather be overwritten with zeroes.
+.TP 8
+.BR \-a ", " \-\-sparse
+will make 
+.B dd_rescue
+look for empty blocks (of 
+.IR softbs
+size), i.e. blocks filled with zeroes. Rather than writing those
+zeroes to the output file, it will then skip forward in the output
+file, resulting in a sparse file, saving space in the output filesystem
+(if it supports sparse files). Note that if the output file does already
+exist and already has data stored at the location where zeroes are skipped
+over, this will result in an incomplete copy in that the output file is
+different from the input file, where blocks of zeroes are skipped over.
+.B dd_rescue
+tries to detect this and issue a warning, but it does not prevent this
+from happening
+.TP 8
+.BR \-W ", " \-\-avoidwrite
+results in 
+.B dd_rescue
+reading a block (
+.IR softbs
+sized) from the output file prior to writing it. If it is already identical
+with the data that would be written to it, the writes are actually avoided.
+This option may be useful for devices, where e.g. writes should be avoided
+(e.g. because they may impact the reaining lifetime or because they are very
+slow compared to reads).
+.SS Other optimizations
+.TP 8
+.BR \-R ", " \-\-repeat
+tells 
+.B dd_rescue
+to only read one block (
+.IR softbs
+sized) and then repeatedly write it to the output file.
+Note that this results in never hitting EOF on the input file and should be
+used with a limit for the transfer size (options -m or -M) or when filling
+up an output device completely.
+.br
+This option is automatically set, if the input file name equals "/dev/zero".
+.TP 8
+.BR \-k ", " \-\-splice
+tells
+.B dd_rescue
+to use the Linux in-kernel zerocopy splice() copy operation rather than
+reading blocks into a userspace buffer. Note that this operation mode
+does prevent the support of a number of
+.B dd_rescue
+features that can normally be used, such as falling back to smaller block
+sizes, avoiding writes, sparse mode, repeat optimization, reverse direction
+copy. A warning is issued to make the user aware.
+.TP 8
+.BR \-P ", " \-\-fallocate
+results in 
+.B dd_rescue
+calling fallocate() on the output file, telling the filesystem how much
+space to preallocate for the output file. (The size is determined by the
+expected last position, as inferred from the input file length and 
+.IR maxxfer
+). On filesystems that support it, this results in them making better
+allocation decisions, avoiding fragmentation. (Note that it does not
+make sense to use sparse together with fallocate().)
+.SS Misc options
+.TP 8
+.BR \-r ", " \-\-reverse
+tells
+.B dd_rescue
+to copy in reverse direction, starting at 
+.IR ipos
+(with special case 0 meaning EOF) and working towards the beginning of
+the file. This is especially helpful if the input file has a bad spot
+which can be extremely slow to skip over, so approaching it from both
+directions saves a lot of time (and may prevent further damage).
+.br
+Note that 
+.B dd_rescue
+does automatically switch to reverse direction copy, if input and output
+file are identical and the input position is smaller than the output 
+position, similar to the intelligence that memmove() uses to prevent
+loss of data when overlapping areas are copied. The option -f / --force
+does prevent this intelligence from happening.
+.TP 8
+.BR \-p ", " \-\-preserve
+When copying files, this option does result in file metadata (timestamps,
+ownership, access rights) to be copied, similar to the option with the
+same name in the cp program.
+.br
+Note that 
+.B dd_rescue
+at this point does not have support for copying extended attributes
+or ACLs. (But the behaviour of -p is still consistent with cp.)
+.TP 8
+.BR \-t ", " \-\-truncate
+...
+.TP 8
+.BR \-T ", " \-\-trunclast
+...
+.TP 8
+.BR \-d ", " \-\-odir_in
+...
+.TP 8
+.BR \-D ", " \-\-odir_out
+...
+
+
+.SS Logging
+.TP 8
+.BI \-l\  logfile \fR,\ \fB\-\-logfile= logfile
+...
+.TP 8
+.BI \-o\  bbfile \fR,\ \fB\-\-bbfile= bbfile
+...
+.SS Multiple output files
+.TP 8
+.BI \-Y\  ofileX \fR,\ \fB\-\-outfile= ofileX \fR,\ \fB\-\-of= ofileX
+
+
+.SS Random data generation
+.TP 8
+.BI \-z\  RANDSEED \fR,\ \fB\-\-random= RANDSEED
+.TP
+.BI \-Z\  RANDSEED \fR,\ \fB\-\-frandom= RANDSEED
+.TP
+.BI \-2\  RANDSEED \fR,\ \fB\-\-shred2= RANDSEED
+.TP
+.BI \-3\  RANDSEED \fR,\ \fB\-\-shred3= RANDSEED
+.TP 
+.BI \-4\  RANDSEED \fR,\ \fB\-\-shred4= RANDSEED
+
+
+
 
 
 
