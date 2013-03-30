@@ -49,12 +49,17 @@ does not (by default) truncate the output file.
 .PP
 .B dd_rescue
 by default reports on progress, and optionally also writes into a logfile.
+It has a progress bar and gives an estimate for the remaining time.
 .B dd_rescue
 has a wealth of options that influence its behaviour, such as the possibility
 to use direct IO for input/output, to use fallocate() to preallocate space
 for the output file, using splice copy (in kernel zerocopy) for efficiency,
 looking for empty blocks to create sparse files, or using a pseudo random
 number generator (PRNG) to quickly overwrite data with random numbers.
+.PP
+You can use "-" as infile or outfile, meaning stdin or stdout. Note that
+this means that either file is not seekable, limiting the usefulness of
+some of dd_rescues features.
 .
 .SH OPTIONS
 When parsing numbers, 
@@ -178,7 +183,7 @@ For reverse direction copy, an explicit
 .IR opos 
 of 0 will position at the end of the output file.
 .TP 8
-.BR \-x ", " \-\-extend
+.BR \-x ", " \-\-extend ", " \-\-append
 changes the interpretation of the output position to start at the 
 end of the existing output file, making appending to a file convenient.
 If the output file does not exist, an error will be reported and
@@ -331,29 +336,78 @@ at this point does not have support for copying extended attributes
 or ACLs. (But the behaviour of -p is still consistent with cp.)
 .TP 8
 .BR \-t ", " \-\-truncate
-...
+tells
+.B dd_rescue
+to open the output file with O_TRUNC, resulting in the output file
+(if it is a regular file) to be truncated to 0 bytes, removing all
+previous content that the file may have contained. By default,
+.B dd_rescue
+does not remove previous content. 
 .TP 8
 .BR \-T ", " \-\-trunclast
-...
+tells 
+.B dd_rescue
+to truncate the output file to the highest copied position, thus
+ensuring there's no data beyond the end of the data that has been
+copied in this run.
 .TP 8
 .BR \-d ", " \-\-odir_in
-...
+instructs 
+.b dd_rescue
+to open
+.IR infie
+with O_DIRECT, bypassing the kernel buffers. While this option has a negative
+effect on performance (the kernel does readahead for buffered I/O), it will
+result in errors to be detected more quickly (kernel won't retry) and allows
+for smaller I/O units (hardware sector size, 512bytes for most hard disks).
 .TP 8
 .BR \-D ", " \-\-odir_out
-...
-
+tells
+.B dd_rescue
+to open
+.IR outfile
+with O_DIRECT, bypassing kernel buffers. This has a significant negative
+effect on performance, as the program needs to wait for writes to hit the
+disks as opposed to the asynchronous nature of buffered writeback.
+On the flipside, the return status from writing is reliable this
+way and smaller I/O chunks (hardware sector size, 512bytes) are possible.
 
 .SS Logging
 .TP 8
 .BI \-l\  logfile \fR,\ \fB\-\-logfile= logfile
-...
+Unless in quiet mode, 
+.B dd_rescue
+does produce constant updates on the status of the copy operation to
+stderr. With this option, these updates are also written to the specified
+.IR logfile .
+The control characters (to move the cursor up to overwrite the existing
+status lines) are not written to the logfile.
 .TP 8
 .BI \-o\  bbfile \fR,\ \fB\-\-bbfile= bbfile
-...
+instructs 
+.B dd_rescue
+to write a list of bad blocks to 
+.IR bbfile .
+The file will contain a list of numbers (ASCII), one per line, where
+the numbers indicate the offset in terms of 
+.IR hardbs
+sized blocks. The file format is compatible with that of badblocks.
+Using dd_rescue on a block device (partition) and setting
+.IR hardbs
+to the block size of a filesystem that you want to create, you should
+be able to feed the 
+.IR bbfile
+to mke2fs with the option -l.
+
 .SS Multiple output files
 .TP 8
 .BI \-Y\  ofileX \fR,\ \fB\-\-outfile= ofileX \fR,\ \fB\-\-of= ofileX
-
+If you want to copy data to multiple filess simultaneously, you can specify
+this option. It can be specified multiple times, so many copies can be made.
+Note that these files are secondary output files; they share file position
+with the primary output file
+.IR outfile .
+Errors when writing to a secondary output file are ignored.
 
 .SS Random data generation
 .TP 8
@@ -361,33 +415,152 @@ or ACLs. (But the behaviour of -p is still consistent with cp.)
 .PD 0
 .TP
 .BI \-Z\  RANDSEED \fR,\ \fB\-\-frandom= RANDSEED
-.PD 0
 .TP
 .BI \-2\  RANDSEED \fR,\ \fB\-\-shred2= RANDSEED
-.PD 0
 .TP
 .BI \-3\  RANDSEED \fR,\ \fB\-\-shred3= RANDSEED
-.PD 0
 .TP 
 .BI \-4\  RANDSEED \fR,\ \fB\-\-shred4= RANDSEED
+.PD 1
 .\".PD 0
 .\".IP "\fB\-5\fR \fIRANDSEED\fR,\ \fB\-\-shred5=\fR\fIRANDSEED\fR" 4
-
-
-
+When you want to overwrite a file, partition or disk with random data,
+using /dev/urandom (on Linux) as input is not a very good idea; the interface
+has not been designed to yield a high bandwidth. It's better to use a
+userspace Pseudo Random Number Generator (PRNG). With option -z / --random,
+the C library's PRNG is used. With -Z / --frandom and the -2/-3/-4 / 
+--shred2/3/4 options, an RC4 based PRNG is used.
+.br
+Note that in this mode, there is no
+.IR infile
+so the first non-option argument is the output file.
+.br
+The PRNG needs seeding; the C libraries PRNG takes a 32bit integer (4 bytes);
+the RC4 based PRNG takes 256 bytes. If 
+.IR RANDSEED 
+is an integer, the integer
+number will be used to seed the C library's PRNG. For the RC4 method, the C
+library's PRNG then generates the 256 bytes to seed it. This creates
+repeatable PRNG data. The RANDSEED value of 0 is special; it will create
+a seedval that's based on the current time and the process' PID and should
+be different for multiple runs of
+.B dd_recue .
+.br
+If 
+.IR RANDSEED
+is not an integer, it's assumed to be a filename from which the seed values
+can be read. 
+.B dd_rescue
+will read 4 or 256 bytes from the file to seed the C library's or the RC4
+PRNG. For good pseudo random numbers, using /dev/urandom to seed is a good idea.
+.br
+The modes -2/-3/-4 resp. --shred2/--shred3/--shred4 will overwrite the output
+file multiple times; after each pass, fsync() will ensure that the data does
+indeed hit the file. The last pass for these modes will overwrite the file
+with zeroes. The rationale behind doing this is to make it easier to hide
+that important data may have been overwritten, to make it easier for intelligent
+storage systems (such as SSDs) to recycle the empty blocks and to allow for
+better compression of a filesystem image containing such data.
+.br
+With -2 / --shred2, one pass with RC4 generated PRNG is happening and then
+zeroes are written. With -3 / --shred3, there are two passes with RC4 PRNG
+generated random numbers and a zero pass; the second PRNG pass writes the
+inverse (bitwise reversed) numbers from the first pass. -4 / --shred4 works
+like -3 / --shred3, with an additional pass with independent random numbers
+as third pass.
 
 .SH EXIT STATUS
-...
+On successful completion, 
+.B dd_rescue
+returns an exit code of 0.
+Any other exit code indicates that the program has aborted because of an 
+error condition or that copying of the file has not been entirely successful.
+.PP
+.\"TODO: Better documentation of the error codes!
+
 .SH EXAMPLES
-...
+.TP
+.BI dd_rescue -k -P -p -t infile outfile
+copies
+.IR infile
+to
+.IR outfile
+and does truncate the output file on opening (so deleting any previous data
+in it), copies mode, times, ownerships at the end, uses fallocate to
+reserve the space for the output file and uses efficient in kernel splice
+copy method.
+.BI dd_rescue -A -d -D -b 512 /dev/sda /dev/sda
+reads the contents of every sector of disk sda and writes it back to the
+same location. Typical hard disks reallocate flaky and faulty sectors on 
+writes, so this operation may result in the complete disk being usable
+again when there were errors before. Unreadable blocks however will contain
+zeroes after this.
+.BI dd_rescue -2 /dev/urandom -M outfile
+overwrites the file
+.IR outfile
+twice; once with good pseudo random numbers and then with zeroes.
+.PP
+See README.dd_rescue to learn about some more possibilities.
 .SH BUGS/LIMITATIONS
-...
+The source code does use the 64bit functions provided by glibc for file
+positioning. However, your kernel might not support it, so you might be
+unable to copy partitions larger then 2GB into a file.
+.br
+This program has been written using Linux and only tested on a couple of
+Linux systems. It should be possible to port it easily to other Un*x
+platforms, and I occasionally get hints from users of other *nix like
+systems that I take into account. Still, my own testing is limited to Linux.
+.br
+Currently, the escape sequence for moving the cursor up is hard coded in the
+sources. It's fine for most terminal emulations (including vt100 and linux),
+but it should use the terminal description database instead.
+.br
+Since dd_rescue-1.10, non-seekable input or output files are supported,
+but there's of course limitations to recover errors in such cases.
+.PP
+The modes for overwriting data with pseudo random numbers to securely
+delete sensitive data on purpose only implement a limited number of
+overwrites. While Peter Gutmann's classic analysis concludes that the
+then current harddisk technology requires more overwrites to be really
+secure, the author believes that modern hard disk technology does not
+allow data restoration in sectors that have been overwritten with the
+--shred4 mode.
+.br
+However, users should be aware that depending on your filesystem, overwriting
+files with this technology may not render file content safely overwritten
+on hard disk. This is due to journals keeping data or filesystems writing
+data to different locations every time. So here, only overwriting a whole
+partition or disk will be effective. The fact that the hard disk firmware
+has spare sectors to be allocated when regular sectors become flaky or
+faulty may leave traces of files on the medium. The Flash Translation Layer
+on SSDs may have similar effects.
+.PP
+dd_rescue does not automate the recovery of faulty files or partitions
+by automatically keeping a list of copied sectors and approaching bad spots
+from both sides. There is a helper script dd_rhelp from LAB Valentin that
+does this.
+.br
+There also is a tool, GNU ddrescue, that is a reimplementation of this
+tool and which contains the capabilities to automate recovery of bad
+files in the way dd_rhelp does.
 .SH SEE ALSO
-...
+.BR README.dd_rescue 
+.BR README.dd_rhelp 
+.BR wipe (1)
+.BR shred (1)
 .SH AUTHOR
-...
+Kurt Garloff <kurt@garloff.de>
 .SH COPYRIGHT
-...
+This program is protected by the GNU General Public License (GPL) 
+v2 or v3 - at your option.
 .SH HISTORY
-...
+Since version 1.10, non seekable input and output files are supported.
+.br
+Splice copy is supported since 1.15.
+.br
+A progress bar exists since 1.17.
+.br
+Support for preallocation (fallocate) exists since 1.19.
+.br
+The Pseudo Random Number modes have been started with 1.29.
 
