@@ -125,6 +125,12 @@ bytes. When
 encounters read errors, it will fall back to copying data in chunks of 
 this size. This value defaults to 4k for buffered I/O and 512 bytes for
 direct I/O.
+.br
+.IR hardbs
+should be equal to or smaller than
+.IR softbs .
+If both block sizes are identical, no fallback mechanism (and thus no
+retry) will take place on read errors.
 .TP 8
 .BI \-y\  syncfreq \fR,\ \fB\-\-syncfreq= syncfreq
 tells
@@ -140,6 +146,84 @@ is set to 0, meaning that fsync() is only issued at the end of the
 copy operation.
 .
 .SS Positions and length
+.TP 8
+.BI \-s\  ipos \fR,\ \fB\-\-ipos= ipos
+sets the starting position of the 
+.IR infile
+to
+.IR ipos .
+Note that ipos is specified in bytes (but suffixes can be used, see above), 
+not in terms of 
+.IR softbs
+or
+.IR hardbs
+sized blocks.
+The default value for this is 0. When reverse direction copy is used, an
+.IR ipos
+of 0 is treated specially, meaning the end of file.
+.br
+Negative positions result in an error message.
+.TP 8
+.BI \-S\  opos \fR,\ \fB\-\-opos= opos
+sets the starting position of the
+.IR outfile
+to
+.IR opos .
+If not specified,
+.IR opos
+is set to
+.IR ipos ,
+so the file offsets in input and output file are the same.
+For reverse direction copy, an explicit 
+.IR opos 
+of 0 will position at the end of the output file.
+.TP 8
+.BR \-x ", " \-\-extend
+changes the interpretation of the output position to start at the 
+end of the existing output file, making appending to a file convenient.
+If the output file does not exist, an error will be reported and
+.B dd_rescue
+aborted.
+.TP 8
+.BI \-m\  maxxfer \fR,\ \fB\-\-maxxfer= maxxfer
+specifies the maximum number of bytes (suffixes apply, but it's NOT
+counted in blocks) that 
+.B dd_rescue 
+copies. If EOF is encountered before 
+.IR maxxfer
+bytes have been transferred, this option will be silently ignored.
+.TP 8
+.BR \-M ", " \-\-noextend
+tells 
+.B dd_rescue
+to not extend the output file. This option is particularly helpful
+when overwriting a file with random data or zeroes for safe data
+destruction. If the output file does not exist, an error message
+will be generated and the program be aborted.
+.SS Error handling
+.TP 8
+.BI \-e\  maxerr \fR,\ \fB\-\-maxerr= maxerr
+tells
+.B dd_rescue
+to exit, after
+.IR maxerr
+read errors have been encountered. By default, this is set to 0,
+resulting in
+.B dd_rescue
+trying to move on until it hits EOF (or
+.IR maxxfer
+bytes have been transferred).
+.TP 8
+.BR \-w ", " \-\-abort_we
+makes
+.B dd_rescue
+abort on any write errors. By default, write errors are ignored.
+This is because for buffered writes, errors can't be detected and
+located reliably anyway. Also, write errors are not often reported
+to userspace, as hard drives e.g. reallocate bad blocks on writes
+and the OS block layer typically also does some retries on write
+operations.
+
 
 
 ...
