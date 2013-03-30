@@ -22,35 +22,11 @@ dd_rescue \- Rescue copy tool
 .SH DESCRIPTION
 .B dd_rescue
 is a tool that copies data from a source (file, block device, pipe, ...) 
-to one (or several) output file(s). It can use large blocks (softbs sized)
-to copy quickly and \-\- if the source is seekable \-\- fall back to smaller
-blocks (hardbs) if the input file is seekable.
-.PP
-.B dd_rescue
-can copy in reverse direction as well, allowing to approach a bad spot in 
-from the other direction. As trying to read over a bad spot of significant size
-can take very long (and potentially cause further damage), this is an important
-optimization when recovering data. The
-.B dd_rhelp
-tool takes advantage of this and automates data recovery.
-.
-.B dd_rescue
-does not (by default) truncate the output file or overwrite data in the output
-file that could not be read from the input file (so preexisting good data will
-remain intact).
-.PP
-.B dd_rescue
-by default reports on progress, and optionally also writes into a logfile.
-.B dd_rescue
-has a wealth of options that influence its behaviour, such as the possibility
-to use direct IO for input/output, to use fallocate() to preallocate space
-for the output file, using splice copy (in kernel zerocopy) for efficiency,
-looking for empty blocks to create sparse files, or using a pseudo random
-number generator (PRNG) to quickly overwrite data with random numbers.
+to one (or several) output file(s). 
 .PP
 If input and output files are seekable (block devices or regular files),
 .B dd_rescue
-does copy with large blocks (softbs) to increase the performance. When
+does copy with large blocks (softbs) to increase performance. When
 a read error is encountered,
 .B dd_rescue
 falls back to reading smaller blocks (hardbs), to allow to recover the maximum
@@ -60,7 +36,112 @@ by default skips over them also in the output file, avoiding to overwrite
 data that might have been copied there successfully in a previous run.
 (Option -A / --alwayswrite changes this.).
 .
+.PP
+.B dd_rescue
+can copy in reverse direction as well, allowing to approach a bad spot 
+from both directions. As trying to read over a bad spot of significant size
+can take very long (and potentially cause further damage), this is an important
+optimization when recovering data. The
+.B dd_rhelp
+tool takes advantage of this and automates data recovery.
+.B dd_rescue
+does not (by default) truncate the output file.
+.PP
+.B dd_rescue
+by default reports on progress, and optionally also writes into a logfile.
+.B dd_rescue
+has a wealth of options that influence its behaviour, such as the possibility
+to use direct IO for input/output, to use fallocate() to preallocate space
+for the output file, using splice copy (in kernel zerocopy) for efficiency,
+looking for empty blocks to create sparse files, or using a pseudo random
+number generator (PRNG) to quickly overwrite data with random numbers.
+.
 .SH OPTIONS
+When parsing numbers, 
+.B dd_rescue
+assumes bytes. It accepts the following suffixes:
+.br 
+b -- 512 size units (blocks)
+.br 
+k -- 1024 size units (binary kilobytes, kiB)
+.br 
+M -- 1024^2 size units (binary megabytes, MiB)
+.br 
+G -- 1024^3 size units (binary gigabytes, GiB)
+.PP
+The following options may be used to modify the behaviour of 
+.B dd_rescue 
+.SS General options
+.TP 8
+.BR \-h ", " \-\-help
+This option tells
+.B dd_rescue
+to output a list of options and exit.
+.TP 8
+.BR \-V ", " \-\-version
+Display version number and exit.
+.TP 8
+.BR \-q ", " \-\-quiet
+tells
+.B dd_rescue
+to be less verbose.
+.TP 8
+.BR \-v ", " \-\-verbose
+makes
+.B dd_rescue
+more verbose.
+.BR \-v ", " \-\-verbose
+makes
+.B dd_rescue
+more verbose.
+.TP 8
+.BR \-f ", " \-\-force
+makes
+.B dd_rescue
+skip some sanity checks (e.g. automatically setting reverse direction when 
+input and output file are the same and ipos < opos).
+.TP 8
+.BR \-i ", " \-\-interactive
+tells
+.B dd_rescue
+to ask before overwriting existing files.
+.
+.SS Block sizes
+.TP 8
+.BI \-b\  softbs \fR,\ \fB\-\-softbs= softbs
+sets the (larger) blocksize to
+.IR softbs  
+bytes.
+.B dd_rescue
+will transfer chunks of that size unless a read error is encountered (or the 
+end of the input file or the maximum transfer size has been reached).
+The default value for this is 64k for buffered I/O and 1M for direct I/O.
+.TP 8
+.BI \-B\  hardbs \fR,\ \fB\-\-hardbs= hardbs
+sets the (smaller) fallback blocksize to
+.IR hardbs
+bytes. When
+.B dd_rescue
+encounters read errors, it will fall back to copying data in chunks of 
+this size. This value defaults to 4k for buffered I/O and 512 bytes for
+direct I/O.
+.TP 8
+.BI \-y\  syncfreq \fR,\ \fB\-\-syncfreq= syncfreq
+tells
+.B dd_rescue
+to call fsync() on the output file every 
+.IR syncfreq
+blocks (in terms of
+.IR softbs
+sized blocks). It will also update the progress indicator at least as
+often. By default,
+.IR syyncfreq
+is set to 0, meaning that fsync() is only issued at the end of the
+copy operation.
+.
+.SS Positions and length
+
+
 ...
 .SH EXAMPLES
 ...
