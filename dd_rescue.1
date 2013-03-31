@@ -501,6 +501,14 @@ zeroes after this.
 overwrites the file
 .IR outfile
 twice; once with good pseudo random numbers and then with zeroes.
+.TP
+.BI dd_rescue\ \-t\ \-a\ image1.raw\ image2.raw
+copies a filesystem image and looks for empty blocks to create a
+sparse output file to save disk space. (If the source filesystem
+has been used a bit, on that filesystem creating a large file with
+zeroes and removing it again prior to this operation will result
+in more sectors with zeroes. dd_rescue /dev/zero DUMMY; rm DUMMY
+will achieve this ...)
 .PP
 See README.dd_rescue to learn about some more possibilities.
 .SH BUGS/LIMITATIONS
@@ -526,7 +534,8 @@ overwrites. While Peter Gutmann's classic analysis concludes that the
 then current harddisk technology requires more overwrites to be really
 secure, the author believes that modern hard disk technology does not
 allow data restoration in sectors that have been overwritten with the
---shred4 mode.
+--shred4 mode. This is in compliance with the recommendations from
+BSI GSDS M7.15.
 .br
 However, users should be aware that depending on your filesystem, overwriting
 files with this technology may not render file content safely overwritten
@@ -548,6 +557,8 @@ will never happen.
 There also is a tool, GNU ddrescue, that is a reimplementation of this
 tool and which contains the capabilities to automate recovery of bad
 files in the way dd_rhelp does.
+.PP
+Please report bugs to me via email.
 .SH SEE ALSO
 .BR README.dd_rescue 
 .BR README.dd_rhelp 
@@ -557,17 +568,36 @@ files in the way dd_rhelp does.
 .BR dd (1)
 .SH AUTHOR
 Kurt Garloff <kurt@garloff.de>
+.SH CREDITS
+Many little issues were reported by Valentin LAB, the author of 
+.B dd_rhelp .
+.br
+The RC4 PRNG (frandom) is a port from Eli Billauer's kernel mode PRNG.
+.br
+A number of recent ideas and suggestions came from Thomas.
 .SH COPYRIGHT
 This program is protected by the GNU General Public License (GPL) 
 v2 or v3 - at your option.
 .SH HISTORY
 Since version 1.10, non seekable input and output files are supported.
 .br
-Splice copy is supported since 1.15.
+Splice copy -k is supported since 1.15.
 .br
 A progress bar exists since 1.17.
 .br
-Support for preallocation (fallocate) exists since 1.19.
+Support for preallocation (fallocate) -P exists since 1.19.
+.br
+Since 1.23, we default to -y0, enhancing performance.
 .br
 The Pseudo Random Number modes have been started with 1.29.
+.br
+Write avoidance -W has been implemented in 1.30
+.br
+Multiple output files -Y have been added in 1.32.
+.br
+Long options and man page came with 1.33.
+.PP
+More detailed information can be found on
+.br
+http://garloff.de/kurt/linux/ddrescue/
 
