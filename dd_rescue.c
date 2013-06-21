@@ -1458,24 +1458,27 @@ unsigned char* zalloc_buf(unsigned int bs)
 {
 	unsigned char *ptr;
 #ifdef O_DIRECT
-	void *mp;
-#ifdef __DragonFly__
-	mp = valloc(bs);
-	if (!mp) {
+	if (o_dir_in || o_dir_out) {
+#if defined (__DragonFly__) || defined(__NetBSD__)
+		ptr = (unsigned char*)valloc(bs)
 #else
-	if (posix_memalign(&mp, pagesize, bs)) {
-#endif
-		fplog(stderr, "dd_rescue: (fatal): allocation of aligned buffer failed!\n");
-		cleanup(); exit(18);
+		void *mp = 0;
+		posix_memalign(&mp, pagesize, bs);
+		ptr = (unsigned char*)mp;
+#endif /* NetBSD */
+		if (!ptr) {
+			fplog(stderr, "dd_rescue: (fatal): allocation of aligned buffer failed but needed with O_DIRECT!\n");
+			cleanup(); exit(18);
+		}
+		memset(ptr, 0, bs);
+		return ptr;
 	}
-	ptr = (unsigned char*)mp;
-#else
-	ptr = malloc(bs);
+#endif /* O_DIRECT */
+	ptr = (unsigned char*)malloc(bs);
 	if (!ptr) {
 		fplog(stderr, "dd_rescue: (fatal): allocation of buffer failed!\n");
 		cleanup(); exit(18);
 	}
-#endif
 	memset(ptr, 0, bs);
 	return ptr;
 }
