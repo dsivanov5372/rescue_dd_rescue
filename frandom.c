@@ -92,7 +92,7 @@ void* frandom_init(unsigned char* seedbf)
 {
 	struct frandom_state *state;
 
-	state = malloc(sizeof(struct frandom_state));
+	state = (struct frandom_state *)malloc(sizeof(struct frandom_state));
 	if (!state)
 		return NULL;
 
@@ -105,7 +105,7 @@ void* frandom_init(unsigned char* seedbf)
 
 void* frandom_stdup(const void* fst)
 {
-	struct frandom_state *newst = malloc(sizeof(struct frandom_state));
+	struct frandom_state *newst = (struct frandom_state *)malloc(sizeof(struct frandom_state));
 	if (!newst)
 		return 0;
 	memcpy(newst, fst, sizeof(struct frandom_state));
@@ -147,9 +147,9 @@ void* frandom_init_lrand(int seedval)
 
 int frandom_release(void* rstate)
 {
-	struct frandom_state *state = rstate;
+	struct frandom_state *state = (struct frandom_state *)rstate;
 	if (!state)
-		state = int_random_state;	
+		state = int_random_state;
 	if (!state)
 		return -ENOMEM;
 
@@ -161,7 +161,7 @@ int frandom_release(void* rstate)
 
 ssize_t frandom_bytes(void *rstate, u8 *buf, size_t count)
 {
-	struct frandom_state *state = rstate;
+	struct frandom_state *state = (struct frandom_state *)rstate;
 	u8 *S;
 #ifdef INT_IS_FASTER
 	unsigned int i, j;
@@ -173,7 +173,7 @@ ssize_t frandom_bytes(void *rstate, u8 *buf, size_t count)
 	if (!state)
 		state = int_random_state;
 	if (!state)
-		state = frandom_init_lrand(0);
+		state = (struct frandom_state *)frandom_init_lrand(0);
   
 	i = state->i;
 	j = state->j;
@@ -202,7 +202,7 @@ ssize_t frandom_bytes(void *rstate, u8 *buf, size_t count)
 
 ssize_t frandom_bytes_inv(void *rstate, u8 *buf, size_t count)
 {
-	struct frandom_state *state = rstate;
+	struct frandom_state *state = (struct frandom_state *)rstate;
 	u8 *S;
 #ifdef INT_IS_FASTER
 	unsigned int i, j;
@@ -214,7 +214,7 @@ ssize_t frandom_bytes_inv(void *rstate, u8 *buf, size_t count)
 	if (!state)
 		state = int_random_state;
 	if (!state)
-		state = frandom_init_lrand(0);
+		state = (struct frandom_state *)frandom_init_lrand(0);
   
 	i = state->i;
 	j = state->j;

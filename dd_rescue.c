@@ -1492,9 +1492,9 @@ int is_filename(char* arg)
 	return 1;
 }
 
-char* retstrdupcat3(const char* dir, char dirsep, const char* inm)
+char* retstrdupcat3(const char* dir, char dirsep, char* inm)
 {
-	const char* ibase = basename(inm);
+	char* ibase = basename(inm);
 	const int dlen = strlen(dir) + (dirsep>0? 1: dirsep);
 	char* ret = (char*)malloc(dlen + strlen(inm) + 1);
 	strcpy(ret, dir);
