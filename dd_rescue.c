@@ -37,7 +37,6 @@
  * - Optional colors
  * - Use dlopen to open libfallocate rather than linking to it ...
  * - Display more infos on errors by collecting info from syslog
- * - A man page ...
  */
 
 #ifndef VERSION
@@ -886,7 +885,10 @@ int dowrite(const ssize_t rd)
 	if (!sparse || blockiszero(buf, rd) < rd)
 		errs += ((wr = writeblock(rd)) < rd ? 1: 0);
 	advancepos(rd, wr);
-	if (wr <= 0 && (errno == ENOSPC 
+	if (wr <= 0 && (errno == ENOSPC || errno == EROFS
+#ifdef EDQUOT
+		   || errno == EDQUOT
+#endif
 		   || (errno == EFBIG && !reverse)))
 		++fatal;
 	if (rd != wr && !sparse) {
@@ -1025,8 +1027,12 @@ int copyfile_softbs(const off_t max)
 #endif
 	/* expand file to AT LEAST the right length 
 	 * FIXME: 0 byte writes do NOT expand file */
-	if (!o_chr && !avoidwrite)
+	if (!o_chr && !avoidwrite) {
 		rc = pwrite(odes, buf, 0, opos);
+		if (rc)
+			fplog(stderr, "dd_rescue: (warning): extending file %s to %.1fk failed\n",
+			      oname, (float)opos/1024);
+	}
 	while ((toread = blockxfer(max, softbs)) > 0) {
 		int err;
 		ssize_t rd = readblock(toread);
