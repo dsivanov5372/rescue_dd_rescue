@@ -43,7 +43,7 @@
 # define VERSION "(unknown)"
 #endif
 #ifndef __COMPILER__
-# define "(unknown compiler)"
+# define __COMPILER__ "(unknown compiler)"
 #endif
 
 #define ID "$Id$"
@@ -97,6 +97,12 @@
 
 #ifdef HAVE_LIBFALLOCATE
 #include <fallocate.h>
+#define HAVE_FALLOCATE
+#endif
+
+#ifdef HAVE_LIBDL
+#include <dlfcn.h>
+void* libfalloc;
 #endif
 
 /* splice */
@@ -454,10 +460,24 @@ static void sparse_output_warn()
 }
 
 #ifdef HAVE_FALLOCATE
+
+#ifdef HAVE_LIBDL
+static void* load_libfallocate()
+{
+	libfalloc = dlopen("libfallocate.so.1", RTLD_NOW);
+	if (!libfalloc) {
+		fplog(stderr, "Failed to open libfallocate.so.1\n");
+		return 0;
+	} else
+		return dlsym(libfalloc, "linux_fallocate64");
+}
+#endif
+
 static void do_fallocate(int fd, char* onm)
 {
 	struct stat stbuf;
 	off_t to_falloc, alloced;
+	int rc;
 	if (!estxfer)
 		return;
 	if (fstat(fd, &stbuf))
@@ -468,12 +488,21 @@ static void do_fallocate(int fd, char* onm)
 	to_falloc = estxfer - (alloced < 0 ? 0 : alloced);
 	if (to_falloc <= 0)
 		return;
-#ifdef HAVE_LIBFALLOCATE
-	if (linux_fallocate64(fd, FALLOC_FL_KEEP_SIZE, 
-			      opos, to_falloc))
+#ifdef HAVE_LIBDL
+	int (*_linux_fallocate64)(int fd, int mode, __off64_t start, __off64_t len);
+	_linux_fallocate64 = load_libfallocate();
+	if (_linux_fallocate64)
+		rc = _linux_fallocate64(fd, FALLOC_FL_KEEP_SIZE,
+				opos, to_falloc);
+	else
+		rc = fallocate64(fd, 1, opos, to_falloc);
+#elif defined(HAVE_LIBFALLOCATE)
+	rc = linux_fallocate64(fd, FALLOC_FL_KEEP_SIZE, 
+			      opos, to_falloc);
 #else
-	if (fallocate64(fd, 1, opos, to_falloc))
+	rc = fallocate64(fd, 1, opos, to_falloc);
 #endif
+	if (rc)
 	       fplog(stderr, "dd_rescue: (warning): fallocate %s (%Li, %Li) failed: %s\n",
 			       onm, opos, to_falloc, strerror(errno));
 }
@@ -714,6 +743,10 @@ int cleanup()
 		LISTDATA(onl) = 0;
 	}
 	LISTTREEDEL(freenames, charp);
+#if HAVE_LIBDL
+	if (libfalloc)
+		dlclose(libfalloc);
+#endif
 	return errs;
 }
 

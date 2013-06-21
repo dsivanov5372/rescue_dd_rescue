@@ -39,10 +39,13 @@ frandom.o: frandom.c
 	$(CC) $(CFLAGS_OPT) -c $<
 
 libfalloc: dd_rescue.c frandom.o
-	$(CC) $(CFLAGS) -DHAVE_FALLOCATE=1 -DHAVE_LIBFALLOCATE=1 $(DEFINES) $^ -o dd_rescue -lfallocate
+	$(CC) $(CFLAGS) -DHAVE_LIBFALLOCATE=1 $(DEFINES) $^ -o dd_rescue -lfallocate
 
 libfalloc-static: dd_rescue.c frandom.o
-	$(CC) $(CFLAGS) -DHAVE_FALLOCATE=1 -DHAVE_LIBFALLOCATE=1 $(DEFINES) $^ -o dd_rescue $(LIBDIR)/libfallocate.a
+	$(CC) $(CFLAGS) -DHAVE_LIBFALLOCATE=1 $(DEFINES) $^ -o dd_rescue $(LIBDIR)/libfallocate.a
+
+libfalloc-dl: dd_rescue.c frandom.o
+	$(CC) $(CFLAGS) -DHAVE_LIBDL=1 -DHAVE_LIBFALLOCATE=1 $(DEFINES) $^ -o dd_rescue -ldl
 
 falloc: dd_rescue.c frandom.o
 	$(CC) $(CFLAGS) -DHAVE_FALLOCATE=1 $(DEFINES) $^ -o dd_rescue
