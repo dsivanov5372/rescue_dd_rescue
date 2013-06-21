@@ -739,7 +739,7 @@ static int blockiszero(const unsigned char* blk, const int ln)
 	return ln;
 }
 
-inline ssize_t mypread(int fd, void* bf, size_t sz, off_t off)
+static inline ssize_t mypread(int fd, void* bf, size_t sz, off_t off)
 {
 	if (i_repeat) {
 		if (i_rep_init)
@@ -761,7 +761,7 @@ inline ssize_t mypread(int fd, void* bf, size_t sz, off_t off)
 		return pread(fd, bf, sz, off);
 }
 
-inline ssize_t mypwrite(int fd, void* bf, size_t sz, off_t off)
+static inline ssize_t mypwrite(int fd, void* bf, size_t sz, off_t off)
 {
 	if (o_chr)
 		return write(fd, bf, sz);
