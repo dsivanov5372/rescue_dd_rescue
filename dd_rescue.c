@@ -751,9 +751,9 @@ inline ssize_t mypread(int fd, void* bf, size_t sz, off_t off)
 		return fill_rand(bf, sz);
 	if (prng_frnd) {
 		if (!bsim715_2ndpass)
-			return frandom_bytes(prng_state, bf, sz);
+			return frandom_bytes(prng_state, (unsigned char*) bf, sz);
 		else
-			return frandom_bytes_inv(prng_state, bf, sz);
+			return frandom_bytes_inv(prng_state, (unsigned char*) bf, sz);
 	}
 	if (i_chr) 
 		return read(fd, bf, sz);
@@ -1462,7 +1462,7 @@ unsigned char* zalloc_buf(unsigned int bs)
 		fplog(stderr, "dd_rescue: (fatal): allocation of aligned buffer failed!\n");
 		cleanup(); exit(18);
 	}
-	ptr = mp;
+	ptr = (unsigned char*)mp;
 #else
 	ptr = malloc(bs);
 	if (!ptr) {
@@ -1490,7 +1490,7 @@ char* retstrdupcat3(const char* dir, char dirsep, const char* inm)
 {
 	const char* ibase = basename(inm);
 	const int dlen = strlen(dir) + (dirsep>0? 1: dirsep);
-	char* ret = malloc(dlen + strlen(inm) + 1);
+	char* ret = (char*)malloc(dlen + strlen(inm) + 1);
 	strcpy(ret, dir);
 	if (dirsep > 0) {
 		ret[dlen-1] = dirsep;
