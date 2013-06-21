@@ -45,7 +45,7 @@ libfalloc-static: dd_rescue.c frandom.o
 	$(CC) $(CFLAGS) -DHAVE_LIBFALLOCATE=1 $(DEFINES) $^ -o dd_rescue $(LIBDIR)/libfallocate.a
 
 libfalloc-dl: dd_rescue.c frandom.o
-	$(CC) $(CFLAGS) -DHAVE_LIBDL=1 -DHAVE_LIBFALLOCATE=1 $(DEFINES) $^ -o dd_rescue -ldl
+	$(CC) $(CFLAGS) -DHAVE_LIBDL=1 -DHAVE_LIBFALLOCATE=1 -DHAVE_FALLOCATE=1 $(DEFINES) $^ -o dd_rescue -ldl
 
 falloc: dd_rescue.c frandom.o
 	$(CC) $(CFLAGS) -DHAVE_FALLOCATE=1 $(DEFINES) $^ -o dd_rescue

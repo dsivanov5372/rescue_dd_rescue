@@ -97,7 +97,6 @@
 
 #ifdef HAVE_LIBFALLOCATE
 #include <fallocate.h>
-#define HAVE_FALLOCATE
 #endif
 
 #ifdef HAVE_LIBDL
@@ -459,16 +458,15 @@ static void sparse_output_warn()
 				oname, eff_opos, stbuf.st_size);
 }
 
-#ifdef HAVE_FALLOCATE
+#if defined(HAVE_FALLOCATE) || defined(HAVE_LIBFALLOCATE)
 
 #ifdef HAVE_LIBDL
 static void* load_libfallocate()
 {
-	libfalloc = dlopen("libfallocate.so.1", RTLD_NOW);
-	if (!libfalloc) {
-		fplog(stderr, "Failed to open libfallocate.so.1\n");
+	libfalloc = dlopen("libfallocate.so.0", RTLD_NOW);
+	if (!libfalloc) 
 		return 0;
-	} else
+	else
 		return dlsym(libfalloc, "linux_fallocate64");
 }
 #endif
@@ -477,7 +475,7 @@ static void do_fallocate(int fd, char* onm)
 {
 	struct stat stbuf;
 	off_t to_falloc, alloced;
-	int rc;
+	int rc = 0;
 	if (!estxfer)
 		return;
 	if (fstat(fd, &stbuf))
@@ -494,12 +492,14 @@ static void do_fallocate(int fd, char* onm)
 	if (_linux_fallocate64)
 		rc = _linux_fallocate64(fd, FALLOC_FL_KEEP_SIZE,
 				opos, to_falloc);
+#ifdef HAVE_FALLOCATE
 	else
 		rc = fallocate64(fd, 1, opos, to_falloc);
+#endif
 #elif defined(HAVE_LIBFALLOCATE)
 	rc = linux_fallocate64(fd, FALLOC_FL_KEEP_SIZE, 
 			      opos, to_falloc);
-#else
+#else /* HAVE_FALLOCATE */
 	rc = fallocate64(fd, 1, opos, to_falloc);
 #endif
 	if (rc)
@@ -1354,9 +1354,12 @@ void printversion()
 #ifdef O_DIRECT
 	fprintf(stderr, "O_DIRECT ");
 #endif
-#ifdef HAVE_LIBFALLOCATE
+#ifdef HAVE_LIBDL
+	fprintf(stderr, "dl/libfallocate ");
+#elif defined(HAVE_LIBFALLOCATE)
 	fprintf(stderr, "libfallocate ");
-#elif defined(HAVE_FALLOCATE)
+#endif	
+#if defined(HAVE_FALLOCATE)
 	fprintf(stderr, "fallocate ");
 #endif
 #ifdef HAVE_SPLICE
@@ -1426,7 +1429,7 @@ void printhelp()
 #ifdef HAVE_SPLICE
 	fprintf(stderr, "         -k         use efficient in-kernel zerocopy splice\n");
 #endif       	
-#ifdef HAVE_FALLOCATE
+#if defined(HAVE_FALLOCATE) || defined(HAVE_LIBFALLOCATE)
 	fprintf(stderr, "         -P         use fallocate to preallocate target space\n");
 #endif
 	fprintf(stderr, "         -w         abort on Write errors (def=no),\n");
@@ -1908,7 +1911,7 @@ int main(int argc, char* argv[])
 	}
 
 
-#ifdef HAVE_FALLOCATE
+#if defined(HAVE_FALLOCATE) || defined(HAVE_LIBFALLOCATE)
 	if (falloc && !o_chr)
 		do_fallocate(odes, oname);
 #endif
@@ -1941,7 +1944,7 @@ int main(int argc, char* argv[])
 		check_seekable(oft->fd, &(oft->cdev), NULL);
 		if (preserve)
 			copyperm(ides, oft->fd);
-#ifdef HAVE_FALLOCATE
+#if defined(HAVE_FALLOCATE) || defined(HAVE_LIBFALLOCATE)
 		if (falloc && !oft->cdev)
 			do_fallocate(oft->fd, oft->name);
 #endif
