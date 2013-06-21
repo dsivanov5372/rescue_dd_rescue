@@ -82,6 +82,7 @@
 #include <limits.h>
 #include <sys/time.h>
 #include <sys/stat.h>
+#include <libgen.h>
 
 #include "frandom.h"
 #include "list.h"
@@ -1458,7 +1459,12 @@ unsigned char* zalloc_buf(unsigned int bs)
 	unsigned char *ptr;
 #ifdef O_DIRECT
 	void *mp;
+#ifdef __DragonFly__
+	mp = valloc(bs);
+	if (!mp) {
+#else
 	if (posix_memalign(&mp, pagesize, bs)) {
+#endif
 		fplog(stderr, "dd_rescue: (fatal): allocation of aligned buffer failed!\n");
 		cleanup(); exit(18);
 	}
