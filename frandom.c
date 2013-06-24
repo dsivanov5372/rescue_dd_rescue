@@ -121,7 +121,7 @@ void* frandom_stcopy(void* target, const void* fst)
 static void get_libc_rand_bytes(u8 *buf, size_t len)
 {
 	int *lbuf = (int*)buf;
-	int i;
+	unsigned int i;
 	for (i = 0; i < len/sizeof(int); ++i)
 		lbuf[i] = rand();
 }
