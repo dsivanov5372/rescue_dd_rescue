@@ -509,7 +509,7 @@ static void do_fallocate(int fd, char* onm)
 #endif
 
 
-void doprint(FILE* const file, const int bs, const clock_t cl, 
+void doprint(FILE* const file, const unsigned int bs, const clock_t cl, 
 	     const float t1, const float t2, const int sync)
 {
 	float avgrate = (float)xfer/(t1*1024);
@@ -756,7 +756,7 @@ int cleanup()
 
 ssize_t fill_rand(void *bf, size_t ln)
 {
-	int i;
+	unsigned int i;
 	int* buf = (int*)bf;
 	for (i = 0; i < ln/sizeof(int); ++i)
 		buf[i] = rand();
@@ -806,7 +806,7 @@ static inline ssize_t mypwrite(int fd, void* bf, size_t sz, off_t off)
 	else {
 		if (avoidwrite) {
 			ssize_t ln = pread(fd, buf2, sz, off);
-			if (ln < sz)
+			if (ln < (ssize_t)sz)
 				return pwrite(fd, bf, sz, off);
 			if (memcmp(bf, buf2, ln))
 				return pwrite(fd, bf, sz, off);
