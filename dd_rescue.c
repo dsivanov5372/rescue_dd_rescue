@@ -685,10 +685,14 @@ int sync_close(int fd, char* nm, char chr)
 		if (sparse) {
 			rc = mayexpandfile(nm);
 			if (rc)
-				fplog(stderr, "dd_rescue: (warning): seek %s (%1.fk): %s!\n",
+				fplog(stderr, "dd_rescue: (warning): seek %s (%.1fk): %s!\n",
 				      nm, (float)opos/1024, strerror(errno));
-		} else if (trunclast && !reverse)
-			truncate(nm, opos);
+		} else if (trunclast && !reverse) {
+			rc = truncate(nm, opos);
+			if (rc)
+				fplog(stderr, "dd_rescue: (warning): could not truncate %s to %.1fk: %s!\n",
+					nm, (float)opos/1024, strerror(errno));
+		}
 
 	}
 	return err;
@@ -1496,11 +1500,13 @@ unsigned char* zalloc_buf(unsigned int bs)
 #ifdef O_DIRECT
 	if (o_dir_in || o_dir_out) {
 #if defined (__DragonFly__) || defined(__NetBSD__)
-		ptr = (unsigned char*)valloc(bs)
+		ptr = (unsigned char*)valloc(bs);
 #else
-		void *mp = 0;
-		posix_memalign(&mp, pagesize, bs);
-		ptr = (unsigned char*)mp;
+		void *mp;
+		if (posix_memalign(&mp, pagesize, bs))
+			ptr = 0;
+		else
+			ptr = (unsigned char*)mp;
 #endif /* NetBSD */
 		if (!ptr) {
 			fplog(stderr, "dd_rescue: (fatal): allocation of aligned buffer failed but needed with O_DIRECT!\n");
@@ -1930,7 +1936,9 @@ int main(int argc, char* argv[])
 		fplog(stderr, "dd_rescue: (warning): triple overwrite with non-seekable output!\n");
 	}
 	if (reverse && trunclast)
-		ftruncate(odes, opos);
+		if (ftruncate(odes, opos))
+			fplog(stderr, "dd_rescue: (warning): Could not truncate %s to %.1fk: %s!\n",
+				oname, (float)opos/1024, strerror(errno));
 
 	LISTTYPE(ofile_t) *of;
 	LISTFOREACH(ofiles, of) {
@@ -1949,7 +1957,9 @@ int main(int argc, char* argv[])
 			do_fallocate(oft->fd, oft->name);
 #endif
 		if (reverse && trunclast)
-			ftruncate(oft->fd, opos);
+			if (ftruncate(oft->fd, opos))
+				fplog(stderr, "dd_rescue: (warning): Could not truncate %s to %.1fk: %s!\n",
+					oft->name, (float)opos/1024, strerror(errno));
 	}
 
 	/* Install signal handler */
