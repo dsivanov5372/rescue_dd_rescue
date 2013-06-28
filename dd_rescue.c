@@ -454,7 +454,7 @@ static void sparse_output_warn()
 			fplog(stderr, "dd_rescue: (warning): %s is a block device; -a not recommended; -A recommended\n", oname);
 		return;
 	}
-	eff_opos = opos == -INT_MAX? ipos: opos;
+	eff_opos = (opos == (off_t)-INT_MAX? ipos: opos);
 	if (sparse && (eff_opos < stbuf.st_size))
 		fplog(stderr, "dd_rescue: (warning): write into %s (@%li/%li): sparse not recommended\n", 
 				oname, eff_opos, stbuf.st_size);
@@ -1760,6 +1760,8 @@ int main(int argc, char* argv[])
 		if (!i_repeat && verbose)
 			fplog(stderr, "dd_rescue: (info): turning on repeat (-R) for /dev/zero\n");
 		i_repeat = 1;
+		if (reverse && !ipos && maxxfer)
+			ipos = maxxfer > opos? opos: maxxfer;
 	}
 
 	/* Properly append input basename if output name is dir */
