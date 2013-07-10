@@ -305,6 +305,10 @@ expected last position, as inferred from the input file length and
 ). On filesystems that support it, this results in them making better
 allocation decisions, avoiding fragmentation. (Note that it does not
 make sense to use sparse together with fallocate().)
+.br
+This option is only available if dd_rescue is compiled with fallocate()
+support. For optimal support, it should be compiled with the 
+libfallocate library.
 .SS Misc options
 .TP 8
 .BR \-r ", " \-\-reverse
@@ -360,6 +364,8 @@ with O_DIRECT, bypassing the kernel buffers. While this option has a negative
 effect on performance (the kernel does readahead for buffered I/O), it will
 result in errors to be detected more quickly (kernel won't retry) and allows
 for smaller I/O units (hardware sector size, 512bytes for most hard disks).
+.br
+O_DIRECT may not be available on all platforms.
 .TP 8
 .BR \-D ", " \-\-odir_out
 tells
