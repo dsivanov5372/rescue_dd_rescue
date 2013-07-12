@@ -940,66 +940,83 @@ static void advancepos(const ssize_t rd, const ssize_t wr)
 
 static int is_writeerr_fatal(int err)
 {
-	return (errno == ENOSPC || errno == EROFS
+	return (err == ENOSPC || err == EROFS
 #ifdef EDQUOT
-               || errno == EDQUOT
+               || err == EDQUOT
 #endif
-               || (errno == EFBIG && !reverse));
+               || (err == EFBIG && !reverse));
 }
 
-int dowrite(const ssize_t rd)
+int weno;
+
+ssize_t dowrite(const ssize_t rd)
 {
 	int err = 0;
 	int fatal = 0;
-	int eno = 0;
 	ssize_t wr = 0;
+	weno = 0;
 	errno = 0;
 	if (!sparse || blockiszero(buf, rd) < rd) {
 		err = ((wr = writeblock(rd)) < rd ? 1: 0);
-		eno = errno;
+		weno = errno;
 	}
-	if (err && is_writeerr_fatal(eno))
+	if (err && is_writeerr_fatal(weno))
 		++fatal;
 	if (err) {
 		fplog(stderr, DDR_WARN "assumption rd(%i) == wr(%i) failed! \n", rd, wr);
 		fplog(stderr, "%swrite %s (%.1fk): %s!\n", 
 		      (fatal? DDR_FATAL : DDR_WARN), oname, 
-		      (float)opos/1024, strerror(eno));
+		      (float)(opos+wr)/1024, strerror(weno));
 		fprintf(stderr, "%s%s%s", down, down, down);
 		errno = 0;
+		/* FIXME: This breaks for reverse direction */
+		if (!reverse)
+			advancepos(wr, wr);
+		else
+			return 0;
 	} else
 		advancepos(rd, wr);
-	return fatal? -err: err;
+	return wr;
 }
 
 int dowrite_retry(const ssize_t rd)
 {
-	int err = dowrite(rd);
-	if (!err)
+	int errs = 0;
+	ssize_t wr = dowrite(rd);
+	if (wr == rd || weno == 0)
 		return 0;
-	if ((rd <= hardbs) || (err < 0 && errno != ENOSPC && errno != EFBIG)) {
-		advancepos(rd, 0);
-		return err;
+	if ((rd <= hardbs) || (weno != ENOSPC && weno != EFBIG)) {
+		/* No retry, move on */
+		advancepos(rd-wr, 0);
+		return is_writeerr_fatal(weno)? -1: 1;
 	} else {
-		ssize_t rwr = 0;
-		unsigned char* oldbuf = buf;
+		ssize_t rwr = wr;
+		unsigned char* oldbuf = buf; 
 		int adv = 1;
+		buf += wr;
+		fprintf(stderr, "%s%s%s", up, up, up);
+		fplog(stderr, DDR_INFO "retrying writes with smaller blocks \n");
 		if (reverse) {
-			buf = buf+rd-hardbs;
+			buf = oldbuf+rd-hardbs;
 			adv = -1;
 		}
 		while (rwr < rd) {
-			ssize_t towr = (hardbs > rd-rwr)? rd-rwr: hardbs;;
-			int err2 = dowrite(towr);
-			if (err2 < 0)
-				return err2;
-			if (err2)
-				advancepos(towr, 0);
+			ssize_t towr = (hardbs > rd-rwr)? rd-rwr: hardbs;
+			ssize_t wr2 = dowrite(towr);
+			if (is_writeerr_fatal(weno)) {
+				buf = oldbuf;
+				return -1;
+			}
+			if (wr2 < towr) {
+				advancepos(towr-wr2, 0);
+				++errs;
+			}
 			rwr += towr; buf += towr*adv;
 		}
 		buf = oldbuf;
+		fprintf(stderr, "%s%s%s", down, down, down);
 	}
-	return err;
+	return errs;
 }
 
 static int partialwrite(const ssize_t rd)
@@ -2059,7 +2076,9 @@ int main(int argc, char* argv[])
 
 	gettimeofday(&currenttime, NULL);
 	printreport();
-	cleanup();
+	c += cleanup();
+	if (c && !quiet)
+		fplog(stderr, DDR_WARN "There were %i errors! \n", c);
 	return c;
 }
 
