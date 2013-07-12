@@ -34,8 +34,6 @@
  * - Provide options to copy ACLs/xattrs as well
  * - Use termcap to fetch cursor up/down codes
  * - Better handling of write errors: also try sub blocks
- * - Optional colors
- * - Use dlopen to open libfallocate rather than linking to it ...
  * - Display more infos on errors by collecting info from syslog
  */
 
@@ -103,7 +101,7 @@
 
 #ifdef HAVE_LIBDL
 #include <dlfcn.h>
-void* libfalloc;
+void* libfalloc = (void*)0;
 #endif
 
 /* splice */
@@ -186,6 +184,25 @@ const char* down = DOWN;
 const char* right = RIGHT;
 char *graph;
 
+#ifdef NO_COLORS
+#define RED ""
+#define AMBER ""
+#define GREEN ""
+#define BOLD ""
+#define NORM ""
+#else
+#define RED "\x1b[0;31m"
+#define AMBER "\x1b[0;33m"
+#define GREEN "\x1b[0;32m"
+#define BOLD "\x1b[0;1m"
+#define NORM "\x1b[0;0m"
+#endif
+
+#define DDR_WARN  AMBER "dd_rescue: (warning): " NORM
+#define DDR_INFO  BOLD "dd_rescue: (info): " NORM
+#define DDR_FATAL RED "dd_rescue: (fatal): " NORM
+
+
 #ifdef MISS_STRSIGNAL
 static char sbuf[16];
 static char* strsignal(int sig)
@@ -265,7 +282,7 @@ static int openfile(const char* const fname, const int flags)
 		fdes = open(fname, flags, 0640);
 	if (fdes == -1) {
 		char nbuf[128];
-		snprintf(nbuf, 128, "dd_rescue: (fatal): open \"%s\" failed", fname);
+		snprintf(nbuf, 128, DDR_FATAL "open \"%s\" failed", fname);
 		perror(nbuf); exit(17);
 	}
 	return fdes;
@@ -277,8 +294,8 @@ static void check_seekable(const int fd, char *ischr, char* msg)
 	errno = 0;
 	if (!*ischr && lseek(fd, (off_t)0, SEEK_SET) != 0) {
 		if (msg) {
-			fplog(stderr, "dd_rescue: (warning): file %s is not seekable!\n", msg);
-			fplog(stderr, "dd_rescue: (warning): %s\n", strerror(errno));
+			fplog(stderr, DDR_WARN "file %s is not seekable!\n", msg);
+			fplog(stderr, DDR_WARN "%s\n", strerror(errno));
 		}
 		*ischr = 1;
 	} //else
@@ -365,7 +382,7 @@ void input_length()
 			return;
 		diff = ilen - stbuf.st_blocks*512;
 		if (diff >= 4096 && (float)diff/ilen > 0.05 && !quiet)
-		       fplog(stderr, "dd_rescue: (info): %s is sparse (%i%%) %s\n", iname, (int)(100.0*diff/ilen), (sparse? "": ", consider -a"));
+		       fplog(stderr, DDR_INFO "%s is sparse (%i%%) %s\n", iname, (int)(100.0*diff/ilen), (sparse? "": ", consider -a"));
 	}
 	if (!ilen)
 		return;
@@ -378,7 +395,7 @@ void input_length()
 	if (estxfer < 0)
 		estxfer = 0;
 	if (!quiet)
-		fplog(stderr, "dd_rescue: (info): expect to copy %LikB from %s\n",
+		fplog(stderr, DDR_INFO "expect to copy %LikB from %s\n",
 			estxfer/1024, iname);
 	if (!graph)
 		preparegraph();
@@ -411,25 +428,25 @@ int output_length()
 			return -1;
 		diff = olen - stbuf.st_blocks*512;
 		if (diff >= 4096 && (float)diff/ilen > 0.05 && !quiet)
-		       fplog(stderr, "dd_rescue: (info): %s is sparse (%i%%) %s\n", oname, (int)(100.0*diff/olen), (sparse? "": ", consider -a"));
+		       fplog(stderr, DDR_INFO "%s is sparse (%i%%) %s\n", oname, (int)(100.0*diff/olen), (sparse? "": ", consider -a"));
 	}
 	if (!olen)
 		return -1;
 	if (!reverse) {
 		off_t newmax = olen - opos;
 		if (newmax < 0) {
-			fplog(stderr, "dd_rescue: (fatal): output position is beyond end of file but -M specified!\n");
+			fplog(stderr, DDR_FATAL "output position is beyond end of file but -M specified!\n");
 			cleanup();
 			exit(19);
 		}			
 		if (!maxxfer || maxxfer > newmax) {
 			maxxfer = newmax;
 			if (!quiet)
-				fplog(stderr, "dd_rescue: (info): limit max xfer to %LikB\n",
+				fplog(stderr, DDR_INFO "limit max xfer to %LikB\n",
 					maxxfer/1024);
 		}
 	} else if (opos > olen) {
-		fplog(stderr, "dd_rescue: (warning): change output position %LikB to endpos %Likb due to -M\n",
+		fplog(stderr, DDR_WARN "change output position %LikB to endpos %Likb due to -M\n",
 			opos/1024, olen/1024);
 		opos = olen;
 	}
@@ -451,12 +468,12 @@ static void sparse_output_warn()
 	}
 	if (S_ISBLK(stbuf.st_mode)) {
 		if (sparse || !nosparse)
-			fplog(stderr, "dd_rescue: (warning): %s is a block device; -a not recommended; -A recommended\n", oname);
+			fplog(stderr, DDR_WARN "%s is a block device; -a not recommended; -A recommended\n", oname);
 		return;
 	}
 	eff_opos = (opos == (off_t)-INT_MAX? ipos: opos);
 	if (sparse && (eff_opos < stbuf.st_size))
-		fplog(stderr, "dd_rescue: (warning): write into %s (@%li/%li): sparse not recommended\n", 
+		fplog(stderr, DDR_WARN "write into %s (@%li/%li): sparse not recommended\n", 
 				oname, eff_opos, stbuf.st_size);
 }
 
@@ -465,8 +482,9 @@ static void sparse_output_warn()
 #ifdef HAVE_LIBDL
 static void* load_libfallocate()
 {
-	libfalloc = dlopen("libfallocate.so.0", RTLD_NOW);
-	if (!libfalloc) 
+	if (!libfalloc)
+		libfalloc = dlopen("libfallocate.so.0", RTLD_NOW);
+	if (!libfalloc)
 		return 0;
 	else
 		return dlsym(libfalloc, "linux_fallocate64");
@@ -505,7 +523,7 @@ static void do_fallocate(int fd, char* onm)
 	rc = fallocate64(fd, 1, opos, to_falloc);
 #endif
 	if (rc)
-	       fplog(stderr, "dd_rescue: (warning): fallocate %s (%Li, %Li) failed: %s\n",
+	       fplog(stderr, DDR_WARN "fallocate %s (%Li, %Li) failed: %s\n",
 			       onm, opos, to_falloc, strerror(errno));
 }
 #endif
@@ -515,7 +533,7 @@ void doprint(FILE* const file, const unsigned int bs, const clock_t cl,
 	     const float t1, const float t2, const int sync)
 {
 	float avgrate = (float)xfer/(t1*1024);
-	fprintf(file, "dd_rescue: (info): ipos:%12.1fk, opos:%12.1fk, xferd:%12.1fk\n",
+	fprintf(file, DDR_INFO "ipos:%12.1fk, opos:%12.1fk, xferd:%12.1fk\n",
 		(float)ipos/1024, (float)opos/1024, (float)xfer/1024);
 	fprintf(file, "             %s  %s  errs:%7i, errxfer:%12.1fk, succxfer:%12.1fk\n",
 		(reverse? "-": " "), (bs==hardbs? "*": " "), nrerr, 
@@ -563,7 +581,7 @@ void printstatus(FILE* const file1, FILE* const file2,
 	if (sync) {
 		int err = fsync(odes);
 		if (err && (errno != EINVAL || !einvalwarn) &&!o_chr) {
-			fplog(stderr, "dd_rescue: (warning): sync %s (%.1fk): %s!  \n",
+			fplog(stderr, DDR_WARN "sync %s (%.1fk): %s!  \n",
 			      oname, (float)ipos/1024, strerror(errno));
 			++einvalwarn;
 		}
@@ -603,7 +621,7 @@ void printreport()
 	FILE *report = (!quiet || nrerr)? stderr: 0;
 	in_report = 1;
 	if (report) {
-		fplog(report, "dd_rescue: (info): Summary for %s -> %s", iname, oname);
+		fplog(report, DDR_INFO "Summary for %s -> %s", iname, oname);
 		LISTTYPE(ofile_t) *of;
 		LISTFOREACH(ofiles, of)
 			fplog(report, "; %s", LISTDATA(of).name);
@@ -612,7 +630,7 @@ void printreport()
 		fprintf(report, ":\n%s%s%s%s", down, down, down, down);
 		printstatus(report, logfd, 0, 1);
 		if (avoidwrite) 
-			fplog(report, "dd_rescue: (info): Avoided %LikB of writes (performed %LikB)\n", axfer/1024, (sxfer-axfer)/1024);
+			fplog(report, DDR_INFO "Avoided %LikB of writes (performed %LikB)\n", axfer/1024, (sxfer-axfer)/1024);
 	}
 }
 
@@ -673,26 +691,26 @@ int sync_close(int fd, char* nm, char chr)
 			rc = pwrite(fd, buf, 0, opos);
 		rc = fsync(fd);
 		if (rc && !chr) {
-			fplog(stderr, "dd_rescue: (warning): fsync %s (%.1fk): %s!\n", 
+			fplog(stderr, DDR_WARN "fsync %s (%.1fk): %s!\n",
 			      nm, (float)opos/1024, strerror(errno));
 			++err;
 			errno = 0;
 		}
 		rc = close(fd); 
 		if (rc) {
-			fplog(stderr, "dd_rescue: (warning): close %s (%.1fk): %s!\n", 
+			fplog(stderr, DDR_WARN "close %s (%.1fk): %s!\n",
 			      nm, (float)opos/1024, strerror(errno));
 			++err;
 		}
 		if (sparse) {
 			rc = mayexpandfile(nm);
 			if (rc)
-				fplog(stderr, "dd_rescue: (warning): seek %s (%.1fk): %s!\n",
+				fplog(stderr, DDR_WARN "seek %s (%.1fk): %s!\n",
 				      nm, (float)opos/1024, strerror(errno));
 		} else if (trunclast && !reverse) {
 			rc = truncate(nm, opos);
 			if (rc)
-				fplog(stderr, "dd_rescue: (warning): could not truncate %s to %.1fk: %s!\n",
+				fplog(stderr, DDR_WARN "could not truncate %s to %.1fk: %s!\n",
 					nm, (float)opos/1024, strerror(errno));
 		}
 
@@ -714,7 +732,7 @@ int cleanup()
 	if (ides != -1) {
 		rc = close(ides);
 		if (rc) {
-			fplog(stderr, "dd_rescue: (warning): close %s (%.1fk): %s!\n", 
+			fplog(stderr, DDR_WARN "close %s (%.1fk): %s!\n",
 			      iname, (float)ipos/1024, strerror(errno));
 			++errs;
 		}
@@ -765,15 +783,19 @@ ssize_t fill_rand(void *bf, size_t ln)
 	return ln;
 }
 
+/* TODO: Can't we use library functions to find the first non-null byte?
+ * There should be optimized versions, using SSE4.x insns e.g. */
+
 /** is the block zero ? */
-static int blockiszero(const unsigned char* blk, const int ln)
+static int blockiszero(const unsigned char* blk, const size_t ln)
 {
+	const unsigned long* ptr = (const unsigned long*)blk;
+	const unsigned long* const bptr = ptr;
 	if (i_repeat && i_rep_zero)
 		return i_rep_zero;
-	unsigned long* ptr = (unsigned long*)blk;
-	while ((ptr-(unsigned long*)blk) < ln/sizeof(unsigned long))
+	while ((size_t)(ptr-bptr) < ln/sizeof(unsigned long))
 		if (*(ptr++)) 
-			return i_rep_zero = (sizeof(unsigned long)*(ptr-(unsigned long*)blk));
+			return i_rep_zero = (sizeof(unsigned long)*(--ptr-bptr));
 	if (i_repeat)
 		i_rep_zero = ln;
 	return ln;
@@ -848,8 +870,8 @@ ssize_t writeblock(const int towrite)
 		  || (wr < towrite && err > 0 && errno == 0));
 	if (wr < towrite && err != 0) {
 		/* Write error: handle ? .. */
-		fplog(stderr, "dd_rescue: (%s): write %s (%.1fk): %s\n",
-		      (abwrerr? "fatal": "warning"),
+		fplog(stderr, "%swrite %s (%.1fk): %s\n",
+		      (abwrerr? DDR_FATAL: DDR_WARN),
 		      oname, (float)opos/1024, strerror(errno));
 		if (abwrerr) {
 			cleanup(); exit(21);
@@ -870,7 +892,7 @@ ssize_t writeblock(const int towrite)
 		} while ((e2 == -1 && (errno == EINTR || errno == EAGAIN))
 			  || (w2 < towrite && e2 > 0 && errno == 0));
 		if (w2 < towrite && e2 != 0) 
-			fplog(stderr, "dd_rescue: (warning): 2ndary write %s (%.1fk): %s\n",
+			fplog(stderr, DDR_WARN "2ndary write %s (%.1fk): %s\n",
 			      oft->name, (float)opos/1024, strerror(errno));
 	}
 	o_chr = oldochr;
@@ -897,7 +919,7 @@ int blockxfer(const off_t max, const int bs)
 void exitfatalerr(const int eno)
 {
 	if (eno == ESPIPE || eno == EPERM || eno == ENXIO || eno == ENODEV) {
-		fplog(stderr, "dd_rescue: (fatal): %s (%.1fk): %s! \n", 
+		fplog(stderr, DDR_FATAL "%s (%.1fk): %s! \n", 
 		      iname, (float)ipos/1024, strerror(eno));
 		fplog(stderr, "dd_rescue: Last error fatal! Exiting ... \n");
 		cleanup();
@@ -916,38 +938,75 @@ static void advancepos(const ssize_t rd, const ssize_t wr)
 	}
 }
 
+static int is_writeerr_fatal(int err)
+{
+	return (errno == ENOSPC || errno == EROFS
+#ifdef EDQUOT
+               || errno == EDQUOT
+#endif
+               || (errno == EFBIG && !reverse));
+}
+
 int dowrite(const ssize_t rd)
 {
-	int errs = 0;
+	int err = 0;
 	int fatal = 0;
-	/* errno == 0: We can write to disk */
+	int eno = 0;
 	ssize_t wr = 0;
-	if (!sparse || blockiszero(buf, rd) < rd)
-		errs += ((wr = writeblock(rd)) < rd ? 1: 0);
-	advancepos(rd, wr);
-	if (wr <= 0 && (errno == ENOSPC || errno == EROFS
-#ifdef EDQUOT
-		   || errno == EDQUOT
-#endif
-		   || (errno == EFBIG && !reverse)))
+	errno = 0;
+	if (!sparse || blockiszero(buf, rd) < rd) {
+		err = ((wr = writeblock(rd)) < rd ? 1: 0);
+		eno = errno;
+	}
+	if (err && is_writeerr_fatal(eno))
 		++fatal;
-	if (rd != wr && !sparse) {
-		const int eno = errno;
-		fplog(stderr, "dd_rescue: (warning): assumption rd(%i) == wr(%i) failed! \n", rd, wr);
-		fplog(stderr, "dd_rescue: (%s): write %s (%.1fk): %s!\n", 
-		      (fatal? "fatal": "warning"), oname, 
+	if (err) {
+		fplog(stderr, DDR_WARN "assumption rd(%i) == wr(%i) failed! \n", rd, wr);
+		fplog(stderr, "%swrite %s (%.1fk): %s!\n", 
+		      (fatal? DDR_FATAL : DDR_WARN), oname, 
 		      (float)opos/1024, strerror(eno));
 		fprintf(stderr, "%s%s%s", down, down, down);
 		errno = 0;
+	} else
+		advancepos(rd, wr);
+	return fatal? -err: err;
+}
+
+int dowrite_retry(const ssize_t rd)
+{
+	int err = dowrite(rd);
+	if (!err)
+		return 0;
+	if ((rd <= hardbs) || (err < 0 && errno != ENOSPC && errno != EFBIG)) {
+		advancepos(rd, 0);
+		return err;
+	} else {
+		ssize_t rwr = 0;
+		unsigned char* oldbuf = buf;
+		int adv = 1;
+		if (reverse) {
+			buf = buf+rd-hardbs;
+			adv = -1;
+		}
+		while (rwr < rd) {
+			ssize_t towr = (hardbs > rd-rwr)? rd-rwr: hardbs;;
+			int err2 = dowrite(towr);
+			if (err2 < 0)
+				return err2;
+			if (err2)
+				advancepos(towr, 0);
+			rwr += towr; buf += towr*adv;
+		}
+		buf = oldbuf;
 	}
-	return fatal? -errs: errs;
+	return err;
 }
 
 static int partialwrite(const ssize_t rd)
 {
 	/* But first: write available data and advance (optimization) */
 	if (rd > 0 && !reverse) 
-		return dowrite(rd);
+		return dowrite_retry(rd);
 	return 0;	
 }
 
@@ -969,7 +1028,7 @@ int copyfile_hardbs(const off_t max)
 		/* EOF */
 		if (rd == 0 && !eno) {
 			if (!quiet)
-				fplog(stderr, "dd_rescue: (info): read %s (%.1fk): EOF\n", 
+				fplog(stderr, DDR_INFO "read %s (%.1fk): EOF\n", 
 				      iname, (float)ipos/1024);
 			return errs;
 		}
@@ -1001,7 +1060,7 @@ int copyfile_hardbs(const off_t max)
 			}					
 			/* Real error on small blocks: Don't retry */
 			nrerr++; 
-			fplog(stderr, "dd_rescue: (warning): read %s (%.1fk): %s!\n", 
+			fplog(stderr, DDR_WARN "read %s (%.1fk): %s!\n", 
 			      iname, (float)ipos/1024, strerror(eno));
 		
 			errno = 0;
@@ -1015,9 +1074,9 @@ int copyfile_hardbs(const off_t max)
 					   || (eno == EFBIG && !reverse))) 
 					return errs;
 				if (toread != wr) {
-					fplog(stderr, "dd_rescue: (warning): assumption toread(%i) == wr(%i) failed! \n", toread, wr);	
+					fplog(stderr, DDR_WARN "assumption toread(%i) == wr(%i) failed! \n", toread, wr);	
 					/*
-					fplog(stderr, "dd_rescue: (warning): %s (%.1fk): %s!\n", 
+					fplog(stderr, DDR_WARN "%s (%.1fk): %s!\n", 
 					      oname, (float)opos/1024, strerror(eno));
 					fprintf(stderr, "%s%s%s%s", down, down, down, down);
 				 	*/
@@ -1033,13 +1092,13 @@ int copyfile_hardbs(const off_t max)
 			}
 			/* exit if too many errs */
 			if (maxerr && nrerr >= maxerr) {
-				fplog(stderr, "dd_rescue: (fatal): maxerr reached!\n");
+				fplog(stderr, DDR_FATAL "maxerr reached!\n");
 				printreport();
 				cleanup(); exit(32);
 			}
 			fprintf(stderr, "%s%s%s%s", down, down, down, down);
 		} else {
-	      		int err = dowrite(rd);
+	      		int err = dowrite_retry(rd);
 			if (err < 0)
 				return -err;
 			else
@@ -1070,7 +1129,7 @@ int copyfile_softbs(const off_t max)
 	if (!o_chr && !avoidwrite) {
 		rc = pwrite(odes, buf, 0, opos);
 		if (rc)
-			fplog(stderr, "dd_rescue: (warning): extending file %s to %.1fk failed\n",
+			fplog(stderr, DDR_WARN "extending file %s to %.1fk failed\n",
 			      oname, (float)opos/1024);
 	}
 	while ((toread = blockxfer(max, softbs)) > 0) {
@@ -1081,7 +1140,7 @@ int copyfile_softbs(const off_t max)
 		/* EOF */
 		if (rd == 0 && !eno) {
 			if (!quiet)
-				fplog(stderr, "dd_rescue: (info): read %s (%.1fk): EOF\n", 
+				fplog(stderr, DDR_INFO "read %s (%.1fk): EOF\n", 
 				      iname, (float)ipos/1024);
 			return errs;
 		}
@@ -1100,7 +1159,7 @@ int copyfile_softbs(const off_t max)
 			new_max = xfer + toread;
 			/* Error with large blocks: Try small ones ... */
 			if (verbose) {
-				fprintf(stderr, "dd_rescue: (info): problems at ipos %.1fk: %s \n                 fall back to smaller blocksize \n%s%s%s%s",
+				fprintf(stderr, DDR_INFO "problems at ipos %.1fk: %s \n                 fall back to smaller blocksize \n%s%s%s%s",
 				        (float)ipos/1024, strerror(eno), down, down, down, down);
 				printstatus(stderr, logfd, hardbs, 1);
 			}
@@ -1134,10 +1193,10 @@ int copyfile_softbs(const off_t max)
 			if (!err && xfer == old_xfer)
 				return errs;
 			if (verbose) 
-				fprintf(stderr, "dd_rescue: (info): ipos %.1fk promote to large bs again! \n%s%s%s%s",
+				fprintf(stderr, DDR_INFO "ipos %.1fk promote to large bs again! \n%s%s%s%s",
 					(float)ipos/1024, down, down, down, down);
 		} else {
-	      		err = dowrite(rd);
+	      		err = dowrite_retry(rd);
 			if (err < 0)
 				return -err;
 			else
@@ -1166,14 +1225,14 @@ int copyfile_splice(const off_t max)
 					SPLICE_F_MOVE | SPLICE_F_MORE);
 		if (rd < 0) {
 			if (!quiet)
-				fplog(stderr, "dd_rescue: (info): %s (%.1fk): fall back to userspace copy\n%s%s%s%s", 
+				fplog(stderr, DDR_INFO "%s (%.1fk): fall back to userspace copy\n%s%s%s%s",
 				      iname, (float)ipos/1024, down, down, down, down);
 			close(fd_pipe[0]); close(fd_pipe[1]);
 			return copyfile_softbs(max);
 		}
 		if (rd == 0) {
 			if (!quiet)
-				fplog(stderr, "dd_rescue: (info): read %s (%.1fk): EOF (splice)\n", 
+				fplog(stderr, DDR_INFO "read %s (%.1fk): EOF (splice)\n",
 				      iname, (float)ipos/1024);
 			break;
 		}
@@ -1193,7 +1252,7 @@ int copyfile_splice(const off_t max)
 					SPLICE_F_MOVE | SPLICE_F_MORE);
 			/* Simplify error handling, it worked before ... */
 			if (rd <= 0) {
-				fplog(stderr, "dd_rescue: (error): Confused: splice() failed unexpectedly: %s\n%s%s%s%s",
+				fplog(stderr, DDR_WARN "Confused: splice() failed unexpectedly: %s\n%s%s%s%s",
 					strerror(errno), down, down, down, down);
 				/* We should abort here .... */
 				ipos = new_ipos; opos = new_opos;
@@ -1203,7 +1262,7 @@ int copyfile_splice(const off_t max)
 				ssize_t wr = splice(fd_pipe[0], NULL, LISTDATA(oft).fd, &opos, rd,
 						SPLICE_F_MOVE | SPLICE_F_MORE);
 				if (wr < 0) {	
-					fplog(stderr, "dd_rescue: (error): Confused: splice() failed unexpectedly: %s\n%s%s%s%s",
+					fplog(stderr, DDR_WARN "Confused: splice() failed unexpectedly: %s\n%s%s%s%s",
 						strerror(errno), down, down, down, down);
 					/* We should abort here .... */
 					ipos = new_ipos; opos = new_opos;
@@ -1213,7 +1272,7 @@ int copyfile_splice(const off_t max)
 			}
 		}
 		if (ipos != new_ipos || opos != new_opos) {
-			fplog(stderr, "dd_rescue: (error): Confused: splice progress inconsistent: %zi %zi %zi %zi\n%s%s%s%s",
+			fplog(stderr, DDR_WARN "Confused: splice progress inconsistent: %zi %zi %zi %zi\n%s%s%s%s",
 				ipos, new_ipos, opos, new_opos, down, down, down, down);
 			ipos = new_ipos; opos = new_opos;
 		}	
@@ -1237,7 +1296,7 @@ int tripleoverwrite(const off_t max)
 	struct timeval orig_starttime;
 	LISTTYPE(ofile_t) *of;
 	memcpy(&orig_starttime, &starttime, sizeof(starttime));
-	fprintf(stderr, "%s%s%s%sdd_rescue: (info): Triple overwrite (BSI M7.15): first pass ... (frandom)      \n\n\n\n\n", up, up, up, up);
+	fprintf(stderr, "%s%s%s%s" DDR_INFO "Triple overwrite (BSI M7.15): first pass ... (frandom)      \n\n\n\n\n", up, up, up, up);
 	ret += copyfile_softbs(max);
 	fprintf(stderr, "syncing ... \n%s", up);
 	ret += fsync(odes);
@@ -1250,7 +1309,7 @@ int tripleoverwrite(const off_t max)
 	if (!bsim715_2) {
 		opos = orig_opos; xfer = 0; ipos = 0;
 		startclock = clock(); gettimeofday(&starttime, NULL);
-		fprintf(stderr, "dd_rescue: (info): Triple overwrite (BSI M7.15): second pass ... (frandom_inv)\n\n\n\n\n");
+		fprintf(stderr, DDR_INFO "Triple overwrite (BSI M7.15): second pass ... (frandom_inv)\n\n\n\n\n");
 		ret += copyfile_softbs(max);
 		fprintf(stderr, "syncing ... \n%s", up);
 		ret += fsync(odes);
@@ -1260,7 +1319,7 @@ int tripleoverwrite(const off_t max)
 		bsim715_2ndpass = 0;
 		if (bsim715_4) {
 			frandom_bytes(prng_state, buf, 16);
-			fprintf(stderr, "dd_rescue: (info): Triple overwrite (BSI M7.15): third pass ... (frandom) \n\n\n\n\n");
+			fprintf(stderr, DDR_INFO "Triple overwrite (BSI M7.15): third pass ... (frandom) \n\n\n\n\n");
 			opos = orig_opos; xfer = 0; ipos = 0;
 			startclock = clock(); gettimeofday(&starttime, NULL);
 			ret += copyfile_softbs(max);
@@ -1274,7 +1333,7 @@ int tripleoverwrite(const off_t max)
 			iname = "FRND+invFRND+ZERO";
 	} else
 		iname = "FRND+ZERO";
-	fprintf(stderr, "dd_rescue: (info): Triple overwrite (BSI M7.15): last pass ... (zeros) \n\n\n\n\n");
+	fprintf(stderr, DDR_INFO "Triple overwrite (BSI M7.15): last pass ... (zeros) \n\n\n\n\n");
 	frandom_release(prng_state); prng_state = 0;
 	memset(buf, 0, softbs); 
 	i_repeat = 1; i_rep_init = 1;
@@ -1285,7 +1344,7 @@ int tripleoverwrite(const off_t max)
 	memcpy(&starttime, &orig_starttime, sizeof(starttime));
 	xfer = sxfer;
 	if (ret)
-		fplog(stderr, "dd_rescue: (warning): There were %i errors! %s may not be safely overwritten!\n", ret, oname);
+		fplog(stderr, DDR_WARN "There were %i errors! %s may not be safely overwritten!\n", ret, oname);
 	//fprintf(stderr, "syncing ... \n%s", up);
 	return ret;
 }
@@ -1303,7 +1362,7 @@ static off_t readint(const char* const ptr)
 		case ' ':
 		case '\0': break;
 		default:
-			fplog(stderr, "dd_rescue: (warning): suffix %c ignored!\n", *es);
+			fplog(stderr, DDR_WARN "suffix %c ignored!\n", *es);
 	}
 	return (off_t)res;
 }
@@ -1316,11 +1375,11 @@ void init_random()
 		if (!strcmp(prng_sfile, "-")) {
 			fd = 0;
 			if (verbose)
-				fplog(stderr, "dd_rescue: (info): reading random seed from <stdin> ...\n");
+				fplog(stderr, DDR_INFO "reading random seed from <stdin> ...\n");
 		} else
 			fd = open(prng_sfile, O_RDONLY);
 		if (fd == -1) {
-			fplog(stderr, "dd_rescue: (fatal): Could not open \"%s\" for random seed!\n", prng_sfile);
+			fplog(stderr, DDR_FATAL "Could not open \"%s\" for random seed!\n", prng_sfile);
 			/* ERROR */
 			cleanup(); exit(28);
 		}
@@ -1328,14 +1387,14 @@ void init_random()
 			unsigned int* sval = (unsigned int*)sbf;
 			ln = read(fd, sbf, 4);
 			if (ln != 4) {
-				fplog(stderr, "dd_rescue: (fatal): failed to read 4 bytes from \"%s\"!\n", prng_sfile);
+				fplog(stderr, DDR_FATAL "failed to read 4 bytes from \"%s\"!\n", prng_sfile);
 				cleanup(); exit(29);
 			}
 			srand(*sval); rand();
 		} else {
 			ln = read(fd, sbf, 256);
 			if (ln != 256) {
-				fplog(stderr, "dd_rescue: (fatal): failed to read 256 bytes from \"%s\"!\n", prng_sfile);
+				fplog(stderr, DDR_FATAL "failed to read 256 bytes from \"%s\"!\n", prng_sfile);
 				cleanup(); exit(29);
 			}
 			prng_state = frandom_init(sbf);
@@ -1465,30 +1524,30 @@ void printhelp()
 
 void printinfo(FILE* const file)
 {
-	fplog(file, "dd_rescue: (info): about to transfer %.1f kBytes from %s to %s\n",
+	fplog(file, DDR_INFO "about to transfer %.1f kBytes from %s to %s\n",
 	      (double)maxxfer/1024, iname, oname);
-	fplog(file, "dd_rescue: (info): blocksizes: soft %i, hard %i\n", softbs, hardbs);
-	fplog(file, "dd_rescue: (info): starting positions: in %.1fk, out %.1fk\n",
+	fplog(file, DDR_INFO "blocksizes: soft %i, hard %i\n", softbs, hardbs);
+	fplog(file, DDR_INFO "starting positions: in %.1fk, out %.1fk\n",
 	      (double)ipos/1024, (double)opos/1024);
-	fplog(file, "dd_rescue: (info): Logfile: %s, Maxerr: %li\n",
+	fplog(file, DDR_INFO "Logfile: %s, Maxerr: %li\n",
 	      (lname? lname: "(none)"), maxerr);
-	fplog(file, "dd_rescue: (info): Reverse: %s, Trunc: %s, interactive: %s\n",
+	fplog(file, DDR_INFO "Reverse: %s, Trunc: %s, interactive: %s\n",
 	      YESNO(reverse), (dotrunc? "yes": (trunclast? "last": "no")), YESNO(interact));
-	fplog(file, "dd_rescue: (info): abort on Write errs: %s, spArse write: %s\n",
+	fplog(file, DDR_INFO "abort on Write errs: %s, spArse write: %s\n",
 	      YESNO(abwrerr), (sparse? "yes": (nosparse? "never": "if err")));
-	fplog(file, "dd_rescue: (info): preserve: %s, splice: %s, avoidWrite: %s\n",
+	fplog(file, DDR_INFO "preserve: %s, splice: %s, avoidWrite: %s\n",
 	      YESNO(preserve), YESNO(dosplice), YESNO(avoidwrite));
-	fplog(file, "dd_rescue: (info): fallocate: %s, Repeat: %s, O_DIRECT: %s/%s\n",
+	fplog(file, DDR_INFO "fallocate: %s, Repeat: %s, O_DIRECT: %s/%s\n",
 	      YESNO(falloc), YESNO(i_repeat), YESNO(o_dir_in), YESNO(o_dir_out));
 	/*
-	fplog(file, "dd_rescue: (info): verbose: %s, quiet: %s\n", 
+	fplog(file, DDR_INFO "verbose: %s, quiet: %s\n", 
 	      YESNO(verbose), YESNO(quiet));
 	*/
 }
 
 void breakhandler(int sig)
 {
-	fplog(stderr, "dd_rescue: (fatal): Caught signal %i \"%s\". Exiting!\n",
+	fplog(stderr, DDR_FATAL "Caught signal %i \"%s\". Exiting!\n",
 	      sig, strsignal(sig));
 	printreport();
 	cleanup();
@@ -1511,7 +1570,7 @@ unsigned char* zalloc_buf(unsigned int bs)
 			ptr = (unsigned char*)mp;
 #endif /* NetBSD */
 		if (!ptr) {
-			fplog(stderr, "dd_rescue: (fatal): allocation of aligned buffer failed but needed with O_DIRECT!\n");
+			fplog(stderr, DDR_FATAL "allocation of aligned buffer failed but needed with O_DIRECT!\n");
 			cleanup(); exit(18);
 		}
 		memset(ptr, 0, bs);
@@ -1520,7 +1579,7 @@ unsigned char* zalloc_buf(unsigned int bs)
 #endif /* O_DIRECT */
 	ptr = (unsigned char*)malloc(bs);
 	if (!ptr) {
-		fplog(stderr, "dd_rescue: (fatal): allocation of buffer failed!\n");
+		fplog(stderr, DDR_FATAL "allocation of buffer failed!\n");
 		cleanup(); exit(18);
 	}
 	memset(ptr, 0, bs);
@@ -1663,13 +1722,13 @@ int main(int argc, char* argv[])
 			case '2': prng_frnd = 1; if (is_filename(optarg)) prng_sfile = optarg; else prng_seed = readint(optarg); bsim715 = 1; bsim715_2 = 1; break;
 			case '3': prng_frnd = 1; if (is_filename(optarg)) prng_sfile = optarg; else prng_seed = readint(optarg); bsim715 = 1; break;
 			case '4': prng_frnd = 1; if (is_filename(optarg)) prng_sfile = optarg; else prng_seed = readint(optarg); bsim715 = 1; bsim715_4 = 1; break;
-			case ':': fplog (stderr, "dd_rescue: (fatal): option %c requires an argument!\n", optopt); 
+			case ':': fplog (stderr, DDR_FATAL "option %c requires an argument!\n", optopt); 
 				printhelp();
 				exit(11); break;
-			case '?': fplog(stderr, "dd_rescue: (fatal): unknown option %c!\n", optopt, argv[0]);
+			case '?': fplog(stderr, DDR_FATAL "unknown option %c!\n", optopt, argv[0]);
 				printhelp();
 				exit(11); break;
-			default: fplog(stderr, "dd_rescue: (fatal): your getopt() is buggy!\n");
+			default: fplog(stderr, DDR_FATAL "your getopt() is buggy!\n");
 				exit(255);
 		}
 	}
@@ -1686,12 +1745,12 @@ int main(int argc, char* argv[])
 	if (optind < argc) 
 		oname = argv[optind++];
 	if (optind < argc) {
-		fplog(stderr, "dd_rescue: (fatal): spurious options: %s ...\n", argv[optind]);
+		fplog(stderr, DDR_FATAL "spurious options: %s ...\n", argv[optind]);
 		printhelp();
 		exit(12);
 	}
 	if (!iname || !oname) {
-		fplog(stderr, "dd_rescue: (fatal): both input and output have to be specified!\n");
+		fplog(stderr, DDR_FATAL "both input and output have to be specified!\n");
 		printhelp();
 		exit(12);
 	}
@@ -1715,23 +1774,23 @@ int main(int argc, char* argv[])
 			hardbs = BUF_HARDBLOCKSIZE;
 	}
 	if (!quiet)
-		fplog(stderr, "dd_rescue: (info): Using softbs=%lu, hardbs=%lu\n", softbs, hardbs);
+		fplog(stderr, DDR_INFO "Using softbs=%lu, hardbs=%lu\n", softbs, hardbs);
 
 	/* sanity checks */
 #ifdef O_DIRECT
 	if ((o_dir_in || o_dir_out) && hardbs < 512) {
 		hardbs = 512;
-		fplog(stderr, "dd_rescue: (warning): O_DIRECT requires hardbs of at least %i!\n",
+		fplog(stderr, DDR_WARN "O_DIRECT requires hardbs of at least %i!\n",
 		      hardbs);
 	}
 
 	if (o_dir_in || o_dir_out)
-		fplog(stderr, "dd_rescue: (warning): We don't handle misalignment of last block w/ O_DIRECT!\n");
+		fplog(stderr, DDR_WARN "We don't handle misalignment of last block w/ O_DIRECT!\n");
 				
 #endif
 
 	if (softbs < hardbs) {
-		fplog(stderr, "dd_rescue: (warning): setting hardbs from %i to softbs %i!\n",
+		fplog(stderr, DDR_WARN "setting hardbs from %i to softbs %i!\n",
 		      hardbs, softbs);
 		hardbs = softbs;
 	}
@@ -1750,7 +1809,7 @@ int main(int argc, char* argv[])
 		ipos = 0;
 
 	if (dosplice && avoidwrite) {
-		fplog(stderr, "dd_rescue: (warning): disable write avoidance (-W) for splice copy\n");
+		fplog(stderr, DDR_WARN "disable write avoidance (-W) for splice copy\n");
 		avoidwrite = 0;
 	}
 	buf = zalloc_buf(softbs);
@@ -1758,7 +1817,7 @@ int main(int argc, char* argv[])
 	/* Optimization: Don't reread from /dev/zero over and over ... */
 	if (!dosplice && !strcmp(iname, "/dev/zero")) {
 		if (!i_repeat && verbose)
-			fplog(stderr, "dd_rescue: (info): turning on repeat (-R) for /dev/zero\n");
+			fplog(stderr, DDR_INFO "turning on repeat (-R) for /dev/zero\n");
 		i_repeat = 1;
 		if (reverse && !ipos && maxxfer)
 			ipos = maxxfer > opos? opos: maxxfer;
@@ -1770,7 +1829,7 @@ int main(int argc, char* argv[])
 	identical = check_identical(iname, oname);
 
 	if (identical && dotrunc && !force) {
-		fplog(stderr, "dd_rescue: (fatal): infile and outfile are identical and trunc turned on!\n");
+		fplog(stderr, DDR_FATAL "infile and outfile are identical and trunc turned on!\n");
 		cleanup(); exit(14);
 	}
 	/* Open input and output files */
@@ -1781,7 +1840,7 @@ int main(int argc, char* argv[])
 	} else {
 		ides = openfile(iname, O_RDONLY | o_dir_in);
 		if (ides < 0) {
-			fplog(stderr, "dd_rescue: (fatal): could not open %s: %s\n", iname, strerror(errno));
+			fplog(stderr, DDR_FATAL "could not open %s: %s\n", iname, strerror(errno));
 			cleanup(); exit(22);
 		}
 	}
@@ -1805,12 +1864,12 @@ int main(int argc, char* argv[])
 			a = toupper(fgetc(stdin)); //fprintf(stderr, "\n");
 		} while (a != 'Y' && a != 'N');
 		if (a == 'N') {
-			fplog(stderr, "dd_rescue: (fatal): exit on user request!\n");
+			fplog(stderr, DDR_FATAL "exit on user request!\n");
 			cleanup(); exit(23);
 		}
 	}
 	if (o_chr && avoidwrite) {
-		fplog(stderr, "dd_rescue: (warning): Disabling -Write avoidance b/c ofile is not seekable\n");
+		fplog(stderr, DDR_WARN "Disabling -Write avoidance b/c ofile is not seekable\n");
 		avoidwrite = 0;
 	}
 		
@@ -1823,7 +1882,7 @@ int main(int argc, char* argv[])
 	}
 
 	if (odes < 0) {
-		fplog(stderr, "dd_rescue: (fatal): %s: %s\n", oname, strerror(errno));
+		fplog(stderr, DDR_FATAL "%s: %s\n", oname, strerror(errno));
 		cleanup(); exit(24);
 	}
 
@@ -1836,10 +1895,10 @@ int main(int argc, char* argv[])
 	sparse_output_warn();
 	if (o_chr) {
 		if (!nosparse)
-			fprintf(stderr, "dd_rescue: (warning): Not using sparse writes for non-seekable output\n");
+			fprintf(stderr, DDR_WARN "Not using sparse writes for non-seekable output\n");
 		nosparse = 1; sparse = 0; dosplice = 0;
 		if (avoidwrite) {
-			fplog(stderr, "dd_rescue: (warning): Disabling -Write avoidance b/c ofile is not seekable\n");
+			fplog(stderr, DDR_WARN "Disabling -Write avoidance b/c ofile is not seekable\n");
 			avoidwrite = 0;
 			ZFREE(buf2);
 		}
@@ -1849,11 +1908,11 @@ int main(int argc, char* argv[])
 	if (reverse && ipos == 0) {
 		ipos = lseek(ides, ipos, SEEK_END);
 		if (ipos == -1) {
-			fprintf(stderr, "dd_rescue: (fatal): could not seek to end of file %s!\n", iname);
+			fprintf(stderr, DDR_FATAL "could not seek to end of file %s!\n", iname);
 			perror("dd_rescue"); cleanup(); exit(19);
 		}
 		if (verbose) 
-			fprintf(stderr, "dd_rescue: (info): ipos set to the end: %.1fk\n", 
+			fprintf(stderr, DDR_INFO "ipos set to the end: %.1fk\n", 
 			        (float)ipos/1024);
 		/* if opos not set, assume same position */
 		if (opos == (off_t)-INT_MAX) 
@@ -1862,14 +1921,14 @@ int main(int argc, char* argv[])
 		if (opos == 0) {
 			opos = lseek(odes, opos, SEEK_END);
 			if (opos == (off_t)-1) {
-				fprintf(stderr, "dd_rescue: (fatal): could not seek to end of file %s!\n", oname);
+				fprintf(stderr, DDR_FATAL "could not seek to end of file %s!\n", oname);
 				perror(""); cleanup(); exit(19);
 			}
 			/* if existing empty, assume same position */
 			if (opos == 0) 
 				opos = ipos;
 			if (verbose) 
-				fprintf(stderr, "dd_rescue: (info): opos set to: %.1fk\n",
+				fprintf(stderr, DDR_INFO "opos set to: %.1fk\n",
 					(float)opos/1024);
     		}
 	}
@@ -1879,35 +1938,35 @@ int main(int argc, char* argv[])
 		opos = ipos;
 
 	if (identical) {
-		fplog(stderr, "dd_rescue: (warning): infile and outfile are identical!\n");
+		fplog(stderr, DDR_WARN "infile and outfile are identical!\n");
 		if (opos > ipos && !reverse && !force) {
-			fplog(stderr, "dd_rescue: (warning): turned on reverse, as ipos < opos!\n");
+			fplog(stderr, DDR_WARN "turned on reverse, as ipos < opos!\n");
 			reverse = 1;
     		}
 		if (opos < ipos && reverse && !force) {
-			fplog(stderr, "dd_rescue: (warning): turned off reverse, as opos < ipos!\n");
+			fplog(stderr, DDR_WARN "turned off reverse, as opos < ipos!\n");
 			reverse = 0;
 		}
   	}
 
 	if (o_chr && opos != 0) {
-		fplog(stderr, "dd_rescue: (fatal): outfile not seekable, but opos !=0 requested!\n");
+		fplog(stderr, DDR_FATAL "outfile not seekable, but opos !=0 requested!\n");
 		cleanup(); exit(19);
 	}
 	if (i_chr && ipos != 0) {
-		fplog(stderr, "dd_rescue: (fatal): infile not seekable, but ipos !=0 requested!\n");
+		fplog(stderr, DDR_FATAL "infile not seekable, but ipos !=0 requested!\n");
 		cleanup(); exit(19);
 	}
 		
 	if (dosplice) {
 		if (!quiet)
-			fplog(stderr, "dd_rescue: (info): splice copy, ignoring -a, -r, -y, -R, -W\n");
+			fplog(stderr, DDR_INFO "splice copy, ignoring -a, -r, -y, -R, -W\n");
 		reverse = 0;
 	}
 
 	if (noextend || extend) {
 		if (output_length() == -1) {
-			fplog(stderr, "dd_rescue: (fatal): asked to (not) extend output file but can't determine size\n");
+			fplog(stderr, DDR_FATAL "asked to (not) extend output file but can't determine size\n");
 			cleanup(); exit(19);
 		}
 		if (extend)
@@ -1916,7 +1975,7 @@ int main(int argc, char* argv[])
 	input_length();
 
 	if (ipos < 0 || opos < 0) {
-		fplog(stderr, "dd_rescue: (fatal): negative position requested (%.1fk)\n", (float)ipos/1024);
+		fplog(stderr, DDR_FATAL "negative position requested (%.1fk)\n", (float)ipos/1024);
 		cleanup(); exit(25);
 	}
 
@@ -1933,15 +1992,15 @@ int main(int argc, char* argv[])
 	}
 
 	if (bsim715 && avoidwrite) {
-		fplog(stderr, "dd_rescue: (warning): won't avoid writes for -3\n");
+		fplog(stderr, DDR_WARN "won't avoid writes for -3\n");
 		avoidwrite = 0;
 	}
 	if (bsim715 && o_chr) {
-		fplog(stderr, "dd_rescue: (warning): triple overwrite with non-seekable output!\n");
+		fplog(stderr, DDR_WARN "triple overwrite with non-seekable output!\n");
 	}
 	if (reverse && trunclast)
 		if (ftruncate(odes, opos))
-			fplog(stderr, "dd_rescue: (warning): Could not truncate %s to %.1fk: %s!\n",
+			fplog(stderr, DDR_WARN "Could not truncate %s to %.1fk: %s!\n",
 				oname, (float)opos/1024, strerror(errno));
 
 	LISTTYPE(ofile_t) *of;
@@ -1951,7 +2010,7 @@ int main(int argc, char* argv[])
 		oft->name = dirappfile(oft->name);
 		id = check_identical(iname, oft->name);
 		if (id)
-			fplog(stderr, "dd_rescue: (warning): Input file and secondary output file %s are identical!\n", oft->name);
+			fplog(stderr, DDR_WARN "Input file and secondary output file %s are identical!\n", oft->name);
 		oft->fd = openfile(oft->name, (avoidwrite? O_RDWR: O_WRONLY) | O_CREAT | o_dir_out | dotrunc);
 		check_seekable(oft->fd, &(oft->cdev), NULL);
 		if (preserve)
@@ -1962,7 +2021,7 @@ int main(int argc, char* argv[])
 #endif
 		if (reverse && trunclast)
 			if (ftruncate(oft->fd, opos))
-				fplog(stderr, "dd_rescue: (warning): Could not truncate %s to %.1fk: %s!\n",
+				fplog(stderr, DDR_WARN "Could not truncate %s to %.1fk: %s!\n",
 					oft->name, (float)opos/1024, strerror(errno));
 	}
 
