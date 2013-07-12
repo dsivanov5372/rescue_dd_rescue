@@ -1257,7 +1257,11 @@ int copyfile_splice(const off_t max)
 			ssize_t wr = splice(fd_pipe[0], NULL, odes, &opos, rd,
 					SPLICE_F_MOVE | SPLICE_F_MORE);
 			if (wr < 0) {
+				fplog(stderr, DDR_FATAL "write %s (%.1fk): %s (splice)\n",
+					oname, (float)opos/1024.0, strerror(errno));
+
 				close(fd_pipe[0]); close(fd_pipe[1]);
+				cleanup();
 				exit(23);
 			}
 			rd -= wr; xfer += wr; sxfer += wr;
@@ -1269,7 +1273,7 @@ int copyfile_splice(const off_t max)
 					SPLICE_F_MOVE | SPLICE_F_MORE);
 			/* Simplify error handling, it worked before ... */
 			if (rd <= 0) {
-				fplog(stderr, DDR_WARN "Confused: splice() failed unexpectedly: %s\n%s%s%s%s",
+				fplog(stderr, DDR_WARN "Confused: splice() read failed unexpectedly: %s\n%s%s%s%s",
 					strerror(errno), down, down, down, down);
 				/* We should abort here .... */
 				ipos = new_ipos; opos = new_opos;
@@ -1279,7 +1283,7 @@ int copyfile_splice(const off_t max)
 				ssize_t wr = splice(fd_pipe[0], NULL, LISTDATA(oft).fd, &opos, rd,
 						SPLICE_F_MOVE | SPLICE_F_MORE);
 				if (wr < 0) {	
-					fplog(stderr, DDR_WARN "Confused: splice() failed unexpectedly: %s\n%s%s%s%s",
+					fplog(stderr, DDR_WARN "Confused: splice() write failed unexpectedly: %s\n%s%s%s%s",
 						strerror(errno), down, down, down, down);
 					/* We should abort here .... */
 					ipos = new_ipos; opos = new_opos;
@@ -2077,7 +2081,7 @@ int main(int argc, char* argv[])
 	gettimeofday(&currenttime, NULL);
 	printreport();
 	c += cleanup();
-	if (c && !quiet)
+	if (c && verbose)
 		fplog(stderr, DDR_WARN "There were %i errors! \n", c);
 	return c;
 }
