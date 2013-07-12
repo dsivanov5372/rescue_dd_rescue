@@ -634,6 +634,16 @@ void printreport()
 	}
 }
 
+void exit_report(int rc)
+{
+	gettimeofday(&currenttime, NULL);
+	printreport();
+	cleanup();
+	fplog(stderr, DDR_FATAL "aborting! \n");
+	exit(rc);
+}
+
+
 int copyperm(int ifd, int ofd)
 {
 	int err; 
@@ -873,9 +883,8 @@ ssize_t writeblock(const int towrite)
 		fplog(stderr, "%swrite %s (%.1fk): %s\n",
 		      (abwrerr? DDR_FATAL: DDR_WARN),
 		      oname, (float)opos/1024, strerror(errno));
-		if (abwrerr) {
-			cleanup(); exit(21);
-		}
+		if (abwrerr) 
+			exit_report(21);
 		nrerr++;
 	}
 	int oldeno = errno;
@@ -922,8 +931,7 @@ void exitfatalerr(const int eno)
 		fplog(stderr, DDR_FATAL "%s (%.1fk): %s! \n", 
 		      iname, (float)ipos/1024, strerror(eno));
 		fplog(stderr, "dd_rescue: Last error fatal! Exiting ... \n");
-		cleanup();
-		exit(20);
+		exit_report(20);
 	}
 }
 
@@ -967,7 +975,6 @@ ssize_t dowrite(const ssize_t rd)
 		fplog(stderr, "%swrite %s (%.1fk): %s!\n", 
 		      (fatal? DDR_FATAL : DDR_WARN), oname, 
 		      (float)(opos+wr)/1024, strerror(weno));
-		fprintf(stderr, "%s%s%s", down, down, down);
 		errno = 0;
 		/* FIXME: This breaks for reverse direction */
 		if (!reverse)
@@ -988,13 +995,13 @@ int dowrite_retry(const ssize_t rd)
 	if ((rd <= hardbs) || (weno != ENOSPC && weno != EFBIG)) {
 		/* No retry, move on */
 		advancepos(rd-wr, 0);
+		fprintf(stderr, "%s%s%s", down, down, down);
 		return is_writeerr_fatal(weno)? -1: 1;
 	} else {
 		ssize_t rwr = wr;
 		unsigned char* oldbuf = buf; 
 		int adv = 1;
 		buf += wr;
-		fprintf(stderr, "%s%s%s", up, up, up);
 		fplog(stderr, DDR_INFO "retrying writes with smaller blocks \n");
 		if (reverse) {
 			buf = oldbuf+rd-hardbs;
@@ -1110,8 +1117,7 @@ int copyfile_hardbs(const off_t max)
 			/* exit if too many errs */
 			if (maxerr && nrerr >= maxerr) {
 				fplog(stderr, DDR_FATAL "maxerr reached!\n");
-				printreport();
-				cleanup(); exit(32);
+				exit_report(32);
 			}
 			fprintf(stderr, "%s%s%s%s", down, down, down, down);
 		} else {
@@ -1261,8 +1267,7 @@ int copyfile_splice(const off_t max)
 					oname, (float)opos/1024.0, strerror(errno));
 
 				close(fd_pipe[0]); close(fd_pipe[1]);
-				cleanup();
-				exit(23);
+				exit_report(23);
 			}
 			rd -= wr; xfer += wr; sxfer += wr;
 		}
