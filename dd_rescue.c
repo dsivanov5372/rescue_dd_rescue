@@ -173,6 +173,8 @@ typedef char* charp;
 LISTDECL(charp);
 LISTTYPE(charp) *freenames;
 
+char lastprint_status = 0;
+
 #ifndef UP
 # define UP "\x1b[A"
 # define DOWN "\n"
@@ -248,6 +250,7 @@ int fplog(FILE* const file, const char * const fmt, ...)
 		ret = vfprintf(logfd, fmt, vl);
 		va_end(vl);
 	}
+	lastprint_status = 0;
 	return ret;
 }
 
@@ -573,9 +576,9 @@ void printstatus(FILE* const file1, FILE* const file2,
 	clock_t cl;
 	static int einvalwarn = 0;
 
-	if (file1 == stderr || file1 == stdout) 
+	if (lastprint_status && (file1 == stderr || file1 == stdout))
 		fprintf(file1, "%s%s%s%s", up, up, up, up);
-	if (file2 == stderr || file2 == stdout) 
+	if (lastprint_status && (file2 == stderr || file2 == stdout))
 		fprintf(file2, "%s%s%s%s", up, up, up, up);
 
 	if (sync) {
@@ -601,6 +604,8 @@ void printstatus(FILE* const file1, FILE* const file2,
 		memcpy(&lasttime, &currenttime, sizeof(lasttime));
 		lxfer = xfer;
 	}
+	lastprint_status = 1;
+
 }
 
 static void savebb(unsigned long block)
@@ -627,7 +632,8 @@ void printreport()
 			fplog(report, "; %s", LISTDATA(of).name);
 		if (logfd > 0)
 			fprintf(logfd, ":\n");
-		fprintf(report, ":\n%s%s%s%s", down, down, down, down);
+		//fprintf(report, ":\n%s%s%s%s", down, down, down, down);
+		fprintf(report, "\n");
 		printstatus(report, logfd, 0, 1);
 		if (avoidwrite) 
 			fplog(report, DDR_INFO "Avoided %LikB of writes (performed %LikB)\n", axfer/1024, (sxfer-axfer)/1024);
@@ -639,7 +645,7 @@ void exit_report(int rc)
 	gettimeofday(&currenttime, NULL);
 	printreport();
 	cleanup();
-	fplog(stderr, DDR_FATAL "aborting! \n");
+	fplog(stderr, DDR_FATAL "Not completed fully successfully! \n");
 	exit(rc);
 }
 
@@ -995,7 +1001,7 @@ int dowrite_retry(const ssize_t rd)
 	if ((rd <= hardbs) || (weno != ENOSPC && weno != EFBIG)) {
 		/* No retry, move on */
 		advancepos(rd-wr, 0);
-		fprintf(stderr, "%s%s%s", down, down, down);
+		//fprintf(stderr, "%s%s%s", down, down, down);
 		return is_writeerr_fatal(weno)? -1: 1;
 	} else {
 		ssize_t rwr = wr;
@@ -1021,7 +1027,7 @@ int dowrite_retry(const ssize_t rd)
 			rwr += towr; buf += towr*adv;
 		}
 		buf = oldbuf;
-		fprintf(stderr, "%s%s%s", down, down, down);
+		//fprintf(stderr, "%s%s%s", down, down, down);
 	}
 	return errs;
 }
@@ -1119,7 +1125,7 @@ int copyfile_hardbs(const off_t max)
 				fplog(stderr, DDR_FATAL "maxerr reached!\n");
 				exit_report(32);
 			}
-			fprintf(stderr, "%s%s%s%s", down, down, down, down);
+			//fprintf(stderr, "%s%s%s%s", down, down, down, down);
 		} else {
 	      		int err = dowrite_retry(rd);
 			if (err < 0)
@@ -1182,8 +1188,13 @@ int copyfile_softbs(const off_t max)
 			new_max = xfer + toread;
 			/* Error with large blocks: Try small ones ... */
 			if (verbose) {
+				/*
 				fprintf(stderr, DDR_INFO "problems at ipos %.1fk: %s \n                 fall back to smaller blocksize \n%s%s%s%s",
 				        (float)ipos/1024, strerror(eno), down, down, down, down);
+				 */
+				fprintf(stderr, DDR_INFO "problems at ipos %.1fk: %s \n                 fall back to smaller blocksize \n",
+				        (float)ipos/1024, strerror(eno));
+				lastprint_status = 0;
 				printstatus(stderr, logfd, hardbs, 1);
 			}
 			/* But first: write available data and advance (optimization) */
@@ -1215,9 +1226,11 @@ int copyfile_softbs(const off_t max)
 			/* EOF ? */      
 			if (!err && xfer == old_xfer)
 				return errs;
-			if (verbose) 
-				fprintf(stderr, DDR_INFO "ipos %.1fk promote to large bs again! \n%s%s%s%s",
-					(float)ipos/1024, down, down, down, down);
+			if (verbose) {
+				fprintf(stderr, DDR_INFO "ipos %.1fk promote to large bs again! \n",
+					(float)ipos/1024);
+				lastprint_status = 0;
+			}
 		} else {
 	      		err = dowrite_retry(rd);
 			if (err < 0)
@@ -1248,8 +1261,8 @@ int copyfile_splice(const off_t max)
 					SPLICE_F_MOVE | SPLICE_F_MORE);
 		if (rd < 0) {
 			if (!quiet)
-				fplog(stderr, DDR_INFO "%s (%.1fk): fall back to userspace copy\n%s%s%s%s",
-				      iname, (float)ipos/1024, down, down, down, down);
+				fplog(stderr, DDR_INFO "%s (%.1fk): fall back to userspace copy\n",
+				      iname, (float)ipos/1024);
 			close(fd_pipe[0]); close(fd_pipe[1]);
 			return copyfile_softbs(max);
 		}
@@ -1278,8 +1291,8 @@ int copyfile_splice(const off_t max)
 					SPLICE_F_MOVE | SPLICE_F_MORE);
 			/* Simplify error handling, it worked before ... */
 			if (rd <= 0) {
-				fplog(stderr, DDR_WARN "Confused: splice() read failed unexpectedly: %s\n%s%s%s%s",
-					strerror(errno), down, down, down, down);
+				fplog(stderr, DDR_WARN "Confused: splice() read failed unexpectedly: %s\n",
+					strerror(errno));
 				/* We should abort here .... */
 				ipos = new_ipos; opos = new_opos;
 				continue;
@@ -1288,8 +1301,8 @@ int copyfile_splice(const off_t max)
 				ssize_t wr = splice(fd_pipe[0], NULL, LISTDATA(oft).fd, &opos, rd,
 						SPLICE_F_MOVE | SPLICE_F_MORE);
 				if (wr < 0) {	
-					fplog(stderr, DDR_WARN "Confused: splice() write failed unexpectedly: %s\n%s%s%s%s",
-						strerror(errno), down, down, down, down);
+					fplog(stderr, DDR_WARN "Confused: splice() write failed unexpectedly: %s\n",
+						strerror(errno));
 					/* We should abort here .... */
 					ipos = new_ipos; opos = new_opos;
 					continue;
@@ -1298,8 +1311,8 @@ int copyfile_splice(const off_t max)
 			}
 		}
 		if (ipos != new_ipos || opos != new_opos) {
-			fplog(stderr, DDR_WARN "Confused: splice progress inconsistent: %zi %zi %zi %zi\n%s%s%s%s",
-				ipos, new_ipos, opos, new_opos, down, down, down, down);
+			fplog(stderr, DDR_WARN "Confused: splice progress inconsistent: %zi %zi %zi %zi\n",
+				ipos, new_ipos, opos, new_opos);
 			ipos = new_ipos; opos = new_opos;
 		}	
 		advancepos(0, 0);
@@ -2063,7 +2076,8 @@ int main(int argc, char* argv[])
 	memcpy(&lasttime, &starttime, sizeof(lasttime));
 
 	if (!quiet) {
-		fprintf(stderr, "%s%s%s%s", down, down, down, down);
+		lastprint_status = 0;
+		//fprintf(stderr, "%s%s%s%s", down, down, down, down);
 		printstatus(stderr, 0, softbs, 0);
 	}
 
