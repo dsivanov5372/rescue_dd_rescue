@@ -173,7 +173,7 @@ typedef char* charp;
 LISTDECL(charp);
 LISTTYPE(charp) *freenames;
 
-const char *scrollup = "";
+const char *scrollup = 0;
 
 #ifndef UP
 # define UP "\x1b[A"
@@ -253,7 +253,7 @@ int fplog(FILE* const file, const char * const fmt, ...)
 		ret = vfprintf(logfd, fmt, vl);
 		va_end(vl);
 	}
-	scrollup = "";
+	scrollup = 0;
 	return ret;
 }
 
@@ -577,10 +577,12 @@ void printstatus(FILE* const file1, FILE* const file2,
 	clock_t cl;
 	static int einvalwarn = 0;
 
-	if ((file1 == stderr || file1 == stdout) && *scrollup)
-		fprintf(file1, "%s", scrollup);
-	if ((file2 == stderr || file2 == stdout) && *scrollup)
-		fprintf(file2, "%s", scrollup);
+	if (scrollup) {
+		if (file1 == stderr || file1 == stdout)
+			fprintf(file1, "%s", scrollup);
+		if (file2 == stderr || file2 == stdout)
+			fprintf(file2, "%s", scrollup);
+	}
 
 	if (sync) {
 		int err = fsync(odes);
@@ -997,7 +999,7 @@ int dowrite_retry(const ssize_t rd)
 	ssize_t wr = dowrite(rd);
 	if (wr == rd || weno == 0)
 		return 0;
-	if ((rd <= hardbs) || (weno != ENOSPC && weno != EFBIG)) {
+	if ((rd <= (ssize_t)hardbs) || (weno != ENOSPC && weno != EFBIG)) {
 		/* No retry, move on */
 		advancepos(rd-wr, 0);
 		//fprintf(stderr, "%s%s%s", down, down, down);
@@ -1013,7 +1015,7 @@ int dowrite_retry(const ssize_t rd)
 			adv = -1;
 		}
 		while (rwr < rd) {
-			ssize_t towr = (hardbs > rd-rwr)? rd-rwr: hardbs;
+			ssize_t towr = ((ssize_t)hardbs > rd-rwr)? rd-rwr: hardbs;
 			ssize_t wr2 = dowrite(towr);
 			if (is_writeerr_fatal(weno)) {
 				buf = oldbuf;
@@ -1193,7 +1195,7 @@ int copyfile_softbs(const off_t max)
 				 */
 				fprintf(stderr, DDR_INFO "problems at ipos %.1fk: %s \n                 fall back to smaller blocksize \n",
 				        (float)ipos/1024, strerror(eno));
-				scrollup = "";
+				scrollup = 0;
 				printstatus(stderr, logfd, hardbs, 1);
 			}
 			/* But first: write available data and advance (optimization) */
@@ -1228,7 +1230,7 @@ int copyfile_softbs(const off_t max)
 			if (verbose) {
 				fprintf(stderr, DDR_INFO "ipos %.1fk promote to large bs again! \n",
 					(float)ipos/1024);
-				scrollup = "";
+				scrollup = 0;
 			}
 		} else {
 	      		err = dowrite_retry(rd);
@@ -2075,7 +2077,7 @@ int main(int argc, char* argv[])
 	memcpy(&lasttime, &starttime, sizeof(lasttime));
 
 	if (!quiet) {
-		scrollup = "";
+		scrollup = 0;
 		//fprintf(stderr, "%s%s%s%s", down, down, down, down);
 		printstatus(stderr, 0, softbs, 0);
 	}
