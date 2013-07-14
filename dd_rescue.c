@@ -32,9 +32,9 @@
 /**
  * TODO:
  * - Provide options to copy ACLs/xattrs as well
- * - Use termcap to fetch cursor up/down codes
- * - Better handling of write errors: also try sub blocks
+ * - Use termcap to fetch cursor up/down and color codes
  * - Display more infos on errors by collecting info from syslog
+ * - Option to send TRIM on zeroed file blocks
  */
 
 #ifndef VERSION
@@ -633,7 +633,6 @@ void printreport()
 			fplog(report, "; %s", LISTDATA(of).name);
 		if (logfd > 0)
 			fprintf(logfd, ":\n");
-		//fprintf(report, ":\n%s%s%s%s", down, down, down, down);
 		fprintf(report, "\n");
 		printstatus(report, logfd, 0, 1);
 		if (avoidwrite) 
@@ -1002,7 +1001,6 @@ int dowrite_retry(const ssize_t rd)
 	if ((rd <= (ssize_t)hardbs) || (weno != ENOSPC && weno != EFBIG)) {
 		/* No retry, move on */
 		advancepos(rd-wr, 0);
-		//fprintf(stderr, "%s%s%s", down, down, down);
 		return is_writeerr_fatal(weno)? -1: 1;
 	} else {
 		ssize_t rwr = wr;
@@ -1028,7 +1026,6 @@ int dowrite_retry(const ssize_t rd)
 			rwr += towr; buf += towr*adv;
 		}
 		buf = oldbuf;
-		//fprintf(stderr, "%s%s%s", down, down, down);
 	}
 	return errs;
 }
@@ -1126,7 +1123,6 @@ int copyfile_hardbs(const off_t max)
 				fplog(stderr, DDR_FATAL "maxerr reached!\n");
 				exit_report(32);
 			}
-			//fprintf(stderr, "%s%s%s%s", down, down, down, down);
 		} else {
 	      		int err = dowrite_retry(rd);
 			if (err < 0)
@@ -2078,7 +2074,6 @@ int main(int argc, char* argv[])
 
 	if (!quiet) {
 		scrollup = 0;
-		//fprintf(stderr, "%s%s%s%s", down, down, down, down);
 		printstatus(stderr, 0, softbs, 0);
 	}
 
