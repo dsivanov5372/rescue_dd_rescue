@@ -173,7 +173,7 @@ typedef char* charp;
 LISTDECL(charp);
 LISTTYPE(charp) *freenames;
 
-char lastprint_status = 0;
+const char *scrollup = "";
 
 #ifndef UP
 # define UP "\x1b[A"
@@ -182,8 +182,11 @@ char lastprint_status = 0;
 #endif
 
 const char* up = UP;
-const char* down = DOWN;
+const char* fourup = UP UP UP UP;
+const char* threeup = UP UP UP;
+//const char* down = DOWN;
 const char* right = RIGHT;
+const char* nineright = RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT;
 char *graph;
 
 #ifdef NO_COLORS
@@ -250,7 +253,7 @@ int fplog(FILE* const file, const char * const fmt, ...)
 		ret = vfprintf(logfd, fmt, vl);
 		va_end(vl);
 	}
-	lastprint_status = 0;
+	scrollup = "";
 	return ret;
 }
 
@@ -547,10 +550,8 @@ void doprint(FILE* const file, const unsigned int bs, const clock_t cl,
 			avgrate,
 			100.0*(cl-startclock)/(CLOCKS_PER_SEC*t1));
 	else
-		fprintf(file, "             -curr.rate:%s%s%s%s%s%s%s%s%skB/s, avg.rate:%9.0fkB/s, avg.load:%5.1f%%\n",
-			right, right, right, right, right, right, right, right, right,
-			avgrate,
-			100.0*(cl-startclock)/(CLOCKS_PER_SEC*t1));
+		fprintf(file, "             -curr.rate:%skB/s, avg.rate:%9.0fkB/s, avg.load:%5.1f%%\n",
+			nineright, avgrate, 100.0*(cl-startclock)/(CLOCKS_PER_SEC*t1));
 	if (estxfer && avgrate > 0) {
 		int sec;
 		if (in_report)
@@ -564,9 +565,9 @@ void doprint(FILE* const file, const unsigned int bs, const clock_t cl,
 		fprintf(file, "             %s %3i%%  %s: %2i:%02i:%02i \n",
 			graph, (int)(100*xfer/estxfer), (in_report? "TOT": "ETA"), 
 			hour, min, sec);
+		scrollup = fourup;
 	} else
-		fprintf(file, "\n");
-
+		scrollup = threeup;
 }
 
 void printstatus(FILE* const file1, FILE* const file2,
@@ -576,10 +577,10 @@ void printstatus(FILE* const file1, FILE* const file2,
 	clock_t cl;
 	static int einvalwarn = 0;
 
-	if (lastprint_status && (file1 == stderr || file1 == stdout))
-		fprintf(file1, "%s%s%s%s", up, up, up, up);
-	if (lastprint_status && (file2 == stderr || file2 == stdout))
-		fprintf(file2, "%s%s%s%s", up, up, up, up);
+	if ((file1 == stderr || file1 == stdout) && *scrollup)
+		fprintf(file1, "%s", scrollup);
+	if ((file2 == stderr || file2 == stdout) && *scrollup)
+		fprintf(file2, "%s", scrollup);
 
 	if (sync) {
 		int err = fsync(odes);
@@ -604,8 +605,6 @@ void printstatus(FILE* const file1, FILE* const file2,
 		memcpy(&lasttime, &currenttime, sizeof(lasttime));
 		lxfer = xfer;
 	}
-	lastprint_status = 1;
-
 }
 
 static void savebb(unsigned long block)
@@ -1194,7 +1193,7 @@ int copyfile_softbs(const off_t max)
 				 */
 				fprintf(stderr, DDR_INFO "problems at ipos %.1fk: %s \n                 fall back to smaller blocksize \n",
 				        (float)ipos/1024, strerror(eno));
-				lastprint_status = 0;
+				scrollup = "";
 				printstatus(stderr, logfd, hardbs, 1);
 			}
 			/* But first: write available data and advance (optimization) */
@@ -1229,7 +1228,7 @@ int copyfile_softbs(const off_t max)
 			if (verbose) {
 				fprintf(stderr, DDR_INFO "ipos %.1fk promote to large bs again! \n",
 					(float)ipos/1024);
-				lastprint_status = 0;
+				scrollup = "";
 			}
 		} else {
 	      		err = dowrite_retry(rd);
@@ -2076,7 +2075,7 @@ int main(int argc, char* argv[])
 	memcpy(&lasttime, &starttime, sizeof(lasttime));
 
 	if (!quiet) {
-		lastprint_status = 0;
+		scrollup = "";
 		//fprintf(stderr, "%s%s%s%s", down, down, down, down);
 		printstatus(stderr, 0, softbs, 0);
 	}
