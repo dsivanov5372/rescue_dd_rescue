@@ -627,8 +627,11 @@ void printstatus(FILE* const file1, FILE* const file2,
 	cl = clock();
 
 	/* Idea: Could save last not printed status and print on err */
-	if (t2 < printint && !sync && !in_report) 
+	if (t2 < printint && !sync && !in_report) {
+		if (estxfer)
+			updgraph(0);
 		return;
+	}
 
 	if (scrollup) {
 		if (file1 == stderr || file1 == stdout)
