@@ -1421,6 +1421,18 @@ static off_t readint(const char* const ptr)
 	return (off_t)res;
 }
 
+char readbool(const char* arg)
+{
+	if (isdigit(*arg))
+		return !!atoi(arg);
+	if (!strcasecmp(arg, "yes")
+		|| !strcasecmp(arg, "y")
+		|| !strcasecmp(arg, "always")
+		|| !strcasecmp(arg, "true"))
+		return 1;
+	return 0;
+}
+
 void init_random()
 {
 	if (prng_sfile) {
@@ -1705,11 +1717,11 @@ char test_nocolor_term()
 	char* term = getenv("TERM");
 	if (!term) 
 		return 1;
-	if (!strcmp(term, "dumb") || !strcmp(term, "unknown")
-		|| !strcmp(term, "net") || !strcmp(term, "vanilla"))
+	if (!strcasecmp(term, "dumb") || !strcasecmp(term, "unknown")
+		|| !strcasecmp(term, "net") || !strcasecmp(term, "vanilla"))
 		return 1;
-	if (!strcmp(term+strlen(term)-2, "-m") 
-		|| !strcmp(term+strlen(term)-5, "-mono"))
+	if (!strcasecmp(term+strlen(term)-2, "-m") 
+		|| !strcasecmp(term+strlen(term)-5, "-mono"))
 		return 1;
 	return 0;
 }
@@ -1777,7 +1789,7 @@ int main(int argc, char* argv[])
 			case 'V': printversion(); exit(0); break;
 			case 'v': quiet = 0; verbose = 1; break;
 			case 'q': verbose = 0; quiet = 1; break;
-			case 'c': nocol = !atoi(optarg); break;
+			case 'c': nocol = !readbool(optarg); break;
 			case 'b': softbs = (int)readint(optarg); break;
 			case 'B': hardbs = (int)readint(optarg); break;
 			case 'm': maxxfer = readint(optarg); break;
