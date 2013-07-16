@@ -1,3 +1,5 @@
+#define _LARGEFILE_SOURCE
+#define _FILE_OFFSET_BITS 64
 #include "fmt_no.h"
 #include <string.h>
 
@@ -65,14 +67,13 @@ char* fmt_int(int pre, int post, int scale, off_t no,
 			idx -= nlen;
 		}
 		if (my_no == 0) {
-			/* TODO: Optimization: break loop early */
 			if (pos == 0)
 				fmtbuf[--idx] = '0';
 			else if (isneg) {
 				fmtbuf[--idx] = '-';
 				isneg = 0;
 			} else 
-				fmtbuf[--idx] = ' ';
+				break;
 		} else	
 			fmtbuf[--idx] = '0' + digit;
 		my_no /= 10;
@@ -85,9 +86,13 @@ char* fmt_int(int pre, int post, int scale, off_t no,
 		}
 	}
 	/* Do we need a leading bold? */
-	if (bold && leadbold && ((pre-1) % 6 >= 3)) {
+	if (bold && leadbold && ((pos-1) % 6 >= 3)) {
 		memcpy(fmtbuf+idx-blen, bold, blen);
 		idx -= blen;
+	}
+	if (pos < pre) {
+		memset(fmtbuf+idx+pos-pre, ' ', pre-pos);
+		idx -= pre-pos;
 	}
 	return fmtbuf+idx;
 }

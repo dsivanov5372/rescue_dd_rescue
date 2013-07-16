@@ -35,10 +35,10 @@ endif
 
 default: $(TARGETS)
 
-frandom.o: frandom.c
+frandom.o: frandom.c frandom.h
 	$(CC) $(CFLAGS_OPT) -c $<
 
-fmt_no.o: fmt_no.c
+fmt_no.o: fmt_no.c fmt_no.h
 	$(CC) $(CFLAGS_OPT) -c $<
 
 libfalloc: dd_rescue.c frandom.o fmt_no.o

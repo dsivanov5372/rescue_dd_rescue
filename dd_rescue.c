@@ -195,15 +195,19 @@ char *graph;
 #ifdef NO_COLORS
 # define RED ""
 # define AMBER ""
+# define YELLOW ""
 # define GREEN ""
 # define BOLD ""
+# define INV ""
 # define NORM ""
 #else
 #ifndef RED
 # define RED "\x1b[0;31m"
 # define AMBER "\x1b[0;33m"
+# define YELLOW "\x1b[1;33m"
 # define GREEN "\x1b[0;32m"
 # define BOLD "\x1b[0;1m"
+# define INV "\x1b[0;7m"
 # define NORM "\x1b[0;0m"
 #endif
 #endif
@@ -518,7 +522,7 @@ static void* load_libfallocate()
 }
 #endif
 
-static void do_fallocate(int fd, char* onm)
+static void do_fallocate(int fd, const char* onm)
 {
 	struct stat stbuf;
 	off_t to_falloc, alloced;
@@ -534,8 +538,9 @@ static void do_fallocate(int fd, char* onm)
 	if (to_falloc <= 0)
 		return;
 #ifdef HAVE_LIBDL
-	int (*_linux_fallocate64)(int fd, int mode, __off64_t start, __off64_t len);
-	_linux_fallocate64 = load_libfallocate();
+	typedef int (*_l_f_t) (int fd, int mode, __off64_t start, __off64_t len);
+	//int (*_linux_fallocate64)(int fd, int mode, __off64_t start, __off64_t len);
+	_l_f_t _linux_fallocate64 = (_l_f_t)load_libfallocate();
 	if (_linux_fallocate64)
 		rc = _linux_fallocate64(fd, FALLOC_FL_KEEP_SIZE,
 				opos, to_falloc);
