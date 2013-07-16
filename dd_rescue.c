@@ -190,17 +190,19 @@ const char* nineright = RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT;
 char *graph;
 
 #ifdef NO_COLORS
-#define RED ""
-#define AMBER ""
-#define GREEN ""
-#define BOLD ""
-#define NORM ""
+# define RED ""
+# define AMBER ""
+# define GREEN ""
+# define BOLD ""
+# define NORM ""
 #else
-#define RED "\x1b[0;31m"
-#define AMBER "\x1b[0;33m"
-#define GREEN "\x1b[0;32m"
-#define BOLD "\x1b[0;1m"
-#define NORM "\x1b[0;0m"
+#ifndef RED
+# define RED "\x1b[0;31m"
+# define AMBER "\x1b[0;33m"
+# define GREEN "\x1b[0;32m"
+# define BOLD "\x1b[0;1m"
+# define NORM "\x1b[0;0m"
+#endif
 #endif
 
 #define DDR_WARN  AMBER "dd_rescue: (warning): " NORM

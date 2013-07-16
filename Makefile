@@ -53,6 +53,9 @@ falloc: dd_rescue.c frandom.o
 dd_rescue: dd_rescue.c frandom.o
 	$(CC) $(CFLAGS) $(DEFINES) $^ $(OUT)
 
+nocolor: dd_rescue.c frandom.o
+	$(CC) $(CFLAGS) -DNO_COLORS=1 $(DEFINES) $^ -o dd_rescue
+
 strip: dd_rescue
 	strip -S $<
 
