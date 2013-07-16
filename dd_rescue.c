@@ -135,7 +135,7 @@ int maxerr, nrerr, dotrunc;
 char trunclast, reverse, abwrerr, sparse, nosparse;
 char verbose, quiet, interact, force, in_report, nocol;
 unsigned char *buf, *buf2;
-char *lname, *iname, *oname, *bbname = NULL;
+const char *lname, *iname, *oname, *bbname = NULL;
 off_t ipos, opos, xfer, lxfer, sxfer, fxfer, maxxfer, axfer, init_opos, ilen, olen, estxfer;
 
 int ides, odes;
@@ -157,12 +157,14 @@ FILE *logfd;
 struct timeval starttime, lasttime, currenttime;
 struct timezone tz;
 clock_t startclock;
+/* Rate limit for status updates */
+float printint = 0.1;
 
 unsigned int pagesize = 4096;
 
 /* multiple output files */
 typedef struct _ofile {
-	char* name;
+	const char* name;
 	int fd;
 	char cdev;
 } ofile_t;
@@ -314,7 +316,7 @@ static int openfile(const char* const fname, const int flags)
 }
 
 /** Checks whether file is seekable */
-static void check_seekable(const int fd, char *ischr, char* msg)
+static void check_seekable(const int fd, char *ischr, const char* msg)
 {
 	errno = 0;
 	if (!*ischr && lseek(fd, (off_t)0, SEEK_SET) != 0) {
@@ -557,6 +559,7 @@ void doprint(FILE* const file, const unsigned int bs, const clock_t cl,
 	     const float t1, const float t2, const int sync)
 {
 	float avgrate = (float)xfer/(t1*1024);
+	/* Idea: Could use BOLD to format 3 digit blocks for readability */
 	fprintf(file, DDR_INFO "ipos:%12.1fk, opos:%12.1fk, xferd:%12.1fk\n",
 		(float)ipos/1024, (float)opos/1024, (float)xfer/1024);
 	fprintf(file, "             %s  %s  errs:%7i, errxfer:%12.1fk, succxfer:%12.1fk\n",
@@ -595,13 +598,6 @@ void printstatus(FILE* const file1, FILE* const file2,
 	clock_t cl;
 	static int einvalwarn = 0;
 
-	if (scrollup) {
-		if (file1 == stderr || file1 == stdout)
-			fprintf(file1, "%s", scrollup);
-		if (file2 == stderr || file2 == stdout)
-			fprintf(file2, "%s", scrollup);
-	}
-
 	if (sync) {
 		int err = fsync(odes);
 		if (err && (errno != EINVAL || !einvalwarn) &&!o_chr) {
@@ -616,6 +612,17 @@ void printstatus(FILE* const file1, FILE* const file2,
 	t1 = difftimetv(&currenttime, &starttime);
 	t2 = difftimetv(&currenttime, &lasttime);
 	cl = clock();
+
+	/* Idea: Could save last not printed status and print on err */
+	if (t2 < printint && !sync && !in_report) 
+		return;
+
+	if (scrollup) {
+		if (file1 == stderr || file1 == stdout)
+			fprintf(file1, "%s", scrollup);
+		if (file2 == stderr || file2 == stdout)
+			fprintf(file2, "%s", scrollup);
+	}
 
 	if (file1) 
 		doprint(file1, bs, cl, t1, t2, sync);
@@ -699,7 +706,7 @@ int copytimes(const char* inm, const char* onm)
 	return err;
 }
 
-static int mayexpandfile(char* onm)
+static int mayexpandfile(const char* onm)
 {
 	struct stat st;
 	off_t maxopos = opos;
@@ -714,7 +721,7 @@ static int mayexpandfile(char* onm)
 		return 0;		
 }
 
-int sync_close(int fd, char* nm, char chr)
+int sync_close(int fd, const char* nm, char chr)
 {
 	int rc, err = 0;
 	if (fd != -1) {
@@ -1151,7 +1158,7 @@ int copyfile_hardbs(const off_t max)
 
 		if (syncfreq && !(xfer % (syncfreq*softbs)))
 			printstatus((quiet? 0: stderr), 0, hardbs, 1);
-		else if (!quiet && !(xfer % (16*softbs)))
+		else if (!quiet && !(xfer % (8*softbs)))
 			printstatus(stderr, 0, hardbs, 0);
 	} /* remain */
 	return errs;
@@ -1667,9 +1674,9 @@ int is_filename(char* arg)
 	return 1;
 }
 
-char* retstrdupcat3(const char* dir, char dirsep, char* inm)
+const char* retstrdupcat3(const char* dir, char dirsep, const char* inm)
 {
-	char* ibase = basename(inm);
+	char* ibase = basename(strdupa(inm));
 	const int dlen = strlen(dir) + (dirsep>0? 1: dirsep);
 	char* ret = (char*)malloc(dlen + strlen(inm) + 1);
 	strcpy(ret, dir);
@@ -1684,11 +1691,11 @@ char* retstrdupcat3(const char* dir, char dirsep, char* inm)
 		
 
 /** Fix output filename if it's a directory */
-char* dirappfile(char* onm)
+const char* dirappfile(const char* onm)
 {
 	size_t oln = strlen(onm);
 	if (!strcmp(onm, ".")) {
-		char* ret = strdup(basename(iname));
+		char* ret = strdup(basename(strdupa(iname)));
 		LISTAPPEND(freenames, ret, charp);
 		return ret;
 	}
