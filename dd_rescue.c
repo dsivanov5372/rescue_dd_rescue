@@ -554,7 +554,6 @@ static void do_fallocate(int fd, char* onm)
 }
 #endif
 
-
 void doprint(FILE* const file, const unsigned int bs, const clock_t cl, 
 	     const float t1, const float t2, const int sync)
 {
