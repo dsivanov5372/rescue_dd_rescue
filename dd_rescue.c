@@ -323,8 +323,7 @@ static void check_seekable(const int fd, char *ischr, char* msg)
 			fplog(stderr, WARN, "%s\n", strerror(errno));
 		}
 		*ischr = 1;
-	} //else
-	//	lseek(id, (off_t)0, SEEK_SET);
+	}
 	errno = 0;
 }
 
@@ -1492,12 +1491,14 @@ void printversion()
 
 
 #ifndef LACK_GETOPT_LONG
-struct option longopts[] = { 	{"help", 0, NULL, 'h'}, {"verbose", 0, NULL, 'v'}, 
+struct option longopts[] = { 	{"help", 0, NULL, 'h'}, {"verbose", 0, NULL, 'v'},
 				{"quiet", 0, NULL, 'q'}, {"version", 0, NULL, 'V'},
+				{"color", 1, NULL, 'c'},
 				{"ipos", 1, NULL, 's'}, {"opos", 1, NULL, 'S'},
 				{"softbs", 1, NULL, 'b'}, {"hardbs", 1, NULL, 'B'},
 				{"maxerr", 1, NULL, 'e'}, {"maxxfer", 1, NULL, 'm'},
-				{"noextend", 0, NULL, 'M'}, {"extend", 0, NULL, 'x'}, {"append", 0, NULL, 'x'},
+				{"noextend", 0, NULL, 'M'}, {"extend", 0, NULL, 'x'},
+				{"append", 0, NULL, 'x'},
 				{"syncfreq", 1, NULL, 'y'}, {"logfile", 1, NULL, 'l'},
 				{"bbfile", 1, NULL, 'o'}, {"reverse", 0, NULL, 'r'},
 				{"repeat", 0, NULL, 'R'}, {"truncate", 0, NULL, 't'},
@@ -1510,7 +1511,7 @@ struct option longopts[] = { 	{"help", 0, NULL, 'h'}, {"verbose", 0, NULL, 'v'},
 				{"preserve", 0, NULL, 'p'}, {"outfile", 1, NULL, 'Y'},
 				{"random", 1, NULL, 'z'}, {"frandom", 1, NULL, 'Z'},
  				{"shred3", 1, NULL, '3'}, {"shred4", 1, NULL, '4'},
- 				{"shred2", 1, NULL, '2'}, 
+ 				{"shred2", 1, NULL, '2'},
 				/* GNU ddrescue compat */
 				{"block-size", 1, NULL, 'B'}, {"input-position", 1, NULL, 's'},
 				{"output-position", 1, NULL, 'S'}, {"max-size", 1, NULL, 'm'},
@@ -1562,6 +1563,7 @@ void printhelp()
 	fprintf(stderr, "         -Y oname   Secondary output file (multiple possible)\n");
 	fprintf(stderr, "         -q         quiet operation,\n");
 	fprintf(stderr, "         -v         verbose operation,\n");
+	fprintf(stderr, "         -c 0/1     switch off/on colors (def=auto),\n");
 	fprintf(stderr, "         -V         display version and exit,\n");
 	fprintf(stderr, "         -h         display this help and exit.\n");
 	fprintf(stderr, "Instead of infile, -z/Z SEED or -z/Z SEEDFILE may be specified, taking the PRNG\n");
@@ -1698,6 +1700,19 @@ char* dirappfile(char* onm)
 	return onm;
 }
 
+char test_nocolor_term()
+{
+	char* term = getenv("TERM");
+	if (!term) 
+		return 1;
+	if (!strcmp(term, "dumb") || !strcmp(term, "unknown")
+		|| !strcmp(term, "net") || !strcmp(term, "vanilla"))
+		return 1;
+	if (!strcmp(term+strlen(term)-2, "-m") 
+		|| !strcmp(term+strlen(term)-5, "-mono"))
+		return 1;
+	return 0;
+}
 
 int main(int argc, char* argv[])
 {
@@ -1727,13 +1742,15 @@ int main(int argc, char* argv[])
 
 	ofiles = NULL;
 
+	nocol = test_nocolor_term();
+
 #ifdef _SC_PAGESIZE
 	pagesize = sysconf(_SC_PAGESIZE);
 #endif
 #ifdef LACK_GETOPT_LONG
-	while ((c = getopt(argc, argv, ":rtTfihqvVwWaAdDkMRpPb:B:m:e:s:S:l:o:y:z:Z:2:3:4:xY:")) != -1) 
+	while ((c = getopt(argc, argv, ":rtTfihqvVwWaAdDkMRpPc:b:B:m:e:s:S:l:o:y:z:Z:2:3:4:xY:")) != -1) 
 #else
-	while ((c = getopt_long(argc, argv, ":rtTfihqvVwWaAdDkMRpPb:B:m:e:s:S:l:o:y:z:Z:2:3:4:xY:", longopts, NULL)) != -1) 
+	while ((c = getopt_long(argc, argv, ":rtTfihqvVwWaAdDkMRpPc:b:B:m:e:s:S:l:o:y:z:Z:2:3:4:xY:", longopts, NULL)) != -1) 
 #endif
 	{
 		switch (c) {
@@ -1760,6 +1777,7 @@ int main(int argc, char* argv[])
 			case 'V': printversion(); exit(0); break;
 			case 'v': quiet = 0; verbose = 1; break;
 			case 'q': verbose = 0; quiet = 1; break;
+			case 'c': nocol = !atoi(optarg); break;
 			case 'b': softbs = (int)readint(optarg); break;
 			case 'B': hardbs = (int)readint(optarg); break;
 			case 'm': maxxfer = readint(optarg); break;

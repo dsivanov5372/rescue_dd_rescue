@@ -95,10 +95,12 @@ to be less verbose.
 makes
 .B dd_rescue
 more verbose.
-.BR \-v ", " \-\-verbose
-makes
+.TP 8
+.BI \-c\  0/1 \fR,\ \fB\-\-color= 0/1
+controls whether
 .B dd_rescue
-more verbose.
+uses colors. By default it does, unless the terminal type from TERM is 
+unknown or dumb or ends in -m or -mono.
 .TP 8
 .BR \-f ", " \-\-force
 makes
