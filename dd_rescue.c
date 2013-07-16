@@ -1017,7 +1017,7 @@ ssize_t dowrite(const ssize_t rd)
 	if (err) {
 		fplog(stderr, WARN, "assumption rd(%i) == wr(%i) failed! \n", rd, wr);
 		fplog(stderr, (fatal? FATAL: WARN),
-			"%swrite %s (%.1fk): %s!\n", 
+			"write %s (%.1fk): %s!\n", 
 			oname, (double)(opos+wr)/1024, strerror(weno));
 		errno = 0;
 		/* FIXME: This breaks for reverse direction */
