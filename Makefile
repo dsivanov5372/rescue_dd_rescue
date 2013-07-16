@@ -19,7 +19,7 @@ MANDIR = $(prefix)/share/man/
 #MYDIR = dd_rescue-$(VERSION)
 MYDIR = dd_rescue
 TARGETS = dd_rescue
-OBJECTS = dd_rescue.o frandom.o
+OBJECTS = dd_rescue.o frandom.o fmt_no.o
 DOCDIR = $(prefix)/share/doc/packages
 INSTASROOT = -o root -g root
 LIBDIR = /usr/lib
@@ -38,22 +38,25 @@ default: $(TARGETS)
 frandom.o: frandom.c
 	$(CC) $(CFLAGS_OPT) -c $<
 
-libfalloc: dd_rescue.c frandom.o
+fmt_no.o: fmt_no.c
+	$(CC) $(CFLAGS_OPT) -c $<
+
+libfalloc: dd_rescue.c frandom.o fmt_no.o
 	$(CC) $(CFLAGS) -DHAVE_LIBFALLOCATE=1 $(DEFINES) $^ -o dd_rescue -lfallocate
 
-libfalloc-static: dd_rescue.c frandom.o
+libfalloc-static: dd_rescue.c frandom.o fmt_no.o
 	$(CC) $(CFLAGS) -DHAVE_LIBFALLOCATE=1 $(DEFINES) $^ -o dd_rescue $(LIBDIR)/libfallocate.a
 
-libfalloc-dl: dd_rescue.c frandom.o
+libfalloc-dl: dd_rescue.c frandom.o fmt_no.o
 	$(CC) $(CFLAGS) -DHAVE_LIBDL=1 -DHAVE_LIBFALLOCATE=1 -DHAVE_FALLOCATE=1 $(DEFINES) $^ -o dd_rescue -ldl
 
-falloc: dd_rescue.c frandom.o
+falloc: dd_rescue.c frandom.o fmt_no.o
 	$(CC) $(CFLAGS) -DHAVE_FALLOCATE=1 $(DEFINES) $^ -o dd_rescue
 
-dd_rescue: dd_rescue.c frandom.o
+dd_rescue: dd_rescue.c frandom.o fmt_no.o
 	$(CC) $(CFLAGS) $(DEFINES) $^ $(OUT)
 
-nocolor: dd_rescue.c frandom.o
+nocolor: dd_rescue.c frandom.o fmt_no.o
 	$(CC) $(CFLAGS) -DNO_COLORS=1 $(DEFINES) $^ -o dd_rescue
 
 strip: dd_rescue

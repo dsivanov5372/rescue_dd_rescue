@@ -86,6 +86,7 @@
 
 #include "frandom.h"
 #include "list.h"
+#include "fmt_no.h"
 
 #ifndef LACK_GETOPT_LONG
 #include <getopt.h>
@@ -557,27 +558,35 @@ static void do_fallocate(int fd, char* onm)
 void doprint(FILE* const file, const unsigned int bs, const clock_t cl, 
 	     const float t1, const float t2, const int sync)
 {
-	float avgrate = (float)xfer/(t1*1024);
-	/* Idea: Could use BOLD to format 3 digit blocks for readability */
-	fprintf(file, DDR_INFO "ipos:%12.1fk, opos:%12.1fk, xferd:%12.1fk\n",
-		(float)ipos/1024, (float)opos/1024, (float)xfer/1024);
-	fprintf(file, "             %s  %s  errs:%7i, errxfer:%12.1fk, succxfer:%12.1fk\n",
+	float avgrate = (float)xfer/t1;
+	const char *bold = BOLD, *norm = NORM;
+	if (nocol || (file != stderr && file != stdout)) {
+		bold = ""; norm = "";
+	}
+	fprintf(file, DDR_INFO "ipos:%sk, opos:%sk, xferd:%sk\n",
+		fmt_int(10, 1, 1024, ipos, bold, norm, 1),
+		fmt_int(10, 1, 1024, opos, bold, norm, 1),
+		fmt_int(10, 1, 1024, xfer, bold, norm, 1));
+	fprintf(file, "             %s  %s  errs:%7i, errxfer:%sk, succxfer:%sk\n",
 		(reverse? "-": " "), (bs==hardbs? "*": " "), nrerr, 
-		(float)fxfer/1024, (float)sxfer/1024);
+		fmt_int(10, 1, 1024, fxfer, bold, norm, 1),
+		fmt_int(10, 1, 1024, sxfer, bold, norm, 1));
 	if (sync || (file != stdin && file != stdout) )
-		fprintf(file, "             +curr.rate:%9.0fkB/s, avg.rate:%9.0fkB/s, avg.load:%5.1f%%\n",
-			(float)(xfer-lxfer)/(t2*1024),
-			avgrate,
-			100.0*(cl-startclock)/(CLOCKS_PER_SEC*t1));
+		fprintf(file, "             +curr.rate:%skB/s, avg.rate:%skB/s, avg.load:%s%%\n",
+			fmt_int(9, 0, t2*1024, xfer-lxfer, bold, norm, 1),
+			fmt_int(9, 0, t1*1024, xfer, bold, norm, 1),
+			fmt_int(3, 1, CLOCKS_PER_SEC*t1, 100*(cl-startclock), bold, norm, 1));
 	else
-		fprintf(file, "             -curr.rate:%skB/s, avg.rate:%9.0fkB/s, avg.load:%5.1f%%\n",
-			nineright, avgrate, 100.0*(cl-startclock)/(CLOCKS_PER_SEC*t1));
+		fprintf(file, "             -curr.rate:%skB/s, avg.rate:%skB/s, avg.load:%s%%\n",
+			nineright, 
+			fmt_int(9, 0, t1*1024, xfer, bold, norm, 1),
+			fmt_int(3, 1, CLOCKS_PER_SEC*t1, 100*(cl-startclock), bold, norm, 1));
 	if (estxfer && avgrate > 0) {
 		int sec;
 		if (in_report)
 			sec = 0.5 + t1;
 		else
-			sec = 0.5 + (estxfer-xfer)/(1024*avgrate);
+			sec = 0.5 + (estxfer-xfer)/avgrate;
 		int hour = sec / 3600;
 		int min = (sec % 3600) / 60;
 		sec = sec % 60;
@@ -601,7 +610,7 @@ void printstatus(FILE* const file1, FILE* const file2,
 		int err = fsync(odes);
 		if (err && (errno != EINVAL || !einvalwarn) &&!o_chr) {
 			fplog(stderr, WARN, "sync %s (%.1fk): %s!  \n",
-			      oname, (float)ipos/1024, strerror(errno));
+			      oname, (double)ipos/1024.0, strerror(errno));
 			++einvalwarn;
 		}
 		errno = 0;
@@ -732,26 +741,26 @@ int sync_close(int fd, const char* nm, char chr)
 		rc = fsync(fd);
 		if (rc && !chr) {
 			fplog(stderr, WARN, "fsync %s (%.1fk): %s!\n",
-			      nm, (float)opos/1024, strerror(errno));
+			      nm, (double)opos/1024, strerror(errno));
 			++err;
 			errno = 0;
 		}
 		rc = close(fd); 
 		if (rc) {
 			fplog(stderr, WARN, "close %s (%.1fk): %s!\n",
-			      nm, (float)opos/1024, strerror(errno));
+			      nm, (double)opos/1024, strerror(errno));
 			++err;
 		}
 		if (sparse) {
 			rc = mayexpandfile(nm);
 			if (rc)
 				fplog(stderr, WARN, "seek %s (%.1fk): %s!\n",
-				      nm, (float)opos/1024, strerror(errno));
+				      nm, (double)opos/1024, strerror(errno));
 		} else if (trunclast && !reverse) {
 			rc = truncate(nm, opos);
 			if (rc)
 				fplog(stderr, WARN, "could not truncate %s to %.1fk: %s!\n",
-					nm, (float)opos/1024, strerror(errno));
+					nm, (double)opos/1024, strerror(errno));
 		}
 
 	}
@@ -773,7 +782,7 @@ int cleanup()
 		rc = close(ides);
 		if (rc) {
 			fplog(stderr, WARN, "close %s (%.1fk): %s!\n",
-			      iname, (float)ipos/1024, strerror(errno));
+			      iname, (double)ipos/1024, strerror(errno));
 			++errs;
 		}
 	}
@@ -912,7 +921,7 @@ ssize_t writeblock(const int towrite)
 		/* Write error: handle ? .. */
 		fplog(stderr, (abwrerr? FATAL: WARN),
 				"write %s (%.1fk): %s\n",
-	      			oname, (float)opos/1024, strerror(errno));
+	      			oname, (double)opos/1024, strerror(errno));
 		if (abwrerr) 
 			exit_report(21);
 		nrerr++;
@@ -932,7 +941,7 @@ ssize_t writeblock(const int towrite)
 			  || (w2 < towrite && e2 > 0 && errno == 0));
 		if (w2 < towrite && e2 != 0) 
 			fplog(stderr, WARN, "2ndary write %s (%.1fk): %s\n",
-			      oft->name, (float)opos/1024, strerror(errno));
+			      oft->name, (double)opos/1024, strerror(errno));
 	}
 	o_chr = oldochr;
 	errno = oldeno;	
@@ -959,7 +968,7 @@ void exitfatalerr(const int eno)
 {
 	if (eno == ESPIPE || eno == EPERM || eno == ENXIO || eno == ENODEV) {
 		fplog(stderr, FATAL, "%s (%.1fk): %s! \n", 
-		      iname, (float)ipos/1024, strerror(eno));
+		      iname, (double)ipos/1024, strerror(eno));
 		fplog(stderr, NOHDR, "dd_rescue: Last error fatal! Exiting ... \n");
 		exit_report(20);
 	}
@@ -1004,7 +1013,7 @@ ssize_t dowrite(const ssize_t rd)
 		fplog(stderr, WARN, "assumption rd(%i) == wr(%i) failed! \n", rd, wr);
 		fplog(stderr, (fatal? FATAL: WARN),
 			"%swrite %s (%.1fk): %s!\n", 
-			oname, (float)(opos+wr)/1024, strerror(weno));
+			oname, (double)(opos+wr)/1024, strerror(weno));
 		errno = 0;
 		/* FIXME: This breaks for reverse direction */
 		if (!reverse)
@@ -1069,7 +1078,7 @@ int copyfile_hardbs(const off_t max)
 #if 0	
 	fprintf(stderr, "%s%s%s%s copyfile (ipos=%.1fk, xfer=%.1fk, max=%.1fk, bs=%i)                         ##\n%s%s%s%s",
 		up, up, up, up,
-		(float)ipos/1024, (float)xfer/1024, (float)max/1024, hardbs,
+		(double)ipos/1024, (double)xfer/1024, (double)max/1024, hardbs,
 		down, down, down, down);
 #endif
 	while ((toread = blockxfer(max, hardbs)) > 0) { 
@@ -1081,7 +1090,7 @@ int copyfile_hardbs(const off_t max)
 		if (rd == 0 && !eno) {
 			if (!quiet)
 				fplog(stderr, INFO, "read %s (%.1fk): EOF\n", 
-				      iname, (float)ipos/1024);
+				      iname, (double)ipos/1024);
 			return errs;
 		}
 		/* READ ERROR */
@@ -1113,7 +1122,7 @@ int copyfile_hardbs(const off_t max)
 			/* Real error on small blocks: Don't retry */
 			nrerr++; 
 			fplog(stderr, WARN, "read %s (%.1fk): %s!\n", 
-			      iname, (float)ipos/1024, strerror(eno));
+			      iname, (double)ipos/1024, strerror(eno));
 		
 			errno = 0;
 			if (nosparse || 
@@ -1129,7 +1138,7 @@ int copyfile_hardbs(const off_t max)
 					fplog(stderr, WARN, "assumption toread(%i) == wr(%i) failed! \n", toread, wr);	
 					/*
 					fplog(stderr, WARN, "%s (%.1fk): %s!\n", 
-					      oname, (float)opos/1024, strerror(eno));
+					      oname, (double)opos/1024, strerror(eno));
 					fprintf(stderr, "%s%s%s%s", down, down, down, down);
 				 	*/
 				}
@@ -1171,7 +1180,7 @@ int copyfile_softbs(const off_t max)
 #if 0	
 	fprintf(stderr, "%s%s%s%s copyfile (ipos=%.1fk, xfer=%.1fk, max=%.1fk, bs=%i)                         ##\n%s%s%s%s",
 		up, up, up, up,
-		(float)ipos/1024, (float)xfer/1024, (float)max/1024, softbs,
+		(double)ipos/1024, (double)xfer/1024, (double)max/1024, softbs,
 		down, down, down, down);
 #endif
 	/* expand file to AT LEAST the right length 
@@ -1180,7 +1189,7 @@ int copyfile_softbs(const off_t max)
 		rc = pwrite(odes, buf, 0, opos);
 		if (rc)
 			fplog(stderr, WARN, "extending file %s to %.1fk failed\n",
-			      oname, (float)opos/1024);
+			      oname, (double)opos/1024);
 	}
 	while ((toread = blockxfer(max, softbs)) > 0) {
 		int err;
@@ -1191,7 +1200,7 @@ int copyfile_softbs(const off_t max)
 		if (rd == 0 && !eno) {
 			if (!quiet)
 				fplog(stderr, INFO, "read %s (%.1fk): EOF\n", 
-				      iname, (float)ipos/1024);
+				      iname, (double)ipos/1024);
 			return errs;
 		}
 		/* READ ERROR or short read */
@@ -1211,10 +1220,10 @@ int copyfile_softbs(const off_t max)
 			if (verbose) {
 				/*
 				fprintf(stderr, DDR_INFO "problems at ipos %.1fk: %s \n                 fall back to smaller blocksize \n%s%s%s%s",
-				        (float)ipos/1024, strerror(eno), down, down, down, down);
+				        (double)ipos/1024, strerror(eno), down, down, down, down);
 				 */
 				fprintf(stderr, DDR_INFO "problems at ipos %.1fk: %s \n                 fall back to smaller blocksize \n",
-				        (float)ipos/1024, strerror(eno));
+				        (double)ipos/1024, strerror(eno));
 				scrollup = 0;
 				printstatus(stderr, logfd, hardbs, 1);
 			}
@@ -1249,7 +1258,7 @@ int copyfile_softbs(const off_t max)
 				return errs;
 			if (verbose) {
 				fprintf(stderr, DDR_INFO "ipos %.1fk promote to large bs again! \n",
-					(float)ipos/1024);
+					(double)ipos/1024);
 				scrollup = 0;
 			}
 		} else {
@@ -1283,14 +1292,14 @@ int copyfile_splice(const off_t max)
 		if (rd < 0) {
 			if (!quiet)
 				fplog(stderr, INFO, "%s (%.1fk): fall back to userspace copy\n",
-				      iname, (float)ipos/1024);
+				      iname, (double)ipos/1024);
 			close(fd_pipe[0]); close(fd_pipe[1]);
 			return copyfile_softbs(max);
 		}
 		if (rd == 0) {
 			if (!quiet)
 				fplog(stderr, INFO, "read %s (%.1fk): EOF (splice)\n",
-				      iname, (float)ipos/1024);
+				      iname, (double)ipos/1024);
 			break;
 		}
 		while (rd) {
@@ -1298,7 +1307,7 @@ int copyfile_splice(const off_t max)
 					SPLICE_F_MOVE | SPLICE_F_MORE);
 			if (wr < 0) {
 				fplog(stderr, FATAL, "write %s (%.1fk): %s (splice)\n",
-					oname, (float)opos/1024.0, strerror(errno));
+					oname, (double)opos/1024.0, strerror(errno));
 
 				close(fd_pipe[0]); close(fd_pipe[1]);
 				exit_report(23);
@@ -2004,7 +2013,7 @@ int main(int argc, char* argv[])
 		}
 		if (verbose) 
 			fprintf(stderr, DDR_INFO "ipos set to the end: %.1fk\n", 
-			        (float)ipos/1024);
+			        (double)ipos/1024);
 		/* if opos not set, assume same position */
 		if (opos == (off_t)-INT_MAX) 
 			opos = ipos;
@@ -2020,7 +2029,7 @@ int main(int argc, char* argv[])
 				opos = ipos;
 			if (verbose) 
 				fprintf(stderr, DDR_INFO "opos set to: %.1fk\n",
-					(float)opos/1024);
+					(double)opos/1024);
     		}
 	}
 
@@ -2066,7 +2075,7 @@ int main(int argc, char* argv[])
 	input_length();
 
 	if (ipos < 0 || opos < 0) {
-		fplog(stderr, FATAL, "negative position requested (%.1fk)\n", (float)ipos/1024);
+		fplog(stderr, FATAL, "negative position requested (%.1fk)\n", (double)ipos/1024);
 		cleanup(); exit(25);
 	}
 
@@ -2092,7 +2101,7 @@ int main(int argc, char* argv[])
 	if (reverse && trunclast)
 		if (ftruncate(odes, opos))
 			fplog(stderr, WARN, "Could not truncate %s to %.1fk: %s!\n",
-				oname, (float)opos/1024, strerror(errno));
+				oname, (double)opos/1024, strerror(errno));
 
 	LISTTYPE(ofile_t) *of;
 	LISTFOREACH(ofiles, of) {
@@ -2113,7 +2122,7 @@ int main(int argc, char* argv[])
 		if (reverse && trunclast)
 			if (ftruncate(oft->fd, opos))
 				fplog(stderr, WARN, "Could not truncate %s to %.1fk: %s!\n",
-					oft->name, (float)opos/1024, strerror(errno));
+					oft->name, (double)opos/1024, strerror(errno));
 	}
 
 	/* Install signal handler */
