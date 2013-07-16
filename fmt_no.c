@@ -102,7 +102,7 @@ char* fmt_int(int pre, int post, int scale, off_t no,
 #include <stdio.h>
 int main(int argc, char **argv)
 {
-	int i; long l;
+	int i; off_t l;
 	for (i = 1; i < argc; ++i) {
 		l = atoll(argv[i]);
 		printf("%12.2f: %s %s %s %s\n",
