@@ -2,6 +2,7 @@
 #include <time.h>
 #include <sys/time.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include "find_nonzero.h"
 
 #define SIZE (64*1024*1024)
@@ -12,12 +13,12 @@
 	for (i = 0; i < rep; ++i)	\
 		ln = routine(buf, SIZE);\
 	gettimeofday(&t2, NULL);	\
-	printf("%5i x %18s (%8i): %.3fs => %i\n",\
+	printf("%5i x %18s (%8i): %.3fs => %8i\n",\
 		rep, #routine, sz,	\
 		t2.tv_sec-t1.tv_sec+0.000001*(t2.tv_usec-t1.tv_usec), ln)
 
 
-#ifdef __SSE2__
+#if defined(__SSE2__) && !defined(NO_SSE2)
 #define TEST_SSE(a,b,c) TEST(a,b,c)
 #else
 #define TEST_SSE(a,b,c) do {} while (0)
@@ -25,7 +26,7 @@
 
 int main()
 {
-	unsigned char* buf = malloc(SIZE);
+	unsigned char* buf = (unsigned char*)malloc(SIZE);
 	struct timeval t1, t2;
 	int i, ln;
 	memset(buf, 0xa5, SIZE);

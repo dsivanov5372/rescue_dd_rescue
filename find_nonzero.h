@@ -12,7 +12,7 @@ static inline size_t find_nonzero_sse2(const unsigned char* blk, const size_t ln
 {
 	__m128i xmm, zero = _mm_setzero_si128();
 	long register rax;
-	int i;
+	size_t i;
 	for (i = 0; i < ln; i+= 16) {
 		xmm = _mm_load_si128((__m128i*)(blk+i));
 		_mm_cmpeq_epi8(xmm, zero);
