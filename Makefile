@@ -19,13 +19,14 @@ MANDIR = $(prefix)/share/man/
 #MYDIR = dd_rescue-$(VERSION)
 MYDIR = dd_rescue
 TARGETS = dd_rescue
-OBJECTS = dd_rescue.o frandom.o fmt_no.o
+OBJECTS = frandom.o fmt_no.o
+HEADERS = frandom.h fmt_no.h find_nonzero.h
 DOCDIR = $(prefix)/share/doc/packages
 INSTASROOT = -o root -g root
 LIBDIR = /usr/lib
 COMPILER = $(shell $(CC) --version | head -n1)
 DEFINES = -DVERSION=\"$(VERSION)\"  -D__COMPILER__="\"$(COMPILER)\""
-OUT = -o $@
+OUT = -o dd_rescue
 
 ifeq ($(CC),wcl386)
   CFLAGS = "-ox -wx $(EXTRA_CFLAGS)"
@@ -41,29 +42,29 @@ frandom.o: frandom.c frandom.h
 fmt_no.o: fmt_no.c fmt_no.h
 	$(CC) $(CFLAGS_OPT) -c $<
 
-libfalloc: dd_rescue.c frandom.o fmt_no.o
-	$(CC) $(CFLAGS) -DHAVE_LIBFALLOCATE=1 $(DEFINES) $^ -o dd_rescue -lfallocate
+libfalloc: dd_rescue.c $(HEADERS) $(OBJECTS)
+	$(CC) $(CFLAGS) -DHAVE_LIBFALLOCATE=1 $(DEFINES) $< $(OUT) $(OBJECTS) -lfallocate
 
-libfalloc-static: dd_rescue.c frandom.o fmt_no.o
-	$(CC) $(CFLAGS) -DHAVE_LIBFALLOCATE=1 $(DEFINES) $^ -o dd_rescue $(LIBDIR)/libfallocate.a
+libfalloc-static: dd_rescue.c $(HEADERS) $(OBJECTS)
+	$(CC) $(CFLAGS) -DHAVE_LIBFALLOCATE=1 $(DEFINES) $< $(OUT) $(OBJECTS) $(LIBDIR)/libfallocate.a
 
-libfalloc-dl: dd_rescue.c frandom.o fmt_no.o
-	$(CC) $(CFLAGS) -DHAVE_LIBDL=1 -DHAVE_LIBFALLOCATE=1 -DHAVE_FALLOCATE=1 $(DEFINES) $^ -o dd_rescue -ldl
+libfalloc-dl: dd_rescue.c $(HEADERS) $(OBJECTS)
+	$(CC) $(CFLAGS) -DHAVE_LIBDL=1 -DHAVE_LIBFALLOCATE=1 -DHAVE_FALLOCATE=1 $(DEFINES) $< $(OUT) $(OBJECTS) -ldl
 
-falloc: dd_rescue.c frandom.o fmt_no.o
-	$(CC) $(CFLAGS) -DHAVE_FALLOCATE=1 $(DEFINES) $^ -o dd_rescue
+falloc: dd_rescue.c $(HEADERS) $(OBJECTS)
+	$(CC) $(CFLAGS) -DHAVE_FALLOCATE=1 $(DEFINES) $< $(OUT) $(OBJECTS)
 
-dd_rescue: dd_rescue.c frandom.o fmt_no.o
-	$(CC) $(CFLAGS) $(DEFINES) $^ $(OUT)
+dd_rescue: dd_rescue.c $(HEADERS) $(OBJECTS)
+	$(CC) $(CFLAGS) $(DEFINES) $< $(OUT) $(OBJECTS)
 
-nocolor: dd_rescue.c frandom.o fmt_no.o
-	$(CC) $(CFLAGS) -DNO_COLORS=1 $(DEFINES) $^ -o dd_rescue
+nocolor: dd_rescue.c $(HEADERS) $(OBJECTS)
+	$(CC) $(CFLAGS) -DNO_COLORS=1 $(DEFINES) $< $(OUT) $(OBJECTS)
 
 strip: dd_rescue
 	strip -S $<
 
 clean:
-	rm -f $(TARGETS) $(OBJECTS) core
+	rm -f $(TARGETS) $(OBJECTS) dd_rescue.o core test log
 
 distclean: clean
 	rm -f *~
