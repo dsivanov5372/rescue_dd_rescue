@@ -35,6 +35,7 @@
  * - Use termcap to fetch cursor up/down and color codes
  * - Display more infos on errors by collecting info from syslog
  * - Option to send TRIM on zeroed file blocks
+ * - Options to compress with libz, liblzo, libbz2, lzma, ... 
  */
 
 #ifndef VERSION
