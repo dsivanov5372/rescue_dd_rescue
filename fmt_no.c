@@ -42,6 +42,8 @@ char* fmt_int(int pre, int post, int scale, off_t no,
 	off_t my_no;
 	char* fmtbuf = fmtbufs[fbno++];
 	char isneg = no < 0;
+	if (!scale)
+		scale = 1;
 	no = (no < 0? -no: no);
 	fmtbuf[idx] = 0;
 	fbno %= 8;
