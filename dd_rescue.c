@@ -88,6 +88,7 @@
 #include "frandom.h"
 #include "list.h"
 #include "fmt_no.h"
+#include "find_nonzero.h"
 
 #ifndef LACK_GETOPT_LONG
 #include <getopt.h>
@@ -841,22 +842,13 @@ ssize_t fill_rand(void *bf, size_t ln)
 	return ln;
 }
 
-/* TODO: Can't we use library functions to find the first non-null byte?
- * There should be optimized versions, using SSE4.x insns e.g. */
-
 /** is the block zero ? */
 static int blockiszero(const unsigned char* blk, const size_t ln)
 {
-	const unsigned long* ptr = (const unsigned long*)blk;
-	const unsigned long* const bptr = ptr;
 	if (i_repeat && i_rep_zero)
 		return i_rep_zero;
-	while ((size_t)(ptr-bptr) < ln/sizeof(unsigned long))
-		if (*(ptr++)) 
-			return i_rep_zero = (sizeof(unsigned long)*(--ptr-bptr));
-	if (i_repeat)
-		i_rep_zero = ln;
-	return ln;
+	i_rep_zero = find_nonzero(blk, ln);
+	return i_rep_zero;
 }
 
 static inline ssize_t mypread(int fd, void* bf, size_t sz, off_t off)
