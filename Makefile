@@ -64,7 +64,14 @@ strip: dd_rescue
 	strip -S $<
 
 clean:
-	rm -f $(TARGETS) $(OBJECTS) dd_rescue.o core test log
+	rm -f $(TARGETS) $(OBJECTS) dd_rescue.o core test log find_nonzero fmt_no
+
+find_nonzero: find_nonzero.c find_nonzero.h
+	$(CC) $(CFLAGS_OPT) -o $@ $<
+
+fmt_no: fmt_no.c fmt_no.h
+	$(CC) $(CFLAGS) -o $@ $< -DTEST
+
 
 distclean: clean
 	rm -f *~

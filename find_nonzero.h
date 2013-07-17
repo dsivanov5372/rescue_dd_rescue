@@ -2,13 +2,16 @@
 #define _FIND_NONZERO_H
 #include <sys/types.h>
 
-/* TODO: Can't we use library functions to find the first non-null byte?
- * There should be optimized versions, using SSE4.x insns e.g. */
+/* FIXME: Is there no library function to find the first non-null byte?
+ * Here is an optimized version using SSE2 intrinsics, but there should be
+ * be versions for NEON ... etc. */
+
 #if defined(__SSE2__) & !defined(NO_SSE2)
 #include <emmintrin.h>
+#define HAVE_SIMD
 
-#define find_nonzero find_nonzero_sse2
-static inline size_t find_nonzero_sse2(const unsigned char* blk, const size_t ln)
+#define find_nonzero find_nonzero_simd
+static inline size_t find_nonzero_simd(const unsigned char* blk, const size_t ln)
 {
 	__m128i xmm, zero = _mm_setzero_si128();
 	long register rax;
