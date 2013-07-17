@@ -1,6 +1,8 @@
 /** list.h 
  * C version of linked lists
  * (ab)uing macros ...
+ * (c) Kurt Garloff <kurt@garloff.de>, 1996 -- 2013
+ * License: GNU GPL v2 or v3
  */
 
 #ifndef _LIST_H
