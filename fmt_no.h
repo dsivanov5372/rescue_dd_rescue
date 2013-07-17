@@ -1,3 +1,5 @@
+/** Decl for int to str conversion with highlighting */
+
 #ifndef _FMT_NO_H
 #define _FMT_NO_H
 #include <sys/types.h>

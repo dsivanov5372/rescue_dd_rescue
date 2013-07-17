@@ -1,3 +1,8 @@
+/** Test & Benchmark program for find_nonzero()
+ * (c) Kurt Garloff <kurt@garloff.de>, 2013
+ * License: GNU GPL v2 or v3
+ */
+
 #include <string.h>
 #include <time.h>
 #include <sys/time.h>

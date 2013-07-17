@@ -1,8 +1,14 @@
+/** Helper to find length of block with zero bytes
+ * (c) Kurt Garloff <kurt@garloff.de>, 2013
+ * License: GNU GPL v2 or v3
+ */
+
 #ifndef _FIND_NONZERO_H
 #define _FIND_NONZERO_H
 #include <sys/types.h>
 
 /* FIXME: Is there no library function to find the first non-null byte?
+ * Something like ffs()?
  * Here is an optimized version using SSE2 intrinsics, but there should be
  * be versions for NEON ... etc. */
 
@@ -11,6 +17,7 @@
 #define HAVE_SIMD
 
 #define find_nonzero find_nonzero_simd
+/* This has been inspired by http://developer.amd.com/community/blog/faster-string-operations/ */
 static inline size_t find_nonzero_simd(const unsigned char* blk, const size_t ln)
 {
 	__m128i xmm, zero = _mm_setzero_si128();

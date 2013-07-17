@@ -1,3 +1,8 @@
+/** Convert long integer to strings with highlighting 
+ * (c) Kurt Garloff <kurt@garloff.de>, 2013
+ * License: GNU GPL v2 or v3
+ */
+
 #define _LARGEFILE_SOURCE
 #define _FILE_OFFSET_BITS 64
 #include "fmt_no.h"
