@@ -1851,7 +1851,7 @@ int main(int argc, char* argv[])
 		exit(12);
 	}
 	if (!iname || !oname) {
-		fplog(stderr, FATAL, "both input and output have to be specified!\n");
+		fplog(stderr, FATAL, "both input and output files have to be specified!\n");
 		printhelp();
 		exit(12);
 	}
