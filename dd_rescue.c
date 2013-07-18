@@ -137,7 +137,7 @@ unsigned int softbs, hardbs, syncfreq;
 int maxerr, nrerr, dotrunc;
 char trunclast, reverse, abwrerr, sparse, nosparse;
 char verbose, quiet, interact, force, in_report, nocol;
-unsigned char *buf, *buf2;
+unsigned char *buf, *buf2, *origbuf, *origbuf2;
 const char *lname, *iname, *oname, *bbname = NULL;
 off_t ipos, opos, xfer, lxfer, sxfer, fxfer, maxxfer, axfer, init_opos, ilen, olen, estxfer;
 
@@ -317,7 +317,7 @@ static int openfile(const char* const fname, const int flags)
 	if (fdes == -1) {
 		fplog(stderr, FATAL, "open \"%s\" failed: %s\n",
 			fname, strerror(errno));
-		exit(17);
+		cleanup(); exit(17);
 	}
 	return fdes;
 }
@@ -803,8 +803,8 @@ int cleanup()
 		ofile_t *oft = &(LISTDATA(of));
 		rc = sync_close(oft->fd, oft->name, oft->cdev);
 	}
-	ZFREE(buf2);
-	ZFREE(buf);
+	ZFREE(origbuf2);
+	ZFREE(origbuf);
 	ZFREE(graph);
 	if (preserve)
 		copytimes(iname, oname);
@@ -1640,32 +1640,31 @@ void breakhandler(int sig)
 	raise(sig);
 }
 
-unsigned char* zalloc_buf(unsigned int bs)
+unsigned char* zalloc_aligned_buf(unsigned int bs, unsigned char**obuf)
 {
 	unsigned char *ptr;
-#ifdef O_DIRECT
-	if (o_dir_in || o_dir_out) {
 #if defined (__DragonFly__) || defined(__NetBSD__)
-		ptr = (unsigned char*)valloc(bs);
+	ptr = (unsigned char*)valloc(bs);
 #else
-		void *mp;
-		if (posix_memalign(&mp, pagesize, bs))
-			ptr = 0;
-		else
-			ptr = (unsigned char*)mp;
+	void *mp;
+	if (posix_memalign(&mp, pagesize, bs))
+		ptr = 0;
+	else
+		ptr = (unsigned char*)mp;
 #endif /* NetBSD */
+	if (obuf) 
+		*obuf = ptr;
+	if (!ptr) {
+		fplog(stderr, WARN, "allocation of aligned buffer failed -- use malloc\n");
+		ptr = (unsigned char*)malloc(bs + pagesize);
 		if (!ptr) {
-			fplog(stderr, FATAL, "allocation of aligned buffer failed but needed with O_DIRECT!\n");
+			fplog(stderr, FATAL, "allocation of buffer failed!\n");
 			cleanup(); exit(18);
 		}
-		memset(ptr, 0, bs);
-		return ptr;
-	}
-#endif /* O_DIRECT */
-	ptr = (unsigned char*)malloc(bs);
-	if (!ptr) {
-		fplog(stderr, FATAL, "allocation of buffer failed!\n");
-		cleanup(); exit(18);
+		if (obuf)
+			*obuf = ptr;
+		ptr += pagesize-1;
+		ptr -= (unsigned long)ptr % pagesize;
 	}
 	memset(ptr, 0, bs);
 	return ptr;
@@ -1913,7 +1912,7 @@ int main(int argc, char* argv[])
 		fplog(stderr, WARN, "disable write avoidance (-W) for splice copy\n");
 		avoidwrite = 0;
 	}
-	buf = zalloc_buf(softbs);
+	buf = zalloc_aligned_buf(softbs, &origbuf);
 
 	/* Optimization: Don't reread from /dev/zero over and over ... */
 	if (!dosplice && !strcmp(iname, "/dev/zero")) {
@@ -1976,7 +1975,7 @@ int main(int argc, char* argv[])
 		
 	if (odes != 1) {
 		if (avoidwrite) {
-			buf2 = zalloc_buf(softbs);
+			buf2 = zalloc_aligned_buf(softbs, &origbuf2);
 			odes = openfile(oname, O_RDWR | O_CREAT | o_dir_out /*| O_EXCL*/ | dotrunc);
 		} else
 			odes = openfile(oname, O_WRONLY | O_CREAT | o_dir_out /*| O_EXCL*/ | dotrunc);
@@ -2001,7 +2000,7 @@ int main(int argc, char* argv[])
 		if (avoidwrite) {
 			fplog(stderr, WARN, "Disabling -Write avoidance b/c ofile is not seekable\n");
 			avoidwrite = 0;
-			ZFREE(buf2);
+			ZFREE(origbuf2);
 		}
 	}
 
