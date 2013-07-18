@@ -3,6 +3,7 @@
  * License: GNU GPL v2 or v3
  */
 
+#define _GNU_SOURCE 1
 #include <string.h>
 #include <time.h>
 #include <sys/time.h>
@@ -29,43 +30,32 @@
 #define TEST_SIMD(a,b,c) do {} while (0)
 #endif
 
-#if defined(HAVE_SIMD_EXACT)
-#define TEST_SIMD_EXACT(a,b,c) TEST(a,b,c)
-#else
-#define TEST_SIMD_EXACT(a,b,c) do {} while (0)
-#endif
-
 int main()
 {
-	unsigned char* buf = (unsigned char*)malloc(SIZE);
+	unsigned char* obuf = (unsigned char*)malloc(SIZE+15);
+	unsigned char* buf = obuf+15;
 	struct timeval t1, t2;
 	int i, ln;
+	buf -= (unsigned long)buf%16;
 	memset(buf, 0xa5, SIZE);
 	TEST(1024*1024, find_nonzero_c, 2048);
 	TEST_SIMD(1024*1024, find_nonzero_simd, 2048);
-	TEST_SIMD_EXACT(1024*1024, find_nonzero_simd_exact, 2048);
 	TEST(1024*1024+3, find_nonzero_c, 2048);
 	TEST_SIMD(1024*1024+3, find_nonzero_simd, 2048);
-	TEST_SIMD_EXACT(1024*1024+3, find_nonzero_simd_exact, 2048);
 	TEST(1024*1024+6, find_nonzero_c, 2048);
 	TEST_SIMD(1024*1024+6, find_nonzero_simd, 2048);
-	TEST_SIMD_EXACT(1024*1024+6, find_nonzero_simd_exact, 2048);
 	TEST(1024*1024+9, find_nonzero_c, 2048);
 	TEST_SIMD(1024*1024+9, find_nonzero_simd, 2048);
-	TEST_SIMD_EXACT(1024*1024+9, find_nonzero_simd_exact, 2048);
 	TEST(1024*1024+16, find_nonzero_c, 2048);
 	TEST_SIMD(1024*1024+16, find_nonzero_simd, 2048);
-	TEST_SIMD_EXACT(1024*1024+16, find_nonzero_simd_exact, 2048);
 
-	TEST(16*1024*1024, find_nonzero_c, 128);
-	TEST_SIMD(16*1024*1024, find_nonzero_simd, 128);
-	TEST_SIMD_EXACT(16*1024*1024, find_nonzero_simd_exact, 128);
+	TEST(16*1024*1024+9, find_nonzero_c, 128);
+	TEST_SIMD(16*1024*1024+9, find_nonzero_simd, 128);
 
 	TEST(64*1024*1024, find_nonzero_c, 32);
 	TEST_SIMD(64*1024*1024, find_nonzero_simd, 32);
-	TEST_SIMD_EXACT(64*1024*1024, find_nonzero_simd_exact, 32);
 
-	free(buf);
+	free(obuf);
 	return 0;
 }
 
