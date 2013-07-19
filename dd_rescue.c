@@ -582,12 +582,12 @@ void doprint(FILE* const file, const unsigned int bs, const clock_t cl,
 		fprintf(file, "             +curr.rate:%skB/s, avg.rate:%skB/s, avg.load:%s%%\n",
 			fmt_int(9, 0, t2*1024, xfer-lxfer, bold, norm, 1),
 			fmt_int(9, 0, t1*1024, xfer, bold, norm, 1),
-			fmt_int(3, 1, CLOCKS_PER_SEC*t1, 100*(cl-startclock), bold, norm, 1));
+			fmt_int(3, 1, CLOCKS_PER_SEC/100*t1, cl-startclock, bold, norm, 1));
 	else
 		fprintf(file, "             -curr.rate:%skB/s, avg.rate:%skB/s, avg.load:%s%%\n",
 			nineright, 
 			fmt_int(9, 0, t1*1024, xfer, bold, norm, 1),
-			fmt_int(3, 1, CLOCKS_PER_SEC*t1, 100*(cl-startclock), bold, norm, 1));
+			fmt_int(3, 1, CLOCKS_PER_SEC/100*t1, cl-startclock, bold, norm, 1));
 	if (estxfer && avgrate > 0) {
 		int sec;
 		if (in_report)
