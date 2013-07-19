@@ -22,7 +22,7 @@
 	}				\
 	gettimeofday(&t2, NULL);	\
 	tdiff = t2.tv_sec-t1.tv_sec + 0.000001*(t2.tv_usec-t1.tv_usec);	\
-	printf("%7i x %18s (%8i): %8i (%6.3fs => %5.0fMB/s)\n",	\
+	printf("%7i x %20s (%8i): %8i (%6.3fs => %5.0fMB/s)\n",	\
 		rep, #routine, sz, ln, tdiff, (double)(rep)*(double)(sz)/(1024*1024*tdiff))
 
 
@@ -46,8 +46,13 @@ int main(int argc, char* argv[])
 	memset(buf, 0xa5, SIZE);
 	TEST(8*1024-15, find_nonzero_c, 1024*256*scale/16);
 	TEST_SIMD(8*1024-15, find_nonzero_simd, 1024*256*scale/16);
+	TEST_SIMD(8*1024-15, find_nonzero_generic, 1024*256*scale/16);
+	buf++;
+	TEST_SIMD(8*1024-15, find_nonzero_generic, 1024*256*scale/16);
+	buf--;
 	TEST(32*1024-9, find_nonzero_c, 1024*64*scale/16);
 	TEST_SIMD(32*1024-9, find_nonzero_simd, 1024*64*scale/16);
+	TEST_SIMD(32*1024-9, find_nonzero_generic, 1024*64*scale/16);
 	TEST(128*1024-8, find_nonzero_c, 1024*16*scale/16);
 	TEST_SIMD(128*1024-8, find_nonzero_simd, 1024*16*scale/16);
 	TEST(1024*1024-7, find_nonzero_c, 2048*scale/16);

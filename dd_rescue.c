@@ -847,7 +847,7 @@ static int blockiszero(const unsigned char* blk, const size_t ln)
 {
 	if (i_repeat && i_rep_zero)
 		return i_rep_zero;
-	i_rep_zero = find_nonzero(blk, ln);
+	i_rep_zero = find_nonzero_opt(blk, ln);
 	return i_rep_zero;
 }
 
