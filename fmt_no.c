@@ -36,8 +36,8 @@ static char fmtbufs[8][64];
  * - The string can't be longer than 64 chars, which should be i
  *   enough though to print all possible 64bit ints.
  */
-char* fmt_int(int pre, int post, int scale, off_t no, 
-		const char* bold, const char* norm, int leadbold)
+char* fmt_int(unsigned char pre, unsigned char post, unsigned int scale, 
+	      off_t no, const char* bold, const char* norm, int leadbold)
 {
 	static int fbno = 0;
 	const int blen = bold? strlen(bold): 0;
