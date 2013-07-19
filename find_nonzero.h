@@ -57,8 +57,15 @@ static size_t find_nonzero_simd(const unsigned char* blk, const size_t ln)
 {
 	__m128i xmm, zero = _mm_setzero_si128();
 	unsigned /*long*/ register eax;
-	size_t i;
-	for (i = 0; i < ln; i+= 16) {
+	size_t i = 0;
+#ifdef BLK_MAYBE_UNALIGNED
+	//asm(".align 32");
+	const int off = ((unsigned long)blk) % sizeof(__m128i);
+	for (; i < (sizeof(__m128i) - off)%sizeof(__m128i); ++i)
+		if (blk[i])
+			return i;
+#endif
+	for (; i < ln; i+= 16) {
 		xmm = _mm_load_si128((__m128i*)(blk+i));
 		_mm_cmpeq_epi8(xmm, zero);
 		eax = _mm_movemask_epi8(xmm);
@@ -78,7 +85,7 @@ static size_t find_nonzero_c(const unsigned char* blk, const size_t ln)
 	const unsigned long* const bptr = ptr;
 	for (; (size_t)(ptr-bptr) < ln/sizeof(*ptr); ++ptr)
 		if (*ptr)
-			return sizeof(unsigned long)*(ptr-bptr) + ((myffsl(*ptr)+7)>>3) - 1;
+			return sizeof(unsigned long)*(ptr-bptr) + ((myffsl(*ptr)-1)>>3);
 	return ln;
 }
 

@@ -1995,7 +1995,7 @@ int main(int argc, char* argv[])
 	sparse_output_warn();
 	if (o_chr) {
 		if (!nosparse)
-			fprintf(stderr, DDR_WARN "Not using sparse writes for non-seekable output\n");
+			fplog(stderr, WARN, "Not using sparse writes for non-seekable output\n");
 		nosparse = 1; sparse = 0; dosplice = 0;
 		if (avoidwrite) {
 			fplog(stderr, WARN, "Disabling -Write avoidance b/c ofile is not seekable\n");
@@ -2008,7 +2008,7 @@ int main(int argc, char* argv[])
 	if (reverse && ipos == 0) {
 		ipos = lseek(ides, ipos, SEEK_END);
 		if (ipos == -1) {
-			fprintf(stderr, DDR_FATAL "could not seek to end of file %s!\n", iname);
+			fplog(stderr, FATAL, "could not seek to end of file %s!\n", iname);
 			perror("dd_rescue"); cleanup(); exit(19);
 		}
 		if (verbose) 
@@ -2021,8 +2021,8 @@ int main(int argc, char* argv[])
 		if (opos == 0) {
 			opos = lseek(odes, opos, SEEK_END);
 			if (opos == (off_t)-1) {
-				fprintf(stderr, DDR_FATAL "could not seek to end of file %s!\n", oname);
-				perror(""); cleanup(); exit(19);
+				fplog(stderr, FATAL, "could not seek to end of file %s!\n", oname);
+				perror("dd_rescue"); cleanup(); exit(19);
 			}
 			/* if existing empty, assume same position */
 			if (opos == 0) 
