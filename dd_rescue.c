@@ -1565,7 +1565,7 @@ void printhelp()
 	fprintf(stderr, "         -e maxerr  exit after maxerr errors (def=0=infinite),\n");
 	fprintf(stderr, "         -m maxxfer maximum amount of data to be transfered (def=0=inf),\n");
 	fprintf(stderr,	"         -M         avoid extending outfile,\n");
-	fprintf(stderr,	"         -x         count opos from the end of outfile (eXtend)\n");
+	fprintf(stderr,	"         -x         count opos from the end of outfile (eXtend),\n");
 	fprintf(stderr, "         -y syncfrq frequency of fsync calls on outfile (def=512*softbs),\n");
 	fprintf(stderr, "         -l logfile name of a file to log errors and summary to (def=\"\"),\n");
 	fprintf(stderr, "         -o bbfile  name of a file to log bad blocks numbers (def=\"\"),\n");
@@ -1577,10 +1577,10 @@ void printhelp()
 	fprintf(stderr, "         -d/D       use O_DIRECT for input/output (def=no),\n");
 #endif
 #ifdef HAVE_SPLICE
-	fprintf(stderr, "         -k         use efficient in-kernel zerocopy splice\n");
+	fprintf(stderr, "         -k         use efficient in-kernel zerocopy splice,\n");
 #endif       	
 #if defined(HAVE_FALLOCATE) || defined(HAVE_LIBFALLOCATE)
-	fprintf(stderr, "         -P         use fallocate to preallocate target space\n");
+	fprintf(stderr, "         -P         use fallocate to preallocate target space,\n");
 #endif
 	fprintf(stderr, "         -w         abort on Write errors (def=no),\n");
 	fprintf(stderr, "         -W         read target block and avoid Writes if identical (def=no),\n");
@@ -1589,7 +1589,7 @@ void printhelp()
 	fprintf(stderr, "         -i         interactive: ask before overwriting data (def=no),\n");
 	fprintf(stderr, "         -f         force: skip some sanity checks (def=no),\n");
 	fprintf(stderr, "         -p         preserve: preserve ownership / perms (def=no),\n");
-	fprintf(stderr, "         -Y oname   Secondary output file (multiple possible)\n");
+	fprintf(stderr, "         -Y oname   Secondary output file (multiple possible),\n");
 	fprintf(stderr, "         -q         quiet operation,\n");
 	fprintf(stderr, "         -v         verbose operation,\n");
 	fprintf(stderr, "         -c 0/1     switch off/on colors (def=auto),\n");
