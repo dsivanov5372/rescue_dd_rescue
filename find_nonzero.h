@@ -62,7 +62,7 @@ const static char have_simd = 1;
 /* This has been inspired by http://developer.amd.com/community/blog/faster-string-operations/ */
 size_t find_nonzero_simd(const unsigned char* blk, const size_t ln);
 #else
-#define find_nonzero_opt(ptr, ln): find_nonzero_c(ptr, ln)
+#define find_nonzero_opt(ptr, ln) find_nonzero_c(ptr, ln)
 /* This could be replaced by runtime detection later */
 const static char have_simd = 0;
 #endif
