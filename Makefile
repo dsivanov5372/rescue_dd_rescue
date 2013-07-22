@@ -19,7 +19,7 @@ MANDIR = $(prefix)/share/man/
 #MYDIR = dd_rescue-$(VERSION)
 MYDIR = dd_rescue
 TARGETS = dd_rescue
-OBJECTS = frandom.o fmt_no.o
+OBJECTS = frandom.o fmt_no.o find_nonzero.o
 HEADERS = frandom.h fmt_no.h find_nonzero.h
 DOCDIR = $(prefix)/share/doc/packages
 INSTASROOT = -o root -g root
@@ -34,6 +34,12 @@ ifeq ($(CC),wcl386)
   OUT = ""
 endif
 
+MACH := $(shell uname -m | tr A-Z a-z | sed 's/i[3456]86/i386/')
+
+ifeq ($(MACH),i386)
+	SSE=-msse2
+endif
+
 default: $(TARGETS)
 
 frandom.o: frandom.c frandom.h
@@ -41,6 +47,9 @@ frandom.o: frandom.c frandom.h
 
 fmt_no.o: fmt_no.c fmt_no.h
 	$(CC) $(CFLAGS_OPT) -c $<
+
+find_nonzero.o: find_nonzero.c find_nonzero.h
+	$(CC) $(CFLAGS_OPT) -c $< $(SSE)
 
 libfalloc: dd_rescue.c $(HEADERS) $(OBJECTS)
 	$(CC) $(CFLAGS) -DHAVE_LIBFALLOCATE=1 $(DEFINES) $< $(OUT) $(OBJECTS) -lfallocate
@@ -67,7 +76,7 @@ clean:
 	rm -f $(TARGETS) $(OBJECTS) dd_rescue.o core test log find_nonzero fmt_no
 
 find_nonzero: find_nonzero.c find_nonzero.h
-	$(CC) $(CFLAGS_OPT) -o $@ $<
+	$(CC) $(CFLAGS_OPT) -o $@ $< -DTEST $(SSE)
 
 fmt_no: fmt_no.c fmt_no.h
 	$(CC) $(CFLAGS) -o $@ $< -DTEST

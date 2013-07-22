@@ -1771,6 +1771,9 @@ int main(int argc, char* argv[])
 	ofiles = NULL;
 
 	nocol = test_nocolor_term();
+#ifdef NEED_SSE2_RUNTIME_DETECTION
+	detect_sse2();
+#endif
 
 #ifdef _SC_PAGESIZE
 	pagesize = sysconf(_SC_PAGESIZE);
