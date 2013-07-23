@@ -37,7 +37,9 @@ endif
 MACH := $(shell uname -m | tr A-Z a-z | sed 's/i[3456]86/i386/')
 
 ifeq ($(MACH),i386)
-	SSE=-msse2
+	SSE = "-msse2"
+	#SSE = "-msse2 -funroll-loops"
+	#SSE = "-msse2 -funroll-loops -ftree-vectorize"
 endif
 
 default: $(TARGETS)
