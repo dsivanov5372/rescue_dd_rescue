@@ -24,27 +24,29 @@ size_t find_nonzero_simd(const unsigned char* blk, const size_t ln)
 	return ln;
 }
 
-#ifdef NEED_SSE2_RUNTIME_DETECTION
+#ifdef NEED_SIMD_RUNTIME_DETECTION
 #include <signal.h>
 #include <stdio.h>
-char have_simd = 1;
+char have_simd = 0;
 
 static void ill_handler(int sig)
 {
 	have_simd = 0;
 }
 
-
-void detect_sse2()
+#ifdef __SSE2__
+void detect_simd()
 {
 	volatile __m128d xmm;
-	double val = 3.14;
+	double val = 3.14159265259;
+	have_simd = 1;
 	signal(SIGILL, ill_handler);
 	xmm = _mm_set_sd(val);
 	if (!have_simd)
 		fprintf(stderr, "Disabling SSE2 ...\n");
 	signal(SIGILL, SIG_DFL);
 }
+#endif
 #endif
 
 #endif
@@ -85,8 +87,8 @@ int main(int argc, char* argv[])
 	int i, ln = 0;
 	double tdiff;
 	int scale = 16;
-#ifdef NEED_SSE2_RUNTIME_DETECTION
-	detect_sse2();
+#ifdef NEED_SIMD_RUNTIME_DETECTION
+	detect_simd();
 #endif
 	if (argc > 1)
 		scale = atoi(argv[1]);
