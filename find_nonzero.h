@@ -104,7 +104,7 @@ inline static size_t find_nonzero(const unsigned char* blk, const size_t ln)
 {
 	const int off = ((unsigned long)blk) % 16;
 	if (off) {
-		size_t i;
+		int i;
 		for (i = 0; i < 16-off; ++i)
 			if (blk[i])
 				return i;
