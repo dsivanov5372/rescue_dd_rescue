@@ -54,10 +54,12 @@ void probe_simd();
 static inline void detect_simd()
 {
 	signal(SIGILL, ill_handler);
+	signal(SIGSEGV, ill_handler);
 	have_simd = 1;
 	probe_simd();
 	if (!have_simd)
 		fprintf(stderr, "Disabling SSE2 ...\n");
+	signal(SIGSEGV, SIG_DFL);
 	signal(SIGILL, SIG_DFL);
 }
 #endif
