@@ -42,8 +42,24 @@ static inline int myffsl(unsigned long val)
 #define HAVE_SSE2
 #warning NEED TO DETECT SSE2 CAPABILITY AT RUNTIME
 #define NEED_SIMD_RUNTIME_DETECTION
-extern char have_simd;
-void detect_simd();
+#include <signal.h>
+#include <stdio.h>
+static char have_simd;
+static void ill_handler(int sig)
+{
+	have_simd = 0;
+}
+
+void probe_simd();
+void detect_simd()
+{
+	signal(SIGILL, ill_handler);
+	have_simd = 1;
+	probe_simd();
+	if (!have_simd)
+		fprintf(stderr, "Disabling SSE2 ...\n");
+	signal(SIGILL, SIG_DFL);
+}
 #endif
 
 /* Other sse2 cases ... */
