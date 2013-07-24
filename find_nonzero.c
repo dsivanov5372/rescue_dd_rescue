@@ -56,7 +56,8 @@ void probe_simd()
 
 #endif	/* __SSE2__ */
 
-#ifdef __arm__
+#if defined(__arm__)
+
 size_t find_nonzero_simd(const unsigned char *blk, const size_t ln)
 {
 	register unsigned char* res;
@@ -67,14 +68,36 @@ size_t find_nonzero_simd(const unsigned char *blk, const size_t ln)
 	"	cmp r2, #0		\n"
 	"	bne 2f			\n"
 	"	cmp r3, #0		\n"
-	"	bne 2f			\n"
+	"	bne 3f			\n"
 	"	cmp %0, %2		\n"	/* end? */
 	"	blt 1b			\n"
 	"	mov %0, %2		\n"	
-	"	b 3f			\n"	/* exhausted search */
+	"	b 10f			\n"	/* exhausted search */
 	"2:				\n"
-	"	sub %0, 8		\n"
+	"	sub %0, #4		\n"
+	"	mov r3, r2		\n"
 	"3:				\n"
+	"	sub %0, #4		\n"
+#ifndef __ARMEB__
+	"	tst r3, #0xff		\n"
+	"	bne 10f			\n"
+	"	add %0, #1		\n"
+	"	tst r3, #0xff00		\n"
+	"	bne 10f			\n"
+	"	add %0, #1		\n"
+	"	tst r3, 0xff0000	\n"
+#else
+	"	tst r3, #0xff000000	\n"
+	"	bne 10f			\n"
+	"	add %0, #1		\n"
+	"	tst r3, #0xff0000	\n"
+	"	bne 10f			\n"
+	"	add %0, #1		\n"
+	"	tst r3, 0xff00		\n"
+#endif
+	"	bne 10f			\n"
+	"	add %0, 1		\n"	
+	"10:				\n"
 	: "=r"(res)
 	: "0"(blk), "r"(end)
 	: "r2", "r3");
