@@ -56,6 +56,30 @@ void probe_simd()
 
 #endif	/* __SSE2__ */
 
+#ifdef __arm__
+size_t find_nonzero_simd(const unsigned char *blk, const size_t ln)
+{
+	register unsigned char* res;
+	const register unsigned char* end = blk+ln;
+	asm volatile(
+	"1:				\n"
+	"	ldmia %0!,{r2,r3}	\n"
+	"	cmp r2, #0		\n"
+	"	bne 2f			\n"
+	"	cmp r3, #0		\n"
+	"	bne 2f			\n"
+	"	cmp %0, %2		\n"
+	"	blt 1b			\n"
+	"2:				\n"
+	: "=r"(res)
+	: "0"(blk), "r"(end)
+	: "r2", "r3");
+	return res-blk-8;
+}
+#endif
+
+
+
 #ifdef TEST
 #include <string.h>
 #include <time.h>

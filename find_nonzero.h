@@ -69,7 +69,11 @@ static void detect_simd()
 const static char have_simd = 1;
 #endif
 
-#ifdef HAVE_SSE2
+#ifdef __arm__
+const static char have_simd = 1;
+#endif
+
+#if defined(HAVE_SSE2) || defined(__arm__)
 #define HAVE_SIMD
 
 /* FIXME: Is there no library function to find the first non-null byte?
