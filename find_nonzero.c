@@ -58,6 +58,8 @@ void probe_simd()
 
 #if defined(__arm__)
 
+/* Inspired by Linaro's strlen() implementation; 
+   we don't even need NEON here, ldmia does the 3x speedup on A-9 */
 size_t find_nonzero_simd(const unsigned char *blk, const size_t ln)
 {
 	register unsigned char* res;
@@ -74,18 +76,18 @@ size_t find_nonzero_simd(const unsigned char *blk, const size_t ln)
 	"	mov %0, %2		\n"	
 	"	b 10f			\n"	/* exhausted search */
 	"2:				\n"
-	"	sub %0, #4		\n"
+	"	sub %0, #4		\n"	/* First u32 is non-zero */
 	"	mov r3, r2		\n"
 	"3:				\n"
 	"	sub %0, #4		\n"
-#ifndef __ARMEB__
+#ifndef __ARMEB__				/* Little endian bitmasks */
 	"	tst r3, #0xff		\n"
 	"	bne 10f			\n"
 	"	add %0, #1		\n"
 	"	tst r3, #0xff00		\n"
 	"	bne 10f			\n"
 	"	add %0, #1		\n"
-	"	tst r3, 0xff0000	\n"
+	"	tst r3, #0xff0000	\n"
 #else
 	"	tst r3, #0xff000000	\n"
 	"	bne 10f			\n"
@@ -93,10 +95,10 @@ size_t find_nonzero_simd(const unsigned char *blk, const size_t ln)
 	"	tst r3, #0xff0000	\n"
 	"	bne 10f			\n"
 	"	add %0, #1		\n"
-	"	tst r3, 0xff00		\n"
+	"	tst r3, #0xff00		\n"
 #endif
 	"	bne 10f			\n"
-	"	add %0, 1		\n"	
+	"	add %0, #1		\n"	
 	"10:				\n"
 	: "=r"(res)
 	: "0"(blk), "r"(end)
