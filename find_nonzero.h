@@ -51,7 +51,7 @@ static void ill_handler(int sig)
 }
 
 void probe_simd();
-static void detect_simd()
+static inline void detect_simd()
 {
 	signal(SIGILL, ill_handler);
 	have_simd = 1;
