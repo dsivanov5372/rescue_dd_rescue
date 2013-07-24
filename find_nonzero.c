@@ -68,13 +68,17 @@ size_t find_nonzero_simd(const unsigned char *blk, const size_t ln)
 	"	bne 2f			\n"
 	"	cmp r3, #0		\n"
 	"	bne 2f			\n"
-	"	cmp %0, %2		\n"
+	"	cmp %0, %2		\n"	/* end? */
 	"	blt 1b			\n"
+	"	mov %0, %2		\n"	
+	"	b 3f			\n"	/* exhausted search */
 	"2:				\n"
+	"	sub %0, 8		\n"
+	"3:				\n"
 	: "=r"(res)
 	: "0"(blk), "r"(end)
 	: "r2", "r3");
-	return res-blk-8;
+	return res-blk;
 }
 #endif
 
