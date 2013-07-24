@@ -37,8 +37,8 @@ static inline int myffsl(unsigned long val)
 }
 #endif
 
-/* x86: enable SSE2 temporarily and compile both versions, need runtime cpu cap detection */
-#if defined(__i386__) && !defined(__x86_64__) && !defined(NO_SSE2) && (!defined(__SSE2__) || defined(IN_FINDZERO))
+/* x86: need to detect SSE2 at runtime, unless main program is compiled with -msse2 anyways */
+#if defined(__i386__) && !defined(__x86_64__) && !defined(NO_SSE2) && (!defined(__SSE2__) || defined(IN_FINDZERO)) && !(defined(IN_FINDZERO) && !defined(__SSE2__))
 #define HAVE_SSE2
 #warning NEED TO DETECT SSE2 CAPABILITY AT RUNTIME
 #define NEED_SIMD_RUNTIME_DETECTION

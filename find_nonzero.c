@@ -6,6 +6,27 @@
 #define _GNU_SOURCE 1
 #define IN_FINDZERO
 #include "find_nonzero.h"
+
+#if defined(__i386__) || defined(__x86_64__)
+size_t find_nonzero_rep(const unsigned char* blk, const size_t ln)
+{
+	unsigned long register res;
+	asm volatile (
+	"	xor %%al, %%al	\n"
+	"	repz scasb	\n"
+	"	je 1f		\n"
+#ifdef __i386__
+	"	inc %%ecx	\n"
+#else
+	"	inc %%rcx	\n"
+#endif
+	"	1:		\n"
+		: "=c"(res), "=D"(blk): "0"(ln), "1"(blk): "al");
+	return ln - res;
+}
+#define HAVE_NONZERO_REP
+#endif
+
 #ifdef __SSE2__
 #include <emmintrin.h>
 
@@ -25,17 +46,15 @@ size_t find_nonzero_simd(const unsigned char* blk, const size_t ln)
 }
 
 #ifdef NEED_SIMD_RUNTIME_DETECTION
-#ifdef __SSE2__
 void probe_simd()
 {
 	volatile __m128d xmm;
 	double val = 3.14159265358979323844;
 	xmm = _mm_set_sd(val);
 }
-#endif
-#endif
+#endif	/* NEED_SIMD_RUNTIME_DETECTION */
 
-#endif
+#endif	/* __SSE2__ */
 
 #ifdef TEST
 #include <string.h>
@@ -46,12 +65,13 @@ void probe_simd()
 
 #define SIZE (64*1024*1024)
 
-#define TESTC(sz,routine,rep) 		\
+#define mem_clobber	asm("": : : "memory")
+#define TESTC(sz,routine,rep,tsz) 	\
 	memset(buf, 0, sz);		\
 	gettimeofday(&t1, NULL);	\
 	for (i = 0; i < rep; ++i) {	\
-		ln = routine(buf, SIZE);\
-		asm ("": : : "memory");	\
+		mem_clobber;		\
+		ln = routine(buf, tsz);	\
 	}				\
 	gettimeofday(&t2, NULL);	\
 	tdiff = t2.tv_sec-t1.tv_sec + 0.000001*(t2.tv_usec-t1.tv_usec);	\
@@ -60,9 +80,15 @@ void probe_simd()
 
 
 #if defined(HAVE_SIMD)
-#define TEST_SIMD(a,b,c) TESTC(a,b,c)
+#define TEST_SIMD(a,b,c,d) TESTC(a,b,c,d)
 #else
-#define TEST_SIMD(a,b,c) do {} while (0)
+#define TEST_SIMD(a,b,c,d) do {} while (0)
+#endif
+
+#if defined(HAVE_NONZERO_REP)
+#define TEST_REP(a,b,c,d) TESTC(a,b,c,d)
+#else
+#define TEST_REP(a,b,c,d) do {} while (0)
 #endif
 
 int main(int argc, char* argv[])
@@ -80,25 +106,46 @@ int main(int argc, char* argv[])
 		scale = atoi(argv[1]);
 	buf -= (unsigned long)buf%16;
 	memset(buf, 0xa5, SIZE);
-	TESTC(8*1024-15, find_nonzero_c, 1024*256*scale/16);
-	TEST_SIMD(8*1024-15, find_nonzero_simd, 1024*256*scale/16);
-	TESTC(8*1024-15, find_nonzero, 1024*256*scale/16);
+	
+	TESTC(0, find_nonzero_c, 1024*256*scale/16, SIZE);
+	TEST_SIMD(0, find_nonzero_simd, 1024*256*scale/16, SIZE);
+	TESTC(0, find_nonzero, 1024*256*scale/16, SIZE);
+	TEST_REP(0, find_nonzero_rep, 1024*256*scale/16, SIZE);
+	
+	TESTC(8*1024-15, find_nonzero_c, 1024*256*scale/16, SIZE);
+	TEST_SIMD(8*1024-15, find_nonzero_simd, 1024*256*scale/16, SIZE);
+	TESTC(8*1024-15, find_nonzero, 1024*256*scale/16, SIZE);
+	TEST_REP(8*1024-15, find_nonzero_rep, 1024*256*scale/16, SIZE);
 	buf++;
-	TEST_SIMD(8*1024-15, find_nonzero, 1024*256*scale/16);
+	TESTC(8*1024-15, find_nonzero, 1024*256*scale/16, SIZE);
+	TEST_REP(8*1024-15, find_nonzero_rep, 1024*256*scale/16, SIZE);
 	buf--;
-	TESTC(32*1024-9, find_nonzero_c, 1024*64*scale/16);
-	TEST_SIMD(32*1024-9, find_nonzero_simd, 1024*64*scale/16);
-	TESTC(32*1024-9, find_nonzero, 1024*64*scale/16);
-	TESTC(128*1024-8, find_nonzero_c, 1024*16*scale/16);
-	TEST_SIMD(128*1024-8, find_nonzero_simd, 1024*16*scale/16);
-	TESTC(1024*1024-7, find_nonzero_c, 2048*scale/16);
-	TEST_SIMD(1024*1024-7, find_nonzero_simd, 2048*scale/16);
-	TESTC(4096*1024-1, find_nonzero_c, 512*scale/16);
-	TEST_SIMD(4096*1024-1, find_nonzero_simd, 512*scale/16);
-	TESTC(16*1024*1024, find_nonzero_c, 128*scale/16);
-	TEST_SIMD(16*1024*1024, find_nonzero_simd, 128*scale/16);
-	TESTC(64*1024*1024, find_nonzero_c, 32*scale/16);
-	TEST_SIMD(64*1024*1024, find_nonzero_simd, 32*scale/16);
+	TESTC(32*1024-9, find_nonzero_c, 1024*64*scale/16, SIZE);
+	TEST_SIMD(32*1024-9, find_nonzero_simd, 1024*64*scale/16, SIZE);
+	TESTC(32*1024-9, find_nonzero, 1024*64*scale/16, SIZE);
+	TEST_REP(32*1024-9, find_nonzero_rep, 1024*64*scale/16, SIZE);
+	TESTC(128*1024-8, find_nonzero_c, 1024*16*scale/16, SIZE);
+	TEST_SIMD(128*1024-8, find_nonzero_simd, 1024*16*scale/16, SIZE);
+	TEST_REP(128*1024-8, find_nonzero_rep, 1024*16*scale/16, SIZE);
+	TESTC(1024*1024-7, find_nonzero_c, 2048*scale/16, SIZE);
+	TEST_SIMD(1024*1024-7, find_nonzero_simd, 2048*scale/16, SIZE);
+	TEST_REP(1024*1024-7, find_nonzero_rep, 2048*scale/16, SIZE);
+	TESTC(4096*1024-1, find_nonzero_c, 512*scale/16, SIZE);
+	TEST_SIMD(4096*1024-1, find_nonzero_simd, 512*scale/16, SIZE);
+	TESTC(16*1024*1024, find_nonzero_c, 128*scale/16, SIZE);
+	TEST_SIMD(16*1024*1024, find_nonzero_simd, 128*scale/16, SIZE);
+	TESTC(64*1024*1024, find_nonzero_c, 32*scale/16, SIZE);
+	TEST_SIMD(64*1024*1024, find_nonzero_simd, 32*scale/16, SIZE);
+	
+	TESTC(64*1024*1024, find_nonzero_c, 32*scale/16, SIZE-16);
+	TEST_SIMD(64*1024*1024, find_nonzero_simd, 32*scale/16, SIZE-16);
+	TESTC(64*1024*1024, find_nonzero, 32*scale/16, SIZE-16);
+	TEST_REP(64*1024*1024, find_nonzero_rep, 32*scale/16, SIZE-16);
+
+	TESTC(64*1024*1024, find_nonzero_c, 32*scale/16, SIZE-5);
+	TEST_SIMD(64*1024*1024, find_nonzero_simd, 32*scale/16, SIZE-5);
+	TESTC(64*1024*1024, find_nonzero, 32*scale/16, SIZE-5);
+	TEST_REP(64*1024*1024, find_nonzero_rep, 32*scale/16, SIZE-5);
 
 	free(obuf);
 	return 0;
