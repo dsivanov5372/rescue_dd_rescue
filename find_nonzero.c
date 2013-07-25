@@ -147,7 +147,7 @@ size_t find_nonzero_simd(const unsigned char *blk, const size_t ln)
 
 #define TESTFFS(val) printf("%08x: last %i first %i\n", val, myffsl(val), myflsl(val));
 #if __WORDSIZE == 64
-#define TESTFFS64(val) printf("%16Lxx: last %i first %i\n", val, myffsl(val), myflsl(val));
+#define TESTFFS64(val) printf("%016Lx: last %i first %i\n", val, myffsl(val), myflsl(val));
 #else
 #define TESTFFS64(val) do {} while (0)
 #endif
