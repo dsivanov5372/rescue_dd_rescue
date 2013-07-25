@@ -27,13 +27,59 @@
 # define myffsl(x) myffs(x)
 static inline int myffsl(unsigned long val)
 {
-	int i;
-	for (i = 1; i <= sizeof(val)*8; ++i) {
-		if (val & 0x01)
-			return i;
-		val >>= 1;
+	int res = 1;
+	if (!val)
+		return 0;
+#if __WORDSIZE == 64
+	unsigned int vlo = val;
+	unsigned int vhi = val >> 32;
+	if (!vlo) {
+		res += 32;
+		vlo = vhi;
 	}
-	return 0;
+#else
+	unsigned int vlo = val;
+#endif
+	unsigned int mask = 0x0000ffff;
+	unsigned int shift = 16;
+	while (shift > 0) {
+		if (!(vlo & mask)) {
+			res += shift;
+			vlo >>= shift;
+		}
+		shift >>= 1;
+		mask >>= shift;
+	}
+	return res;
+}
+#endif
+#if __BYTE_ORDER == __BIG_ENDIAN || defined(TEST)
+static inline int myflsl(unsigned long val)
+{
+	int res = __WORDSIZE;
+	if (!val)
+		return 0;
+#if __WORDSIZE == 64
+	unsigned int vlo = val;
+	unsigned int vhi = val >> 32;
+	if (!vhi) {
+		res -= 32;
+		vhi = vlo;
+	}
+#else
+	unsigned int vhi = val;
+#endif
+	unsigned int mask = 0xffff0000;
+	unsigned int shift = 16;
+	while (shift > 0) {
+		if (!(vhi & mask)) {
+			res -= shift;
+			vhi <<= shift;
+		}
+		shift >>= 1;
+		mask <<= shift;
+	}
+	return res;
 }
 #endif
 
@@ -97,7 +143,11 @@ static size_t find_nonzero_c(const unsigned char* blk, const size_t ln)
 	const unsigned long* const bptr = ptr;
 	for (; (size_t)(ptr-bptr) < ln/sizeof(*ptr); ++ptr)
 		if (*ptr)
+#if __BYTE_ORDER == __BIG_ENDIAN
+			return sizeof(unsigned long)*(ptr-bptr) + sizeof(long)-((myflsl(*ptr)+7)>>3);
+#else
 			return sizeof(unsigned long)*(ptr-bptr) + ((myffsl(*ptr)-1)>>3);
+#endif
 	return ln;
 }
 

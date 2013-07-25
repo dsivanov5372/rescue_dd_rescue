@@ -80,7 +80,8 @@ size_t find_nonzero_simd(const unsigned char *blk, const size_t ln)
 	"	mov r3, r2		\n"
 	"3:				\n"
 	"	sub %0, #4		\n"
-#ifndef __ARMEB__				/* Little endian bitmasks */
+//#ifndef __ARMEB__				/* Little endian bitmasks */
+#if __BYTE_ORDER == __LITTLE_ENDIAN
 	"	tst r3, #0xff		\n"
 	"	bne 10f			\n"
 	"	add %0, #1		\n"
@@ -129,7 +130,7 @@ size_t find_nonzero_simd(const unsigned char *blk, const size_t ln)
 	gettimeofday(&t2, NULL);	\
 	tdiff = t2.tv_sec-t1.tv_sec + 0.000001*(t2.tv_usec-t1.tv_usec);	\
 	printf("%7i x %20s (%8i): %8i (%6.3fs => %5.0fMB/s)\n",	\
-		rep, #routine, sz, ln, tdiff, (double)(rep)*(double)(sz)/(1024*1024*tdiff))
+		rep, #routine, sz, ln, tdiff, (double)(rep)*(double)(sz+1)/(1024*1024*tdiff))
 
 
 #if defined(HAVE_SIMD)
@@ -144,6 +145,13 @@ size_t find_nonzero_simd(const unsigned char *blk, const size_t ln)
 #define TEST_REP(a,b,c,d) do {} while (0)
 #endif
 
+#define TESTFFS(val) printf("%08x: last %i first %i\n", val, myffsl(val), myflsl(val));
+#if __WORDSIZE == 64
+#define TESTFFS64(val) printf("%16Lxx: last %i first %i\n", val, myffsl(val), myflsl(val));
+#else
+#define TESTFFS64(val) do {} while (0)
+#endif
+
 int main(int argc, char* argv[])
 {
 	unsigned char* obuf = (unsigned char*)malloc(SIZE+15);
@@ -155,15 +163,23 @@ int main(int argc, char* argv[])
 #ifdef NEED_SIMD_RUNTIME_DETECTION
 	detect_simd();
 #endif
+	TESTFFS(0x05000100);
+	TESTFFS(0x00900002);
+	TESTFFS(0x00000100);
+	TESTFFS(0x80000100);
+	TESTFFS64(0x0030000000000100ULL);
+	TESTFFS64(0x1000000000000000ULL);
+	TESTFFS64(0x0000000000001000ULL);
+
 	if (argc > 1)
 		scale = atoi(argv[1]);
 	buf -= (unsigned long)buf%16;
 	memset(buf, 0xa5, SIZE);
 	
-	TESTC(0, find_nonzero_c, 1024*256*scale/16, SIZE);
-	TEST_SIMD(0, find_nonzero_simd, 1024*256*scale/16, SIZE);
-	TESTC(0, find_nonzero, 1024*256*scale/16, SIZE);
-	TEST_REP(0, find_nonzero_rep, 1024*256*scale/16, SIZE);
+	TESTC(0, find_nonzero_c, 1024*1024*scale/16, SIZE);
+	TEST_SIMD(0, find_nonzero_simd, 1024*1024*scale/16, SIZE);
+	TESTC(0, find_nonzero, 1024*1024*scale/16, SIZE);
+	TEST_REP(0, find_nonzero_rep, 1024*1024*scale/16, SIZE);
 	
 	TESTC(8*1024-15, find_nonzero_c, 1024*256*scale/16, SIZE);
 	TEST_SIMD(8*1024-15, find_nonzero_simd, 1024*256*scale/16, SIZE);
@@ -190,15 +206,15 @@ int main(int argc, char* argv[])
 	TESTC(64*1024*1024, find_nonzero_c, 32*scale/16, SIZE);
 	TEST_SIMD(64*1024*1024, find_nonzero_simd, 32*scale/16, SIZE);
 	
-	TESTC(64*1024*1024, find_nonzero_c, 32*scale/16, SIZE-16);
-	TEST_SIMD(64*1024*1024, find_nonzero_simd, 32*scale/16, SIZE-16);
-	TESTC(64*1024*1024, find_nonzero, 32*scale/16, SIZE-16);
-	TEST_REP(64*1024*1024, find_nonzero_rep, 32*scale/16, SIZE-16);
+	TESTC(64*1024*1024, find_nonzero_c, 1+scale/16, SIZE-16);
+	TEST_SIMD(64*1024*1024, find_nonzero_simd, 1+scale/16, SIZE-16);
+	TESTC(64*1024*1024, find_nonzero, 1+scale/16, SIZE-16);
+	TEST_REP(64*1024*1024, find_nonzero_rep, 1+scale/16, SIZE-16);
 
-	TESTC(64*1024*1024, find_nonzero_c, 32*scale/16, SIZE-5);
-	TEST_SIMD(64*1024*1024, find_nonzero_simd, 32*scale/16, SIZE-5);
-	TESTC(64*1024*1024, find_nonzero, 32*scale/16, SIZE-5);
-	TEST_REP(64*1024*1024, find_nonzero_rep, 32*scale/16, SIZE-5);
+	TESTC(64*1024*1024, find_nonzero_c, 1+scale/16, SIZE-5);
+	TEST_SIMD(64*1024*1024, find_nonzero_simd, 1+scale/16, SIZE-5);
+	TESTC(64*1024*1024, find_nonzero, 1+scale/16, SIZE-5);
+	TEST_REP(64*1024*1024, find_nonzero_rep, 1+scale/16, SIZE-5);
 
 	free(obuf);
 	return 0;
