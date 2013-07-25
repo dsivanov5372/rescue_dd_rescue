@@ -7,7 +7,8 @@
 #define IN_FINDZERO
 #include "find_nonzero.h"
 
-#if defined(__i386__) || defined(__x86_64__)
+#if defined(TEST) && (defined(__i386__) || defined(__x86_64__))
+/** Just for testing the speed of the good old x86 string instructions */
 size_t find_nonzero_rep(const unsigned char* blk, const size_t ln)
 {
 	unsigned long register res;
@@ -30,6 +31,7 @@ size_t find_nonzero_rep(const unsigned char* blk, const size_t ln)
 #ifdef __SSE2__
 #include <emmintrin.h>
 
+/** SSE2 version for measuring the initial zero bytes of aligned blk */
 size_t find_nonzero_simd(const unsigned char* blk, const size_t ln)
 {
 	__m128i xmm, zero = _mm_setzero_si128();
@@ -46,6 +48,7 @@ size_t find_nonzero_simd(const unsigned char* blk, const size_t ln)
 }
 
 #ifdef NEED_SIMD_RUNTIME_DETECTION
+/** Issue an SSE2 insn for runtime detection of SSE2 capability (x86) */
 void probe_simd()
 {
 	volatile __m128d xmm;
@@ -58,8 +61,9 @@ void probe_simd()
 
 #if defined(__arm__)
 
-/* Inspired by Linaro's strlen() implementation; 
-   we don't even need NEON here, ldmia does the 3x speedup on A-9 */
+/** ASM optimized version for ARM.
+ * Inspired by Linaro's strlen() implementation; 
+ * we don't even need NEON here, ldmia does the 3x speedup on Cortexes */
 size_t find_nonzero_simd(const unsigned char *blk, const size_t ln)
 {
 	register unsigned char* res;
@@ -107,7 +111,6 @@ size_t find_nonzero_simd(const unsigned char *blk, const size_t ln)
 	return res-blk;
 }
 #endif
-
 
 
 #ifdef TEST

@@ -23,8 +23,9 @@
 # else
 #  define myffsl(x) _mm_popcnt_u32(x^(~(-x)))
 # endif
-#else
+#else /* NOFFS */
 # define myffsl(x) myffs(x)
+/** Find first (lowest) bit set in word val, returns a val b/w 1 and __WORDSIZE, 0 if no bit is set */
 static inline int myffsl(unsigned long val)
 {
 	int res = 1;
@@ -54,6 +55,7 @@ static inline int myffsl(unsigned long val)
 }
 #endif
 #if __BYTE_ORDER == __BIG_ENDIAN || defined(TEST)
+/** Find last (highest) bit set in word val, returns a val b/w __WORDSIZE and 1, 0 if no bit is set */
 static inline int myflsl(unsigned long val)
 {
 	int res = __WORDSIZE;
@@ -136,7 +138,7 @@ size_t find_nonzero_simd(const unsigned char* blk, const size_t ln);
 /* No need for runtime detection here */
 const static char have_simd = 0;
 #endif
-/** return length of zero bytes */
+/** return number of bytes at beginning of blk that are all zero, assumes __WORDSIZE bit alignment */
 static size_t find_nonzero_c(const unsigned char* blk, const size_t ln)
 {
 	const unsigned long* ptr = (const unsigned long*)blk;
@@ -151,10 +153,13 @@ static size_t find_nonzero_c(const unsigned char* blk, const size_t ln)
 	return ln;
 }
 
-/* Generic version, does not require an aligned buffer blk */
+/** return number of bytes at beginning of blk that are all zero 
+  * Generic version, does not require an aligned buffer blk */
 inline static size_t find_nonzero(const unsigned char* blk, const size_t ln)
 {
 	const int off = ((unsigned long)blk) % 16;
+	if (!ln || *blk)
+		return 0;
 	if (off) {
 		int i;
 		for (i = 0; i < 16-off; ++i)
