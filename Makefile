@@ -83,6 +83,8 @@ find_nonzero: find_nonzero.c find_nonzero.h
 fmt_no: fmt_no.c fmt_no.h
 	$(CC) $(CFLAGS) -o $@ $< -DTEST
 
+file_zblock: file_zblock.c find_nonzero.h find_nonzero.c find_nonzero.o
+	$(CC) $(CFLAGS) -o $@ $< find_nonzero.o
 
 distclean: clean
 	rm -f *~
