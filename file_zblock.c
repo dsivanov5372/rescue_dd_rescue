@@ -7,7 +7,6 @@
 
 #include "find_nonzero.h"
 
-#define CHUNKSZ 512
 #define BUFSZ (64*1024)
 unsigned char buf[BUFSZ];
 
@@ -20,10 +19,20 @@ void usage()
 int main(int argc, char *argv[])
 {
 	int zf = 0;
-	int i, off;
+	int chunksz = 4096;
+	int i = 1, off;
 	if (argc < 2)
 		usage();
-	for (i = 1; i < argc; ++i) {
+	if (!memcmp(argv[1], "-c", 2)) {
+		if (strlen(argv[1]) > 2) {
+			chunksz = atoi(argv[1]+2);
+			++i;
+		} else {
+			chunksz = atoi(argv[2]);
+			i += 2;
+		}
+	}
+	for (; i < argc; ++i) {
 		int fd = open(argv[i], O_RDONLY);
 		if (fd<0) {
 			fprintf(stderr, "ERROR opening file %s: %s\n", argv[i], strerror(errno));
@@ -31,8 +40,8 @@ int main(int argc, char *argv[])
 		}
 		int rd, found = 0;
 		while ((rd = read(fd, buf, BUFSZ)) > 0 && !found) {
-			for (off = 0; off < rd; off += CHUNKSZ) {
-				int tocheck = rd-off > CHUNKSZ? CHUNKSZ: rd-off;
+			for (off = 0; off < rd; off += chunksz) {
+				int tocheck = rd-off > chunksz? chunksz: rd-off;
 				if (find_nonzero(buf+off, tocheck) == tocheck) {
 					++found; ++zf;
 					printf("%s,%i\n", argv[i], off);
