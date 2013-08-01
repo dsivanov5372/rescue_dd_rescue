@@ -31,8 +31,9 @@ size_t find_nonzero_rep(const unsigned char* blk, const size_t ln)
 #ifdef __SSE2__
 #include <emmintrin.h>
 
+#ifdef TEST
 /** SSE2 version for measuring the initial zero bytes of aligned blk */
-size_t find_nonzero_simd(const unsigned char* blk, const size_t ln)
+size_t find_nonzero_simd2(const unsigned char* blk, const size_t ln)
 {
 	__m128i register xmm;
 	const __m128i register zero = _mm_setzero_si128();
@@ -51,11 +52,33 @@ size_t find_nonzero_simd(const unsigned char* blk, const size_t ln)
 		xmm = _mm_cmpeq_epi8(xmm, zero);
 #ifdef SIMD_XOR
 		xmm = _mm_xor_si128(xmm, mask);
+#endif
 		eax = _mm_movemask_epi8(xmm);
+#endif	/* BUGGY **/
+#if defined(SIMD_XOR) || defined(BUGGY_136)
+		if (eax) 
+			return i + myffs(eax)-1;
 #else
+		if (eax != 0xffff)
+			return i + myffs(eax^0xffff)-1;
+#endif
+	}
+	return ln;
+}
+#endif
+
+/** SSE2 version for measuring the initial zero bytes of aligned blk */
+size_t find_nonzero_simd(const unsigned char* blk, const size_t ln)
+{
+	__m128i register xmm;
+	const __m128i register zero = _mm_setzero_si128();
+	unsigned register eax;
+	size_t i = 0;
+	//asm(".p2align 5");
+	for (; i < ln; i+= 16) {
+		xmm = _mm_load_si128((__m128i*)(blk+i));
+		xmm = _mm_cmpeq_epi8(xmm, zero);
 		eax = _mm_movemask_epi8(xmm) ^ 0xffff;
-#endif
-#endif
 		if (eax) 
 			return i + myffs(eax)-1;
 	}
@@ -64,11 +87,11 @@ size_t find_nonzero_simd(const unsigned char* blk, const size_t ln)
 
 #ifdef NEED_SIMD_RUNTIME_DETECTION
 /** Issue an SSE2 insn for runtime detection of SSE2 capability (x86) */
+volatile __m128d _probe_xmm;
 void probe_simd()
 {
-	volatile __m128d xmm;
 	double val = 3.14159265358979323844;
-	xmm = _mm_set_sd(val);
+	_probe_xmm = _mm_set_sd(val);
 }
 #endif	/* NEED_SIMD_RUNTIME_DETECTION */
 
@@ -177,6 +200,14 @@ size_t find_nonzero_simd(const unsigned char *blk, const size_t ln)
 #define TEST2_SIMD(a,b,c,d) do {} while (0)
 #endif
 
+#ifdef __SSE2__
+#define TEST_SIMD2(a,b,c,d) TESTC(a,b,c,d)
+#define TEST2_SIMD2(a,b,c,d) TEST2C(a,b,c,d)
+#else
+#define TEST_SIMD2(a,b,c,d) do {} while (0)
+#define TEST2_SIMD2(a,b,c,d) do {} while (0)
+#endif
+
 #if defined(HAVE_NONZERO_REP)
 #define TEST_REP(a,b,c,d) TESTC(a,b,c,d)
 #else
@@ -229,6 +260,7 @@ int main(int argc, char* argv[])
 	buf--;
 	TESTC(32*1024-9, find_nonzero_c, 1024*64*scale/16, SIZE);
 	TEST_SIMD(32*1024-9, find_nonzero_simd, 1024*64*scale/16, SIZE);
+	TEST_SIMD2(32*1024-9, find_nonzero_simd2, 1024*64*scale/16, SIZE);
 	TESTC(32*1024-9, find_nonzero, 1024*64*scale/16, SIZE);
 	TEST_REP(32*1024-9, find_nonzero_rep, 1024*64*scale/16, SIZE);
 	TESTC(128*1024-8, find_nonzero_c, 1024*16*scale/16, SIZE);
@@ -256,6 +288,7 @@ int main(int argc, char* argv[])
 
 	TEST2C(12*1024*1024, find_nonzero_c, 160*scale/16, SIZE);
 	TEST2_SIMD(12*1024*1024, find_nonzero_simd, 160*scale/16, SIZE);
+	TEST2_SIMD2(12*1024*1024, find_nonzero_simd2, 160*scale/16, SIZE);
 
 	free(obuf);
 	return 0;
