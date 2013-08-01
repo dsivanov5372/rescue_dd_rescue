@@ -101,3 +101,9 @@ install: $(TARGETS)
 	$(INSTALL) $(INSTASROOT) -m 644 dd_rescue.1 $(MANDIR)/man1/
 	gzip -9 $(MANDIR)/man1/dd_rescue.1
 
+check: $(TARGETS) find_nonzero
+	./dd_rescue -apP dd_rescue dd_rescue.copy
+	cmp dd_rescue dd_rescue.copy 
+	./find_nonzero 2
+	rm dd_rescue.copy
+
