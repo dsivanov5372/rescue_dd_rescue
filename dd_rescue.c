@@ -845,7 +845,7 @@ ssize_t fill_rand(void *bf, size_t ln)
 }
 
 /** is the block zero ? */
-static size_t blockiszero(const unsigned char* blk, const size_t ln)
+static ssize_t blockiszero(const unsigned char* blk, const size_t ln)
 {
 	if (i_repeat && i_rep_zero)
 		return i_rep_zero;
