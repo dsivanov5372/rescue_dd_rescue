@@ -107,6 +107,7 @@ size_t find_nonzero_simd(const unsigned char *blk, const size_t ln)
 	register unsigned char* res;
 	const register unsigned char* end = blk+ln;
 	asm volatile(
+	//".align 4			\n"
 	"1:				\n"
 	"	ldmia %0!,{r2,r3}	\n"
 	"	cmp r2, #0		\n"
