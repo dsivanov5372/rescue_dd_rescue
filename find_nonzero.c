@@ -44,12 +44,17 @@ size_t find_nonzero_simd(const unsigned char* blk, const size_t ln)
 	//asm(".align 32");
 	for (; i < ln; i+= 16) {
 		xmm = _mm_load_si128((__m128i*)(blk+i));
+#ifdef BUGGY_136
+		_mm_cmpeq_epi8(xmm, zero);
+		eax = _mm_movemask_epi8(xmm);
+#else
 		xmm = _mm_cmpeq_epi8(xmm, zero);
 #ifdef SIMD_XOR
 		xmm = _mm_xor_si128(xmm, mask);
 		eax = _mm_movemask_epi8(xmm);
 #else
 		eax = _mm_movemask_epi8(xmm) ^ 0xffff;
+#endif
 #endif
 		if (eax) 
 			return i + myffs(eax)-1;
@@ -143,13 +148,33 @@ size_t find_nonzero_simd(const unsigned char *blk, const size_t ln)
 	gettimeofday(&t2, NULL);	\
 	tdiff = t2.tv_sec-t1.tv_sec + 0.000001*(t2.tv_usec-t1.tv_usec);	\
 	printf("%7i x %20s (%8i): %8i (%6.3fs => %5.0fMB/s)\n",	\
-		rep, #routine, sz, ln, tdiff, (double)(rep)*(double)(sz+1)/(1024*1024*tdiff))
+		rep, #routine, sz, ln, tdiff, (double)(rep)*(double)(sz+1)/(1024*1024*tdiff));	\
+	if (ln != (tsz<sz? tsz: sz))	\
+		abort()
+
+
+#define TEST2C(sz,routine,rep,tsz) 	\
+	memset(buf, 0, tsz);		\
+	buf[sz] = 0x4c;			\
+	gettimeofday(&t1, NULL);	\
+	for (i = 0; i < rep; ++i) {	\
+		mem_clobber;		\
+		ln = routine(buf, tsz);	\
+	}				\
+	gettimeofday(&t2, NULL);	\
+	tdiff = t2.tv_sec-t1.tv_sec + 0.000001*(t2.tv_usec-t1.tv_usec);	\
+	printf("%7i x %20s (%8i): %8i (%6.3fs => %5.0fMB/s)\n",	\
+		rep, #routine, sz, ln, tdiff, (double)(rep)*(double)(sz+1)/(1024*1024*tdiff));	\
+	if (ln != (tsz<sz? tsz: sz))	\
+		abort()
 
 
 #if defined(HAVE_SIMD)
 #define TEST_SIMD(a,b,c,d) TESTC(a,b,c,d)
+#define TEST2_SIMD(a,b,c,d) TEST2C(a,b,c,d)
 #else
 #define TEST_SIMD(a,b,c,d) do {} while (0)
+#define TEST2_SIMD(a,b,c,d) do {} while (0)
 #endif
 
 #if defined(HAVE_NONZERO_REP)
@@ -228,6 +253,9 @@ int main(int argc, char* argv[])
 	TEST_SIMD(64*1024*1024, find_nonzero_simd, 1+scale/16, SIZE-5);
 	TESTC(64*1024*1024, find_nonzero, 1+scale/16, SIZE-5);
 	TEST_REP(64*1024*1024, find_nonzero_rep, 1+scale/16, SIZE-5);
+
+	TEST2C(12*1024*1024, find_nonzero_c, 160*scale/16, SIZE);
+	TEST2_SIMD(12*1024*1024, find_nonzero_simd, 160*scale/16, SIZE);
 
 	free(obuf);
 	return 0;
