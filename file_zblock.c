@@ -13,6 +13,7 @@ unsigned char buf[BUFSZ];
 void usage()
 {
 	fprintf(stderr, "Usage: file_zblock FILE1 [FILE2 [FILE3 [...]]]\n");
+	fprintf(stderr, "file_zblock reports files with ()at least) chunk-sized blocks of zeros inside.\n");
 	exit(0);
 }
 
