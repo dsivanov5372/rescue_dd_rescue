@@ -34,13 +34,23 @@ size_t find_nonzero_rep(const unsigned char* blk, const size_t ln)
 /** SSE2 version for measuring the initial zero bytes of aligned blk */
 size_t find_nonzero_simd(const unsigned char* blk, const size_t ln)
 {
-	__m128i xmm, zero = _mm_setzero_si128();
-	unsigned /*long*/ register eax;
+	__m128i register xmm;
+	const __m128i register zero = _mm_setzero_si128();
+#ifdef SIMD_XOR
+	const __m128i register mask = _mm_set_epi16(-1, -1, -1, -1, -1, -1, -1, -1);
+#endif
+	unsigned register eax;
 	size_t i = 0;
+	//asm(".align 32");
 	for (; i < ln; i+= 16) {
 		xmm = _mm_load_si128((__m128i*)(blk+i));
-		_mm_cmpeq_epi8(xmm, zero);
+		xmm = _mm_cmpeq_epi8(xmm, zero);
+#ifdef SIMD_XOR
+		xmm = _mm_xor_si128(xmm, mask);
 		eax = _mm_movemask_epi8(xmm);
+#else
+		eax = _mm_movemask_epi8(xmm) ^ 0xffff;
+#endif
 		if (eax) 
 			return i + myffs(eax)-1;
 	}

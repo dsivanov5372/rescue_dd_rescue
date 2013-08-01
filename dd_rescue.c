@@ -146,7 +146,8 @@ int o_dir_in, o_dir_out;
 char identical, preserve, falloc, dosplice;
 char i_chr, o_chr;
 char i_repeat, i_rep_init;
-int i_rep_zero, prng_seed;
+size_t i_rep_zero;
+int  prng_seed;
 char noextend, avoidwrite;
 char prng_libc, prng_frnd;
 char bsim715, bsim715_4, bsim715_2, bsim715_2ndpass;
@@ -844,7 +845,7 @@ ssize_t fill_rand(void *bf, size_t ln)
 }
 
 /** is the block zero ? */
-static int blockiszero(const unsigned char* blk, const size_t ln)
+static size_t blockiszero(const unsigned char* blk, const size_t ln)
 {
 	if (i_repeat && i_rep_zero)
 		return i_rep_zero;
