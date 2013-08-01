@@ -2055,8 +2055,12 @@ int main(int argc, char* argv[])
   	}
 
 	if (o_chr && opos != 0) {
-		fplog(stderr, FATAL, "outfile not seekable, but opos !=0 requested!\n");
-		cleanup(); exit(19);
+		if (force)
+			fplog(stderr, WARN, "ignore non-seekable output with opos != 0 due to --force\n");
+		else {
+			fplog(stderr, FATAL, "outfile not seekable, but opos !=0 requested!\n");
+			cleanup(); exit(19);
+		}
 	}
 	if (i_chr && ipos != 0) {
 		fplog(stderr, FATAL, "infile not seekable, but ipos !=0 requested!\n");
