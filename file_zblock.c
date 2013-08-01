@@ -1,4 +1,4 @@
-#define _GNU_SOURCE
+#define _GNU_SOURCE 1
 #include <stdio.h>
 #include <sys/file.h>
 #include <unistd.h>
@@ -42,7 +42,7 @@ int main(int argc, char *argv[])
 		int rd, found = 0;
 		while ((rd = read(fd, buf, BUFSZ)) > 0 && !found) {
 			for (off = 0; off < rd; off += chunksz) {
-				int tocheck = rd-off > chunksz? chunksz: rd-off;
+				unsigned int tocheck = rd-off > chunksz? chunksz: rd-off;
 				if (find_nonzero(buf+off, tocheck) == tocheck) {
 					++found; ++zf;
 					printf("%s,%i\n", argv[i], off);
