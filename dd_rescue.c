@@ -563,12 +563,21 @@ static void do_fallocate(int fd, const char* onm)
 }
 #endif
 
+float floatrate4  = 0.0;
+float floatrate32 = 0.0;
 void doprint(FILE* const file, const unsigned int bs, const clock_t cl, 
 	     const float t1, const float t2, const int sync)
 {
 	float avgrate = (float)xfer/t1;
 	float currate = (float)(xfer-lxfer)/t2;
 	const char *bold = BOLD, *norm = NORM;
+	if (!floatrate4) {
+		floatrate4  = currate;
+		floatrate32 = currate;
+	} else {
+		floatrate4  = (floatrate4 * 3 + currate)/ 4;
+		floatrate32 = (floatrate32*31 + currate)/32;
+	}
 	if (nocol || (file != stderr && file != stdout)) {
 		bold = ""; norm = "";
 	}
@@ -582,7 +591,7 @@ void doprint(FILE* const file, const unsigned int bs, const clock_t cl,
 		fmt_int(10, 1, 1024, sxfer, bold, norm, 1));
 	if (sync || (file != stdin && file != stdout) )
 		fprintf(file, "             +curr.rate:%skB/s, avg.rate:%skB/s, avg.load:%s%%\n",
-			fmt_int(9, 0, 1024, currate, bold, norm, 1),
+			fmt_int(9, 0, 1024, floatrate4, bold, norm, 1),
 			fmt_int(9, 0, 1024, avgrate, bold, norm, 1),
 			fmt_int(3, 1, 10, (cl-startclock)/(t1*(CLOCKS_PER_SEC/1000)), bold, norm, 1));
 	else
@@ -595,7 +604,7 @@ void doprint(FILE* const file, const unsigned int bs, const clock_t cl,
 		if (in_report)
 			sec = 0.5 + t1;
 		else
-			sec = 0.5 + (estxfer-xfer)/avgrate;
+			sec = 0.5 + 2*(estxfer-xfer)/(avgrate+floatrate32);
 		int hour = sec / 3600;
 		int min = (sec % 3600) / 60;
 		sec = sec % 60;
