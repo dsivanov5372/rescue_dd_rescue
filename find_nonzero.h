@@ -126,7 +126,7 @@ const static char have_simd = 1;
 #if defined(HAVE_SSE2) || defined(__arm__)
 #define HAVE_SIMD
 
-#ifdef __AVX2__
+#ifdef HAVE_AVX2
 #define find_nonzero_simd find_nonzero_avx2
 #elif defined(HAVE_SSE2)
 #define find_nonzero_simd find_nonzero_sse2
