@@ -1,6 +1,15 @@
+/** find_nonzero_avx.c
+  * AVX2 optimized search for non-zero bytes
+  * taken straight from SSE2 and adapted to use AVX registers
+  * Needs recent (2.23+) binutils to compile ...
+  * (c) Kurt Garloff <kurt@garloff.de>, 2013
+  * License: GNU GPL v2 or v3
+  */
+
 #define _GNU_SOURCE 1
 #include "find_nonzero.h"
 size_t find_nonzero_sse2(const unsigned char* blk, const size_t ln);
+
 #ifdef __AVX2__
 #if defined(__GNUC__) || defined(__llvm__)
 # warning AVX2 version untested and runtime detection only with gcc 4.8+
