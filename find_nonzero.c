@@ -67,23 +67,56 @@ size_t find_nonzero_simd2(const unsigned char* blk, const size_t ln)
 }
 #endif
 
-/** SSE2 version for measuring the initial zero bytes of aligned blk */
-size_t find_nonzero_simd(const unsigned char* blk, const size_t ln)
+/** SSE2 version for measuring the initial zero bytes of 16b aligned blk */
+size_t find_nonzero_sse2(const unsigned char* blk, const size_t ln)
 {
-	__m128i register xmm;
-	const __m128i register zero = _mm_setzero_si128();
-	unsigned register eax;
+	register __m128i xmm0, xmm1;
+	register const __m128i zero = _mm_setzero_si128();
+	register unsigned int eax, ebx;
 	size_t i = 0;
 	//asm(".p2align 5");
-	for (; i < ln; i+= 16) {
-		xmm = _mm_load_si128((__m128i*)(blk+i));
-		xmm = _mm_cmpeq_epi8(xmm, zero);
-		eax = _mm_movemask_epi8(xmm) ^ 0xffff;
+	for (; i < ln; i+= 32) {
+		//xmm0 = _mm_load_si128((__m128i*)(blk+i));
+		//xmm1 = _mm_load_si128((__m128i*)(blk+i+16));
+		xmm0 = _mm_cmpeq_epi8(*(__m128i*)(blk+i), zero);
+		xmm1 = _mm_cmpeq_epi8(*(__m128i*)(blk+i+16), zero);
+		eax = _mm_movemask_epi8(xmm0);
+		ebx = _mm_movemask_epi8(xmm1);
+		eax = ~(eax | (ebx << 16));
 		if (eax) 
 			return i + myffs(eax)-1;
 	}
 	return ln;
 }
+
+#ifdef __AVX2__
+#if defined(__GNUC__) || defined(__llvm__)
+# warning AVX2 version untested and runtime detection only with gcc 4.8+
+#endif
+#include <immintrin.h>
+/** AVX2 version for measuring the initial zero bytes of 32b aligned blk */
+size_t find_nonzero_avx2(const unsigned char* blk, const size_t ln)
+{
+#if defined( __GNUC__) && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 8))
+	if (!(__builtin_cpu_supports("avx2")))
+		return find_nonzero_sse2(blk, ln);
+#endif
+	__m256i register ymm;
+	const __m256i register zero = _mm256_setzero_si256();
+	unsigned register eax;
+	size_t i = 0;
+	//asm(".p2align 5");
+	for (; i < ln; i+= 32) {
+		//ymm = _mm256_load_si256((__m256i*)(blk+i));
+		ymm = _mm256_cmpeq_epi8(*(__m256i*)(blk+i), zero);
+		eax = ~(_mm256_movemask_epi8(ymm));
+		if (eax) 
+			return i + myffs(eax)-1;
+	}
+	return ln;
+}
+#define find_nonzero_simd find_nonzero_avx2
+#endif
 
 #ifdef NEED_SIMD_RUNTIME_DETECTION
 /** Issue an SSE2 insn for runtime detection of SSE2 capability (x86) */
@@ -102,7 +135,7 @@ void probe_simd()
 /** ASM optimized version for ARM.
  * Inspired by Linaro's strlen() implementation; 
  * we don't even need NEON here, ldmia does the 3x speedup on Cortexes */
-size_t find_nonzero_simd(const unsigned char *blk, const size_t ln)
+size_t find_nonzero_arm6(const unsigned char *blk, const size_t ln)
 {
 	register unsigned char* res;
 	const register unsigned char* end = blk+ln;
@@ -149,6 +182,7 @@ size_t find_nonzero_simd(const unsigned char *blk, const size_t ln)
 	: "r2", "r3");
 	return res-blk;
 }
+#define find_nonzero_simd find_nonzero_arm6
 #endif
 
 

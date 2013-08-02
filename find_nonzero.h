@@ -126,6 +126,14 @@ const static char have_simd = 1;
 #if defined(HAVE_SSE2) || defined(__arm__)
 #define HAVE_SIMD
 
+#ifdef __AVX2__
+#define find_nonzero_simd find_nonzero_avx2
+#elif defined(HAVE_SSE2)
+#define find_nonzero_simd find_nonzero_sse2
+#elif defined(__arm__)
+#define find_nonzero_simd find_nonzero_arm6
+#endif
+
 /* FIXME: Is there no library function to find the first non-null byte?
  * Something like ffs() for a long byte array?
  * Here is an optimized version using SSE2 intrinsics, but there should be
@@ -154,20 +162,23 @@ static size_t find_nonzero_c(const unsigned char* blk, const size_t ln)
 }
 
 /** return number of bytes at beginning of blk that are all zero 
-  * Generic version, does not require an aligned buffer blk */
+  * Generic version, does not require an aligned buffer blk or even ln ... */
 inline static size_t find_nonzero(const unsigned char* blk, const size_t ln)
 {
-	const int off = ((unsigned long)blk) % 16;
-	if (!ln || *blk)
-		return 0;
-	if (off) {
-		int i;
-		for (i = 0; i < 16-off; ++i)
-			if (blk[i])
-				return i;
-		return i+find_nonzero_opt(blk+i, ln-i);
-	} else
-		return find_nonzero_opt(blk, ln);
+	const int off = (-(unsigned char)(unsigned long)blk) & 0x1f;
+	size_t remain = ln - off;
+	size_t i;
+	for (i = 0; i < off; ++i)
+		if (blk[i])
+			return i;
+	int r2 = remain % 0x1f;
+	size_t res = find_nonzero_opt(blk+off, remain-r2);
+	if (!r2 || res != remain-r2)
+		return off+res;
+	for (i = off+remain; i < ln; ++i)
+		if (blk[i])
+			return i;
+	return ln;
 }
 
 
