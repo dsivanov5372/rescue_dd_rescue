@@ -148,7 +148,7 @@ char i_chr, o_chr;
 char i_repeat, i_rep_init;
 size_t i_rep_zero;
 int  prng_seed;
-char noextend, avoidwrite;
+char noextend, avoidwrite, avoidnull;
 char prng_libc, prng_frnd;
 char bsim715, bsim715_4, bsim715_2, bsim715_2ndpass;
 char extend;
@@ -886,9 +886,14 @@ static inline ssize_t mypread(int fd, void* bf, size_t sz, off_t off)
 
 static inline ssize_t mypwrite(int fd, void* bf, size_t sz, off_t off)
 {
-	if (o_chr)
-		return write(fd, bf, sz);
-	else {
+	if (o_chr) {
+		if (!avoidnull)
+			return write(fd, bf, sz);
+		else {
+			axfer += sz;
+			return sz;
+		}
+	} else {
 		if (avoidwrite) {
 			ssize_t ln = pread(fd, buf2, sz, off);
 			if (ln < (ssize_t)sz)
@@ -1771,7 +1776,7 @@ int main(int argc, char* argv[])
 	i_chr = 0; o_chr = 0;
 
 	i_repeat = 0; i_rep_init = 0; i_rep_zero = 0;
-	noextend = 0; avoidwrite = 0;
+	noextend = 0; avoidwrite = 0; avoidnull = 0;
 	bsim715 = 0; bsim715_4 = 0; bsim715_2 = 0; bsim715_2ndpass = 0;
 	extend = 0;
 	prng_libc = 0; prng_frnd = 0;
@@ -1983,8 +1988,13 @@ int main(int argc, char* argv[])
 		}
 	}
 	if (o_chr && avoidwrite) {
-		fplog(stderr, WARN, "Disabling -Write avoidance b/c ofile is not seekable\n");
-		avoidwrite = 0;
+		if (!strcmp(oname, "/dev/null")) {
+			fplog(stderr, INFO, "Avoid writes to /dev/null ...\n");
+			avoidnull = 1;
+		} else {
+			fplog(stderr, WARN, "Disabling -Write avoidance b/c ofile is not seekable\n");
+			avoidwrite = 0;
+		}
 	}
 		
 	if (odes != 1) {
@@ -2012,9 +2022,14 @@ int main(int argc, char* argv[])
 			fplog(stderr, WARN, "Not using sparse writes for non-seekable output\n");
 		nosparse = 1; sparse = 0; dosplice = 0;
 		if (avoidwrite) {
-			fplog(stderr, WARN, "Disabling -Write avoidance b/c ofile is not seekable\n");
-			avoidwrite = 0;
-			ZFREE(origbuf2);
+			if (!strcmp(oname, "/dev/null")) {
+				fplog(stderr, INFO, "Avoid writes to /dev/null ...\n");
+				avoidnull = 1;
+			} else {
+				fplog(stderr, WARN, "Disabling -Write avoidance b/c ofile is not seekable\n");
+				ZFREE(origbuf2);
+				avoidwrite = 0;
+			}
 		}
 	}
 
@@ -2112,6 +2127,7 @@ int main(int argc, char* argv[])
 	if (bsim715 && avoidwrite) {
 		fplog(stderr, WARN, "won't avoid writes for -3\n");
 		avoidwrite = 0;
+		ZFREE(buf2);
 	}
 	if (bsim715 && o_chr) {
 		fplog(stderr, WARN, "triple overwrite with non-seekable output!\n");
