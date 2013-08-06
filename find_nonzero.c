@@ -118,6 +118,11 @@ size_t find_nonzero_arm6(const unsigned char *blk, const size_t ln)
 	"	bne 2f			\n"
 	"	cmp r3, #0		\n"
 	"	bne 3f			\n"
+	"	ldmia %0!,{r2, r3}	\n"
+	"	cmp r2, #0		\n"
+	"	bne 2f			\n"
+	"	cmp r3, #0		\n"
+	"	bne 3f			\n"
 	"	cmp %0, %2		\n"	/* end? */
 	"	blt 1b			\n"
 	"	mov %0, %2		\n"	
@@ -169,6 +174,7 @@ size_t find_nonzero_arm6(const unsigned char *blk, const size_t ln)
 #define mem_clobber	asm("": : : "memory")
 #define TESTC(sz,routine,rep,tsz) 	\
 	memset(buf, 0, sz);		\
+	expect = (tsz<sz? tsz: sz);	\
 	gettimeofday(&t1, NULL);	\
 	for (i = 0; i < rep; ++i) {	\
 		mem_clobber;		\
@@ -177,13 +183,15 @@ size_t find_nonzero_arm6(const unsigned char *blk, const size_t ln)
 	gettimeofday(&t2, NULL);	\
 	tdiff = t2.tv_sec-t1.tv_sec + 0.000001*(t2.tv_usec-t1.tv_usec);	\
 	printf("%7i x %20s (%8i): %8i (%6.3fs => %5.0fMB/s)\n",	\
-		rep, #routine, sz, ln, tdiff, (double)(rep)*(double)(sz+1)/(1024*1024*tdiff));	\
-	if (ln != (tsz<sz? tsz: sz))	\
+		rep, #routine, sz, ln, tdiff, (double)(rep)*(double)(expect+1)/(1024*1024*tdiff));	\
+	if (ln != expect)		\
 		abort()
 
 
 #define TEST2C(sz,routine,rep,tsz) 	\
 	memset(buf, 0, tsz);		\
+	expect = (tsz<sz? tsz: sz);	\
+	gettimeofday(&t1, NULL);	\
 	buf[sz] = 0x4c;			\
 	gettimeofday(&t1, NULL);	\
 	for (i = 0; i < rep; ++i) {	\
@@ -193,8 +201,8 @@ size_t find_nonzero_arm6(const unsigned char *blk, const size_t ln)
 	gettimeofday(&t2, NULL);	\
 	tdiff = t2.tv_sec-t1.tv_sec + 0.000001*(t2.tv_usec-t1.tv_usec);	\
 	printf("%7i x %20s (%8i): %8i (%6.3fs => %5.0fMB/s)\n",	\
-		rep, #routine, sz, ln, tdiff, (double)(rep)*(double)(sz+1)/(1024*1024*tdiff));	\
-	if (ln != (tsz<sz? tsz: sz))	\
+		rep, #routine, sz, ln, tdiff, (double)(rep)*(double)(expect+1)/(1024*1024*tdiff));	\
+	if (ln != expect)		\
 		abort()
 
 
@@ -232,7 +240,7 @@ int main(int argc, char* argv[])
 	unsigned char* obuf = (unsigned char*)malloc(SIZE+31);
 	unsigned char* buf = (obuf+31)-((unsigned long)(obuf+31)%32);
 	struct timeval t1, t2;
-	int i, ln = 0;
+	int i, expect, ln = 0;
 	double tdiff;
 	int scale = 16;
 #ifdef NEED_SIMD_RUNTIME_DETECTION
