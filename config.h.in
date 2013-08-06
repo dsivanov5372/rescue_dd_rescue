@@ -1,0 +1,23 @@
+/* unistd.h presence */
+#undef HAVE_UNISTD_H
+
+/* dlfcn.h presence */
+#undef HAVE_DLFCN_H
+
+/* dlsym() in libdl */
+#undef HAVE_LIBDL
+
+/* ffs() in libc */
+#undef HAVE_FFS
+
+/* splice() in libc */
+#undef HAVE_SPLICE
+
+/* fallocate.h */
+#undef HAVE_FALLOCATE_H
+
+/* linux_fallocate64 in libfallocate */
+#undef HAVE_LIBFALLOCATE
+
+/* fallocate64 in libc */
+#undef HAVE_FALLOCATE
