@@ -21,3 +21,9 @@
 
 /* fallocate64 in libc */
 #undef HAVE_FALLOCATE
+
+/* attr/xattr.h */
+#undef HAVE_ATTR_XATTR_H
+
+/* sys/acl.h */
+#undef HAVE_SYS_ACL_H

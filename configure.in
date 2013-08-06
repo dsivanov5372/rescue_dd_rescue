@@ -6,7 +6,7 @@ AC_C_INLINE
 AC_HEADER_STDC
 #AC_PROG_INSTALL
 CFLAGS="$CFLAGS -DHAVE_CONFIG_H"
-AC_CHECK_HEADERS([fallocate.h dlfcn.h unistd.h])
+AC_CHECK_HEADERS([fallocate.h dlfcn.h unistd.h attr/xattr.h sys/acl.h])
 AC_CHECK_LIB(dl,dlsym)
 AC_CHECK_LIB(fallocate,linux_fallocate64)
 AC_CHECK_FUNCS([ffs fallocate splice])
