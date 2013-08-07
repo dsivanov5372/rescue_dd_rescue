@@ -1581,7 +1581,7 @@ void printhelp()
 	fprintf(stderr, "         -m maxxfer maximum amount of data to be transfered (def=0=inf),\n");
 	fprintf(stderr,	"         -M         avoid extending outfile,\n");
 	fprintf(stderr,	"         -x         count opos from the end of outfile (eXtend),\n");
-	fprintf(stderr, "         -y syncfrq frequency of fsync calls on outfile (def=512*softbs),\n");
+	fprintf(stderr, "         -y syncsz  frequency of fsync calls in bytes (def=512*softbs),\n");
 	fprintf(stderr, "         -l logfile name of a file to log errors and summary to (def=\"\"),\n");
 	fprintf(stderr, "         -o bbfile  name of a file to log bad blocks numbers (def=\"\"),\n");
 	fprintf(stderr, "         -r         reverse direction copy (def=forward),\n");

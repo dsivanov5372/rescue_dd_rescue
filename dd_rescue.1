@@ -139,16 +139,16 @@ should be equal to or smaller than
 If both block sizes are identical, no fallback mechanism (and thus no
 retry) will take place on read errors.
 .TP 8
-.BI \-y\  syncfreq \fR,\ \fB\-\-syncfreq= syncfreq
+.BI \-y\  syncsize \fR,\ \fB\-\-syncfreq= syncsize
 tells
 .B dd_rescue
 to call fsync() on the output file every 
-.IR syncfreq
-blocks (in terms of
+.IR syncsize
+bytes (will be rounded to multiples of 
 .IR softbs
 sized blocks). It will also update the progress indicator at least as
 often. By default,
-.IR syyncfreq
+.IR syncsize
 is set to 0, meaning that fsync() is only issued at the end of the
 copy operation.
 .
