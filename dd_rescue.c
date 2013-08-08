@@ -530,7 +530,7 @@ static void sparse_output_warn()
 				oname, eff_opos, stbuf.st_size);
 }
 
-#if defined(HAVE_FALLOCATE) || defined(HAVE_LIBFALLOCATE)
+#if defined(HAVE_FALLOCATE64) || defined(HAVE_LIBFALLOCATE)
 
 #ifdef USE_LIBDL
 static void* load_libfallocate()
@@ -566,14 +566,14 @@ static void do_fallocate(int fd, const char* onm)
 	if (_linux_fallocate64)
 		rc = _linux_fallocate64(fd, FALLOC_FL_KEEP_SIZE,
 				opos, to_falloc);
-#ifdef HAVE_FALLOCATE
+#ifdef HAVE_FALLOCATE64
 	else
 		rc = fallocate64(fd, 1, opos, to_falloc);
 #endif
 #elif defined(HAVE_LIBFALLOCATE)
 	rc = linux_fallocate64(fd, FALLOC_FL_KEEP_SIZE, 
 			      opos, to_falloc);
-#else /* HAVE_FALLOCATE */
+#else /* HAVE_FALLOCATE64 */
 	rc = fallocate64(fd, 1, opos, to_falloc);
 #endif
 	if (rc)
@@ -1541,7 +1541,7 @@ void printversion()
 #elif defined(HAVE_LIBFALLOCATE)
 	fprintf(stderr, "libfallocate ");
 #endif	
-#if defined(HAVE_FALLOCATE)
+#if defined(HAVE_FALLOCATE64)
 	fprintf(stderr, "fallocate ");
 #endif
 #ifdef HAVE_SPLICE
@@ -1613,7 +1613,7 @@ void printhelp()
 #ifdef HAVE_SPLICE
 	fprintf(stderr, "         -k         use efficient in-kernel zerocopy splice,\n");
 #endif       	
-#if defined(HAVE_FALLOCATE) || defined(HAVE_LIBFALLOCATE)
+#if defined(HAVE_FALLOCATE64) || defined(HAVE_LIBFALLOCATE)
 	fprintf(stderr, "         -P         use fallocate to preallocate target space,\n");
 #endif
 	fprintf(stderr, "         -w         abort on Write errors (def=no),\n");
@@ -2132,7 +2132,7 @@ int main(int argc, char* argv[])
 	}
 
 
-#if defined(HAVE_FALLOCATE) || defined(HAVE_LIBFALLOCATE)
+#if defined(HAVE_FALLOCATE64) || defined(HAVE_LIBFALLOCATE)
 	if (falloc && !o_chr)
 		do_fallocate(odes, oname);
 #endif
@@ -2168,7 +2168,7 @@ int main(int argc, char* argv[])
 		check_seekable(oft->fd, &(oft->cdev), NULL);
 		if (preserve)
 			copyperm(ides, oft->fd);
-#if defined(HAVE_FALLOCATE) || defined(HAVE_LIBFALLOCATE)
+#if defined(HAVE_FALLOCATE64) || defined(HAVE_LIBFALLOCATE)
 		if (falloc && !oft->cdev)
 			do_fallocate(oft->fd, oft->name);
 #endif
