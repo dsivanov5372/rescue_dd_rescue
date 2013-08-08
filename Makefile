@@ -2,7 +2,7 @@
 # (c) garloff@suse.de, 99/10/09, GNU GPL
 # $Id$
 
-VERSION = 1.38.1
+VERSION = 1.39
 
 DESTDIR = 
 
@@ -107,7 +107,8 @@ file_zblock: file_zblock.c find_nonzero.h find_nonzero.c find_nonzero.o
 	$(CC) $(CFLAGS) -o $@ $< find_nonzero.o
 
 distclean: clean
-	rm -f *~ config.h config.h.in configure
+	rm -f *~ config.h config.h.in config.status config.log configure
+	rm -rf autom4te.cache
 
 dist: distclean
 	tar cvzf ../dd_rescue-$(VERSION).tar.gz -C.. --exclude=$(MYDIR)/CV* --exclude $(MYDIR)/dd_rescue2* --exclude $(MYDIR)/.* $(MYDIR)
