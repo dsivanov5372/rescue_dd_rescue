@@ -991,7 +991,7 @@ void exitfatalerr(const int eno)
 	}
 }
 
-
+/* Update positions after successful copy, rd = progress, wr = really written */
 static void advancepos(const ssize_t rd, const ssize_t wr)
 {
 	sxfer += wr; xfer += rd;
@@ -1013,6 +1013,8 @@ static int is_writeerr_fatal(int err)
 
 int weno;
 
+/* Do write,  update positions ... 
+ * Returns number of successfully written bytes. */
 ssize_t dowrite(const ssize_t rd)
 {
 	int err = 0;
@@ -1042,6 +1044,8 @@ ssize_t dowrite(const ssize_t rd)
 	return wr;
 }
 
+/* Do write with retry if rd > hardbs, update positions ... 
+ * Returns 0 on success, -1 on fatal error, 1 on normal error. */
 int dowrite_retry(const ssize_t rd)
 {
 	int errs = 0;
@@ -1121,19 +1125,15 @@ int copyfile_hardbs(const off_t max)
 			exitfatalerr(eno);
 			/* Non fatal error */
 			/* This is the case, where we were not called from copyfile_softbs and thus have to assume harmless EOF */
-			if (softbs <= hardbs && eno == 0) {
+			if (/*softbs <= hardbs &&*/ eno == 0) {
 				int ret;
 				/* But first: write available data and advance (optimization) */
 				if ((ret = partialwrite(rd)) < 0)
 					return ret;
 				else
 					errs += ret;
-				xfer += rd; sxfer += rd;
-				if (reverse) { 
-					ipos -= rd; opos -= rd; 
-				} else { 
-					ipos += rd; opos += rd; 
-				}
+				/* partialwrite calls dowrite_retry which updates
+				 * statistics and positions. */
 				continue;
 			}					
 			/* Real error on small blocks: Don't retry */
