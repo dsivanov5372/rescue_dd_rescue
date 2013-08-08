@@ -117,6 +117,10 @@
 
 #ifdef HAVE_FALLOCATE_H
 # include <fallocate.h>
+#else
+# ifdef HAVE_FALLOCATE64
+#  include <linux/falloc.h>
+# endif
 #endif
 
 #if defined(HAVE_DLFCN_H) && !defined(NO_LIBDL)
