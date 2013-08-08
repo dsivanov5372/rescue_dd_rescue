@@ -38,6 +38,10 @@
  * - Options to compress with libz, liblzo, libbz2, lzma, ... 
  */
 
+#ifdef HAVE_CONFIG_H
+# include "config.h"
+#endif
+
 #ifndef VERSION
 # define VERSION "(unknown)"
 #endif
@@ -65,7 +69,7 @@
 
 
 #ifndef _GNU_SOURCE
-# define _GNU_SOURCE
+# define _GNU_SOURCE 1
 #endif
 #define _LARGEFILE_SOURCE
 #define _FILE_OFFSET_BITS 64
@@ -90,25 +94,39 @@
 #include "fmt_no.h"
 #include "find_nonzero.h"
 
-#ifndef LACK_GETOPT_LONG
+#ifdef HAVE_GETOPT_LONG
 #include <getopt.h>
 #endif
+
 // hack around buggy splice definition(!)
+#if defined(__GLIBC__) && __GLIBC__ == 2 && __GLIBC_MINOR__ < 10
+# define SPLICE_IS_BUGGY 1
+#endif
+
+#ifdef SPLICE_IS_BUGGY
+#warning work around buggy splice() prototype
 #define splice oldsplice
+#endif
 #include <fcntl.h>
 #undef splice
 
-#ifdef HAVE_LIBFALLOCATE
-#include <fallocate.h>
+#ifdef NO_LIBFALLOCATE
+# undef HAVE_LIBFALLOCATE
+# undef HAVE_FALLOCATE_H
 #endif
 
-#ifdef HAVE_LIBDL
+#ifdef HAVE_FALLOCATE_H
+# include <fallocate.h>
+#endif
+
+#if defined(HAVE_DLFCN_H) && !defined(NO_LIBDL)
 #include <dlfcn.h>
 void* libfalloc = (void*)0;
+#define USE_LIBDL 1
 #endif
 
 /* splice */
-#ifdef __linux__
+#if defined(__linux__) && (!defined(HAVE_SPLICE) || defined(SPLICE_IS_BUGGY))
 # define __KERNEL__
 # include <asm/unistd.h>
 # ifdef __NR_splice
@@ -118,7 +136,7 @@ void* libfalloc = (void*)0;
 #   define SPLICE_F_MORE 4
 #  endif
 #  if 1
-static inline long splice(int fdin, loff_t *off_in, int fdout, 
+static inline ssize_t splice(int fdin, loff_t *off_in, int fdout, 
 			      loff_t *off_out, size_t len, unsigned int flags)
 {
 	return syscall(__NR_splice, fdin, off_in, fdout, off_out, len, flags);
@@ -127,6 +145,7 @@ static inline long splice(int fdin, loff_t *off_in, int fdout,
 _syscall6(long, splice, int, fdin, loff_t*, off_in, int, fdout, loff_t*, off_out, size_t, len, unsigned int, flags);
 #  endif
 # endif
+# undef __KERNEL__
 #endif
 
 /* fwd decls */
@@ -513,7 +532,7 @@ static void sparse_output_warn()
 
 #if defined(HAVE_FALLOCATE) || defined(HAVE_LIBFALLOCATE)
 
-#ifdef HAVE_LIBDL
+#ifdef USE_LIBDL
 static void* load_libfallocate()
 {
 	if (!libfalloc)
@@ -540,7 +559,7 @@ static void do_fallocate(int fd, const char* onm)
 	to_falloc = estxfer - (alloced < 0 ? 0 : alloced);
 	if (to_falloc <= 0)
 		return;
-#ifdef HAVE_LIBDL
+#ifdef USE_LIBDL
 	typedef int (*_l_f_t) (int fd, int mode, __off64_t start, __off64_t len);
 	//int (*_linux_fallocate64)(int fd, int mode, __off64_t start, __off64_t len);
 	_l_f_t _linux_fallocate64 = (_l_f_t)load_libfallocate();
@@ -837,7 +856,7 @@ int cleanup()
 		LISTDATA(onl) = 0;
 	}
 	LISTTREEDEL(freenames, charp);
-#if HAVE_LIBDL
+#if USE_LIBDL
 	if (libfalloc)
 		dlclose(libfalloc);
 #endif
@@ -1517,7 +1536,7 @@ void printversion()
 #ifdef O_DIRECT
 	fprintf(stderr, "O_DIRECT ");
 #endif
-#ifdef HAVE_LIBDL
+#ifdef USE_LIBDL
 	fprintf(stderr, "dl/libfallocate ");
 #elif defined(HAVE_LIBFALLOCATE)
 	fprintf(stderr, "libfallocate ");
@@ -1534,7 +1553,7 @@ void printversion()
 }
 
 
-#ifndef LACK_GETOPT_LONG
+#ifdef HAVE_GETOPT_LONG
 struct option longopts[] = { 	{"help", 0, NULL, 'h'}, {"verbose", 0, NULL, 'v'},
 				{"quiet", 0, NULL, 'q'}, {"version", 0, NULL, 'V'},
 				{"color", 1, NULL, 'c'},

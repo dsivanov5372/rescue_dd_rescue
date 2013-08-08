@@ -8,7 +8,7 @@ DESTDIR =
 
 CC = gcc
 RPM_OPT_FLAGS = -Os -Wall -g
-CFLAGS = $(RPM_OPT_FLAGS) $(EXTRA_CFLAGS)
+CFLAGS = $(RPM_OPT_FLAGS) $(EXTRA_CFLAGS) -DHAVE_CONFIG_H
 CFLAGS_OPT = $(CFLAGS) -O3
 INSTALL = install
 INSTALLFLAGS = -s
@@ -19,8 +19,9 @@ MANDIR = $(prefix)/share/man/
 #MYDIR = dd_rescue-$(VERSION)
 MYDIR = dd_rescue
 TARGETS = dd_rescue
+#TARGETS = libfalloc-dl
 OBJECTS = frandom.o fmt_no.o find_nonzero.o
-HEADERS = frandom.h fmt_no.h find_nonzero.h
+HEADERS = frandom.h fmt_no.h find_nonzero.h config.h
 DOCDIR = $(prefix)/share/doc/packages
 INSTASROOT = -o root -g root
 LIBDIR = /usr/lib
@@ -42,37 +43,50 @@ ifeq ($(MACH),i386)
 	#SSE = "-msse2 -funroll-loops -ftree-vectorize"
 endif
 
+.phony: libfalloc libfalloc-static libfalloc-dl nolib nocolor static strip
+
 default: $(TARGETS)
 
-frandom.o: frandom.c frandom.h
+config.h: configure config.h.in
+	./configure
+
+configure: configure.in
+	autoconf
+
+config.h.in: configure.in
+	autoheader
+
+frandom.o: frandom.c frandom.h config.h
 	$(CC) $(CFLAGS_OPT) -c $<
 
-fmt_no.o: fmt_no.c fmt_no.h
+fmt_no.o: fmt_no.c fmt_no.h config.h
 	$(CC) $(CFLAGS_OPT) -c $<
 
-find_nonzero.o: find_nonzero.c find_nonzero.h
+find_nonzero.o: find_nonzero.c find_nonzero.h config.h
 	$(CC) $(CFLAGS_OPT) -c $< $(SSE)
 
-find_nonzero_avx.o: find_nonzero_avx.c find_nonzero.h
+find_nonzero_avx.o: find_nonzero_avx.c find_nonzero.h config.h
 	$(CC) $(CFLAGS_OPT) -mavx2 -c $<
 
 libfalloc: dd_rescue.c $(HEADERS) $(OBJECTS)
-	$(CC) $(CFLAGS) -DHAVE_LIBFALLOCATE=1 $(DEFINES) $< $(OUT) $(OBJECTS) -lfallocate
+	$(CC) $(CFLAGS) -DNO_LIBDL $(DEFINES) $< $(OUT) $(OBJECTS) -lfallocate
 
 libfalloc-static: dd_rescue.c $(HEADERS) $(OBJECTS)
-	$(CC) $(CFLAGS) -DHAVE_LIBFALLOCATE=1 $(DEFINES) $< $(OUT) $(OBJECTS) $(LIBDIR)/libfallocate.a
-
-libfalloc-dl: dd_rescue.c $(HEADERS) $(OBJECTS)
-	$(CC) $(CFLAGS) -DHAVE_LIBDL=1 -DHAVE_LIBFALLOCATE=1 -DHAVE_FALLOCATE=1 $(DEFINES) $< $(OUT) $(OBJECTS) -ldl
-
-falloc: dd_rescue.c $(HEADERS) $(OBJECTS)
-	$(CC) $(CFLAGS) -DHAVE_FALLOCATE=1 $(DEFINES) $< $(OUT) $(OBJECTS)
+	$(CC) $(CFLAGS) -DNO_LIBDL $(DEFINES) $< $(OUT) $(OBJECTS) $(LIBDIR)/libfallocate.a
 
 dd_rescue: dd_rescue.c $(HEADERS) $(OBJECTS)
-	$(CC) $(CFLAGS) $(DEFINES) $< $(OUT) $(OBJECTS)
+	$(CC) $(CFLAGS) $(DEFINES) $< $(OUT) $(OBJECTS) -ldl
+
+libfalloc-dl: dd_rescue
+
+nolib: dd_rescue.c $(HEADERS) $(OBJECTS)
+	$(CC) $(CFLAGS) -DNO_LIBDL -DNO_LIBFALLOCATE $(DEFINES) $< $(OUT) $(OBJECTS)
 
 nocolor: dd_rescue.c $(HEADERS) $(OBJECTS)
 	$(CC) $(CFLAGS) -DNO_COLORS=1 $(DEFINES) $< $(OUT) $(OBJECTS)
+
+static: dd_rescue.c $(HEADERS) $(OBJECTS)
+	$(CC) $(CFLAGS) -DNO_LIBDL -DNO_LIBFALLOCATE -static $(DEFINES) $< $(OUT) $(OBJECTS)
 
 strip: dd_rescue
 	strip -S $<
@@ -93,7 +107,7 @@ file_zblock: file_zblock.c find_nonzero.h find_nonzero.c find_nonzero.o
 	$(CC) $(CFLAGS) -o $@ $< find_nonzero.o
 
 distclean: clean
-	rm -f *~
+	rm -f *~ config.h config.h.in configure
 
 dist: distclean
 	tar cvzf ../dd_rescue-$(VERSION).tar.gz -C.. --exclude=$(MYDIR)/CV* --exclude $(MYDIR)/dd_rescue2* --exclude $(MYDIR)/.* $(MYDIR)

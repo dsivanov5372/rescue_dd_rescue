@@ -5,12 +5,13 @@
 
 #ifndef _FIND_NONZERO_H
 #define _FIND_NONZERO_H
+
+#ifdef HAVE_CONFIG_H
+# include "config.h"
+#endif
+
 #include <string.h>
 #include <sys/types.h>
-
-#if defined(__GLIBC__) && !defined(HAVE_FFS) && !defined(NOFFS)
-# define HAVE_FFS
-#endif
 
 #ifdef HAVE_FFS
 # define myffs(x) ffs(x)
