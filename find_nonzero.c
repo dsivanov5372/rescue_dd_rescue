@@ -70,16 +70,23 @@ size_t find_nonzero_sse2o(const unsigned char* blk, const size_t ln)
 /** SSE2 version for measuring the initial zero bytes of 16b aligned blk */
 size_t find_nonzero_sse2(const unsigned char* blk, const size_t ln)
 {
+	if (!ln || *blk)
+		return 0;
 	register __m128i xmm0, xmm1;
 	register const __m128i zero = _mm_setzero_si128();
 	register unsigned int eax, ebx;
 	size_t i = 0;
 	//asm(".p2align 5");
 	for (; i < ln; i+= 32) {
-		//xmm0 = _mm_load_si128((__m128i*)(blk+i));
-		//xmm1 = _mm_load_si128((__m128i*)(blk+i+16));
-		xmm0 = _mm_cmpeq_epi8(*(__m128i*)(blk+i), zero);
-		xmm1 = _mm_cmpeq_epi8(*(__m128i*)(blk+i+16), zero);
+#if 1
+		xmm0 = _mm_load_si128((__m128i*)(blk+i));
+		xmm1 = _mm_load_si128((__m128i*)(blk+i+16));
+		xmm0 = _mm_cmpeq_epi8(xmm0, zero);
+		xmm1 = _mm_cmpeq_epi8(xmm1, zero);
+#else
+		//xmm0 = _mm_cmpeq_epi8(*(__m128i*)(blk+i), zero);
+		//xmm1 = _mm_cmpeq_epi8(*(__m128i*)(blk+i+16), zero);
+#endif
 		eax = _mm_movemask_epi8(xmm0);
 		ebx = _mm_movemask_epi8(xmm1);
 		eax = ~(eax | (ebx << 16));
@@ -108,6 +115,8 @@ void probe_simd()
  * we don't even need NEON here, ldmia does the 3x speedup on Cortexes */
 size_t find_nonzero_arm6(const unsigned char *blk, const size_t ln)
 {
+	if (!ln || *blk)
+		return 0;
 	register unsigned char* res;
 	const register unsigned char* end = blk+ln;
 	asm volatile(
