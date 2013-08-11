@@ -1004,6 +1004,17 @@ int blockxfer(const off_t max, const int bs)
 		if (block > opos)
 			block = opos;
 	}
+	/* If we write the first block and it's a full block, do alignment ... */
+	if (block == bs && !xfer && ((opos % bs && !o_chr) || (ipos % bs && !i_chr))) {
+		/* Write alignment is more important except if o_chr == 1 */
+		int off = opos % bs;
+		if (o_chr)
+			off = ipos % bs;
+		if (reverse)
+			block = off;
+		else
+			block = bs - off;
+	}
 	return block;
 }
 
