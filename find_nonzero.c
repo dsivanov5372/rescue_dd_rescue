@@ -70,8 +70,10 @@ size_t find_nonzero_sse2o(const unsigned char* blk, const size_t ln)
 /** SSE2 version for measuring the initial zero bytes of 16b aligned blk */
 size_t find_nonzero_sse2(const unsigned char* blk, const size_t ln)
 {
+	/*
 	if (!ln || *blk)
 		return 0;
+	 */
 	register __m128i xmm0, xmm1;
 	register const __m128i zero = _mm_setzero_si128();
 	register unsigned int eax, ebx;
@@ -115,8 +117,10 @@ void probe_simd()
  * we don't even need NEON here, ldmia does the 3x speedup on Cortexes */
 size_t find_nonzero_arm6(const unsigned char *blk, const size_t ln)
 {
+	/*
 	if (!ln || *blk)
 		return 0;
+	 */
 	register unsigned char* res;
 	const register unsigned char* end = blk+ln;
 	asm volatile(

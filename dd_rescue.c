@@ -881,7 +881,10 @@ static ssize_t blockiszero(const unsigned char* blk, const size_t ln)
 {
 	if (i_repeat && i_rep_zero)
 		return i_rep_zero;
-	i_rep_zero = find_nonzero_opt(blk, ln);
+	if (!ln || *blk) 
+		i_rep_zero = 0;
+	else
+		i_rep_zero = find_nonzero_opt(blk, ln);
 	return i_rep_zero;
 }
 
@@ -1045,6 +1048,7 @@ ssize_t dowrite(const ssize_t rd)
 	ssize_t wr = 0;
 	weno = 0;
 	errno = 0;
+	/* TODO: Sparse writing for blockiszero smaller than rd, but larger than hardbs */
 	if (!sparse || blockiszero(buf, rd) < rd) {
 		err = ((wr = writeblock(rd)) < rd ? 1: 0);
 		weno = errno;
