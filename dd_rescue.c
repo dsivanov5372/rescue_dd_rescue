@@ -1104,7 +1104,7 @@ ssize_t dowrite_sparse(const ssize_t rd)
 	/* First half is empty */
 	if (zln >= mid) {
 		unsigned char* oldbuf = buf;
-		advancepos(rd, zln);
+		advancepos(zln, zln);
 		buf += zln;
 		ssize_t wr = dowrite(rd-zln);
 		buf = oldbuf;

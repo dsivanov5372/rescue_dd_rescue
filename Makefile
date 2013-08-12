@@ -144,9 +144,11 @@ check: $(TARGETS) find_nonzero
 	./dd_rescue -S 20k -m 4k -b 4k -Z 0 zero
 	./dd_rescue -a -b 8k zero zero2
 	du zero zero2
+	cmp zero zero2
 	rm zero2
 	./dd_rescue -a -b 16k zero zero2
 	du zero zero2
+	cmp zero zero2
 	rm zero zero2
 	
 
