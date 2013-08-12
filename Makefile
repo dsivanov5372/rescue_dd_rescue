@@ -123,8 +123,30 @@ install: $(TARGETS)
 	gzip -9 $(MANDIR)/man1/dd_rescue.1
 
 check: $(TARGETS) find_nonzero
+	./find_nonzero 2
+	rm -f dd_rescue.copy dd_rescue.copy2
 	./dd_rescue -apP dd_rescue dd_rescue.copy
 	cmp dd_rescue dd_rescue.copy 
-	./find_nonzero 2
 	rm dd_rescue.copy
+	./dd_rescue -b16k -B16k -a dd_rescue dd_rescue.copy
+	cmp dd_rescue dd_rescue.copy
+	rm dd_rescue.copy
+	./dd_rescue -r dd_rescue dd_rescue.copy
+	cmp dd_rescue dd_rescue.copy
+	./dd_rescue -x dd_rescue dd_rescue.copy
+	cat dd_rescue dd_rescue > dd_rescue.copy2
+	cmp dd_rescue.copy dd_rescue.copy2
+	rm dd_rescue.copy dd_rescue.copy2
+	rm -f zero zero2
+	./dd_rescue -a -m 261k /dev/zero zero
+	du zero
+	./dd_rescue -S 12k -m 4k -b 4k -Z 0 zero
+	./dd_rescue -S 20k -m 4k -b 4k -Z 0 zero
+	./dd_rescue -a -b 8k zero zero2
+	du zero zero2
+	rm zero2
+	./dd_rescue -a -b 16k zero zero2
+	du zero zero2
+	rm zero zero2
+	
 
