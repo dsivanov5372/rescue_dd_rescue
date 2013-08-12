@@ -1116,7 +1116,7 @@ ssize_t dowrite_sparse(const ssize_t rd)
 		return dowrite(rd);
 	else {
 		ssize_t wr = dowrite(mid);
-		advancepos(mid, wr);
+		//advancepos(mid, wr);
 		if (wr != mid) 
 			return wr;
 		advancepos(rd-mid, 0);
