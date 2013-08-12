@@ -52,7 +52,7 @@
 #define ID "$Id$"
 
 #ifndef BUF_SOFTBLOCKSIZE
-# define BUF_SOFTBLOCKSIZE 65536
+# define BUF_SOFTBLOCKSIZE 131072
 #endif
 
 #ifndef BUF_HARDBLOCKSIZE
@@ -1059,11 +1059,9 @@ ssize_t dowrite(const ssize_t rd)
 	ssize_t wr = 0;
 	weno = 0;
 	errno = 0;
-	/* TODO: Sparse writing for blockiszero smaller than rd, but larger than hardbs */
-	if (!sparse || blockiszero(buf, rd) < rd) {
-		err = ((wr = writeblock(rd)) < rd ? 1: 0);
-		weno = errno;
-	}
+	err = ((wr = writeblock(rd)) < rd ? 1: 0);
+	weno = errno;
+
 	if (err && is_writeerr_fatal(weno))
 		++fatal;
 	if (err) {
@@ -1082,12 +1080,56 @@ ssize_t dowrite(const ssize_t rd)
 	return wr;
 }
 
+/* Write rd-sized block at buf; if sparse is set, check if at least half of the
+ * block is empty and if so, move over the sparse pieces ... */
+ssize_t dowrite_sparse(const ssize_t rd)
+{
+	/* Simple case: sparse not set => just write */
+	if (!sparse)
+		return dowrite(rd);
+	ssize_t zln = blockiszero(buf, rd);
+	/* Also simple: Whole block is empty, so just move on */
+	if (zln == rd) {
+		advancepos(rd, 0);
+		weno = 0;
+		return 0;
+	}
+	/* Block is smaller than 2*hardbs and not completely zero, so don't bother optimizing ... */
+	if (rd < 2*hardbs)
+		return dowrite(rd);
+	/* Check both halves -- aligned to hardbs boundaries */
+	int mid = rd/2;
+	mid -= mid%hardbs;
+	zln -= zln%hardbs;
+	/* First half is empty */
+	if (zln >= mid) {
+		unsigned char* oldbuf = buf;
+		advancepos(rd, zln);
+		buf += zln;
+		ssize_t wr = dowrite(rd-zln);
+		buf = oldbuf;
+		return wr;
+	}
+	/* Check second half */
+	ssize_t zln2 = blockiszero(buf+mid, rd-mid);
+	if (zln2 != rd-mid)
+		return dowrite(rd);
+	else {
+		ssize_t wr = dowrite(mid);
+		advancepos(mid, wr);
+		if (wr != mid) 
+			return wr;
+		advancepos(rd-mid, 0);
+		return wr;
+	}
+}
+
 /* Do write with retry if rd > hardbs, update positions ... 
  * Returns 0 on success, -1 on fatal error, 1 on normal error. */
 int dowrite_retry(const ssize_t rd)
 {
 	int errs = 0;
-	ssize_t wr = dowrite(rd);
+	ssize_t wr = dowrite_sparse(rd);
 	if (wr == rd || weno == 0)
 		return 0;
 	if ((rd <= (ssize_t)hardbs) || (weno != ENOSPC && weno != EFBIG)) {
