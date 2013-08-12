@@ -1089,7 +1089,7 @@ ssize_t dowrite_sparse(const ssize_t rd)
 		return dowrite(rd);
 	ssize_t zln = blockiszero(buf, rd);
 	/* Also simple: Whole block is empty, so just move on */
-	if (zln == rd) {
+	if (zln >= rd) {
 		advancepos(rd, 0);
 		weno = 0;
 		return 0;
@@ -1112,7 +1112,7 @@ ssize_t dowrite_sparse(const ssize_t rd)
 	}
 	/* Check second half */
 	ssize_t zln2 = blockiszero(buf+mid, rd-mid);
-	if (zln2 != rd-mid)
+	if (zln2 < rd-mid)
 		return dowrite(rd);
 	else {
 		ssize_t wr = dowrite(mid);
