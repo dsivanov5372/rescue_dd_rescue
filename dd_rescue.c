@@ -152,6 +152,11 @@ _syscall6(long, splice, int, fdin, loff_t*, off_in, int, fdout, loff_t*, off_out
 # undef __KERNEL__
 #endif
 
+/* xattrs */
+#ifdef HAVE_ATTR_XATTR_H
+# include <attr/xattr.h>
+#endif
+
 /* fwd decls */
 int cleanup();
 
@@ -743,6 +748,18 @@ int copyperm(int ifd, int ofd)
 	return err;
 }
 
+
+/** Copy xattrs */
+int copyxattr(const char* inm, const char* onm)
+#ifdef HAVE_ATTR_XATTR_H
+{
+	/* TODO: Do calls to listxattr and getxattr and setxattr */	
+}
+#else
+{
+}
+#endif
+
 /** File time copy */
 int copytimes(const char* inm, const char* onm)
 {
@@ -840,11 +857,15 @@ int cleanup()
 	ZFREE(origbuf2);
 	ZFREE(origbuf);
 	ZFREE(graph);
-	if (preserve)
+	if (preserve) {
+		copyxattr(iname, oname);
 		copytimes(iname, oname);
+	}
 	LISTFOREACH(ofiles, of)
-		if (preserve)
+		if (preserve) {
+			copyxattr(iname, LISTDATA(of).name);
 			copytimes(iname, LISTDATA(of).name);
+		}
 	if (prng_state2) {
 		frandom_release(prng_state2);
 		prng_state2 = 0;
