@@ -754,9 +754,20 @@ int copyxattr(const char* inm, const char* onm)
 #ifdef HAVE_ATTR_XATTR_H
 {
 	/* TODO: Do calls to listxattr and getxattr and setxattr */	
+	char *attrs = NULL;
+	ssize_t aln = listxattr(inm, NULL, 0);
+	if (aln <= 0)
+		return 0;
+	attrs = malloc(aln);
+	if (!attrs) {
+		fplog(stderr, WARN, "Can't allocate buffer of len %z for xattr names\n", aln);
+		return -1;
+	}
+
 }
 #else
 {
+	return 0;
 }
 #endif
 
