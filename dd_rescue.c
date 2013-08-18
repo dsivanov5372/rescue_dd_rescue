@@ -756,14 +756,48 @@ int copyxattr(const char* inm, const char* onm)
 	/* TODO: Do calls to listxattr and getxattr and setxattr */	
 	char *attrs = NULL;
 	ssize_t aln = listxattr(inm, NULL, 0);
+	int copied = 0;
 	if (aln <= 0)
 		return 0;
-	attrs = malloc(aln);
+	attrs = (char*)malloc(aln);
 	if (!attrs) {
-		fplog(stderr, WARN, "Can't allocate buffer of len %z for xattr names\n", aln);
+		fplog(stderr, WARN, "Can't allocate buffer of len %z for attr names\n", aln);
 		return -1;
 	}
-
+	aln = listxattr(inm, attrs, aln);
+	if (aln <= 0) {
+		fplog(stderr, WARN, "Could not read attr list: %s\n", strerror(errno));
+		free(attrs);
+		return -1;
+	}
+	int offs;
+	unsigned char* extrabuf = buf;
+	int ebufall = 0;
+	for (offs = 0; offs < aln; offs += 1+strlen(attrs+offs)) {
+		ssize_t itln = getxattr(inm, attrs+offs, NULL, 0);
+		if (ebufall && itln > ebufall) {
+			extrabuf = (unsigned char*)realloc(extrabuf, itln);
+			ebufall = itln;
+		} else if (itln > (ssize_t)softbs) {
+			extrabuf = (unsigned char*)malloc(itln);
+			ebufall = itln;
+		}
+		itln = getxattr(inm, attrs+offs, extrabuf, itln);
+		if (itln <= 0) {
+			fplog(stderr, WARN, "Could not read attr %s: %s\n", attrs+offs, strerror(errno));
+			continue;
+		}
+		itln = setxattr(onm, attrs+offs, extrabuf, itln, 0);
+		if (itln <= 0)
+			fplog(stderr, WARN, "Could not write attr %s: %s\n", attrs+offs, strerror(errno));
+		if (verbose)
+			fplog(stderr, INFO, "Copied attr %s (%i bytes)\n", attrs+offs, itln);
+		++copied;
+	}
+	if (ebufall)
+		free(extrabuf);
+	free(attrs);
+	return copied;
 }
 #else
 {
@@ -1127,7 +1161,7 @@ ssize_t dowrite_sparse(const ssize_t rd)
 		return 0;
 	}
 	/* Block is smaller than 2*hardbs and not completely zero, so don't bother optimizing ... */
-	if (rd < 2*hardbs)
+	if (rd < 2*(ssize_t)hardbs)
 		return dowrite(rd);
 	/* Check both halves -- aligned to hardbs boundaries */
 	int mid = rd/2;

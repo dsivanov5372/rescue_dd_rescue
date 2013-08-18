@@ -168,7 +168,7 @@ inline static size_t find_nonzero(const unsigned char* blk, const size_t ln)
 {
 	if (!ln || *blk)
 		return 0;
-	const int off = (-(unsigned char)(unsigned long)blk) & 0x1f;
+	const unsigned off = (-(unsigned char)(unsigned long)blk) & 0x1f;
 	size_t remain = ln - off;
 	size_t i;
 	for (i = 0; i < off; ++i)
