@@ -1748,7 +1748,7 @@ void printhelp()
 	fprintf(stderr, "         -A         Always write blocks, zeroed if err (def=no),\n");
 	fprintf(stderr, "         -i         interactive: ask before overwriting data (def=no),\n");
 	fprintf(stderr, "         -f         force: skip some sanity checks (def=no),\n");
-	fprintf(stderr, "         -p         preserve: preserve ownership / perms (def=no),\n");
+	fprintf(stderr, "         -p         preserve: preserve ownership, perms, times, attrs (def=no),\n");
 	fprintf(stderr, "         -Y oname   Secondary output file (multiple possible),\n");
 	fprintf(stderr, "         -q         quiet operation,\n");
 	fprintf(stderr, "         -v         verbose operation,\n");
