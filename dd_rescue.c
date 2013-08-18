@@ -1379,7 +1379,7 @@ int copyfile_softbs(const off_t max)
 			/* Non fatal error */
 			new_max = xfer + toread;
 			/* Error with large blocks: Try small ones ... */
-			if (verbose) {
+			if (verbose & eno) {
 				/*
 				fprintf(stderr, DDR_INFO "problems at ipos %.1fk: %s \n                 fall back to smaller blocksize \n%s%s%s%s",
 				        (double)ipos/1024, strerror(eno), down, down, down, down);
