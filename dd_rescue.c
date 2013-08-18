@@ -787,8 +787,7 @@ int copyxattr(const char* inm, const char* onm)
 			fplog(stderr, WARN, "Could not read attr %s: %s\n", attrs+offs, strerror(errno));
 			continue;
 		}
-		itln = setxattr(onm, attrs+offs, extrabuf, itln, 0);
-		if (itln <= 0)
+		if (setxattr(onm, attrs+offs, extrabuf, itln, 0))
 			fplog(stderr, WARN, "Could not write attr %s: %s\n", attrs+offs, strerror(errno));
 		if (verbose)
 			fplog(stderr, INFO, "Copied attr %s (%i bytes)\n", attrs+offs, itln);
@@ -900,7 +899,6 @@ int cleanup()
 		rc = sync_close(oft->fd, oft->name, oft->cdev);
 	}
 	ZFREE(origbuf2);
-	ZFREE(origbuf);
 	ZFREE(graph);
 	if (preserve) {
 		copyxattr(iname, oname);
@@ -911,6 +909,7 @@ int cleanup()
 			copyxattr(iname, LISTDATA(of).name);
 			copytimes(iname, LISTDATA(of).name);
 		}
+	ZFREE(origbuf);
 	if (prng_state2) {
 		frandom_release(prng_state2);
 		prng_state2 = 0;
