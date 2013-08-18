@@ -31,7 +31,6 @@
 
 /**
  * TODO:
- * - Provide options to copy ACLs/xattrs as well
  * - Use termcap to fetch cursor up/down and color codes
  * - Display more infos on errors by collecting info from syslog
  * - Option to send TRIM on zeroed file blocks
@@ -155,6 +154,8 @@ _syscall6(long, splice, int, fdin, loff_t*, off_in, int, fdout, loff_t*, off_out
 /* xattrs */
 #ifdef HAVE_ATTR_XATTR_H
 # include <attr/xattr.h>
+#else
+/* TODO: Could provide the prototypes for the syscalls ourselves ... */
 #endif
 
 /* fwd decls */
@@ -753,7 +754,6 @@ int copyperm(int ifd, int ofd)
 int copyxattr(const char* inm, const char* onm)
 #ifdef HAVE_ATTR_XATTR_H
 {
-	/* TODO: Do calls to listxattr and getxattr and setxattr */	
 	char *attrs = NULL;
 	ssize_t aln = listxattr(inm, NULL, 0);
 	int copied = 0;
