@@ -249,7 +249,7 @@ rather be overwritten with zeroes.
 .BR \-a ", " \-\-sparse
 will make 
 .B dd_rescue
-look for empty blocks (of 
+look for empty blocks (of at least half of 
 .IR softbs
 size), i.e. blocks filled with zeroes. Rather than writing those
 zeroes to the output file, it will then skip forward in the output
@@ -257,7 +257,8 @@ file, resulting in a sparse file, saving space in the output filesystem
 (if it supports sparse files). Note that if the output file does already
 exist and already has data stored at the location where zeroes are skipped
 over, this will result in an incomplete copy in that the output file is
-different from the input file, where blocks of zeroes are skipped over.
+different from the input file at the location where blocks of zeroes 
+were skipped over.
 .B dd_rescue
 tries to detect this and issue a warning, but it does not prevent this
 from happening
