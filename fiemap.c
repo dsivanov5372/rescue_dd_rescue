@@ -117,10 +117,12 @@ int main(int argc, char *argv[])
 			continue;
 		}
 		printf("Extents for %s (ino %li) on dev 0x%04x (0x%08lx bytes): %i\n",
-			argv[fno], st.st_ino, st.st_dev, st.st_size, err);
+			argv[fno], st.st_ino, (uint32_t)st.st_dev, st.st_size, err);
 		for (i = 0; i < err; ++i)
-			printf(" %08lx @ %010lx: %012lx %s\n", ext[i].fe_length,
-				ext[i].fe_logical, ext[i].fe_physical,
+			printf(" %08lx @ %010lx: %012lx %s\n", 
+				(uint64_t)ext[i].fe_length,
+				(uint64_t)ext[i].fe_logical, 
+				(uint64_t)ext[i].fe_physical,
 				fiemap_str(ext[i].fe_flags));
 		if ((ext[err-1].fe_flags & FIEMAP_EXTENT_LAST) == 0)
 			printf(" (INCOMPLETE)\n");
