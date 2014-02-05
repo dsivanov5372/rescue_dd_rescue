@@ -7,6 +7,7 @@
 
 #define _LARGEFILE_SOURCE 1
 #define _FILE_OFFSET_BITS 64
+#define _GNU_SOURCE 1
 #include "fiemap.h"
 #include <errno.h>
 #include <stdint.h>
@@ -26,6 +27,7 @@ int alloc_and_get_mapping(int fd, uint64_t start, uint64_t len, struct fiemap_ex
 	err = ioctl(fd, FS_IOC_FIEMAP, &fmap);
 	if (err != 0)
 		return -errno;
+	/* TODO: Should we add one just in case? */
 	struct fiemap *fm = (struct fiemap*) malloc(sizeof(struct fiemap) 
 			+ sizeof(struct fiemap_extent)*fmap.fm_mapped_extents);
 	if (!fm)
@@ -56,9 +58,8 @@ void free_mapping(struct fiemap_extent *ext)
 static char _devnm_str[64];
 char* devname(dev_t dev)
 {
-	/* FIXME: Need to accommodate > 16bits ... */
-	int maj = (dev & 0xff00) >> 8;
-	int min = (dev & 0xff);
+	unsigned maj = (dev & 0xfff00) >> 8;
+        unsigned min = (dev & 0xff) | ((dev >> 12) & 0xfff00);
 	char partln[128];
 	FILE *f = fopen("/proc/partitions", "r");
 	if (!f)
@@ -66,10 +67,11 @@ char* devname(dev_t dev)
 	int found = 0;
 	char pnm[32];
 	while (fgets(partln, 128, f) != 0) {
-		int pmaj, pmin, psz;
+		unsigned pmaj, pmin;
+	       	unsigned long psz;
 		if (!*partln || *partln == '\n' || isalpha(*partln))
 			continue;
-		sscanf(partln, "%i %i %i %s",
+		sscanf(partln, "%i %i %li %s",
 			&pmaj, &pmin, &psz, pnm);
 		if (maj == pmaj && min == pmin) {
 			++found;
@@ -118,9 +120,26 @@ char* fiemap_str(uint32_t flags)
 	return _fiemap_str;
 }
 
+#include <unistd.h>
+#define BLKSZ 16384
+int compare_ext(int fd1, int fd2, struct fiemap_extent* ext)
+{
+	/* FIXME: Is comparing one block enough? */
+	void* bufs = malloc(2*BLKSZ);
+	unsigned char *b1 = bufs;
+	unsigned char *b2 = bufs+BLKSZ;
+	size_t toread = ext->fe_length < BLKSZ? ext->fe_length: BLKSZ;
+	int rd1 = pread(fd1, b1, toread, ext->fe_logical);
+	int rd2 = pread(fd2, b2, toread, ext->fe_physical);
+	if (rd1 != toread || rd2 != toread)
+		return -1;
+	int res = memcmp(b1, b2, toread);
+	free(bufs);
+	return res;
+}
+
 #ifdef TEST_FIEMAP
 #include <fcntl.h>
-#include <unistd.h>
 
 #if __WORDSIZE == 64
 #define LL "l"
@@ -142,7 +161,8 @@ int main(int argc, char *argv[])
 	for (fno = 1; fno < argc; ++fno) {
 		struct fiemap_extent *ext = NULL;
 		struct stat st;
-		int i, err, fd = open(argv[fno], O_RDONLY);
+		int i, err, fd2 = 0;
+		int fd = open(argv[fno], O_RDONLY);
 		if (fd < 0) {
 			fprintf(stderr, "Can't open %s: %s\n", argv[fno], strerror(errno));
 			++errs;
@@ -162,16 +182,26 @@ int main(int argc, char *argv[])
 			++errs;
 			continue;
 		}
+		char* dnm = devname(st.st_dev);
+		if (*dnm) 
+			fd2 = open(dnm, O_RDONLY);
 		printf("Extents for %s (ino %" LL "i) on dev %s (0x%08" LL "x bytes): %i\n",
 			argv[fno], st.st_ino, devname(st.st_dev), st.st_size, err);
-		for (i = 0; i < err; ++i)
+		for (i = 0; i < err; ++i) {
 			printf(" %08" LL "x @ %010" LL "x: %012" LL "x %s\n", 
 				(uint64_t)ext[i].fe_length,
 				(uint64_t)ext[i].fe_logical, 
 				(uint64_t)ext[i].fe_physical,
 				fiemap_str(ext[i].fe_flags));
+			if (fd2 && compare_ext(fd, fd2, ext+i))
+				printf(" Comparison failed!!!\n");
+		}
 		if ((ext[err-1].fe_flags & FIEMAP_EXTENT_LAST) == 0)
 			printf(" (INCOMPLETE)\n");
+		if (fd2) {
+			close(fd2);
+			fd2 = 0;
+		}
 		free_mapping(ext);
 		close(fd);
 	}
