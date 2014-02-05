@@ -5,6 +5,8 @@
  * sanity checks.
  */
 
+#define _LARGEFILE_SOURCE 1
+#define _FILE_OFFSET_BITS 64
 #include "fiemap.h"
 #include <errno.h>
 #include <stdint.h>
@@ -48,6 +50,47 @@ void free_mapping(struct fiemap_extent *ext)
 		free(((char*)ext) - sizeof(struct fiemap));
 }
 
+#include <sys/stat.h>
+#include <stdio.h>
+#include <ctype.h>
+static char _devnm_str[64];
+char* devname(dev_t dev)
+{
+	/* FIXME: Need to accommodate > 16bits ... */
+	int maj = (dev & 0xff00) >> 8;
+	int min = (dev & 0xff);
+	char partln[128];
+	FILE *f = fopen("/proc/partitions", "r");
+	if (!f)
+		return NULL;
+	int found = 0;
+	char pnm[32];
+	while (fgets(partln, 128, f) != 0) {
+		int pmaj, pmin, psz;
+		if (!*partln || *partln == '\n' || isalpha(*partln))
+			continue;
+		sscanf(partln, "%i %i %i %s",
+			&pmaj, &pmin, &psz, pnm);
+		if (maj == pmaj && min == pmin) {
+			++found;
+			break;
+		}
+	}
+	fclose(f);
+	if (!found)
+		return NULL;
+	struct stat st;
+	sprintf(_devnm_str, "/dev/%s", pnm);
+	if (!stat(_devnm_str, &st))
+		if (S_ISBLK(st.st_mode) && st.st_rdev == dev)
+			return _devnm_str;
+	sprintf(_devnm_str, "/dev/block/%s", pnm);
+	if (!stat(_devnm_str, &st))
+		if (S_ISBLK(st.st_mode) && st.st_rdev == dev)
+			return _devnm_str;
+	return NULL;
+}
+
 static char _fiemap_str[128];
 char* fiemap_str(uint32_t flags)
 {
@@ -76,11 +119,14 @@ char* fiemap_str(uint32_t flags)
 }
 
 #ifdef TEST_FIEMAP
-#define _LARGEFILE_SOURCE 1
-#include <sys/stat.h>
-#include <stdio.h>
 #include <fcntl.h>
 #include <unistd.h>
+
+#if __WORDSIZE == 64
+#define LL "l"
+#else
+#define LL "L"
+#endif
 
 void usage()
 {
@@ -116,10 +162,10 @@ int main(int argc, char *argv[])
 			++errs;
 			continue;
 		}
-		printf("Extents for %s (ino %li) on dev 0x%04x (0x%08lx bytes): %i\n",
-			argv[fno], st.st_ino, (uint32_t)st.st_dev, st.st_size, err);
+		printf("Extents for %s (ino %" LL "i) on dev %s (0x%08" LL "x bytes): %i\n",
+			argv[fno], st.st_ino, devname(st.st_dev), st.st_size, err);
 		for (i = 0; i < err; ++i)
-			printf(" %08lx @ %010lx: %012lx %s\n", 
+			printf(" %08" LL "x @ %010" LL "x: %012" LL "x %s\n", 
 				(uint64_t)ext[i].fe_length,
 				(uint64_t)ext[i].fe_logical, 
 				(uint64_t)ext[i].fe_physical,
