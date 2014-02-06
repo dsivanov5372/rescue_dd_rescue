@@ -52,23 +52,36 @@ int alloc_and_get_mapping(int fd, uint64_t start, uint64_t len, struct fiemap_ex
 		return -errno;
 	}
 	err = ioctl(fd, FS_IOC_FIEMAP, fm);
-	if (err != 0) {
+	if (err != 0 || fm->fm_mapped_extents == 0) {
 		free(fm);
 		ext = NULL;
 		err = errno;
 		ioctl(fd, FITHAW, 0);
 		return -err;
 	}
+	/* Correct last extent length */
+	struct fiemap_extent *lastext = fm->fm_extents+(fm->fm_mapped_extents-1);
+	if (lastext->fe_flags & FIEMAP_EXTENT_LAST) 
+		lastext->fe_length = len-lastext->fe_logical;
 	*ext = fm->fm_extents;
 	return fm->fm_mapped_extents;
 }
 
 void free_mapping(int fd, struct fiemap_extent *ext)
 {
-	ioctl(fd, FITHAW, 0);
+	if (fd > 0)
+		ioctl(fd, FITHAW, 0);
 	if (ext)
 		free(((char*)ext) - sizeof(struct fiemap));
-	/* TODO: THAW */
+}
+
+struct fiemap_extent* copy_ext(struct fiemap_extent *ext, int nr)
+{
+	struct fiemap_extent *copy = malloc(nr*sizeof(struct fiemap_extent));
+	if (!copy)
+		return copy;
+	memcpy(copy, ext, nr*sizeof(struct fiemap_extent));
+	return copy;
 }
 
 static char _devnm_str[64];
@@ -135,6 +148,9 @@ char* fiemap_str(uint32_t flags)
 		strcat(_fiemap_str, "LAST ");
 	return _fiemap_str;
 }
+// FIXME: Is UNWRITTEN really dangerous?
+#define FIEMAP_DANGEROUS (FIEMAP_EXTENT_UNKNOWN | FIEMAP_EXTENT_ENCODED | FIEMAP_EXTENT_NOT_ALIGNED | FIEMAP_EXTENT_UNWRITTEN)
+
 
 #define BLKSZ 16384
 int compare_ext(int fd1, int fd2, struct fiemap_extent* ext)
@@ -150,8 +166,11 @@ int compare_ext(int fd1, int fd2, struct fiemap_extent* ext)
 	}
 	size_t toread = ext->fe_length < BLKSZ? ext->fe_length: BLKSZ;
 	int rd1 = pread(fd1, b1, toread, ext->fe_logical);
+	/* Not needed anymore since we correct this when getting the mapping */
+	/*
 	if (rd1 > 0 && rd1 < toread && (ext->fe_flags & FIEMAP_EXTENT_LAST))
 		toread = rd1;
+	 */
 	int rd2 = pread(fd2, b2, toread, ext->fe_physical);
 	int res;
 	if (rd1 != toread || rd2 != toread) 
@@ -179,10 +198,15 @@ void usage()
 
 int main(int argc, char *argv[])
 {
-	int fno, errs = 0;
+	int fno = 1, errs = 0;
+	int dotrim = 0;
 	if (argc < 2)
 		usage();
-	for (fno = 1; fno < argc; ++fno) {
+	if (!strcmp(argv[1], "-t")) {
+		++dotrim;
+		++fno;
+	}
+	for (; fno < argc; ++fno) {
 		struct fiemap_extent *ext = NULL;
 		struct stat st;
 		int i, err, fd2 = 0;
@@ -221,17 +245,55 @@ int main(int argc, char *argv[])
 				(uint64_t)ext[i].fe_logical, 
 				(uint64_t)ext[i].fe_physical,
 				fiemap_str(ext[i].fe_flags));
-			if (fd2 && compare_ext(fd, fd2, ext+i))
+			if (fd2 > 0 && compare_ext(fd, fd2, ext+i)) {
 				printf(" Comparison failed!!!\n");
+				dotrim = 0;
+			}
 		}
 		if ((ext[err-1].fe_flags & FIEMAP_EXTENT_LAST) == 0)
 			printf(" (INCOMPLETE)\n");
+
+		struct fiemap_extent* extc = NULL;
+		if (dotrim && fd2 > 0)
+			extc = copy_ext(ext, err);
+		free_mapping(fd, ext);
+		close(fd);
+		if (extc) {
+			struct fstrim_range trim;
+			unlink(argv[fno]);
+			for (i = 0; i < err; ++i) {
+				int j;
+				uint64_t accln = extc[i].fe_length;
+				if (extc[i].fe_flags & FIEMAP_DANGEROUS)
+					continue;
+				/*
+				if (compare_ext(fd, fd2, extc+i))
+					continue;
+				 */
+				for (j = i+1; j < err; ++j) {
+					if (extc[j].fe_flags & FIEMAP_DANGEROUS)
+						break;
+					if (extc[j].fe_physical != extc[i].fe_physical + accln)
+						break;
+					/*
+					if (compare_ext(fd, fd2, extc+j))
+						break;
+					 */
+					accln += extc[j].fe_length;
+				}
+				trim.start = extc[i].fe_physical;
+				trim.len = accln;
+				trim.minlen = 65536;
+				int trimerr = ioctl(fd2, FITRIM, &trim);
+				printf("0x%" LL "x/%" LL "x bytes trimmed\n", trimerr? 0: (uint64_t)trim.len, accln);
+				i = j-1;
+			}
+			free(extc);
+		}
 		if (fd2 > 0) {
 			close(fd2);
 			fd2 = 0;
 		}
-		free_mapping(fd, ext);
-		close(fd);
 	}
 	return errs;
 }
