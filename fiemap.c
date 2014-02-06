@@ -181,6 +181,17 @@ int compare_ext(int fd1, int fd2, struct fiemap_extent* ext)
 	return res;
 }
 
+void mydirnm(char* nm)
+{
+	char* last = nm+strlen(nm)-1;
+	while (last > nm && *last != '/')
+		--last;
+	if (last == nm) {
+		*nm++ = '.'; *nm = 0;
+	} else 
+		*++nm = 0;
+}
+
 #ifdef TEST_FIEMAP
 #include <fcntl.h>
 
@@ -236,6 +247,7 @@ int main(int argc, char *argv[])
 			if (fd2 < 0)
 				fprintf(stderr, "Could not open %s for comparison: %s\n",
 					dnm, strerror(errno));
+			ioctl(fd2, BLKFLSBUF, 0);
 		}
 		printf("Extents for %s (ino %" LL "i) on dev %s (0x%08" LL "x bytes): %i\n",
 			argv[fno], st.st_ino, devname(st.st_dev), st.st_size, err);
@@ -260,6 +272,13 @@ int main(int argc, char *argv[])
 		close(fd);
 		if (extc) {
 			struct fstrim_range trim;
+			char* trimnm = strdup(argv[fno]);
+			mydirnm(trimnm);
+			int fd3 = open(trimnm, O_RDONLY);
+			if (fd3 < 0) {
+				fprintf(stderr, "Can't open dir %s: %s\n", trimnm, strerror(errno));
+				break;
+			}
 			unlink(argv[fno]);
 			for (i = 0; i < err; ++i) {
 				int j;
@@ -284,11 +303,12 @@ int main(int argc, char *argv[])
 				trim.start = extc[i].fe_physical;
 				trim.len = accln;
 				trim.minlen = 65536;
-				int trimerr = ioctl(fd2, FITRIM, &trim);
+				int trimerr = ioctl(fd3, FITRIM, &trim);
 				printf("0x%" LL "x/%" LL "x bytes trimmed\n", trimerr? 0: (uint64_t)trim.len, accln);
 				i = j-1;
 			}
 			free(extc);
+			close(fd3);
 		}
 		if (fd2 > 0) {
 			close(fd2);
