@@ -21,7 +21,7 @@
 #include <stdio.h>
 #include <ctype.h>
 
-int alloc_and_get_mapping(int fd, uint64_t start, uint64_t len, struct fiemap_extent **ext)
+int alloc_and_get_mapping(int fd, uint64_t start, uint64_t len, struct fiemap_extent **ext, int needfreeze)
 {
 	int err;
 	struct fiemap fmap;
@@ -45,18 +45,27 @@ int alloc_and_get_mapping(int fd, uint64_t start, uint64_t len, struct fiemap_ex
 	fm->fm_flags = 0;
 	fm->fm_extent_count = fmap.fm_mapped_extents;
 	/* TODO: FREEZE */
+	err = ioctl(fd, FIFREEZE, 0);
+	if (err != 0 && needfreeze) {
+		free(fm);
+		ext = NULL;
+		return -errno;
+	}
 	err = ioctl(fd, FS_IOC_FIEMAP, fm);
 	if (err != 0) {
 		free(fm);
 		ext = NULL;
-		return -errno;
+		err = errno;
+		ioctl(fd, FITHAW, 0);
+		return -err;
 	}
 	*ext = fm->fm_extents;
 	return fm->fm_mapped_extents;
 }
 
-void free_mapping(struct fiemap_extent *ext)
+void free_mapping(int fd, struct fiemap_extent *ext)
 {
+	ioctl(fd, FITHAW, 0);
 	if (ext)
 		free(((char*)ext) - sizeof(struct fiemap));
 	/* TODO: THAW */
@@ -190,7 +199,7 @@ int main(int argc, char *argv[])
 			++errs;
 			continue;
 		}
-		err = alloc_and_get_mapping(fd, 0, st.st_size, &ext);
+		err = alloc_and_get_mapping(fd, 0, st.st_size, &ext, 0);
 		if (err <= 0) {
 			fprintf(stderr, "Can't get extents for %s: %s\n", argv[fno], strerror(-err));
 			close(fd);
@@ -217,11 +226,11 @@ int main(int argc, char *argv[])
 		}
 		if ((ext[err-1].fe_flags & FIEMAP_EXTENT_LAST) == 0)
 			printf(" (INCOMPLETE)\n");
-		if (fd2) {
+		if (fd2 > 0) {
 			close(fd2);
 			fd2 = 0;
 		}
-		free_mapping(ext);
+		free_mapping(fd, ext);
 		close(fd);
 	}
 	return errs;
