@@ -15,10 +15,17 @@
 #include <string.h>
 #include <sys/ioctl.h>
 
+#include <unistd.h>
+
+#include <sys/stat.h>
+#include <stdio.h>
+#include <ctype.h>
+
 int alloc_and_get_mapping(int fd, uint64_t start, uint64_t len, struct fiemap_extent **ext)
 {
 	int err;
 	struct fiemap fmap;
+	sync();
 	//struct fiemap_extent *fmap_exts;
 	fmap.fm_start = start;
 	fmap.fm_length = len;
@@ -27,7 +34,8 @@ int alloc_and_get_mapping(int fd, uint64_t start, uint64_t len, struct fiemap_ex
 	err = ioctl(fd, FS_IOC_FIEMAP, &fmap);
 	if (err != 0)
 		return -errno;
-	/* TODO: Should we add one just in case? */
+	if (fmap.fm_mapped_extents)
+		++fmap.fm_mapped_extents;
 	struct fiemap *fm = (struct fiemap*) malloc(sizeof(struct fiemap) 
 			+ sizeof(struct fiemap_extent)*fmap.fm_mapped_extents);
 	if (!fm)
@@ -36,6 +44,7 @@ int alloc_and_get_mapping(int fd, uint64_t start, uint64_t len, struct fiemap_ex
 	fm->fm_length = len;
 	fm->fm_flags = 0;
 	fm->fm_extent_count = fmap.fm_mapped_extents;
+	/* TODO: FREEZE */
 	err = ioctl(fd, FS_IOC_FIEMAP, fm);
 	if (err != 0) {
 		free(fm);
@@ -50,11 +59,9 @@ void free_mapping(struct fiemap_extent *ext)
 {
 	if (ext)
 		free(((char*)ext) - sizeof(struct fiemap));
+	/* TODO: THAW */
 }
 
-#include <sys/stat.h>
-#include <stdio.h>
-#include <ctype.h>
 static char _devnm_str[64];
 char* devname(dev_t dev)
 {
@@ -120,21 +127,29 @@ char* fiemap_str(uint32_t flags)
 	return _fiemap_str;
 }
 
-#include <unistd.h>
 #define BLKSZ 16384
 int compare_ext(int fd1, int fd2, struct fiemap_extent* ext)
 {
 	/* FIXME: Is comparing one block enough? */
-	void* bufs = malloc(2*BLKSZ);
-	unsigned char *b1 = bufs;
-	unsigned char *b2 = bufs+BLKSZ;
+	unsigned char *b1 = malloc(BLKSZ);
+	if (!b1)
+		return -1;
+	unsigned char *b2 = malloc(BLKSZ);
+	if (!b2) {
+		free(b1);
+		return -1;
+	}
 	size_t toread = ext->fe_length < BLKSZ? ext->fe_length: BLKSZ;
 	int rd1 = pread(fd1, b1, toread, ext->fe_logical);
+	if (rd1 > 0 && rd1 < toread && (ext->fe_flags & FIEMAP_EXTENT_LAST))
+		toread = rd1;
 	int rd2 = pread(fd2, b2, toread, ext->fe_physical);
-	if (rd1 != toread || rd2 != toread)
-		return -1;
-	int res = memcmp(b1, b2, toread);
-	free(bufs);
+	int res;
+	if (rd1 != toread || rd2 != toread) 
+		res = -1;
+	else
+		res = memcmp(b1, b2, toread);
+	free(b2); free(b1);
 	return res;
 }
 
@@ -183,8 +198,12 @@ int main(int argc, char *argv[])
 			continue;
 		}
 		char* dnm = devname(st.st_dev);
-		if (*dnm) 
+		if (*dnm) {
 			fd2 = open(dnm, O_RDONLY);
+			if (fd2 < 0)
+				fprintf(stderr, "Could not open %s for comparison: %s\n",
+					dnm, strerror(errno));
+		}
 		printf("Extents for %s (ino %" LL "i) on dev %s (0x%08" LL "x bytes): %i\n",
 			argv[fno], st.st_ino, devname(st.st_dev), st.st_size, err);
 		for (i = 0; i < err; ++i) {
