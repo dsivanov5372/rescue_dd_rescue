@@ -268,6 +268,10 @@ int main(int argc, char *argv[])
 		struct fiemap_extent* extc = NULL;
 		if (dotrim && fd2 > 0)
 			extc = copy_ext(ext, err);
+		if (fd2 > 0) {
+			close(fd2);
+			fd2 = 0;
+		}
 		free_mapping(fd, ext);
 		close(fd);
 		if (extc) {
@@ -280,6 +284,13 @@ int main(int argc, char *argv[])
 				break;
 			}
 			unlink(argv[fno]);
+#ifdef JUST_DO_FSTRIM
+			trim.start = 0;
+			trim.len = (uint64_t)(-1);
+			trim.minlen = 16384;
+			int trimerr = ioctl(fd3, FITRIM, &trim);
+			printf("0x%" LL "x/%" LL "x bytes trimmed\n", trimerr? 0: (uint64_t)trim.len, (uint64_t)-1);
+#else
 			for (i = 0; i < err; ++i) {
 				int j;
 				uint64_t accln = extc[i].fe_length;
@@ -302,17 +313,14 @@ int main(int argc, char *argv[])
 				}
 				trim.start = extc[i].fe_physical;
 				trim.len = accln;
-				trim.minlen = 65536;
+				trim.minlen = 16384;
 				int trimerr = ioctl(fd3, FITRIM, &trim);
 				printf("0x%" LL "x/%" LL "x bytes trimmed\n", trimerr? 0: (uint64_t)trim.len, accln);
 				i = j-1;
 			}
+#endif
 			free(extc);
 			close(fd3);
-		}
-		if (fd2 > 0) {
-			close(fd2);
-			fd2 = 0;
 		}
 	}
 	return errs;
