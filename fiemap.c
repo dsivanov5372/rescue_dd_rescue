@@ -20,6 +20,7 @@
 #include <sys/stat.h>
 #include <stdio.h>
 #include <ctype.h>
+#include <fcntl.h>
 
 int alloc_and_get_mapping(int fd, uint64_t start, uint64_t len, struct fiemap_extent **ext, int needfreeze)
 {
@@ -192,14 +193,81 @@ void mydirnm(char* nm)
 		*++nm = 0;
 }
 
-#ifdef TEST_FIEMAP
-#include <fcntl.h>
-
 #if __WORDSIZE == 64
 #define LL "l"
 #else
 #define LL "L"
 #endif
+
+
+int64_t fstrim_ext(const char* dirname, const struct fiemap_extent* ext, const int nrext)
+{
+	struct fstrim_range trim;
+	int64_t tottrim = 0;
+	int i, fd = open(dirname, O_RDONLY);
+	if (fd < 0) {
+		int err = errno;
+		fprintf(stderr, "Can't open dir %s: %s\n",
+			dirname, strerror(errno));
+		return -err;
+	}
+	for (i = 0; i < nrext; ++i) {
+		int j;
+		uint64_t accln = ext[i].fe_length;
+		if (ext[i].fe_flags & FIEMAP_DANGEROUS)
+			continue;
+		/*
+		if (compare_ext(fd, fd2, ext+i))
+			continue;
+		 */
+		for (j = i+1; j < nrext; ++j) {
+			if (ext[j].fe_flags & FIEMAP_DANGEROUS)
+				break;
+			if (ext[j].fe_physical != ext[i].fe_physical + accln)
+				break;
+			/*
+			if (compare_ext(fd, fd2, ext+j))
+				break;
+			 */
+			accln += ext[j].fe_length;
+		}
+		trim.start = ext[i].fe_physical;
+		trim.len = accln;
+		trim.minlen = 16384;
+		int trimerr = ioctl(fd, FITRIM, &trim);
+		if (!trimerr)
+			tottrim += trim.len;
+#ifdef DEBUG
+		printf("0x%" LL "x/%" LL "x bytes trimmed\n", trimerr? 0: (uint64_t)trim.len, accln);
+#endif
+		i = j-1;
+	}
+	close(fd);
+	return tottrim;
+}
+
+int64_t fstrim(const char* dirname)
+{
+	struct fstrim_range trim;
+	int fd = open(dirname, O_RDONLY);
+	if (fd < 0) {
+		int err = errno;
+		fprintf(stderr, "Can't open dir %s: %s\n",
+			dirname, strerror(errno));
+		return -err;
+	}
+	trim.start = 0;
+	trim.len = (uint64_t)(-1);
+	trim.minlen = 16384;
+	int trimerr = ioctl(fd, FITRIM, &trim);
+#ifdef DEBUG
+	printf("0x%" LL "x/%" LL "x bytes trimmed\n", trimerr? 0: (uint64_t)trim.len, (uint64_t)-1);
+#endif
+	close(fd);
+	return trimerr? 0: trim.len;
+}
+
+#ifdef TEST_FIEMAP
 
 void usage()
 {
@@ -275,52 +343,16 @@ int main(int argc, char *argv[])
 		free_mapping(fd, ext);
 		close(fd);
 		if (extc) {
-			struct fstrim_range trim;
 			char* trimnm = strdup(argv[fno]);
 			mydirnm(trimnm);
-			int fd3 = open(trimnm, O_RDONLY);
-			if (fd3 < 0) {
-				fprintf(stderr, "Can't open dir %s: %s\n", trimnm, strerror(errno));
-				break;
-			}
 			unlink(argv[fno]);
 #ifdef JUST_DO_FSTRIM
-			trim.start = 0;
-			trim.len = (uint64_t)(-1);
-			trim.minlen = 16384;
-			int trimerr = ioctl(fd3, FITRIM, &trim);
-			printf("0x%" LL "x/%" LL "x bytes trimmed\n", trimerr? 0: (uint64_t)trim.len, (uint64_t)-1);
+			fstrim(trimnm);
 #else
-			for (i = 0; i < err; ++i) {
-				int j;
-				uint64_t accln = extc[i].fe_length;
-				if (extc[i].fe_flags & FIEMAP_DANGEROUS)
-					continue;
-				/*
-				if (compare_ext(fd, fd2, extc+i))
-					continue;
-				 */
-				for (j = i+1; j < err; ++j) {
-					if (extc[j].fe_flags & FIEMAP_DANGEROUS)
-						break;
-					if (extc[j].fe_physical != extc[i].fe_physical + accln)
-						break;
-					/*
-					if (compare_ext(fd, fd2, extc+j))
-						break;
-					 */
-					accln += extc[j].fe_length;
-				}
-				trim.start = extc[i].fe_physical;
-				trim.len = accln;
-				trim.minlen = 16384;
-				int trimerr = ioctl(fd3, FITRIM, &trim);
-				printf("0x%" LL "x/%" LL "x bytes trimmed\n", trimerr? 0: (uint64_t)trim.len, accln);
-				i = j-1;
-			}
+			fstrim_ext(trimnm, extc, err);
 #endif
+			free(trimnm);
 			free(extc);
-			close(fd3);
 		}
 	}
 	return errs;
