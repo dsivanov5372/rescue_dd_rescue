@@ -22,7 +22,8 @@
 #include <ctype.h>
 #include <fcntl.h>
 
-int alloc_and_get_mapping(int fd, uint64_t start, uint64_t len, struct fiemap_extent **ext, int needfreeze)
+int alloc_and_get_mapping(const int fd, const uint64_t start, const uint64_t len, 
+			  struct fiemap_extent **ext, const int needfreeze)
 {
 	int err;
 	struct fiemap fmap;
@@ -68,7 +69,7 @@ int alloc_and_get_mapping(int fd, uint64_t start, uint64_t len, struct fiemap_ex
 	return fm->fm_mapped_extents;
 }
 
-void free_mapping(int fd, struct fiemap_extent *ext)
+void free_mapping(const int fd, struct fiemap_extent *ext)
 {
 	if (fd > 0)
 		ioctl(fd, FITHAW, 0);
@@ -76,7 +77,7 @@ void free_mapping(int fd, struct fiemap_extent *ext)
 		free(((char*)ext) - sizeof(struct fiemap));
 }
 
-struct fiemap_extent* copy_ext(struct fiemap_extent *ext, int nr)
+struct fiemap_extent* copy_ext(const struct fiemap_extent *ext, const int nr)
 {
 	struct fiemap_extent *copy = malloc(nr*sizeof(struct fiemap_extent));
 	if (!copy)
@@ -86,7 +87,7 @@ struct fiemap_extent* copy_ext(struct fiemap_extent *ext, int nr)
 }
 
 static char _devnm_str[64];
-char* devname(dev_t dev)
+char* devname(const dev_t dev)
 {
 	unsigned maj = (dev & 0xfff00) >> 8;
         unsigned min = (dev & 0xff) | ((dev >> 12) & 0xfff00);
@@ -124,7 +125,7 @@ char* devname(dev_t dev)
 }
 
 static char _fiemap_str[128];
-char* fiemap_str(uint32_t flags)
+char* fiemap_str(const uint32_t flags)
 {
 	_fiemap_str[0] = 0;
 	if (flags & FIEMAP_EXTENT_UNKNOWN)
@@ -154,7 +155,7 @@ char* fiemap_str(uint32_t flags)
 
 
 #define BLKSZ 16384
-int compare_ext(int fd1, int fd2, struct fiemap_extent* ext)
+int compare_ext(const int fd1, const int fd2, const struct fiemap_extent* ext)
 {
 	/* FIXME: Is comparing one block enough? */
 	unsigned char *b1 = malloc(BLKSZ);
@@ -267,6 +268,26 @@ int64_t fstrim(const char* dirname)
 	return trimerr? 0: trim.len;
 }
 
+#include <linux/hdreg.h>
+unsigned long partoffset(const char* devnm)
+{
+	struct hd_geometry hdgeo;
+	int fd = open(devnm, O_RDONLY);
+	if (fd < 0) {
+		fprintf(stderr, "Can't open %s: %s\n", devnm, strerror(errno));
+		return -1;
+	}
+	int err = ioctl(fd, HDIO_GETGEO, &hdgeo);
+	if (err) {
+		fprintf(stderr, "HDIO_GETGEO ioctl on %s failed: %s\n", devnm, strerror(errno));
+		close(fd);
+		return -1;
+	}
+	close(fd);
+	return hdgeo.start;
+}
+
+
 #ifdef TEST_FIEMAP
 
 void usage()
@@ -343,14 +364,16 @@ int main(int argc, char *argv[])
 		free_mapping(fd, ext);
 		close(fd);
 		if (extc) {
+			int64_t trimmed;
 			char* trimnm = strdup(argv[fno]);
 			mydirnm(trimnm);
 			unlink(argv[fno]);
 #ifdef JUST_DO_FSTRIM
-			fstrim(trimnm);
+			trimmed = fstrim(trimnm);
 #else
-			fstrim_ext(trimnm, extc, err);
+			trimmed = fstrim_ext(trimnm, extc, err);
 #endif
+			printf("Trimmed 0x%" LL "x bytes on dir %s\n", trimmed, trimnm);
 			free(trimnm);
 			free(extc);
 		}
