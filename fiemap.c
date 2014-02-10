@@ -22,6 +22,8 @@
 #include <ctype.h>
 #include <fcntl.h>
 
+#include <assert.h>
+
 int alloc_and_get_mapping(const int fd, const uint64_t start, const uint64_t len, 
 			  struct fiemap_extent **ext, const int needfreeze)
 {
@@ -269,7 +271,7 @@ int64_t fstrim(const char* dirname)
 }
 
 #include <linux/hdreg.h>
-unsigned long partoffset(const char* devnm)
+int64_t partoffset(const char* devnm)
 {
 	struct hd_geometry hdgeo;
 	int fd = open(devnm, O_RDONLY);
@@ -278,15 +280,44 @@ unsigned long partoffset(const char* devnm)
 		return -1;
 	}
 	int err = ioctl(fd, HDIO_GETGEO, &hdgeo);
-	if (err) {
+	int64_t ret = -1;
+	if (err) 
 		fprintf(stderr, "HDIO_GETGEO ioctl on %s failed: %s\n", devnm, strerror(errno));
-		close(fd);
+	else
+		ret = hdgeo.start;
+	close(fd);
+#if __WORDSIZE == 64 && !defined(PARTOFFPARANOIA)
+	return ret;
+#else
+	if (ret < 1)
+		return ret;
+	const char* devptr = devnm + strlen(devnm);
+	while (devptr > devnm && *--devptr != '/');
+	if (*devptr == '/')
+		++devptr;
+	char basedevnm[32];
+	strcpy(basedevnm, devptr);
+	char* noptr = basedevnm + strlen(basedevnm);
+	while (isdigit(*--noptr));
+	*++noptr = 0;
+	char sysdevnm[128];
+	sprintf(sysdevnm, "/sys/block/%s/%s/start", basedevnm, devptr);
+	FILE *f = fopen(sysdevnm, "r");
+	int64_t val;
+	if (!f)
+		return -1;
+	fscanf(f, "%" LL "i", &val);
+	fclose(f);
+	if ((val & 0xffffffff) != ret) {
+		fprintf(stderr, "Val. inconsistent: %" LL "x <-> %" LL "x\n",
+			ret, val);
 		return -1;
 	}
-	close(fd);
-	return hdgeo.start;
+	if (val != ret)
+		fprintf(stderr, "Warn: HDGETGEO does not work well on 32bit system ....");
+	return val;
+#endif
 }
-
 
 #ifdef TEST_FIEMAP
 
@@ -353,6 +384,7 @@ int main(int argc, char *argv[])
 		}
 		if ((ext[err-1].fe_flags & FIEMAP_EXTENT_LAST) == 0)
 			printf(" (INCOMPLETE)\n");
+		printf("Partition offset for dev %s: 0x%" LL "x\n", dnm, partoffset(dnm));
 
 		struct fiemap_extent* extc = NULL;
 		if (dotrim && fd2 > 0)
