@@ -271,6 +271,7 @@ int64_t fstrim(const char* dirname)
 }
 
 #include <linux/hdreg.h>
+/* Get partition offset in sectors for block device devnm */
 int64_t partoffset(const char* devnm)
 {
 	struct hd_geometry hdgeo;
@@ -384,7 +385,7 @@ int main(int argc, char *argv[])
 		}
 		if ((ext[err-1].fe_flags & FIEMAP_EXTENT_LAST) == 0)
 			printf(" (INCOMPLETE)\n");
-		printf("Partition offset for dev %s: 0x%" LL "x\n", dnm, partoffset(dnm));
+		printf("Partition offset for dev %s: 0x%" LL "x sectors\n", dnm, partoffset(dnm));
 
 		struct fiemap_extent* extc = NULL;
 		if (dotrim && fd2 > 0)
