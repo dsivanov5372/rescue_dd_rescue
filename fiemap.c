@@ -270,6 +270,16 @@ int64_t fstrim(const char* dirname)
 	return trimerr? 0: trim.len;
 }
 
+static char _fulldevnm[32]; 
+char* strippart(const char* partname)
+{
+	strncpy(_fulldevnm, basename(partname), 31);
+	char* noptr = _fulldevnm + strlen(_fulldevnm);
+	while (isdigit(*--noptr));
+	*++noptr = 0;
+	return _fulldevnm;
+}
+
 #include <linux/hdreg.h>
 /* Get partition offset in sectors for block device devnm */
 int64_t partoffset(const char* devnm)
@@ -292,17 +302,8 @@ int64_t partoffset(const char* devnm)
 #else
 	if (ret < 1)
 		return ret;
-	const char* devptr = devnm + strlen(devnm);
-	while (devptr > devnm && *--devptr != '/');
-	if (*devptr == '/')
-		++devptr;
-	char basedevnm[32];
-	strcpy(basedevnm, devptr);
-	char* noptr = basedevnm + strlen(basedevnm);
-	while (isdigit(*--noptr));
-	*++noptr = 0;
 	char sysdevnm[128];
-	sprintf(sysdevnm, "/sys/block/%s/%s/start", basedevnm, devptr);
+	sprintf(sysdevnm, "/sys/block/%s/%s/start", strippart(devnm), basename(devnm));
 	FILE *f = fopen(sysdevnm, "r");
 	int64_t val;
 	if (!f)
