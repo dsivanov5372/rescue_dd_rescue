@@ -394,6 +394,7 @@ int main(int argc, char *argv[])
 			fd2 = open(strippart(dnm), O_RDONLY);
 			if (fd2 < 0)
 				break;
+			ioctl(fd2, BLKFLSBUF, 0);
 			for (i = 0; i < err; ++i) {
 				if (fd2 > 0 && compare_ext(fd, fd2, ext+i, poffs << 9)) {
 					printf(" Comparison failed!!!\n");
