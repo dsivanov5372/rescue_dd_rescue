@@ -157,7 +157,7 @@ char* fiemap_str(const uint32_t flags)
 
 
 #define BLKSZ 16384
-int compare_ext(const int fd1, const int fd2, const struct fiemap_extent* ext)
+int compare_ext(const int fd1, const int fd2, const struct fiemap_extent* ext, uint64_t offset)
 {
 	/* FIXME: Is comparing one block enough? */
 	unsigned char *b1 = malloc(BLKSZ);
@@ -175,7 +175,7 @@ int compare_ext(const int fd1, const int fd2, const struct fiemap_extent* ext)
 	if (rd1 > 0 && rd1 < toread && (ext->fe_flags & FIEMAP_EXTENT_LAST))
 		toread = rd1;
 	 */
-	int rd2 = pread(fd2, b2, toread, ext->fe_physical);
+	int rd2 = pread(fd2, b2, toread, ext->fe_physical+offset);
 	int res;
 	if (rd1 != toread || rd2 != toread) 
 		res = -1;
@@ -380,22 +380,32 @@ int main(int argc, char *argv[])
 				(uint64_t)ext[i].fe_logical, 
 				(uint64_t)ext[i].fe_physical,
 				fiemap_str(ext[i].fe_flags));
-			if (fd2 > 0 && compare_ext(fd, fd2, ext+i)) {
+			if (fd2 > 0 && compare_ext(fd, fd2, ext+i, 0)) {
 				printf(" Comparison failed!!!\n");
 				dotrim = 0;
 			}
 		}
 		if ((ext[err-1].fe_flags & FIEMAP_EXTENT_LAST) == 0)
 			printf(" (INCOMPLETE)\n");
-		printf("Partition offset for dev %s: 0x%" LL "x sectors\n", dnm, partoffset(dnm));
-
+		int64_t poffs = partoffset(dnm);
+		printf("Partition offset for dev %s: 0x%" LL "x sectors\n", dnm, poffs);
+		if (poffs > 0 && fd2 > 0) {
+			close(fd2);
+			fd2 = open(strippart(dnm), O_RDONLY);
+			if (fd2 < 0)
+				break;
+			for (i = 0; i < err; ++i) {
+				if (fd2 > 0 && compare_ext(fd, fd2, ext+i, poffs << 9)) {
+					printf(" Comparison failed!!!\n");
+					dotrim = 0;
+				}
+			}
+		}
 		struct fiemap_extent* extc = NULL;
 		if (dotrim && fd2 > 0)
 			extc = copy_ext(ext, err);
-		if (fd2 > 0) {
+		if (fd2 > 0) 
 			close(fd2);
-			fd2 = 0;
-		}
 		free_mapping(fd, ext);
 		close(fd);
 		if (extc) {
