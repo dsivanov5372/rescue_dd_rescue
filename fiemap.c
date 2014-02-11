@@ -273,7 +273,7 @@ int64_t fstrim(const char* dirname)
 static char _fulldevnm[32]; 
 char* strippart(const char* partname)
 {
-	strncpy(_fulldevnm, basename(partname), 31);
+	strncpy(_fulldevnm, partname, 31);
 	char* noptr = _fulldevnm + strlen(_fulldevnm);
 	while (isdigit(*--noptr));
 	*++noptr = 0;
@@ -302,8 +302,9 @@ int64_t partoffset(const char* devnm)
 #else
 	if (ret < 1)
 		return ret;
+	const char* basedevnm = basename(devnm);
 	char sysdevnm[128];
-	sprintf(sysdevnm, "/sys/block/%s/%s/start", strippart(devnm), basename(devnm));
+	sprintf(sysdevnm, "/sys/block/%s/%s/start", strippart(basedevnm), basedevnm);
 	FILE *f = fopen(sysdevnm, "r");
 	int64_t val;
 	if (!f)
