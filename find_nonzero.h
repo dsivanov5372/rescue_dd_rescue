@@ -93,10 +93,13 @@ static inline int myflsl(unsigned long val)
 #define NEED_SIMD_RUNTIME_DETECTION
 #include <signal.h>
 #include <stdio.h>
+#include <setjmp.h>
+extern jmp_buf no_simd_jmp;
 static char have_simd;
 static void ill_handler(int sig)
 {
 	have_simd = 0;
+	longjmp(no_simd_jmp, 1);
 }
 
 void probe_simd();
@@ -105,7 +108,8 @@ static inline void detect_simd()
 	signal(SIGILL, ill_handler);
 	signal(SIGSEGV, ill_handler);
 	have_simd = 1;
-	probe_simd();
+	if (setjmp(no_simd_jmp) == 0)
+		probe_simd();
 	if (!have_simd)
 		fprintf(stderr, "Disabling SSE2 ...\n");
 	signal(SIGSEGV, SIG_DFL);

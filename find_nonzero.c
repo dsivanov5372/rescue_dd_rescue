@@ -100,6 +100,7 @@ size_t find_nonzero_sse2(const unsigned char* blk, const size_t ln)
 
 #ifdef NEED_SIMD_RUNTIME_DETECTION
 /** Issue an SSE2 insn for runtime detection of SSE2 capability (x86) */
+jmp_buf no_simd_jmp;
 volatile __m128d _probe_xmm;
 void probe_simd()
 {
