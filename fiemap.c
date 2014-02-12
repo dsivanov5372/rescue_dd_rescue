@@ -24,6 +24,18 @@
 
 #include <assert.h>
 
+#include <signal.h>
+
+int unfreeze_fd = 0;
+void unfreeze_handler(int sig)
+{
+	if (unfreeze_fd)
+		ioctl(unfreeze_fd, FITHAW, 0);
+	unfreeze_fd = 0;
+	signal(sig, SIG_DFL);
+	raise(sig);
+}
+
 int alloc_and_get_mapping(const int fd, const uint64_t start, const uint64_t len, 
 			  struct fiemap_extent **ext, const int needfreeze)
 {
@@ -55,6 +67,15 @@ int alloc_and_get_mapping(const int fd, const uint64_t start, const uint64_t len
 		ext = NULL;
 		return -errno;
 	}
+	if (!err) {
+		unfreeze_fd = fd;
+		signal(SIGINT, unfreeze_handler);
+		signal(SIGQUIT, unfreeze_handler);
+		signal(SIGTERM, unfreeze_handler);
+		signal(SIGHUP, unfreeze_handler);
+		signal(SIGBUS, unfreeze_handler);
+		signal(SIGSEGV, unfreeze_handler);
+	}
 	err = ioctl(fd, FS_IOC_FIEMAP, fm);
 	if (err != 0 || fm->fm_mapped_extents == 0) {
 		free(fm);
@@ -75,6 +96,8 @@ void free_mapping(const int fd, struct fiemap_extent *ext)
 {
 	if (fd > 0)
 		ioctl(fd, FITHAW, 0);
+	unfreeze_fd = 0;
+	/* TODO: Remove signal handlers */
 	if (ext)
 		free(((char*)ext) - sizeof(struct fiemap));
 }
