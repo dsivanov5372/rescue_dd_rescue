@@ -12,16 +12,18 @@ size_t find_nonzero_sse2(const unsigned char* blk, const size_t ln);
 
 #ifdef __AVX2__
 #if defined(__GNUC__) || defined(__llvm__)
-# warning AVX2 version untested and runtime detection only with gcc 4.8+
+# warning AVX2 version untested 
 #endif
 #include <immintrin.h>
 #include <stdio.h>
-#if defined( __GNUC__) && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 8))
+#if defined( __GNUC__) && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 8)) && !defined(DO_OWN_DETECT)
+#warning Using AVX2 runtime detection from gcc 4.8+
 static inline char detect_avx() 
 {
 	return !!__builtin_cpu_supports("avx2");
 }
 #else
+#warning Using AVX2 runtime detection by handling SIGILL
 #include <signal.h>
 #include <setjmp.h>
 static jmp_buf no_avx_jmp;
@@ -36,11 +38,12 @@ static void sigill_hdlr(int signo)
 char detect_avx()
 {
 	signal(SIGILL, sigill_hdlr);
-	avx_support = 1;
 	if (setjmp(no_avx_jmp) == 0) {
-		char tst[4]; *tst = 0;
 		_probe_ymm = _mm256_setzero_si256();
-		printf("%s", tst);
+		__m256i register ymm2 = _mm256_setzero_si256();
+		__m256i register ymm3 = _mm256_cmpeq_epi8(_probe_ymm, ymm2);
+		unsigned register eax = _mm256_movemask_epi8(ymm3);
+		avx_support = 1 + eax;
 	}
 	signal(SIGILL, SIG_DFL);
 	return avx_support;
