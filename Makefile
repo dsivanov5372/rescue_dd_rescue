@@ -106,6 +106,9 @@ fmt_no: fmt_no.c fmt_no.h
 file_zblock: file_zblock.c find_nonzero.h find_nonzero.c find_nonzero.o
 	$(CC) $(CFLAGS) -o $@ $< find_nonzero.o
 
+fiemap: fiemap.c fiemap.h
+	$(CC) $(CFLAGS) -DTEST_FIEMAP -o $@ $<
+
 distclean: clean
 	rm -f *~ config.h config.h.in config.status config.log configure
 	rm -rf autom4te.cache

@@ -15,15 +15,15 @@ size_t find_nonzero_sse2(const unsigned char* blk, const size_t ln);
 # warning AVX2 version untested and runtime detection only with gcc 4.8+
 #endif
 #include <immintrin.h>
+#include <stdio.h>
 #if defined( __GNUC__) && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 8))
 char detect_avx() 
 {
-	return __builtin_cpu_supports("avx2");
+	return !!__builtin_cpu_supports("avx2");
 }
 #else
 #include <signal.h>
 #include <setjmp.h>
-#include <stdio.h>
 static jmp_buf no_avx_jmp;
 static int avx_support;
 __m256i _test_ymm;
