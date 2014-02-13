@@ -17,7 +17,7 @@ size_t find_nonzero_sse2(const unsigned char* blk, const size_t ln);
 #include <immintrin.h>
 #include <stdio.h>
 #if defined( __GNUC__) && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 8))
-char detect_avx() 
+static inline char detect_avx() 
 {
 	return !!__builtin_cpu_supports("avx2");
 }
@@ -26,8 +26,8 @@ char detect_avx()
 #include <setjmp.h>
 static jmp_buf no_avx_jmp;
 static int avx_support;
-__m256i _test_ymm;
-void sigill_hdlr(int signo)
+volatile __m256i _probe_ymm;
+static void sigill_hdlr(int signo)
 {
 	avx_support = 0;
 	longjmp(no_avx_jmp, 1);
@@ -39,9 +39,8 @@ char detect_avx()
 	avx_support = 1;
 	if (setjmp(no_avx_jmp) == 0) {
 		char tst[4]; *tst = 0;
-		volatile __m256i register _zero_ymm = _mm256_setzero_si256();
-		_test_ymm = _zero_ymm;
-		fprintf(stderr, "%s", tst);
+		_probe_ymm = _mm256_setzero_si256();
+		printf("%s", tst);
 	}
 	signal(SIGILL, SIG_DFL);
 	return avx_support;
