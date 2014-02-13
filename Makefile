@@ -92,7 +92,7 @@ strip: dd_rescue
 	strip -S $<
 
 clean:
-	rm -f $(TARGETS) $(OBJECTS) dd_rescue.o core test log find_nonzero fmt_no file_zblock find_nonzero_avx.o find_nonzero_avx
+	rm -f $(TARGETS) $(OBJECTS) dd_rescue.o core test log find_nonzero fmt_no file_zblock find_nonzero_avx.o find_nonzero_avx fiemap
 
 find_nonzero: find_nonzero.c find_nonzero.h
 	$(CC) $(CFLAGS_OPT) -o $@ $< -DTEST $(SSE)
