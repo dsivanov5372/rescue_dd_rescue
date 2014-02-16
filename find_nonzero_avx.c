@@ -28,7 +28,7 @@ static inline char detect_avx()
 #include <setjmp.h>
 static jmp_buf no_avx_jmp;
 static int avx_support;
-volatile __m256i _probe_ymm;
+volatile unsigned _cmp_mask_probe_avx;
 static void sigill_hdlr(int signo)
 {
 	avx_support = 0;
@@ -39,11 +39,12 @@ char detect_avx()
 {
 	signal(SIGILL, sigill_hdlr);
 	if (setjmp(no_avx_jmp) == 0) {
-		_probe_ymm = _mm256_setzero_si256();
+		__m256i register _probe_ymm = _mm256_setzero_si256();
 		__m256i register ymm2 = _mm256_setzero_si256();
 		__m256i register ymm3 = _mm256_cmpeq_epi8(_probe_ymm, ymm2);
-		unsigned register eax = _mm256_movemask_epi8(ymm3);
-		avx_support = 1 + eax;
+		_cmp_mask_probe_avx = _mm256_movemask_epi8(ymm3);
+		asm volatile ("" : : : "memory");
+		avx_support = 1;
 	}
 	signal(SIGILL, SIG_DFL);
 	return avx_support;

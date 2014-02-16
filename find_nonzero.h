@@ -95,7 +95,7 @@ static inline int myflsl(unsigned long val)
 #include <stdio.h>
 #include <setjmp.h>
 extern jmp_buf no_simd_jmp;
-static char have_simd;
+static sig_atomic_t have_simd;
 static void ill_handler(int sig)
 {
 	have_simd = 0;
@@ -107,9 +107,11 @@ static inline void detect_simd()
 {
 	signal(SIGILL, ill_handler);
 	signal(SIGSEGV, ill_handler);
-	have_simd = 1;
-	if (setjmp(no_simd_jmp) == 0)
+	if (setjmp(no_simd_jmp) == 0) {
 		probe_simd();
+		asm volatile("" : : : "memory");
+		have_simd = 1;
+	}
 	if (!have_simd)
 		fprintf(stderr, "Disabling SSE2 ...\n");
 	signal(SIGSEGV, SIG_DFL);
