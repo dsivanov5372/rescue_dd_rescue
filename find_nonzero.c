@@ -68,6 +68,11 @@ size_t find_nonzero_sse2o(const unsigned char* blk, const size_t ln)
 #endif
 
 /** SSE2 version for measuring the initial zero bytes of 16b aligned blk */
+#if defined(__GNUC__) || defined(__LLVM__) // &&__has_attribue(noinline)
+size_t find_nonzero_sse2(const unsigned char* blk, const size_t ln) __attribute__((noinline));
+#else
+#warning aggressive compiler might inline sse2 function pieces, reorder and then break on non-sse2 machines
+#endif
 size_t find_nonzero_sse2(const unsigned char* blk, const size_t ln)
 {
 	/*
@@ -272,7 +277,6 @@ int main(int argc, char* argv[])
 	int scale = 16;
 #ifdef NEED_SIMD_RUNTIME_DETECTION
 	detect_simd();
-	asm("": : : "memory");
 #endif
 	printf("Using extensions: %s\n", SIMD_STR);
 	TESTFFS(0x05000100);
