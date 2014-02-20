@@ -74,8 +74,8 @@ size_t find_nonzero_sse2(const unsigned char* blk, const size_t ln)
 	if (!ln || *blk)
 		return 0;
 	 */
-	register __m128i xmm0, xmm1;
 	register const __m128i zero = _mm_setzero_si128();
+	register __m128i xmm0, xmm1;
 	register unsigned int eax, ebx;
 	size_t i = 0;
 	//asm(".p2align 5");
@@ -237,8 +237,13 @@ size_t find_nonzero_arm6(const unsigned char *blk, const size_t ln)
 #endif
 
 #ifdef __SSE2__
+#ifdef __x86_64__
 #define TEST_SIMD2(a,b,c,d) TESTC(a,b,c*2,d)
 #define TEST2_SIMD2(a,b,c,d) TEST2C(a,b,c*2,d)
+#else
+#define TEST_SIMD2(a,b,c,d) if (have_simd) { TESTC(a,b,c*2,d); }
+#define TEST2_SIMD2(a,b,c,d) if (have_simd) { TEST2C(a,b,c*2,d); }
+#endif
 #else
 #define TEST_SIMD2(a,b,c,d) do {} while (0)
 #define TEST2_SIMD2(a,b,c,d) do {} while (0)
@@ -267,6 +272,7 @@ int main(int argc, char* argv[])
 	int scale = 16;
 #ifdef NEED_SIMD_RUNTIME_DETECTION
 	detect_simd();
+	asm("": : : "memory");
 #endif
 	printf("Using extensions: %s\n", SIMD_STR);
 	TESTFFS(0x05000100);
@@ -280,6 +286,10 @@ int main(int argc, char* argv[])
 	if (argc > 1)
 		scale = atoi(argv[1]);
 	memset(buf, 0xa5, SIZE);
+
+	ln = find_nonzero_c  (buf, SIZE);
+	ln = find_nonzero    (buf, SIZE);
+	ln = find_nonzero_opt(buf, SIZE);
 	
 	TESTC    (0, find_nonzero_c,    1024*512*scale/16, SIZE);
 	TEST_SIMD(0, find_nonzero_opt,  1024*512*scale/16, SIZE);
