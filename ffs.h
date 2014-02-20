@@ -24,6 +24,7 @@
 # define myffs(x) myffs_c(x)
 # define myffsl(x) myffsl_c(x)
 #endif
+
 #define myffs_c(x) myffsl_c(x)
 /** Find first (lowest) bit set in word val, returns a val b/w 1 and __WORDSIZE, 0 if no bit is set */
 static int myffsl_c(unsigned long val)
@@ -53,7 +54,6 @@ static int myffsl_c(unsigned long val)
 	}
 	return res;
 }
-#endif
 #if __BYTE_ORDER == __BIG_ENDIAN || defined(TEST)
 /** Find last (highest) bit set in word val, returns a val b/w __WORDSIZE and 1, 0 if no bit is set */
 static int myflsl_c(unsigned long val)
@@ -84,5 +84,7 @@ static int myflsl_c(unsigned long val)
 	return res;
 }
 #endif
+
+void probe_sse42();
 
 #endif /* _FFS_H */

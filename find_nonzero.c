@@ -12,7 +12,7 @@ ARCH_DECLS
 
 #include <signal.h>
 #include <setjmp.h>
-static have_feature;
+static sig_atomic_t have_feature;
 static jmp_buf sigill_jmp;
 static void ill_handler(int sig)
 {
@@ -24,8 +24,8 @@ char probe_procedure(void (*probefn)(void))
 {
 	signal(SIGILL, ill_handler);
 	signal(SIGSEGV, ill_handler);
-	if (setjmp(no_simd_jmp) == 0) {
-		probe_procedure();
+	if (setjmp(sigill_jmp) == 0) {
+		probefn();
 		asm volatile("" : : : "memory");
 		have_feature = 1;
 	} else {

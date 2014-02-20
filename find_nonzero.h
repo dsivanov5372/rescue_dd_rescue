@@ -10,28 +10,31 @@
 # include "config.h"
 #endif
 
+#include "archdep.h"
 #include "ffs.h"
 
 extern char cap_str[32];
 
-char detect(const char* feature, void (*probe)(void))
-{
 #if defined( __GNUC__) && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 8)) && !defined(DO_OWN_DETECT)
-	char cap = !!__builtin_cpu_supports(feature);
+# define PROBE(FEAT, PROBEFN)	!!__builtin_cpu_supports(FEAT)
 #else
-	char cap = probe_procedure(probe);
+# define PROBE(FEAT, PROBEFN)	probe_procedure(PROBEFN)
 #endif
-	if (cap) {
-		strcat(cap_str, feature);
-		strcat(cap_str, " ");
-	}
-	return cap;
-}
+
+#define detect(feature, probefn)		\
+({						\
+	char cap = PROBE(feature, probefn);	\
+	if (cap) {				\
+		strcat(cap_str, feature);	\
+		strcat(cap_str, " ");		\
+	}					\
+ 	cap;					\
+})
 
 void detect_cpu_cap()
 {
 	*cap_str = 0;
-	ARCH_DETECT
+	ARCH_DETECT;
 }
 
 
@@ -73,42 +76,6 @@ static inline void detect_simd()
 #else
 #ifdef IN_FINDZERO
 #warning Trapping SIGILL for SSE2/AVX2 runtime detection
-#endif
-#include <signal.h>
-#include <setjmp.h>
-static jmp_buf no_simd_jmp;
-static void ill_handler(int sig)
-{
-	have_simd = 0;
-	longjmp(no_simd_jmp, 1);
-}
-
-#ifdef __x86_64__
-void probe_simd_avx2();
-#else
-void probe_simd_sse2();
-#endif
-static inline void detect_simd()
-{
-	signal(SIGILL, ill_handler);
-	signal(SIGSEGV, ill_handler);
-	if (setjmp(no_simd_jmp) == 0) {
-#ifdef __x86_64__
-		probe_simd_avx2();
-#else
-		probe_simd_sse2();
-#endif
-		asm volatile("" : : : "memory");
-		have_simd = 1;
-		SIMD_STR = TO_DETECT;
-	} else {
-		have_simd = 0;
-		SIMD_STR = DET_FBCK;
-	}
-	signal(SIGSEGV, SIG_DFL);
-	signal(SIGILL, SIG_DFL);
-	sprintf(FNZ_SIMD, "find_nonzero_%s", *SIMD_STR? SIMD_STR: "c");
-}
 #endif
 #endif
 
@@ -200,4 +167,4 @@ inline static size_t find_nonzero(const unsigned char* blk, const size_t ln)
 }
 
 
-#endif
+#endif /* _FIND_NONZERO_H */
