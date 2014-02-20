@@ -6,6 +6,36 @@
 #define _GNU_SOURCE 1
 #define IN_FINDZERO
 #include "find_nonzero.h"
+#include "archdep.h"
+
+ARCH_DECLS
+
+#include <signal.h>
+#include <setjmp.h>
+static have_feature;
+static jmp_buf sigill_jmp;
+static void ill_handler(int sig)
+{
+	have_feature = 0;
+	longjmp(sigill_jmp, 1);
+}
+
+char probe_procedure(void (*probefn)(void))
+{
+	signal(SIGILL, ill_handler);
+	signal(SIGSEGV, ill_handler);
+	if (setjmp(no_simd_jmp) == 0) {
+		probe_procedure();
+		asm volatile("" : : : "memory");
+		have_feature = 1;
+	} else {
+		have_feature = 0;
+	}
+	signal(SIGSEGV, SIG_DFL);
+	signal(SIGILL, SIG_DFL);
+	//sprintf(FNZ_SIMD, "find_nonzero_%s", *SIMD_STR? SIMD_STR: "c");
+	return have_feature;
+}
 
 #if defined(TEST) && (defined(__i386__) || defined(__x86_64__))
 size_t find_nonzero_sse2o(const unsigned char* blk, const size_t ln);

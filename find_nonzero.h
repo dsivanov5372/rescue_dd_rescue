@@ -10,82 +10,30 @@
 # include "config.h"
 #endif
 
-#define _GNU_SOURCE 1
-#include <string.h>
-#include <sys/types.h>
+#include "ffs.h"
 
-#ifdef HAVE_FFS
-# define myffs(x) ffs(x)
-# define myffsl(x) ffsl(x)
-#elif defined(__SSE4_2__)
-# include <smmintrin.h>
-# define myffs(x) _mm_popcnt_u32(x^(~(-x)))
-# ifdef __x86_64__
-#  define myffsl(x) _mm_popcnt_u64(x^(~(-x)))
-# else
-#  define myffsl(x) _mm_popcnt_u32(x^(~(-x)))
-# endif
-#else /* NOFFS */
-# define myffsl(x) myffs(x)
-/** Find first (lowest) bit set in word val, returns a val b/w 1 and __WORDSIZE, 0 if no bit is set */
-static inline int myffsl(unsigned long val)
+extern char cap_str[32];
+
+char detect(const char* feature, void (*probe)(void))
 {
-	int res = 1;
-	if (!val)
-		return 0;
-#if __WORDSIZE == 64
-	unsigned int vlo = val;
-	unsigned int vhi = val >> 32;
-	if (!vlo) {
-		res += 32;
-		vlo = vhi;
-	}
+#if defined( __GNUC__) && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 8)) && !defined(DO_OWN_DETECT)
+	char cap = !!__builtin_cpu_supports(feature);
 #else
-	unsigned int vlo = val;
+	char cap = probe_procedure(probe);
 #endif
-	unsigned int mask = 0x0000ffff;
-	unsigned int shift = 16;
-	while (shift > 0) {
-		if (!(vlo & mask)) {
-			res += shift;
-			vlo >>= shift;
-		}
-		shift >>= 1;
-		mask >>= shift;
+	if (cap) {
+		strcat(cap_str, feature);
+		strcat(cap_str, " ");
 	}
-	return res;
+	return cap;
 }
-#endif
-#if __BYTE_ORDER == __BIG_ENDIAN || defined(TEST)
-/** Find last (highest) bit set in word val, returns a val b/w __WORDSIZE and 1, 0 if no bit is set */
-static inline int myflsl(unsigned long val)
+
+void detect_cpu_cap()
 {
-	int res = __WORDSIZE;
-	if (!val)
-		return 0;
-#if __WORDSIZE == 64
-	unsigned int vlo = val;
-	unsigned int vhi = val >> 32;
-	if (!vhi) {
-		res -= 32;
-		vhi = vlo;
-	}
-#else
-	unsigned int vhi = val;
-#endif
-	unsigned int mask = 0xffff0000;
-	unsigned int shift = 16;
-	while (shift > 0) {
-		if (!(vhi & mask)) {
-			res -= shift;
-			vhi <<= shift;
-		}
-		shift >>= 1;
-		mask <<= shift;
-	}
-	return res;
+	*cap_str = 0;
+	ARCH_DETECT
 }
-#endif
+
 
 /* x86: need to detect SSE2 at runtime, unless main program is compiled with -msse2 anyways */
 #if defined(__i386__) && !defined(__x86_64__) && !defined(NO_SSE2) && !defined(__SSE2__) 
