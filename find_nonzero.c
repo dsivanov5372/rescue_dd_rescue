@@ -99,10 +99,11 @@ size_t find_nonzero_sse2(const unsigned char* blk, const size_t ln)
 }
 
 #ifdef NEED_SIMD_RUNTIME_DETECTION
+const char* SIMD_STR = "";
+char have_simd;
 /** Issue an SSE2 insn for runtime detection of SSE2 capability (x86) */
-jmp_buf no_simd_jmp;
 volatile __m128d _probe_xmm;
-void probe_simd()
+void probe_simd_sse2()
 {
 	double val = 3.14159265358979323844;
 	_probe_xmm = _mm_set_sd(val);
@@ -112,7 +113,6 @@ void probe_simd()
 #endif	/* __SSE2__ */
 
 #if defined(__arm__)
-
 /** ASM optimized version for ARM.
  * Inspired by Linaro's strlen() implementation; 
  * we don't even need NEON here, ldmia does the 3x speedup on Cortexes */
@@ -192,7 +192,7 @@ size_t find_nonzero_arm6(const unsigned char *blk, const size_t ln)
 #define SIZE (64*1024*1024)
 
 #define mem_clobber	asm("": : : "memory")
-#define TESTC(sz,routine,rep,tsz) 	\
+#define RTESTC(sz,routine,rnm,rep,tsz) 	\
 	memset(buf, 0, sz);		\
 	expect = (tsz<sz? tsz: sz);	\
 	gettimeofday(&t1, NULL);	\
@@ -203,12 +203,12 @@ size_t find_nonzero_arm6(const unsigned char *blk, const size_t ln)
 	gettimeofday(&t2, NULL);	\
 	tdiff = t2.tv_sec-t1.tv_sec + 0.000001*(t2.tv_usec-t1.tv_usec);	\
 	printf("%7i x %20s (%8i): %8i (%6.3fs => %5.0fMB/s)\n",	\
-		rep, #routine, sz, ln, tdiff, (double)(rep)*(double)(expect+1)/(1024*1024*tdiff));	\
+		rep, rnm, sz, ln, tdiff, (double)(rep)*(double)(expect+1)/(1024*1024*tdiff));	\
 	if (ln != expect)		\
 		abort()
 
 
-#define TEST2C(sz,routine,rep,tsz) 	\
+#define RTEST2C(sz,routine,rnm,rep,tsz) \
 	memset(buf, 0, tsz);		\
 	expect = (tsz<sz? tsz: sz);	\
 	gettimeofday(&t1, NULL);	\
@@ -221,14 +221,16 @@ size_t find_nonzero_arm6(const unsigned char *blk, const size_t ln)
 	gettimeofday(&t2, NULL);	\
 	tdiff = t2.tv_sec-t1.tv_sec + 0.000001*(t2.tv_usec-t1.tv_usec);	\
 	printf("%7i x %20s (%8i): %8i (%6.3fs => %5.0fMB/s)\n",	\
-		rep, #routine, sz, ln, tdiff, (double)(rep)*(double)(expect+1)/(1024*1024*tdiff));	\
+		rep, rnm, sz, ln, tdiff, (double)(rep)*(double)(expect+1)/(1024*1024*tdiff));	\
 	if (ln != expect)		\
 		abort()
 
+#define TESTC(sz,rtn,rep,tsz) RTESTC(sz,rtn,#rtn,rep,tsz)
+#define TEST2C(sz,rtn,rep,tsz) RTEST2C(sz,rtn,#rtn,rep,tsz)
 
 #if defined(HAVE_SIMD)
-#define TEST_SIMD(a,b,c,d) TESTC(a,b,c*2,d)
-#define TEST2_SIMD(a,b,c,d) TEST2C(a,b,c*2,d)
+#define TEST_SIMD(a,b,c,d) RTESTC(a,b,FNZ_SIMD,c*2,d)
+#define TEST2_SIMD(a,b,c,d) RTEST2C(a,b,FNZ_SIMD,c*2,d)
 #else
 #define TEST_SIMD(a,b,c,d) do {} while (0)
 #define TEST2_SIMD(a,b,c,d) do {} while (0)
@@ -266,6 +268,7 @@ int main(int argc, char* argv[])
 #ifdef NEED_SIMD_RUNTIME_DETECTION
 	detect_simd();
 #endif
+	printf("Using extensions: %s\n", SIMD_STR);
 	TESTFFS(0x05000100);
 	TESTFFS(0x00900002);
 	TESTFFS(0x00000100);
@@ -279,12 +282,12 @@ int main(int argc, char* argv[])
 	memset(buf, 0xa5, SIZE);
 	
 	TESTC    (0, find_nonzero_c,    1024*512*scale/16, SIZE);
-	TEST_SIMD(0, find_nonzero_simd, 1024*512*scale/16, SIZE);
+	TEST_SIMD(0, find_nonzero_opt,  1024*512*scale/16, SIZE);
 	TESTC    (0, find_nonzero,      1024*512*scale/16, SIZE);
 	TEST_REP (0, find_nonzero_rep,  1024*512*scale/16, SIZE);
 	
 	TESTC    (8*1024-15, find_nonzero_c,    1024*128*scale/16, SIZE);
-	TEST_SIMD(8*1024-15, find_nonzero_simd, 1024*128*scale/16, SIZE);
+	TEST_SIMD(8*1024-15, find_nonzero_opt,  1024*128*scale/16, SIZE);
 	TESTC    (8*1024-15, find_nonzero,      1024*128*scale/16, SIZE);
 	TEST_REP (8*1024-15, find_nonzero_rep,  1024*128*scale/16, SIZE);
 	buf++;
@@ -292,35 +295,35 @@ int main(int argc, char* argv[])
 	TEST_REP (8*1024-15, find_nonzero_rep,  1024*128*scale/16, SIZE);
 	buf--;
 	TESTC     (32*1024-9, find_nonzero_c,     1024*32*scale/16, SIZE);
-	TEST_SIMD (32*1024-9, find_nonzero_simd,  1024*32*scale/16, SIZE);
+	TEST_SIMD (32*1024-9, find_nonzero_opt,   1024*32*scale/16, SIZE);
 	TEST_SIMD2(32*1024-9, find_nonzero_sse2o, 1024*32*scale/16, SIZE);
 	TESTC     (32*1024-9, find_nonzero,       1024*32*scale/16, SIZE);
 	TEST_REP  (32*1024-9, find_nonzero_rep,   1024*32*scale/16, SIZE);
 	TESTC    (128*1024-8, find_nonzero_c,    1024*8*scale/16, SIZE);
-	TEST_SIMD(128*1024-8, find_nonzero_simd, 1024*8*scale/16, SIZE);
+	TEST_SIMD(128*1024-8, find_nonzero_opt,  1024*8*scale/16, SIZE);
 	TEST_REP (128*1024-8, find_nonzero_rep,  1024*8*scale/16, SIZE);
 	TESTC    (1024*1024-7, find_nonzero_c,    1024*scale/16, SIZE);
-	TEST_SIMD(1024*1024-7, find_nonzero_simd, 1024*scale/16, SIZE);
+	TEST_SIMD(1024*1024-7, find_nonzero_opt,  1024*scale/16, SIZE);
 	TEST_REP (1024*1024-7, find_nonzero_rep,  1024*scale/16, SIZE);
 	TESTC    (4096*1024-1, find_nonzero_c,    256*scale/16, SIZE);
-	TEST_SIMD(4096*1024-1, find_nonzero_simd, 256*scale/16, SIZE);
+	TEST_SIMD(4096*1024-1, find_nonzero_opt,  256*scale/16, SIZE);
 	TESTC    (16*1024*1024, find_nonzero_c,    64*scale/16, SIZE);
-	TEST_SIMD(16*1024*1024, find_nonzero_simd, 64*scale/16, SIZE);
+	TEST_SIMD(16*1024*1024, find_nonzero_opt,  64*scale/16, SIZE);
 	TESTC    (64*1024*1024, find_nonzero_c,    16*scale/16, SIZE);
-	TEST_SIMD(64*1024*1024, find_nonzero_simd, 16*scale/16, SIZE);
+	TEST_SIMD(64*1024*1024, find_nonzero_opt,  16*scale/16, SIZE);
 	
 	TESTC    (64*1024*1024, find_nonzero_c,    1+scale/16, SIZE-16);
-	TEST_SIMD(64*1024*1024, find_nonzero_simd, 1+scale/16, SIZE-16);
+	TEST_SIMD(64*1024*1024, find_nonzero_opt,  1+scale/16, SIZE-16);
 	TESTC    (64*1024*1024, find_nonzero,      1+scale/16, SIZE-16);
 	TEST_REP (64*1024*1024, find_nonzero_rep,  1+scale/16, SIZE-16);
 
 	TESTC    (64*1024*1024, find_nonzero_c,    1+scale/16, SIZE-5);
-	TEST_SIMD(64*1024*1024, find_nonzero_simd, 1+scale/16, SIZE-5);
+	TEST_SIMD(64*1024*1024, find_nonzero_opt,  1+scale/16, SIZE-5);
 	TESTC    (64*1024*1024, find_nonzero,      1+scale/16, SIZE-5);
 	TEST_REP (64*1024*1024, find_nonzero_rep,  1+scale/16, SIZE-5);
 
 	TEST2C     (12*1024*1024, find_nonzero_c,     80*scale/16, SIZE);
-	TEST2_SIMD (12*1024*1024, find_nonzero_simd,  80*scale/16, SIZE);
+	TEST2_SIMD (12*1024*1024, find_nonzero_opt,   80*scale/16, SIZE);
 	TEST2_SIMD2(12*1024*1024, find_nonzero_sse2o, 80*scale/16, SIZE);
 
 	free(obuf);

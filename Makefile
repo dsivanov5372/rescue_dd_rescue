@@ -20,7 +20,7 @@ MANDIR = $(prefix)/share/man/
 MYDIR = dd_rescue
 TARGETS = dd_rescue
 #TARGETS = libfalloc-dl
-OBJECTS = frandom.o fmt_no.o find_nonzero.o
+OBJECTS = frandom.o fmt_no.o find_nonzero.o find_nonzero_avx.o
 HEADERS = frandom.h fmt_no.h find_nonzero.h config.h
 DOCDIR = $(prefix)/share/doc/packages
 INSTASROOT = -o root -g root
@@ -68,6 +68,9 @@ find_nonzero.o: find_nonzero.c find_nonzero.h config.h
 find_nonzero_avx.o: find_nonzero_avx.c find_nonzero.h config.h
 	$(CC) $(CFLAGS_OPT) -mavx2 -c $<
 
+find_nonzero_main.o: find_nonzero.c find_nonzero.h
+	$(CC) $(CFLAGS_OPT) -o $@ -c $< -DTEST $(SSE)
+
 libfalloc: dd_rescue.c $(HEADERS) $(OBJECTS)
 	$(CC) $(CFLAGS) -DNO_LIBDL $(DEFINES) $< $(OUT) $(OBJECTS) -lfallocate
 
@@ -92,13 +95,10 @@ strip: dd_rescue
 	strip -S $<
 
 clean:
-	rm -f $(TARGETS) $(OBJECTS) dd_rescue.o core test log find_nonzero fmt_no file_zblock find_nonzero_avx.o find_nonzero_avx fiemap
+	rm -f $(TARGETS) $(OBJECTS) dd_rescue.o core test log find_nonzero fmt_no file_zblock find_nonzero_main.o find_nonzero_avx.o find_nonzero_avx fiemap
 
-find_nonzero: find_nonzero.c find_nonzero.h
-	$(CC) $(CFLAGS_OPT) -o $@ $< -DTEST $(SSE)
-
-find_nonzero_avx: find_nonzero.c find_nonzero.h find_nonzero_avx.o
-	$(CC) $(CFLAGS_OPT) -o $@ $< -DHAVE_AVX2 -DTEST $(SSE) find_nonzero_avx.o
+find_nonzero: find_nonzero_main.o find_nonzero_avx.o
+	$(CC) $(CFLAGS_OPT) -o $@ $^ 
 
 fmt_no: fmt_no.c fmt_no.h
 	$(CC) $(CFLAGS) -o $@ $< -DTEST

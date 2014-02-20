@@ -1676,6 +1676,7 @@ void printversion()
 #ifdef HAVE_ATTR_XATTR_H
 	fprintf(stderr, "xattr ");
 #endif
+	fprintf(stderr, "%s", SIMD_STR);
 	fprintf(stderr, ")\n");
 	fprintf(stderr, "dd_rescue is free software. It's protected by the terms of GNU GPL v2 or v3\n");
 	fprintf(stderr, " (at your option).\n");
