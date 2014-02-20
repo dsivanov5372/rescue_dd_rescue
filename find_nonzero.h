@@ -10,6 +10,7 @@
 # include "config.h"
 #endif
 
+#define _GNU_SOURCE 1
 #include <string.h>
 #include <sys/types.h>
 
@@ -87,7 +88,7 @@ static inline int myflsl(unsigned long val)
 #endif
 
 /* x86: need to detect SSE2 at runtime, unless main program is compiled with -msse2 anyways */
-#if defined(__i386__) && !defined(__x86_64__) && !defined(NO_SSE2) && (!defined(__SSE2__) || defined(IN_FINDZERO)) && !(defined(IN_FINDZERO) && !defined(__SSE2__))
+#if defined(__i386__) && !defined(__x86_64__) && !defined(NO_SSE2) && !defined(__SSE2__) 
 #define HAVE_SSE2
 #define NEED_SIMD_RUNTIME_DETECTION
 #define TO_DETECT "sse2"
@@ -169,6 +170,7 @@ static inline void detect_simd()
 /* No need for runtime detection here */
 const static char have_simd = 1;
 #define SIMD_STR "sse2"
+#define FNZ_SIMD "find_nonzero_sse2"
 #endif
 
 #ifdef __arm__

@@ -9,7 +9,7 @@ DESTDIR =
 CC = gcc
 RPM_OPT_FLAGS = -Os -Wall -g
 CFLAGS = $(RPM_OPT_FLAGS) $(EXTRA_CFLAGS) -DHAVE_CONFIG_H
-CFLAGS_OPT = $(CFLAGS) -O2
+CFLAGS_OPT = $(CFLAGS) -O3
 INSTALL = install
 INSTALLFLAGS = -s
 prefix = $(DESTDIR)/usr
@@ -20,7 +20,7 @@ MANDIR = $(prefix)/share/man/
 MYDIR = dd_rescue
 TARGETS = dd_rescue
 #TARGETS = libfalloc-dl
-OBJECTS = frandom.o fmt_no.o find_nonzero.o find_nonzero_avx.o
+OBJECTS = frandom.o fmt_no.o find_nonzero.o find_nonzero_avx.o find_nonzero_sse2.o
 HEADERS = frandom.h fmt_no.h find_nonzero.h config.h
 DOCDIR = $(prefix)/share/doc/packages
 INSTASROOT = -o root -g root
@@ -68,8 +68,11 @@ find_nonzero.o: find_nonzero.c find_nonzero.h config.h
 find_nonzero_avx.o: find_nonzero_avx.c find_nonzero.h config.h
 	$(CC) $(CFLAGS_OPT) -mavx2 -c $<
 
+find_nonzero_sse2.o: find_nonzero_sse2.c find_nonzero.h config.h
+	$(CC) $(CFLAGS_OPT) -msse2 -c $< -DTEST
+
 find_nonzero_main.o: find_nonzero.c find_nonzero.h
-	$(CC) $(CFLAGS_OPT) -o $@ -c $< -DTEST $(SSE)
+	$(CC) $(CFLAGS_OPT) -o $@ -c $< -DTEST 
 
 libfalloc: dd_rescue.c $(HEADERS) $(OBJECTS)
 	$(CC) $(CFLAGS) -DNO_LIBDL $(DEFINES) $< $(OUT) $(OBJECTS) -lfallocate
@@ -97,7 +100,7 @@ strip: dd_rescue
 clean:
 	rm -f $(TARGETS) $(OBJECTS) dd_rescue.o core test log find_nonzero fmt_no file_zblock find_nonzero_main.o find_nonzero_avx.o find_nonzero_avx fiemap
 
-find_nonzero: find_nonzero_main.o find_nonzero_avx.o
+find_nonzero: find_nonzero_main.o find_nonzero_avx.o find_nonzero_sse2.o
 	$(CC) $(CFLAGS_OPT) -o $@ $^ 
 
 fmt_no: fmt_no.c fmt_no.h
