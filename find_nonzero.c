@@ -162,6 +162,9 @@ int main(int argc, char* argv[])
 	detect_cpu_cap();
 
 	printf("Using extensions: %s\n", OPT_STR);
+	TESTFFS(0x00000000);
+	TESTFFS(0x00000001);
+	TESTFFS(0x80000000);
 	TESTFFS(0x05000100);
 	TESTFFS(0x00900002);
 	TESTFFS(0x00000100);

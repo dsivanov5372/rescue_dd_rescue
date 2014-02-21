@@ -51,9 +51,9 @@ static size_t find_nonzero_c(const unsigned char* blk, const size_t ln)
 	for (; (size_t)(ptr-bptr) < ln/sizeof(*ptr); ++ptr)
 		if (*ptr)
 #if __BYTE_ORDER == __BIG_ENDIAN
-			return sizeof(unsigned long)*(ptr-bptr) + sizeof(long)-((myflsl(*ptr)+7)>>3);
+			return sizeof(long)*(ptr-bptr) + sizeof(long)-((myflsl(*ptr)+7)>>3);
 #else
-			return sizeof(unsigned long)*(ptr-bptr) + ((myffsl(*ptr)-1)>>3);
+			return sizeof(long)*(ptr-bptr) + ((myffsl(*ptr)-1)>>3);
 #endif
 	return ln;
 }

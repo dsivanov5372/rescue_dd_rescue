@@ -130,6 +130,7 @@ void* libfalloc = (void*)0;
 
 /* splice */
 #if defined(__linux__) && (!defined(HAVE_SPLICE) || defined(SPLICE_IS_BUGGY))
+# include <sys/syscall.h>
 # define __KERNEL__
 # include <asm/unistd.h>
 # ifdef __NR_splice
@@ -1808,7 +1809,7 @@ void breakhandler(int sig)
 unsigned char* zalloc_aligned_buf(unsigned int bs, unsigned char**obuf)
 {
 	unsigned char *ptr;
-#if defined (__DragonFly__) || defined(__NetBSD__)
+#if defined (__DragonFly__) || defined(__NetBSD__) || defined(__BIONIC__)
 	ptr = (unsigned char*)valloc(bs);
 #else
 	void *mp;
@@ -1846,6 +1847,15 @@ int is_filename(char* arg)
 		return 0;
 	return 1;
 }
+
+#ifdef __BIONIC__
+#define strdupa(str)				\
+({						\
+	char* _mem = alloca(strlen(str)+1);	\
+ 	strcpy(_mem, str);			\
+ 	_mem;					\
+ })
+#endif
 
 const char* retstrdupcat3(const char* dir, char dirsep, const char* inm)
 {

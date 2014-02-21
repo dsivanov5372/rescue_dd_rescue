@@ -13,8 +13,12 @@
 /* ffs, ffsl */
 #define _GNU_SOURCE 1
 #include <string.h>
+#ifdef __BIONIC__
+#include <strings.h>
+#endif
 /* __BYTE_ORDER */
 #include <sys/types.h>
+#include <sys/endian.h>
 
 /* HAVE_FFS */
 #ifdef HAVE_CONFIG_H
@@ -28,12 +32,11 @@
 # define myffs(x) (have_sse42? myffs_sse42(x): myffs_c(x))
 # define myffsl(x) (have_sse42? myffsl_sse42(x): myffsl_c(x))
 #else
-# define myffs(x) myffs_c(x)
+# define myffs(x) myffsl_c(x)
 # define myffsl(x) myffsl_c(x)
 #endif
 
 #ifndef HAVE_FFS
-#define myffs_c(x) myffsl_c(x)
 /** Find first (lowest) bit set in word val, returns a val b/w 1 and __WORDSIZE, 0 if no bit is set */
 static int myffsl_c(unsigned long val)
 {
