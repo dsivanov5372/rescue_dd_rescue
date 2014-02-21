@@ -47,6 +47,7 @@ endif
 ifeq ($(MACH),x86_64)
 	OBJECTS2 = find_nonzero_avx.o find_nonzero_sse2.o ffs_sse42.o
 endif
+MACH := $(shell uname -m |sed 's/armv[0-9a-z]*/arm/')
 ifeq ($(MACH),arm)
 	OBJECTS2 = find_nonzero_arm.o
 endif
