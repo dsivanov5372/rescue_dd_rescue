@@ -1,4 +1,4 @@
-AC_INIT(dd_rescue, 1.40, kurt@garloff.de)
+AC_INIT(dd_rescue, 1.41, kurt@garloff.de)
 AC_CONFIG_HEADER(config.h)
 AC_PROG_CC
 AC_C_CONST
@@ -6,8 +6,8 @@ AC_C_INLINE
 AC_HEADER_STDC
 #AC_PROG_INSTALL
 #CFLAGS="$CFLAGS -DHAVE_CONFIG_H"
-AC_CHECK_HEADERS([fallocate.h dlfcn.h unistd.h attr/xattr.h sys/acl.h])
-AC_CHECK_FUNCS([ffs fallocate64 splice getopt_long])
+AC_CHECK_HEADERS([fallocate.h dlfcn.h unistd.h attr/xattr.h sys/acl.h sys/endian.h linux/fs.h linux/fiemap.h])
+AC_CHECK_FUNCS([ffs ffsl fallocate64 splice getopt_long])
 AC_CHECK_LIB(dl,dlsym)
 AC_CHECK_LIB(fallocate,linux_fallocate64)
 AC_OUTPUT

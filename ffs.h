@@ -10,30 +10,51 @@
 #ifndef _FFS_H
 #define _FFS_H
 
-/* ffs, ffsl */
-#define _GNU_SOURCE 1
-#include <string.h>
-#ifdef __BIONIC__
-#include <strings.h>
-#endif
-/* __BYTE_ORDER */
-#include <sys/types.h>
-#include <sys/endian.h>
-
 /* HAVE_FFS */
 #ifdef HAVE_CONFIG_H
 # include "config.h"
 #endif
 
+/* ffs, ffsl */
+#define _GNU_SOURCE 1
+#include <string.h>
+//#ifdef __BIONIC__
+#ifdef HAVE_STRINGS_H
+#include <strings.h>
+#endif
+/* __BYTE_ORDER */
+#include <sys/types.h>
+#ifdef HAVE_SYS_ENDIAN_H
+#include <sys/endian.h>
+#endif
+
+
 #ifdef HAVE_FFS
 # define myffs(x) ffs(x)
-# define myffsl(x) ffsl(x)
-#elif defined(__i386__) || defined(__x86_64)
+# if __WORDSIZE == 32
+#  define myffsl(x) ffs(x)
+# else /* 64bit */
+#  ifdef HAVE_FFSL
+#   define myffsl(x) ffsl(x)
+#  elif defined(__i386__) || defined(__x86_64__)
+#   define myffsl(x) (have_sse42? myffsl_sse42(x): myffsl_c(x))
+#  else 
+#   define myffsl(x) myffsl_c(x)
+#  endif
+# endif
+#elif defined(__i386__) || defined(__x86_64__)
 # define myffs(x) (have_sse42? myffs_sse42(x): myffs_c(x))
 # define myffsl(x) (have_sse42? myffsl_sse42(x): myffsl_c(x))
 #else
 # define myffs(x) myffsl_c(x)
 # define myffsl(x) myffsl_c(x)
+#endif
+
+#ifndef __BYTE_ORDER
+# error Need to define __BYTE_ORDER
+#endif
+#ifndef __WORDSIZE
+# error Need to define __WORDSIZE
 #endif
 
 #ifndef HAVE_FFS

@@ -10,8 +10,8 @@
 #ifndef _FIEMAP_H
 #define _FIEMAP_H
 
-#include <linux/fiemap.h>
 #include <linux/fs.h>
+#include <linux/fiemap.h>
 
 #endif
 
