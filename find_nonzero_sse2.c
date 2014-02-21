@@ -1,9 +1,14 @@
+/** find_nonzero_sse2.c
+ *
+ * SSE2 optimized version to find first non-zero byte in a block
+ * (c) Kurt Garloff <kurt@garloff.de>, GNU GPL v2 or v3
+ */
 
 #include "find_nonzero.h"
 
 #if defined(__SSE2__)
 #include <emmintrin.h>
-#ifdef TEST
+//#ifdef TEST
 /** SSE2 version for measuring the initial zero bytes of aligned blk */
 size_t find_nonzero_sse2o(const unsigned char* blk, const size_t ln)
 {
@@ -37,7 +42,7 @@ size_t find_nonzero_sse2o(const unsigned char* blk, const size_t ln)
 	}
 	return ln;
 }
-#endif
+//#endif
 
 /** SSE2 version for measuring the initial zero bytes of 16b aligned blk */
 size_t find_nonzero_sse2(const unsigned char* blk, const size_t ln)
@@ -70,15 +75,13 @@ size_t find_nonzero_sse2(const unsigned char* blk, const size_t ln)
 	return ln;
 }
 
-#if 1 //def NEED_SIMD_RUNTIME_DETECTION
 /** Issue an SSE2 insn for runtime detection of SSE2 capability (x86) */
 volatile __m128d _probe_xmm;
-void probe_simd_sse2()
+void probe_sse2()
 {
 	double val = 3.14159265358979323844;
 	_probe_xmm = _mm_set_sd(val);
 }
-#endif	/* NEED_SIMD_RUNTIME_DETECTION */
 
 #else
 # warning pointless exercise compiling find_nonzero_sse2 with -msse2 ...

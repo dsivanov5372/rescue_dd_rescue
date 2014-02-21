@@ -14,6 +14,7 @@
 #include "ffs.h"
 
 extern char cap_str[32];
+extern char FNZ_OPT[32];
 
 #if defined( __GNUC__) && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 8)) && !defined(DO_OWN_DETECT)
 # define PROBE(FEAT, PROBEFN)	!!__builtin_cpu_supports(FEAT)
@@ -31,103 +32,17 @@ extern char cap_str[32];
  	cap;					\
 })
 
-void detect_cpu_cap()
-{
-	*cap_str = 0;
-	ARCH_DETECT;
-}
+extern void detect_cpu_cap();
 
-
-/* x86: need to detect SSE2 at runtime, unless main program is compiled with -msse2 anyways */
-#if defined(__i386__) && !defined(__x86_64__) && !defined(NO_SSE2) && !defined(__SSE2__) 
-#define HAVE_SSE2
-#define NEED_SIMD_RUNTIME_DETECTION
-#define TO_DETECT "sse2"
-#define DET_FBCK ""
-#endif
-/* x86-64: Detect AVX2 */
-#if defined(__x86_64__) && !defined(NO_AVX2) 
-#define HAVE_AVX2
-#define NEED_SIMD_RUNTIME_DETECTION
-#define TO_DETECT "avx2"
-#define DET_FBCK "sse2"
-#endif
-
-#ifdef NEED_SIMD_RUNTIME_DETECTION
-#include <stdio.h>
-extern const char* SIMD_STR;
-static char FNZ_SIMD[32];
-extern char have_simd;
-#if defined( __GNUC__) && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 8)) && !defined(DO_OWN_DETECT)
-#ifdef IN_FINDZERO
-#warning Using SSE2/AVX2 runtime detection from gcc 4.8+
-#endif
-static inline void detect_simd()
-{
-	if (__builtin_cpu_supports(TO_DETECT)) {
-		SIMD_STR = TO_DETECT;
-		have_simd = 1;
-	} else {
-		SIMD_STR = DET_FBCK;
-		have_simd = 0;
-	}
-	sprintf(FNZ_SIMD, "find_nonzero_%s", *SIMD_STR? SIMD_STR: "c");
-}
-#else
-#ifdef IN_FINDZERO
-#warning Trapping SIGILL for SSE2/AVX2 runtime detection
-#endif
-#endif
-
-/* Other sse2 cases ... */
-#if !defined(HAVE_SSE2) && !defined(HAVE_AVX2) && defined(__SSE2__) && !defined(NO_SSE2)
-#define HAVE_SSE2
-/* No need for runtime detection here */
-const static char have_simd = 1;
-#define SIMD_STR "sse2"
-#define FNZ_SIMD "find_nonzero_sse2"
-#endif
-
-#ifdef __arm__
-const static char have_simd = 1;
-#define SIMD_STR "ldmia"
-#define FNZ_SIMD "find_nonzero_ldmia"
-#endif
-
-#if defined(HAVE_SSE2) || defined(__arm__) || defined(HAVE_AVX2)
-#define HAVE_SIMD
-
-#ifdef HAVE_AVX2
-#define find_nonzero_simd find_nonzero_avx2
-#define find_nonzero_fbck find_nonzero_sse2
-size_t find_nonzero_fbck(const unsigned char* blk, const size_t ln);
-#elif defined(HAVE_SSE2)
-#define find_nonzero_simd find_nonzero_sse2
-#define find_nonzero_fbck find_nonzero_c
-#elif defined(__arm__)
-#define find_nonzero_simd find_nonzero_arm6
-#define find_nonzero_fbck find_nonzero_c
-#endif
-
-/* FIXME: Is there no library function to find the first non-null byte?
- * Something like ffs() for a long byte array?
- * Here is an optimized version using SSE2 intrinsics, but there should be
- * be versions for NEON ... etc. */
-#define find_nonzero_opt(ptr, ln) (have_simd? find_nonzero_simd(ptr, ln): find_nonzero_fbck(ptr, ln))
 /* This has been inspired by http://developer.amd.com/community/blog/faster-string-operations/ */
-size_t find_nonzero_simd(const unsigned char* blk, const size_t ln);
-
-#else /* NO SIMD VERSION VAILABLE */
-
-#define SIMD_STR ""
-#define FNZ_SIMD "find_nonzero_c"
-
-#define find_nonzero_opt(ptr, ln) find_nonzero_c(ptr, ln)
-/* No need for runtime detection here */
-const static char have_simd = 0;
+extern size_t find_nonzero_sse2 (const unsigned char* blk, const size_t ln);
+extern size_t find_nonzero_avx2 (const unsigned char* blk, const size_t ln);
+extern size_t find_nonzero_arm  (const unsigned char* blk, const size_t ln);
+#ifdef TEST
+extern size_t find_nonzero_sse2o(const unsigned char* blk, const size_t ln);
 #endif
 
-#if !defined(__x86_64__) || defined(TEST)
+#if defined(TEST) || !(defined(__x86_64__) || defined(__arm__))
 /** return number of bytes at beginning of blk that are all zero, assumes __WORDSIZE bit alignment */
 static size_t find_nonzero_c(const unsigned char* blk, const size_t ln)
 {
@@ -142,7 +57,7 @@ static size_t find_nonzero_c(const unsigned char* blk, const size_t ln)
 #endif
 	return ln;
 }
-#endif
+#endif /* TEST */
 
 /** return number of bytes at beginning of blk that are all zero 
   * Generic version, does not require an aligned buffer blk or even ln ... */
@@ -157,7 +72,7 @@ inline static size_t find_nonzero(const unsigned char* blk, const size_t ln)
 		if (blk[i])
 			return i;
 	int r2 = remain % 0x1f;
-	size_t res = find_nonzero_opt(blk+off, remain-r2);
+	size_t res = FIND_NONZERO_OPT(blk+off, remain-r2);
 	if (!r2 || res != remain-r2)
 		return off+res;
 	for (i = off+remain; i < ln; ++i)

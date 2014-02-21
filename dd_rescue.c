@@ -949,7 +949,7 @@ static ssize_t blockiszero(const unsigned char* blk, const size_t ln)
 	if (!ln || *blk) 
 		i_rep_zero = 0;
 	else
-		i_rep_zero = find_nonzero_opt(blk, ln);
+		i_rep_zero = FIND_NONZERO_OPT(blk, ln);
 	return i_rep_zero;
 }
 
@@ -1676,7 +1676,7 @@ void printversion()
 #ifdef HAVE_ATTR_XATTR_H
 	fprintf(stderr, "xattr ");
 #endif
-	fprintf(stderr, "%s", SIMD_STR);
+	fprintf(stderr, "%s", OPT_STR);
 	fprintf(stderr, ")\n");
 	fprintf(stderr, "dd_rescue is free software. It's protected by the terms of GNU GPL v2 or v3\n");
 	fprintf(stderr, " (at your option).\n");
@@ -1935,9 +1935,8 @@ int main(int argc, char* argv[])
 	ofiles = NULL;
 
 	nocol = test_nocolor_term();
-#ifdef NEED_SIMD_RUNTIME_DETECTION
-	detect_simd();
-#endif
+
+	detect_cpu_cap();
 
 #ifdef _SC_PAGESIZE
 	pagesize = sysconf(_SC_PAGESIZE);

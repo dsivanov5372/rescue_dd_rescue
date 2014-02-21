@@ -1,3 +1,9 @@
+/** file_zblock.c
+ *
+ * Identifies files with zero-filled chunks
+ * (c) Kurt Garloff <kurt@garloff.de>, GNU GPL v2 or v3
+ */
+
 #define _GNU_SOURCE 1
 #include <stdio.h>
 #include <sys/file.h>
@@ -12,8 +18,8 @@ unsigned char buf[BUFSZ];
 
 void usage()
 {
-	fprintf(stderr, "Usage: file_zblock FILE1 [FILE2 [FILE3 [...]]]\n");
-	fprintf(stderr, "file_zblock reports files with ()at least) chunk-sized blocks of zeros inside.\n");
+	fprintf(stderr, "Usage: file_zblock [-c chunk] FILE1 [FILE2 [FILE3 [...]]]\n");
+	fprintf(stderr, "file_zblock reports files with (at least) chunk-sized blocks of zeros inside.\n");
 	exit(0);
 }
 

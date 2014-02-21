@@ -1,18 +1,25 @@
 /** ffs.h
  *
- * bit search functions
+ * bit search functions header
+ * ideally, we can juswt refer to libc,
+ * if not, there's a open-coded C implementation here
+ * and the possibility to use SSE4.2 popcnt insns on x86
+ * (c) Kurt Garloff <kurt@garloff.de>, GNU GPL v2 or v3
  */
 
 #ifndef _FFS_H
 #define _FFS_H
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
-
+/* ffs, ffsl */
 #define _GNU_SOURCE 1
 #include <string.h>
+/* __BYTE_ORDER */
 #include <sys/types.h>
+
+/* HAVE_FFS */
+#ifdef HAVE_CONFIG_H
+# include "config.h"
+#endif
 
 #ifdef HAVE_FFS
 # define myffs(x) ffs(x)
@@ -25,6 +32,7 @@
 # define myffsl(x) myffsl_c(x)
 #endif
 
+#ifndef HAVE_FFS
 #define myffs_c(x) myffsl_c(x)
 /** Find first (lowest) bit set in word val, returns a val b/w 1 and __WORDSIZE, 0 if no bit is set */
 static int myffsl_c(unsigned long val)
@@ -54,9 +62,11 @@ static int myffsl_c(unsigned long val)
 	}
 	return res;
 }
+#endif
+
 #if __BYTE_ORDER == __BIG_ENDIAN || defined(TEST)
 /** Find last (highest) bit set in word val, returns a val b/w __WORDSIZE and 1, 0 if no bit is set */
-static int myflsl_c(unsigned long val)
+static int myflsl(unsigned long val)
 {
 	int res = __WORDSIZE;
 	if (!val)

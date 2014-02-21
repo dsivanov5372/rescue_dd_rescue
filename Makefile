@@ -20,8 +20,9 @@ MANDIR = $(prefix)/share/man/
 MYDIR = dd_rescue
 TARGETS = dd_rescue
 #TARGETS = libfalloc-dl
-OBJECTS = frandom.o fmt_no.o find_nonzero.o find_nonzero_avx.o find_nonzero_sse2.o
-HEADERS = frandom.h fmt_no.h find_nonzero.h config.h
+OBJECTS = frandom.o fmt_no.o find_nonzero.o 
+FNZ_HEADERS = find_nonzero.h archdep.h ffs.h
+HEADERS = frandom.h fmt_no.h config.h $(FNZ_HEADERS)
 DOCDIR = $(prefix)/share/doc/packages
 INSTASROOT = -o root -g root
 LIBDIR = /usr/lib
@@ -41,6 +42,13 @@ ifeq ($(MACH),i386)
 	SSE = "-msse2"
 	#SSE = "-msse2 -funroll-loops"
 	#SSE = "-msse2 -funroll-loops -ftree-vectorize"
+	OBJECTS2 = find_nonzero_avx.o find_nonzero_sse2.o ffs_sse42.o
+endif
+ifeq ($(MACH),x86_64)
+	OBJECTS2 = find_nonzero_avx.o find_nonzero_sse2.o ffs_sse42.o
+endif
+ifeq ($(MACH),arm)
+	OBJECTS2 = find_nonzero_arm.o
 endif
 
 .phony: libfalloc libfalloc-static libfalloc-dl nolib nocolor static strip
@@ -62,54 +70,60 @@ frandom.o: frandom.c frandom.h config.h
 fmt_no.o: fmt_no.c fmt_no.h config.h
 	$(CC) $(CFLAGS_OPT) -c $<
 
-find_nonzero.o: find_nonzero.c find_nonzero.h config.h
+find_nonzero.o: find_nonzero.c $(FNZ_HEADERS) config.h
 	$(CC) $(CFLAGS_OPT) -c $< $(SSE)
 
-find_nonzero_avx.o: find_nonzero_avx.c find_nonzero.h config.h
+find_nonzero_avx.o: find_nonzero_avx.c $(FNZ_HEADERS) config.h
 	$(CC) $(CFLAGS_OPT) -mavx2 -c $<
 
-find_nonzero_sse2.o: find_nonzero_sse2.c find_nonzero.h config.h
-	$(CC) $(CFLAGS_OPT) -msse2 -c $< -DTEST
+find_nonzero_sse2.o: find_nonzero_sse2.c $(FNZ_HEADERS) config.h
+	$(CC) $(CFLAGS_OPT) -msse2 -c $<
 
-find_nonzero_main.o: find_nonzero.c find_nonzero.h
+find_nonzero_arm.o: find_nonzero_arm.c $(FNZ_HEADERS) config.h
+	$(CC) $(CFLAGS_OPT) -c $< 
+
+find_nonzero_main.o: find_nonzero.c $(FNZ_HEADERS) config.h
 	$(CC) $(CFLAGS_OPT) -o $@ -c $< -DTEST 
 
-libfalloc: dd_rescue.c $(HEADERS) $(OBJECTS)
-	$(CC) $(CFLAGS) -DNO_LIBDL $(DEFINES) $< $(OUT) $(OBJECTS) -lfallocate
+ffs_sse42.o: ffs_sse42.c ffs.h archdep.h config.h
+	$(CC) $(CFLAGS_OPT) -msse4.2 -c $<
 
-libfalloc-static: dd_rescue.c $(HEADERS) $(OBJECTS)
-	$(CC) $(CFLAGS) -DNO_LIBDL $(DEFINES) $< $(OUT) $(OBJECTS) $(LIBDIR)/libfallocate.a
+libfalloc: dd_rescue.c $(HEADERS) $(OBJECTS) $(OBJECTS2)
+	$(CC) $(CFLAGS) -DNO_LIBDL $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2) -lfallocate
 
-dd_rescue: dd_rescue.c $(HEADERS) $(OBJECTS)
-	$(CC) $(CFLAGS) $(DEFINES) $< $(OUT) $(OBJECTS) -ldl
+libfalloc-static: dd_rescue.c $(HEADERS) $(OBJECTS) $(OBJECTS2)
+	$(CC) $(CFLAGS) -DNO_LIBDL $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2) $(LIBDIR)/libfallocate.a
+
+dd_rescue: dd_rescue.c $(HEADERS) $(OBJECTS) $(OBJECTS2)
+	$(CC) $(CFLAGS) $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2) -ldl
 
 libfalloc-dl: dd_rescue
 
-nolib: dd_rescue.c $(HEADERS) $(OBJECTS)
-	$(CC) $(CFLAGS) -DNO_LIBDL -DNO_LIBFALLOCATE $(DEFINES) $< $(OUT) $(OBJECTS)
+nolib: dd_rescue.c $(HEADERS) $(OBJECTS) $(OBJECTS2)
+	$(CC) $(CFLAGS) -DNO_LIBDL -DNO_LIBFALLOCATE $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2)
 
-nocolor: dd_rescue.c $(HEADERS) $(OBJECTS)
-	$(CC) $(CFLAGS) -DNO_COLORS=1 $(DEFINES) $< $(OUT) $(OBJECTS)
+nocolor: dd_rescue.c $(HEADERS) $(OBJECTS) $(OBJECTS2)
+	$(CC) $(CFLAGS) -DNO_COLORS=1 $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2)
 
 static: dd_rescue.c $(HEADERS) $(OBJECTS)
-	$(CC) $(CFLAGS) -DNO_LIBDL -DNO_LIBFALLOCATE -static $(DEFINES) $< $(OUT) $(OBJECTS)
+	$(CC) $(CFLAGS) -DNO_LIBDL -DNO_LIBFALLOCATE -static $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2)
 
 strip: dd_rescue
 	strip -S $<
 
 clean:
-	rm -f $(TARGETS) $(OBJECTS) dd_rescue.o core test log find_nonzero fmt_no file_zblock find_nonzero_main.o find_nonzero_avx.o find_nonzero_avx fiemap
+	rm -f $(TARGETS) $(OBJECTS) $(OBJECTS2) dd_rescue.o core test log find_nonzero fmt_no file_zblock find_nonzero_main.o fiemap
 
-find_nonzero: find_nonzero_main.o find_nonzero_avx.o find_nonzero_sse2.o
+find_nonzero: find_nonzero_main.o $(OBJECTS2)
 	$(CC) $(CFLAGS_OPT) -o $@ $^ 
 
 fmt_no: fmt_no.c fmt_no.h
 	$(CC) $(CFLAGS) -o $@ $< -DTEST
 
-file_zblock: file_zblock.c find_nonzero.h find_nonzero.c find_nonzero.o
-	$(CC) $(CFLAGS) -o $@ $< find_nonzero.o
+file_zblock: file_zblock.c $(FNZ_HEADERS) config.h find_nonzero.o $(OBJECTS2)
+	$(CC) $(CFLAGS) -o $@ $< find_nonzero.o $(OBJECTS2)
 
-fiemap: fiemap.c fiemap.h
+fiemap: fiemap.c fiemap.h config.h
 	$(CC) $(CFLAGS) -DTEST_FIEMAP -o $@ $<
 
 distclean: clean
@@ -117,7 +131,7 @@ distclean: clean
 	rm -rf autom4te.cache
 
 dist: distclean
-	tar cvzf ../dd_rescue-$(VERSION).tar.gz -C.. --exclude=$(MYDIR)/CV* --exclude $(MYDIR)/dd_rescue2* --exclude $(MYDIR)/.* $(MYDIR)
+	tar cvzf ../dd_rescue-$(VERSION).tar.gz -C.. --exclude=$(MYDIR)/CV* --exclude $(MYDIR)/dd_rescue2* --exclude $(MYDIR)/.* $(MYDIR) --exclude $(MYDIR)/*.i --exclude $(MYDIR)/*~ --exclude $(MYDIR)*.S --exclude $(MYDIR)/*_32 --exclude $(MYDIR)/*_64
 
 install: $(TARGETS)
 	mkdir -p $(INSTALLDIR)
