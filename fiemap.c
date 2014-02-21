@@ -137,13 +137,13 @@ char* devname(const dev_t dev)
 	fclose(f);
 	if (!found)
 		return NULL;
-	struct stat st;
+	struct stat64 st;
 	sprintf(_devnm_str, "/dev/%s", pnm);
-	if (!stat(_devnm_str, &st))
+	if (!stat64(_devnm_str, &st))
 		if (S_ISBLK(st.st_mode) && st.st_rdev == dev)
 			return _devnm_str;
 	sprintf(_devnm_str, "/dev/block/%s", pnm);
-	if (!stat(_devnm_str, &st))
+	if (!stat64(_devnm_str, &st))
 		if (S_ISBLK(st.st_mode) && st.st_rdev == dev)
 			return _devnm_str;
 	return NULL;
@@ -308,7 +308,7 @@ char* strippart(const char* partname)
 int64_t partoffset(const char* devnm)
 {
 	struct hd_geometry hdgeo;
-	int fd = open(devnm, O_RDONLY);
+	int fd = open/*64*/(devnm, O_RDONLY);
 	if (fd < 0) {
 		fprintf(stderr, "Can't open %s: %s\n", devnm, strerror(errno));
 		return -1;
@@ -365,15 +365,15 @@ int main(int argc, char *argv[])
 	}
 	for (; fno < argc; ++fno) {
 		struct fiemap_extent *ext = NULL;
-		struct stat st;
+		struct stat64 st;
 		int i, err, fd2 = 0;
-		int fd = open(argv[fno], O_RDONLY);
+		int fd = open/*64*/(argv[fno], O_RDONLY);
 		if (fd < 0) {
 			fprintf(stderr, "Can't open %s: %s\n", argv[fno], strerror(errno));
 			++errs;
 			continue;
 		}
-		err = fstat(fd, &st);
+		err = fstat64(fd, &st);
 		if (err) {
 			fprintf(stderr, "Can't stat %s: %s\n", argv[fno], strerror(errno));
 			close(fd);
@@ -389,7 +389,7 @@ int main(int argc, char *argv[])
 		}
 		char* dnm = devname(st.st_dev);
 		if (*dnm) {
-			fd2 = open(dnm, O_RDONLY);
+			fd2 = open/*64*/(dnm, O_RDONLY);
 			if (fd2 < 0)
 				fprintf(stderr, "Could not open %s for comparison: %s\n",
 					dnm, strerror(errno));
@@ -414,7 +414,7 @@ int main(int argc, char *argv[])
 		printf("Partition offset for dev %s: 0x%" LL "x sectors\n", dnm, poffs);
 		if (poffs > 0 && fd2 > 0) {
 			close(fd2);
-			fd2 = open(strippart(dnm), O_RDONLY);
+			fd2 = open/*64*/(strippart(dnm), O_RDONLY);
 			if (fd2 < 0)
 				break;
 			ioctl(fd2, BLKFLSBUF, 0);

@@ -27,7 +27,8 @@ int main(int argc, char *argv[])
 {
 	int zf = 0;
 	int chunksz = 4096;
-	int i = 1, off;
+	int i = 1;
+	loff_t off;
 	if (argc < 2)
 		usage();
 	if (!memcmp(argv[1], "-c", 2)) {
@@ -40,18 +41,19 @@ int main(int argc, char *argv[])
 		}
 	}
 	for (; i < argc; ++i) {
-		int fd = open(argv[i], O_RDONLY);
+		int fd = open/*64*/(argv[i], O_RDONLY);
 		if (fd<0) {
 			fprintf(stderr, "ERROR opening file %s: %s\n", argv[i], strerror(errno));
 			continue;
 		}
-		int rd, found = 0;
+		loff_t rd; 
+		int found = 0;
 		while ((rd = read(fd, buf, BUFSZ)) > 0 && !found) {
 			for (off = 0; off < rd; off += chunksz) {
 				unsigned int tocheck = rd-off > chunksz? chunksz: rd-off;
 				if (find_nonzero(buf+off, tocheck) == tocheck) {
 					++found; ++zf;
-					printf("%s,%i\n", argv[i], off);
+					printf("%s,%lli\n", argv[i], off);
 					break;
 				}
 			}

@@ -251,17 +251,17 @@ static char* strsignal(int sig)
 	return sbuf;
 }
 #endif
-#ifdef MISS_PREAD
-static ssize_t pread(int fd, void *buf, size_t sz, loff_t off)
+#ifndef HAVE_PREAD64
+static ssize_t pread64(int fd, void *buf, size_t sz, loff_t off)
 {
-	if (lseek(fd, off, SEEK_SET))
+	if (lseek64(fd, off, SEEK_SET))
 		return -1;
 	return read(fd, buf, sz);
 }
 
-static ssize_t pwrite(int fd, void *buf, size_t sz, loff_t off)
+static ssize_t pwrite64(int fd, void *buf, size_t sz, loff_t off)
 {
-	if (lseek(fd, off, SEEK_SET))
+	if (lseek64(fd, off, SEEK_SET))
 		return -1;
 	return write(fd, buf, sz);
 }
@@ -304,14 +304,14 @@ int fplog(FILE* const file, enum ddrlog_t logpre, const char * const fmt, ...)
 static int check_identical(const char* const in, const char* const on)
 {
 	int err = 0;
-	struct stat istat, ostat;
+	struct stat64 istat, ostat;
 	errno = 0;
 	if (strcmp(in, on) == 0) 
 		return 1;
-	err -= stat(in, &istat);
+	err -= stat64(in, &istat);
 	if (err)
 	       	return 0;
-	err -= stat(on, &ostat);
+	err -= stat64(on, &ostat);
 	errno = 0;
 	if (!err &&
 	    istat.st_ino == ostat.st_ino &&
@@ -342,7 +342,7 @@ static int openfile(const char* const fname, const int flags)
 static void check_seekable(const int fd, char *ischr, const char* msg)
 {
 	errno = 0;
-	if (!*ischr && lseek(fd, (loff_t)0, SEEK_SET) != 0) {
+	if (!*ischr && lseek64(fd, (loff_t)0, SEEK_SET) != 0) {
 		if (msg) {
 			fplog(stderr, WARN, "file %s is not seekable!\n", msg);
 			fplog(stderr, WARN, "%s\n", strerror(errno));
@@ -396,7 +396,7 @@ void updgraph(int err)
 /** Tries to determine size of input file */
 void input_length()
 {
-	struct stat stbuf;
+	struct stat64 stbuf;
 	estxfer = maxxfer;
 	if (reverse) {
 		if (ipos)
@@ -409,7 +409,7 @@ void input_length()
 		preparegraph();
 	if (i_chr)
 		return;
-	if (fstat(ides, &stbuf))
+	if (fstat64(ides, &stbuf))
 		return;
 	if (S_ISLNK(stbuf.st_mode))
 		return;
@@ -419,11 +419,11 @@ void input_length()
 	}
 	if (S_ISBLK(stbuf.st_mode)) {
 		/* Do magic to figure size of block dev */
-		loff_t p = lseek(ides, 0, SEEK_CUR);
+		loff_t p = lseek64(ides, 0, SEEK_CUR);
 		if (p == -1)
 			return;
-		ilen = lseek(ides, 0, SEEK_END) + 1;
-		lseek(ides, p, SEEK_SET);
+		ilen = lseek64(ides, 0, SEEK_END) + 1;
+		lseek64(ides, p, SEEK_SET);
 	} else {
 		loff_t diff;
 		ilen = stbuf.st_size;
@@ -452,10 +452,10 @@ void input_length()
 
 int output_length()
 {
-	struct stat stbuf;
+	struct stat64 stbuf;
 	if (o_chr)
 		return -1;
-	if (fstat(odes, &stbuf))
+	if (fstat64(odes, &stbuf))
 		return -1;
 	if (S_ISLNK(stbuf.st_mode))
 		return -1;
@@ -465,11 +465,11 @@ int output_length()
 	}
 	if (S_ISBLK(stbuf.st_mode)) {
 		/* Do magic to figure size of block dev */
-		loff_t p = lseek(odes, 0, SEEK_CUR);
+		loff_t p = lseek64(odes, 0, SEEK_CUR);
 		if (p == -1)
 			return -1;
-		olen = lseek(odes, 0, SEEK_END) + 1;
-		lseek(odes, p, SEEK_SET);
+		olen = lseek64(odes, 0, SEEK_END) + 1;
+		lseek64(odes, p, SEEK_SET);
 	} else {
 		loff_t diff;
 		olen = stbuf.st_size;
@@ -505,7 +505,7 @@ int output_length()
 
 static void sparse_output_warn()
 {
-	struct stat stbuf;
+	struct stat64 stbuf;
 	loff_t eff_opos;
 	if (o_chr)
 		return;
@@ -542,12 +542,12 @@ static void* load_libfallocate()
 
 static void do_fallocate(int fd, const char* onm)
 {
-	struct stat stbuf;
+	struct stat64 stbuf;
 	loff_t to_falloc, alloced;
 	int rc = 0;
 	if (!estxfer)
 		return;
-	if (fstat(fd, &stbuf))
+	if (fstat64(fd, &stbuf))
 		return;
 	if (!S_ISREG(stbuf.st_mode))
 		return;
@@ -723,8 +723,8 @@ int copyperm(int ifd, int ofd)
 {
 	int err; 
 	mode_t fmode;
-	struct stat stbuf;
-	err = fstat(ifd, &stbuf);
+	struct stat64 stbuf;
+	err = fstat64(ifd, &stbuf);
 	if (err)
 		return err;
 	fmode = stbuf.st_mode & (S_IRWXU | S_IRWXG | S_IRWXO | S_ISUID | S_ISGID | S_ISVTX);
@@ -794,9 +794,9 @@ int copyxattr(const char* inm, const char* onm)
 int copytimes(const char* inm, const char* onm)
 {
 	int err;
-	struct stat stbuf;
+	struct stat64 stbuf;
 	struct utimbuf utbuf;
-	err = stat(inm, &stbuf);
+	err = stat64(inm, &stbuf);
 	if (err)
 		return err;
 	utbuf.actime  = stbuf.st_atime;
@@ -807,11 +807,11 @@ int copytimes(const char* inm, const char* onm)
 
 static int mayexpandfile(const char* onm)
 {
-	struct stat st;
+	struct stat64 st;
 	loff_t maxopos = opos;
 	if (init_opos > opos)
 		maxopos = init_opos;
-	stat(onm, &st);
+	stat64(onm, &st);
 	if (!S_ISREG(st.st_mode))
 		return 0;
 	if (st.st_size < maxopos || trunclast)
@@ -958,7 +958,7 @@ static inline ssize_t mypread(int fd, void* bf, size_t sz, loff_t off)
 	if (i_chr) 
 		return read(fd, bf, sz);
 	else
-		return pread(fd, bf, sz, off);
+		return pread64(fd, bf, sz, off);
 }
 
 static inline ssize_t mypwrite(int fd, void* bf, size_t sz, loff_t off)
@@ -972,17 +972,17 @@ static inline ssize_t mypwrite(int fd, void* bf, size_t sz, loff_t off)
 		}
 	} else {
 		if (avoidwrite) {
-			ssize_t ln = pread(fd, buf2, sz, off);
+			ssize_t ln = pread64(fd, buf2, sz, off);
 			if (ln < (ssize_t)sz)
-				return pwrite(fd, bf, sz, off);
+				return pwrite64(fd, bf, sz, off);
 			if (memcmp(bf, buf2, ln))
-				return pwrite(fd, bf, sz, off);
+				return pwrite64(fd, bf, sz, off);
 			else {
 				axfer += ln;
 				return ln;
 			}
 		} else
-			return pwrite(fd, bf, sz, off);
+			return pwrite64(fd, bf, sz, off);
 	}
 }
 
@@ -1878,8 +1878,8 @@ const char* dirappfile(const char* onm)
 			   (oln > 2 && onm[oln-2] == '.' && onm[oln-3] == '/'))
 			return retstrdupcat3(onm, '/', iname);
 		else { /* Not clear by name, so test */
-			struct stat stbuf;
-			int err = stat(onm, &stbuf);
+			struct stat64 stbuf;
+			int err = stat64(onm, &stbuf);
 			if (!err && S_ISDIR(stbuf.st_mode))
 				return retstrdupcat3(onm, '/', iname);
 		}
@@ -2183,7 +2183,7 @@ int main(int argc, char* argv[])
 
 	/* special case: reverse with ipos == 0 means ipos = end_of_file */
 	if (reverse && ipos == 0) {
-		ipos = lseek(ides, ipos, SEEK_END);
+		ipos = lseek64(ides, ipos, SEEK_END);
 		if (ipos == -1) {
 			fplog(stderr, FATAL, "could not seek to end of file %s!\n", iname);
 			perror("dd_rescue"); cleanup(); exit(19);
@@ -2196,7 +2196,7 @@ int main(int argc, char* argv[])
 			opos = ipos;
 		/* if explicitly set to zero, assume end of _existing_ file */
 		if (opos == 0) {
-			opos = lseek(odes, opos, SEEK_END);
+			opos = lseek64(odes, opos, SEEK_END);
 			if (opos == (loff_t)-1) {
 				fplog(stderr, FATAL, "could not seek to end of file %s!\n", oname);
 				perror("dd_rescue"); cleanup(); exit(19);
