@@ -1,0 +1,21 @@
+ASDK = /casa/Hardware/Android/android-ndk-r9c
+CBIN = $(ASDK)/toolchains/arm-linux-androideabi-4.8/prebuilt/linux-$(shell uname -m)/bin
+
+CC = $(CBIN)/arm-linux-androideabi-gcc
+
+PLAT = $(ASDK)/platforms/android-17/arch-arm/usr
+INCD = $(PLAT)/include
+LIBD = $(PLAT)/lib
+
+CFLG = -I $(INCD) -D__WORDSIZE=32 -L $(LIBD)
+
+PATH = $(shell echo $$PATH)
+
+.phony: config
+
+config:
+	PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" ./configure --host x86-64-linux-gnu
+
+all:
+	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm all
+
