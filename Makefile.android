@@ -22,7 +22,7 @@ config.h:
 	PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" ./configure --host x86-64-linux-gnu
 
 config:
-	rm config.h
+	rm -f config.h
 	$(MAKE) -f Makefile.android config.h
 
 dd_rescue: $(DEPS) 

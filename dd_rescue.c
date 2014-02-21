@@ -1937,9 +1937,11 @@ int main(int argc, char* argv[])
 	pagesize = sysconf(_SC_PAGESIZE);
 #endif
 
+#if 0
 	if (sizeof(loff_t) <= 4/* || sizeof(size_t) <= 4*/)
 		fplog(stderr, WARN, "Limited range: off_t %i/%i bits, size_t %i bits%\n", 
 			8*sizeof(off_t), 8*sizeof(loff_t), 8*sizeof(size_t));
+#endif
 
 #ifdef LACK_GETOPT_LONG
 	while ((c = getopt(argc, argv, ":rtTfihqvVwWaAdDkMRpPc:b:B:m:e:s:S:l:o:y:z:Z:2:3:4:xY:")) != -1) 
