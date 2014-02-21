@@ -37,7 +37,7 @@ extern void detect_cpu_cap();
 /* This has been inspired by http://developer.amd.com/community/blog/faster-string-operations/ */
 extern size_t find_nonzero_sse2 (const unsigned char* blk, const size_t ln);
 extern size_t find_nonzero_avx2 (const unsigned char* blk, const size_t ln);
-extern size_t find_nonzero_arm  (const unsigned char* blk, const size_t ln);
+extern size_t find_nonzero_arm6 (const unsigned char* blk, const size_t ln);
 #ifdef TEST
 extern size_t find_nonzero_sse2o(const unsigned char* blk, const size_t ln);
 #endif

@@ -42,9 +42,9 @@ void probe_avx2(); void probe_sse2(); void probe_sse42();
 #define have_sse42 0
 #define ARCH_DECLS
 #define ARCH_DETECT do {} while (0)
-#define FIND_NONZERO_OPT(x,y) find_nonzero_arm(x,y)
-#define OPT_STR "arm"
-#define OPT_STR2 "arm"
+#define FIND_NONZERO_OPT(x,y) find_nonzero_arm6(x,y)
+#define OPT_STR "arm6"
+#define OPT_STR2 "arm6"
 
 #else
 #define have_ldmia 0
