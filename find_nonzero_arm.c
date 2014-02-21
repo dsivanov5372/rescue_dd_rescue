@@ -72,4 +72,6 @@ size_t find_nonzero_arm6(const unsigned char *blk, const size_t ln)
 	: "r2", "r3", "r4", "r5");
 	return res-blk;
 }
-
+#else
+#warning no point compiling this on non-ARM arch
+#endif
