@@ -24,8 +24,8 @@
 #endif
 /* __BYTE_ORDER */
 #include <sys/types.h>
-#ifdef HAVE_SYS_ENDIAN_H
-#include <sys/endian.h>
+#ifdef HAVE_ENDIAN_H
+#include <endian.h>
 #endif
 
 

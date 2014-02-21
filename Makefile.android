@@ -9,6 +9,8 @@ LIBD = $(PLAT)/lib
 
 CFLG = -I $(INCD) -D__WORDSIZE=32 -L $(LIBD)
 
+DEPS = $(wildcard *.c *.h)
+
 PATH = $(shell echo $$PATH)
 
 .phony: config libfalloc libfalloc-static libfalloc-dl nolib nocolor static strip all
@@ -23,7 +25,7 @@ config:
 	rm config.h
 	$(MAKE) -f Makefile.android config.h
 
-dd_rescue: 
+dd_rescue: $(DEPS) 
 	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm $@
 
 libfalloc:
@@ -35,25 +37,28 @@ libfalloc-static:
 libfalloc-dl:
 	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm $@
 
-nolib:
+nolib: 
 	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm $@
 
 strip: dd_rescue
 	strip -S dd_rescue
 
-find_nonzero:
+find_nonzero: $(DEPS)
 	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm $@
 
-file_zblock:
+file_zblock: $(DEPS)
 	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm $@
 
-fmt_no:
+fmt_no: $(DEPS)
 	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm $@
 
-fiemap:
+fiemap: $(DEPS)
 	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm $@
 
-all:
+all: 
+	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm $@
+
+clean:
 	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm $@
 
 

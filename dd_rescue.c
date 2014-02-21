@@ -130,67 +130,11 @@ void* libfalloc = (void*)0;
 
 /* splice */
 #if defined(__linux__) && (!defined(HAVE_SPLICE) || defined(SPLICE_IS_BUGGY))
-# include <sys/syscall.h>
-# define __KERNEL__
-# include <asm/unistd.h>
-# ifdef __NR_splice
-#  define HAVE_SPLICE 1
-#  ifndef SPLICE_F_MOVE	/* from fcntl.h on x86-64 linux */
-#   define SPLICE_F_MOVE 1
-#   define SPLICE_F_MORE 4
-#  endif
-#  if 1
-//  FIXME: What is the real type of the syscall off_t? 32bit? 64bit? depends?
-//   Do we need to do the same trickery as below with fallocate?? 
-static inline ssize_t splice(int fdin, loff_t *off_in, int fdout, 
-			      loff_t *off_out, size_t len, unsigned int flags)
-{
-	return syscall(__NR_splice, fdin, off_in, fdout, off_out, len, flags);
-}
-#  else
-_syscall6(long, splice, int, fdin, loff_t*, off_in, int, fdout, loff_t*, off_out, size_t, len, unsigned int, flags);
-#  endif
-# endif
-# undef __KERNEL__
+#include "splice.h"
 #endif
-
 /* fallocate64 */
 #if defined(__linux__) && !defined(HAVE_FALLOCATE64)
-# include <sys/syscall.h>
-# define __KERNEL__
-# include <asm/unistd.h>
-# ifdef __NR_fallocate
-#  ifndef FALLOC_FL_KEEP_SIZE
-#   define FALLOC_FL_ADJUST_SIZE 0
-#   define FALLOC_FL_KEEP_SIZE 1
-#  endif
-/* Linux has a system call fallocate() since 2.6.23, but glibc
- * only provides the wrapper with glibc-2.10+
- * So add a (weak) fallocate symbol here.
- */
-typedef off64_t __off64_t;
-int fallocate64(int fd, int mode, __off64_t start, __off64_t len) __attribute__((weak));
-int fallocate64(int fd, int mode, __off64_t start, __off64_t len)
-{
-#  if __WORDSIZE == 64
-	/* Two extra 0ULL for strace */
-	return syscall(__NR_fallocate, fd, mode,
-			start, len /*, 0ULL, 0ULL*/);	
-#  else
-#   if __BYTE_ORDER == __LITTLE_ENDIAN
-	return syscall(__NR_fallocate, fd, mode,
-			(int)start, (int)(start>>32),
-			(int)len, (int)(len>>32));
-#   else
-	return syscall(__NR_fallocate, fd, mode,
-			(int)(start>>32), (int)start,
-			(int)(len>>32), (int)len);
-#   endif
-#  endif /* __WORDSIZE */
-}
-#  define HAVE_FALLOCATE64
-# endif /* __NR_fallocate */
-# undef __KERNEL__
+# include "fallocate64.h"
 #endif
 
 /* xattrs */
@@ -1992,6 +1936,11 @@ int main(int argc, char* argv[])
 #ifdef _SC_PAGESIZE
 	pagesize = sysconf(_SC_PAGESIZE);
 #endif
+
+	if (sizeof(off_t) <= 4/* || sizeof(size_t) <= 4*/)
+		fplog(stderr, WARN, "Limited range: off_t %i/%i bits, size_t %i bits%\n", 
+			8*sizeof(off_t), 8*sizeof(loff_t), 8*sizeof(size_t));
+
 #ifdef LACK_GETOPT_LONG
 	while ((c = getopt(argc, argv, ":rtTfihqvVwWaAdDkMRpPc:b:B:m:e:s:S:l:o:y:z:Z:2:3:4:xY:")) != -1) 
 #else
