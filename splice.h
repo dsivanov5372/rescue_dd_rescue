@@ -20,24 +20,11 @@
 #  define SPLICE_F_MORE 4
 # endif
 # if 1
-//  FIXME: What is the real type of the syscall off_t? 32bit? 64bit? depends?
-//   Do we need to do the same trickery as below with fallocate?? 
 typedef off64_t __off64_t;
-static inline ssize_t splice(int fdin, off_t *off_in, int fdout, 
-			      off_t *off_out, size_t len, unsigned int flags)
+static inline ssize_t splice(int fdin, off64_t *off_in, int fdout, 
+			      off64_t *off_out, size_t len, unsigned int flags)
 {
-#  ifdef __BIONIC__
-	off64_t _off_in  = off_in ? *off_in : 0ULL;
-	off64_t _off_out = off_out? *off_out: 0ULL;
-	ssize_t ret = syscall(__NR_splice, fdin, off_in? &_off_in: NULL, fdout, off_out? &_off_out: NULL, len, flags);
-	if (off_in)
-		*off_in = _off_in;
-	if (off_out)
-		*off_out = _off_out;
-	return ret;
-#  else
 	return syscall(__NR_splice, fdin, off_in, fdout, off_out, len, flags);
-#  endif
 }
 # else
 _syscall6(long, splice, int, fdin, loff_t*, off_in, int, fdout, loff_t*, off_out, size_t, len, unsigned int, flags);

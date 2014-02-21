@@ -154,7 +154,7 @@ char trunclast, reverse, abwrerr, sparse, nosparse;
 char verbose, quiet, interact, force, in_report, nocol;
 unsigned char *buf, *buf2, *origbuf, *origbuf2;
 const char *lname, *iname, *oname, *bbname = NULL;
-off_t ipos, opos, xfer, lxfer, sxfer, fxfer, maxxfer, axfer, init_opos, ilen, olen, estxfer;
+loff_t ipos, opos, xfer, lxfer, sxfer, fxfer, maxxfer, axfer, init_opos, ilen, olen, estxfer;
 
 int ides, odes;
 int o_dir_in, o_dir_out;
@@ -252,14 +252,14 @@ static char* strsignal(int sig)
 }
 #endif
 #ifdef MISS_PREAD
-static ssize_t pread(int fd, void *buf, size_t sz, off_t off)
+static ssize_t pread(int fd, void *buf, size_t sz, loff_t off)
 {
 	if (lseek(fd, off, SEEK_SET))
 		return -1;
 	return read(fd, buf, sz);
 }
 
-static ssize_t pwrite(int fd, void *buf, size_t sz, off_t off)
+static ssize_t pwrite(int fd, void *buf, size_t sz, loff_t off)
 {
 	if (lseek(fd, off, SEEK_SET))
 		return -1;
@@ -342,7 +342,7 @@ static int openfile(const char* const fname, const int flags)
 static void check_seekable(const int fd, char *ischr, const char* msg)
 {
 	errno = 0;
-	if (!*ischr && lseek(fd, (off_t)0, SEEK_SET) != 0) {
+	if (!*ischr && lseek(fd, (loff_t)0, SEEK_SET) != 0) {
 		if (msg) {
 			fplog(stderr, WARN, "file %s is not seekable!\n", msg);
 			fplog(stderr, WARN, "%s\n", strerror(errno));
@@ -353,7 +353,7 @@ static void check_seekable(const int fd, char *ischr, const char* msg)
 }
 
 /** Calc position in graph */
-inline int gpos(off_t off)
+inline int gpos(loff_t off)
 {
 	static const int glen = 40; //strlen(graph) - 2;
 	return 1+(glen*off/ilen);
@@ -419,13 +419,13 @@ void input_length()
 	}
 	if (S_ISBLK(stbuf.st_mode)) {
 		/* Do magic to figure size of block dev */
-		off_t p = lseek(ides, 0, SEEK_CUR);
+		loff_t p = lseek(ides, 0, SEEK_CUR);
 		if (p == -1)
 			return;
 		ilen = lseek(ides, 0, SEEK_END) + 1;
 		lseek(ides, p, SEEK_SET);
 	} else {
-		off_t diff;
+		loff_t diff;
 		ilen = stbuf.st_size;
 		if (!ilen)
 			return;
@@ -444,7 +444,7 @@ void input_length()
 	if (estxfer < 0)
 		estxfer = 0;
 	if (!quiet)
-		fplog(stderr, INFO, "expect to copy %LikB from %s\n",
+		fplog(stderr, INFO, "expect to copy %llikB from %s\n",
 			estxfer/1024, iname);
 	if (!graph)
 		preparegraph();
@@ -465,13 +465,13 @@ int output_length()
 	}
 	if (S_ISBLK(stbuf.st_mode)) {
 		/* Do magic to figure size of block dev */
-		off_t p = lseek(odes, 0, SEEK_CUR);
+		loff_t p = lseek(odes, 0, SEEK_CUR);
 		if (p == -1)
 			return -1;
 		olen = lseek(odes, 0, SEEK_END) + 1;
 		lseek(odes, p, SEEK_SET);
 	} else {
-		off_t diff;
+		loff_t diff;
 		olen = stbuf.st_size;
 		if (!olen)
 			return -1;
@@ -482,7 +482,7 @@ int output_length()
 	if (!olen)
 		return -1;
 	if (!reverse) {
-		off_t newmax = olen - opos;
+		loff_t newmax = olen - opos;
 		if (newmax < 0) {
 			fplog(stderr, FATAL, "output position is beyond end of file but -M specified!\n");
 			cleanup();
@@ -491,11 +491,11 @@ int output_length()
 		if (!maxxfer || maxxfer > newmax) {
 			maxxfer = newmax;
 			if (!quiet)
-				fplog(stderr, INFO, "limit max xfer to %LikB\n",
+				fplog(stderr, INFO, "limit max xfer to %llikB\n",
 					maxxfer/1024);
 		}
 	} else if (opos > olen) {
-		fplog(stderr, WARN, "change output position %LikB to endpos %Likb due to -M\n",
+		fplog(stderr, WARN, "change output position %xllikB to endpos %llikb due to -M\n",
 			opos/1024, olen/1024);
 		opos = olen;
 	}
@@ -506,10 +506,10 @@ int output_length()
 static void sparse_output_warn()
 {
 	struct stat stbuf;
-	off_t eff_opos;
+	loff_t eff_opos;
 	if (o_chr)
 		return;
-	if (fstat(odes, &stbuf))
+	if (fstat64(odes, &stbuf))
 		return;
 	if (S_ISCHR(stbuf.st_mode)) {
 		o_chr = 1;
@@ -520,7 +520,7 @@ static void sparse_output_warn()
 			fplog(stderr, WARN, "%s is a block device; -a not recommended; -A recommended\n", oname);
 		return;
 	}
-	eff_opos = (opos == (off_t)-INT_MAX? ipos: opos);
+	eff_opos = (opos == (loff_t)-INT_MAX? ipos: opos);
 	if (sparse && (eff_opos < stbuf.st_size))
 		fplog(stderr, WARN, "write into %s (@%li/%li): sparse not recommended\n", 
 				oname, eff_opos, stbuf.st_size);
@@ -543,7 +543,7 @@ static void* load_libfallocate()
 static void do_fallocate(int fd, const char* onm)
 {
 	struct stat stbuf;
-	off_t to_falloc, alloced;
+	loff_t to_falloc, alloced;
 	int rc = 0;
 	if (!estxfer)
 		return;
@@ -573,7 +573,7 @@ static void do_fallocate(int fd, const char* onm)
 	rc = fallocate64(fd, 1, opos, to_falloc);
 #endif
 	if (rc)
-	       fplog(stderr, WARN, "fallocate %s (%Li, %Li) failed: %s\n",
+	       fplog(stderr, WARN, "fallocate %s (%lli, %lli) failed: %s\n",
 			       onm, opos, to_falloc, strerror(errno));
 }
 #endif
@@ -705,7 +705,7 @@ void printreport()
 		fprintf(report, "\n");
 		printstatus(report, logfd, 0, 1);
 		if (avoidwrite) 
-			fplog(report, INFO, "Avoided %LikB of writes (performed %LikB)\n", axfer/1024, (sxfer-axfer)/1024);
+			fplog(report, INFO, "Avoided %llikB of writes (performed %llikB)\n", axfer/1024, (sxfer-axfer)/1024);
 	}
 }
 
@@ -808,7 +808,7 @@ int copytimes(const char* inm, const char* onm)
 static int mayexpandfile(const char* onm)
 {
 	struct stat st;
-	off_t maxopos = opos;
+	loff_t maxopos = opos;
 	if (init_opos > opos)
 		maxopos = init_opos;
 	stat(onm, &st);
@@ -939,7 +939,7 @@ static ssize_t blockiszero(const unsigned char* blk, const size_t ln)
 	return i_rep_zero;
 }
 
-static inline ssize_t mypread(int fd, void* bf, size_t sz, off_t off)
+static inline ssize_t mypread(int fd, void* bf, size_t sz, loff_t off)
 {
 	if (i_repeat) {
 		if (i_rep_init)
@@ -961,7 +961,7 @@ static inline ssize_t mypread(int fd, void* bf, size_t sz, off_t off)
 		return pread(fd, bf, sz, off);
 }
 
-static inline ssize_t mypwrite(int fd, void* bf, size_t sz, off_t off)
+static inline ssize_t mypwrite(int fd, void* bf, size_t sz, loff_t off)
 {
 	if (o_chr) {
 		if (!avoidnull)
@@ -1042,7 +1042,7 @@ ssize_t writeblock(const int towrite)
 	return (/*err == -1? err:*/ wr);
 }
 
-int blockxfer(const off_t max, const int bs)
+int blockxfer(const loff_t max, const int bs)
 {
 	int block = bs;
 	/* Don't xfer more bytes than our limit */
@@ -1223,7 +1223,7 @@ static int partialwrite(const ssize_t rd)
 	return 0;	
 }
 
-int copyfile_hardbs(const off_t max)
+int copyfile_hardbs(const loff_t max)
 {
 	ssize_t toread;
 	int errs = 0; errno = 0;
@@ -1320,7 +1320,7 @@ int copyfile_hardbs(const off_t max)
 	return errs;
 }
 
-int copyfile_softbs(const off_t max)
+int copyfile_softbs(const loff_t max)
 {
 	ssize_t toread;
 	int errs = 0, rc; int eno;
@@ -1354,7 +1354,7 @@ int copyfile_softbs(const off_t max)
 		/* READ ERROR or short read */
 		if (rd < toread/* && errno*/) {
 			int ret;
-			off_t new_max, old_xfer;
+			loff_t new_max, old_xfer;
 			if (eno) {
 				++errs;
 				/* Read error occurred: Print warning */
@@ -1426,7 +1426,7 @@ int copyfile_softbs(const off_t max)
 }
 
 #ifdef HAVE_SPLICE
-int copyfile_splice(const off_t max)
+int copyfile_splice(const loff_t max)
 {
 	ssize_t toread;
 	int fd_pipe[2];
@@ -1434,7 +1434,7 @@ int copyfile_splice(const off_t max)
 	if (pipe(fd_pipe) < 0)
 		return copyfile_softbs(max);
 	while ((toread	= blockxfer(max, softbs)) > 0) {
-		off_t old_ipos = ipos, old_opos = opos;
+		loff_t old_ipos = ipos, old_opos = opos;
 		ssize_t rd = splice(ides, &ipos, fd_pipe[1], NULL, toread,
 					SPLICE_F_MOVE | SPLICE_F_MORE);
 		if (rd < 0) {
@@ -1462,7 +1462,7 @@ int copyfile_splice(const off_t max)
 			}
 			rd -= wr; xfer += wr; sxfer += wr;
 		}
-		off_t new_ipos = ipos, new_opos = opos;
+		loff_t new_ipos = ipos, new_opos = opos;
 		LISTFOREACH(ofiles, oft) {
 			ipos = old_ipos; opos = old_opos;
 			rd = splice(ides, &ipos, fd_pipe[1], NULL, toread,
@@ -1504,10 +1504,10 @@ int copyfile_splice(const off_t max)
 }
 #endif
 
-int tripleoverwrite(const off_t max)
+int tripleoverwrite(const loff_t max)
 {
 	int ret = 0;
-	off_t orig_opos = opos;
+	loff_t orig_opos = opos;
 	void* prng_state2 = frandom_stdup(prng_state);
 	clock_t orig_startclock = startclock;
 	struct timeval orig_starttime;
@@ -1566,7 +1566,7 @@ int tripleoverwrite(const off_t max)
 	return ret;
 }
 
-static off_t readint(const char* const ptr)
+static loff_t readint(const char* const ptr)
 {
 	char *es; double res;
 
@@ -1581,7 +1581,7 @@ static off_t readint(const char* const ptr)
 		default:
 			fplog(stderr, WARN, "suffix %c ignored!\n", *es);
 	}
-	return (off_t)res;
+	return (loff_t)res;
 }
 
 char readbool(const char* arg)
@@ -1904,11 +1904,11 @@ char test_nocolor_term()
 int main(int argc, char* argv[])
 {
 	int c;
-	off_t syncsz = -1;
+	loff_t syncsz = -1;
 
   	/* defaults */
 	softbs = 0; hardbs = 0; /* marker for defaults */
-	maxerr = 0; ipos = (off_t)-INT_MAX; opos = (off_t)-INT_MAX; maxxfer = 0; 
+	maxerr = 0; ipos = (loff_t)-INT_MAX; opos = (loff_t)-INT_MAX; maxxfer = 0; 
 	reverse = 0; dotrunc = 0; trunclast = 0; abwrerr = 0; sparse = 0; nosparse = 0;
 	verbose = 0; quiet = 0; interact = 0; force = 0; preserve = 0;
 	lname = 0; iname = 0; oname = 0; o_dir_in = 0; o_dir_out = 0;
@@ -1937,7 +1937,7 @@ int main(int argc, char* argv[])
 	pagesize = sysconf(_SC_PAGESIZE);
 #endif
 
-	if (sizeof(off_t) <= 4/* || sizeof(size_t) <= 4*/)
+	if (sizeof(loff_t) <= 4/* || sizeof(size_t) <= 4*/)
 		fplog(stderr, WARN, "Limited range: off_t %i/%i bits, size_t %i bits%\n", 
 			8*sizeof(off_t), 8*sizeof(loff_t), 8*sizeof(size_t));
 
@@ -2072,7 +2072,7 @@ int main(int argc, char* argv[])
 		syncfreq = (syncsz + softbs - 1) / softbs;
 
 	/* Have those been set by cmdline params? */
-	if (ipos == (off_t)-INT_MAX) 
+	if (ipos == (loff_t)-INT_MAX) 
 		ipos = 0;
 
 	if (dosplice && avoidwrite) {
@@ -2192,12 +2192,12 @@ int main(int argc, char* argv[])
 			fprintf(stderr, DDR_INFO "ipos set to the end: %.1fk\n", 
 			        (double)ipos/1024);
 		/* if opos not set, assume same position */
-		if (opos == (off_t)-INT_MAX) 
+		if (opos == (loff_t)-INT_MAX) 
 			opos = ipos;
 		/* if explicitly set to zero, assume end of _existing_ file */
 		if (opos == 0) {
 			opos = lseek(odes, opos, SEEK_END);
-			if (opos == (off_t)-1) {
+			if (opos == (loff_t)-1) {
 				fplog(stderr, FATAL, "could not seek to end of file %s!\n", oname);
 				perror("dd_rescue"); cleanup(); exit(19);
 			}
@@ -2211,7 +2211,7 @@ int main(int argc, char* argv[])
 	}
 
 	/* if opos not set, assume same position */
-	if (opos == (off_t)-INT_MAX)
+	if (opos == (loff_t)-INT_MAX)
 		opos = ipos;
 
 	if (identical) {

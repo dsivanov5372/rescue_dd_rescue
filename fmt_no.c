@@ -42,14 +42,14 @@ static char fmtbufs[8][64];
  *   enough though to print all possible 64bit ints.
  */
 char* fmt_int(unsigned char pre, unsigned char post, unsigned int scale, 
-	      off_t no, const char* bold, const char* norm, int leadbold)
+	      loff_t no, const char* bold, const char* norm, int leadbold)
 {
 	static int fbno = 0;
 	const int blen = bold? strlen(bold): 0;
 	const int nlen = norm? strlen(norm): 0;
 	int idx = sizeof(fmtbufs[0])-1;
 	char pos;
-	off_t my_no;
+	loff_t my_no;
 	char* fmtbuf = fmtbufs[fbno++];
 	char isneg = no < 0;
 	if (!scale)
@@ -114,7 +114,7 @@ char* fmt_int(unsigned char pre, unsigned char post, unsigned int scale,
 #include <stdio.h>
 int main(int argc, char **argv)
 {
-	int i; off_t l;
+	int i; loff_t l;
 	for (i = 1; i < argc; ++i) {
 		l = atoll(argv[i]);
 		printf("%12.2f: %s %s %s %s\n",
