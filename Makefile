@@ -56,6 +56,8 @@ endif
 
 default: $(TARGETS)
 
+all: $(TARGETS) find_nonzero fiemap file_zblock fmt_no
+
 config.h: configure config.h.in
 	./configure
 
