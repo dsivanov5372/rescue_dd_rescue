@@ -329,7 +329,7 @@ static int openfile(const char* const fname, const int flags)
 		else 
 			fdes = 0;  /* stdin */
 	} else
-		fdes = open(fname, flags, 0640);
+		fdes = open/*64*/(fname, flags, 0640);
 	if (fdes == -1) {
 		fplog(stderr, FATAL, "open \"%s\" failed: %s\n",
 			fname, strerror(errno));
@@ -2114,7 +2114,7 @@ int main(int argc, char* argv[])
 	/* Overwrite? */
 	/* Special case '-': stdout */
 	if (strcmp(oname, "-"))
-		odes = open(oname, O_WRONLY | o_dir_out, 0640);
+		odes = open/*64*/(oname, O_WRONLY | o_dir_out, 0640);
 	else {
 		odes = 1;
 		o_chr = 1;

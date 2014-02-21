@@ -332,7 +332,9 @@ int64_t partoffset(const char* devnm)
 	int64_t val;
 	if (!f)
 		return -1;
-	fscanf(f, "%" LL "i", &val);
+	err = fscanf(f, "%" LL "i", &val);
+	if (err != 1)
+		fprintf(stderr, "Ouch, failed parsing start ...%lli\n", val);
 	fclose(f);
 	if ((val & 0xffffffff) != ret) {
 		fprintf(stderr, "Val. inconsistent: %" LL "x <-> %" LL "x\n",
