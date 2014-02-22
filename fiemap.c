@@ -121,7 +121,7 @@ void free_mapping(const int fd, struct fiemap_extent *ext)
 
 struct fiemap_extent* copy_ext(const struct fiemap_extent *ext, const int nr)
 {
-	struct fiemap_extent *copy = malloc(nr*sizeof(struct fiemap_extent));
+	struct fiemap_extent *copy = (struct fiemap_extent*)malloc(nr*sizeof(struct fiemap_extent));
 	if (!copy)
 		return copy;
 	memcpy(copy, ext, nr*sizeof(struct fiemap_extent));
@@ -200,22 +200,22 @@ char* fiemap_str(const uint32_t flags)
 int compare_ext(const int fd1, const int fd2, const struct fiemap_extent* ext, uint64_t offset)
 {
 	/* FIXME: Is comparing one block enough? */
-	unsigned char *b1 = malloc(BLKSZ);
+	unsigned char *b1 = (unsigned char*)malloc(BLKSZ);
 	if (!b1)
 		return -1;
-	unsigned char *b2 = malloc(BLKSZ);
+	unsigned char *b2 = (unsigned char*)malloc(BLKSZ);
 	if (!b2) {
 		free(b1);
 		return -1;
 	}
-	size_t toread = ext->fe_length < BLKSZ? ext->fe_length: BLKSZ;
-	int rd1 = pread(fd1, b1, toread, ext->fe_logical);
+	ssize_t toread = ext->fe_length < BLKSZ? ext->fe_length: BLKSZ;
+	ssize_t rd1 = pread(fd1, b1, toread, ext->fe_logical);
 	/* Not needed anymore since we correct this when getting the mapping */
 	/*
 	if (rd1 > 0 && rd1 < toread && (ext->fe_flags & FIEMAP_EXTENT_LAST))
 		toread = rd1;
 	 */
-	int rd2 = pread(fd2, b2, toread, ext->fe_physical+offset);
+	ssize_t rd2 = pread(fd2, b2, toread, ext->fe_physical+offset);
 	int res;
 	if (rd1 != toread || rd2 != toread) 
 		res = -1;

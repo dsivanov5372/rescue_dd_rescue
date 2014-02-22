@@ -52,13 +52,14 @@ static inline void swap_byte(u8 *a, u8 *b)
 	*b = swapByte;
 }
 
+/* Unused, b/c it's slower
 static inline void swap_byte_notmp(u8 *a, u8 *b)
 {
 	*a -= *b;
 	*b += *a;
 	*a  = *b - *a;
 }
-
+ */
 
 void init_rand_state(struct frandom_state *state, u8* seedbf)
 {
