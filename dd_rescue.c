@@ -251,20 +251,9 @@ static char* strsignal(int sig)
 	return sbuf;
 }
 #endif
-#ifndef HAVE_PREAD64
-static ssize_t pread64(int fd, void *buf, size_t sz, loff_t off)
-{
-	if (lseek64(fd, off, SEEK_SET))
-		return -1;
-	return read(fd, buf, sz);
-}
 
-static ssize_t pwrite64(int fd, void *buf, size_t sz, loff_t off)
-{
-	if (lseek64(fd, off, SEEK_SET))
-		return -1;
-	return write(fd, buf, sz);
-}
+#ifndef HAVE_PREAD64
+#include "pread64.h"
 #endif
 
 inline float difftimetv(const struct timeval* const t2, 
