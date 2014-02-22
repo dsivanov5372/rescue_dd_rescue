@@ -25,10 +25,30 @@
 # define __KERNEL__
 # include <asm/unistd.h>
 # ifdef __NR_pread64
-/* TODO: Implement syscall wrappers for pread64 and pwrite64 */
-/* define HAVE_PREAD64
- */
-#  warning: pread64 syscall wrapper not yet implemented
+static inline ssize_t pread64(int fd, void *buf, size_t sz, loff_t off)
+{
+#if __WORDSIZE == 64
+	return syscall(__NR_pread64, fd, buf, sz, off);
+#elif __BYTE_ORDER == __LITTLE_ENDIAN
+# warning 32bit wrapper little endian pread64
+	return syscall(__NR_pread64, fd, buf, sz, (unsigned int)off, (int)(off >> 32));
+#else
+# warning 32bit wrapper big endian pread64
+	return syscall(__NR_pread64, fd, buf, sz, (int)(off >> 32), (unsigned int)off);
+#endif
+}
+
+static inline ssize_t pwrite64(int fd, void *buf, size_t sz, loff_t off)
+{
+#if __WORDSIZE == 64
+	return syscall(__NR_pwrite64, fd, buf, sz, off);
+#elif __BYTE_ORDER == __LITTLE_ENDIAN
+	return syscall(__NR_pwrite64, fd, buf, sz, (unsigned int)off, (int)(off >> 32));
+#else
+	return syscall(__NR_pwrite64, fd, buf, sz, (int)(off >> 32), (unsigned int)off);
+#endif
+}
+#  define HAVE_PREAD64
 # endif
 #endif
 
