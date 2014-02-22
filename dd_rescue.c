@@ -155,6 +155,11 @@ void* libfalloc = (void*)0;
 # warning We lack stat64, may not handle >2GB files correctly
 #endif
 
+#ifndef HAVE_LSEEK64
+# define lseek64 lseek
+# warning We lack lseek64, may not handle >2GB files correctly
+#endif
+
 /* This is not critical -- most platforms have an internal 64bit offset with plain open() */
 #ifndef HAVE_OPEN64
 # define open64 open
