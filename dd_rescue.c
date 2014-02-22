@@ -142,16 +142,20 @@ void* libfalloc = (void*)0;
 # include <attr/xattr.h>
 #else
 /* TODO: Could provide the prototypes for the syscalls ourselves ... */
+# warning No support for copying extended attributes / ACLs
 #endif
 
+/* Handle lack of stat64 */
 #ifdef HAVE_STAT64
 # define STAT64 stat64
 # define FSTAT64 fstat64
 #else
 # define STAT64 stat
 # define FSTAT64 fstat
+# warning We lack stat64, may not handle >2GB files correctly
 #endif
 
+/* This is not critical -- most platforms have an internal 64bit offset with plain open() */
 #ifndef HAVE_OPEN64
 # define open64 open
 #endif

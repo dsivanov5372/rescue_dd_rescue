@@ -10,19 +10,72 @@
 #ifndef _PREAD64_H
 #define _PREAD64_H
 
+#ifdef HAVE_CONFIG_H
+# include "config.h"
+#endif
 
-static ssize_t pread64(int fd, void *buf, size_t sz, loff_t off)
+#ifndef HAVE_PREAD64
+
+#ifdef __linux__
+# include <sys/syscall.h>
+# include <sys/types.h>
+# ifdef HAVE_ENDIAN_H
+#  include <endian.h>
+# endif
+# define __KERNEL__
+# include <asm/unistd.h>
+# ifdef __NR_pread64
+/* TODO: Implement syscall wrappers for pread64 and pwrite64 */
+/* define HAVE_PREAD64
+ */
+#  warning: pread64 syscall wrapper not yet implemented
+# endif
+#endif
+
+#ifndef HAVE_PREAD64
+# ifdef HAVE_LSEEK64
+static inline ssize_t pread64(int fd, void *buf, size_t sz, loff_t off)
 {
 	if (lseek64(fd, off, SEEK_SET))
 		return -1;
 	return read(fd, buf, sz);
 }
 
-static ssize_t pwrite64(int fd, void *buf, size_t sz, loff_t off)
+static inline ssize_t pwrite64(int fd, void *buf, size_t sz, loff_t off)
 {
 	if (lseek64(fd, off, SEEK_SET))
 		return -1;
 	return write(fd, buf, sz);
 }
+# elif defined(HAVE_PREAD)
+#  warning Using plain pread will likely limit file size to 2GB
+static inline ssize_t pread64(int fd, void *buf, size_t sz, loff_t off)
+{
+	return pread(fd, buf, sz, off);
+}
+static inline ssize_t pwrite(int fd, void *buf, size_t sz, loff_t off)
+{
+	return pwrite(fd, buf, sz, off);
+}
+# else
+static inline ssize_t pread64(int fd, void *buf, size_t sz, loff_t off)
+{
+	if (lseek(fd, off, SEEK_SET))
+		return -1;
+	return read(fd, buf, sz);
+}
 
-#endif
+static inline ssize_t pwrite64(int fd, void *buf, size_t sz, loff_t off)
+{
+	if (lseek(fd, off, SEEK_SET))
+		return -1;
+	return write(fd, buf, sz);
+}
+# endif
+#endif /* HAVE_PREAD64 -- after syscall wrapper */
+
+#else
+# warning No need to include pread64.h if we have pread64() in libc
+#endif /* HAVE_PREAD64 */
+
+#endif /* _PREAD64_H */
