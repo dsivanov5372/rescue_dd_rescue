@@ -26,6 +26,23 @@
 
 #include <signal.h>
 
+#ifdef __BIONIC__
+# include <libgen.h>
+#endif
+
+#ifndef FIFREEZE
+# define FIFREEZE	_IOWR('X', 119, int)	/* Freeze */
+# define FITHAW		_IOWR('X', 120, int)	/* Thaw */
+#endif
+#ifndef FITRIM
+struct fstrim_range {
+	__u64 start;
+	__u64 len;
+	__u64 minlen;
+};
+# define FITRIM		_IOWR('X', 121, struct fstrim_range)	/* Trim */
+#endif
+
 int unfreeze_fd = 0;
 void unfreeze_handler(int sig)
 {

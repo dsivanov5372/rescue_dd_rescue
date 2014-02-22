@@ -11,7 +11,15 @@
 #define _FIEMAP_H
 
 #include <linux/fs.h>
-#include <linux/fiemap.h>
+#ifdef HAVE_LINUX_FIEMAP
+# include <linux/fiemap.h>
+#else
+# include "linux_fiemap.h"
+#endif
+
+#ifndef FS_IOC_FIEMAP
+# define FS_IOC_FIEMAP			_IOWR('f', 11, struct fiemap)
+#endif
 
 #endif
 
