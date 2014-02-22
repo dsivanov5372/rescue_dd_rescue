@@ -144,6 +144,19 @@ void* libfalloc = (void*)0;
 /* TODO: Could provide the prototypes for the syscalls ourselves ... */
 #endif
 
+#ifdef HAVE_STAT64
+# define STAT64 stat64
+# define FSTAT64 fstat64
+#else
+# define STAT64 stat
+# define FSTAT64 fstat
+#endif
+
+#ifndef HAVE_OPEN64
+# define open64 open
+#endif
+
+
 /* fwd decls */
 int cleanup();
 
@@ -293,14 +306,14 @@ int fplog(FILE* const file, enum ddrlog_t logpre, const char * const fmt, ...)
 static int check_identical(const char* const in, const char* const on)
 {
 	int err = 0;
-	struct stat64 istat, ostat;
+	struct STAT64 istat, ostat;
 	errno = 0;
 	if (strcmp(in, on) == 0) 
 		return 1;
-	err -= stat64(in, &istat);
+	err -= STAT64(in, &istat);
 	if (err)
 	       	return 0;
-	err -= stat64(on, &ostat);
+	err -= STAT64(on, &ostat);
 	errno = 0;
 	if (!err &&
 	    istat.st_ino == ostat.st_ino &&
@@ -318,7 +331,7 @@ static int openfile(const char* const fname, const int flags)
 		else 
 			fdes = 0;  /* stdin */
 	} else
-		fdes = open/*64*/(fname, flags, 0640);
+		fdes = open64(fname, flags, 0640);
 	if (fdes == -1) {
 		fplog(stderr, FATAL, "open \"%s\" failed: %s\n",
 			fname, strerror(errno));
@@ -385,7 +398,7 @@ void updgraph(int err)
 /** Tries to determine size of input file */
 void input_length()
 {
-	struct stat64 stbuf;
+	struct STAT64 stbuf;
 	estxfer = maxxfer;
 	if (reverse) {
 		if (ipos)
@@ -398,7 +411,7 @@ void input_length()
 		preparegraph();
 	if (i_chr)
 		return;
-	if (fstat64(ides, &stbuf))
+	if (FSTAT64(ides, &stbuf))
 		return;
 	if (S_ISLNK(stbuf.st_mode))
 		return;
@@ -441,10 +454,10 @@ void input_length()
 
 int output_length()
 {
-	struct stat64 stbuf;
+	struct STAT64 stbuf;
 	if (o_chr)
 		return -1;
-	if (fstat64(odes, &stbuf))
+	if (FSTAT64(odes, &stbuf))
 		return -1;
 	if (S_ISLNK(stbuf.st_mode))
 		return -1;
@@ -494,11 +507,11 @@ int output_length()
 
 static void sparse_output_warn()
 {
-	struct stat64 stbuf;
+	struct STAT64 stbuf;
 	loff_t eff_opos;
 	if (o_chr)
 		return;
-	if (fstat64(odes, &stbuf))
+	if (FSTAT64(odes, &stbuf))
 		return;
 	if (S_ISCHR(stbuf.st_mode)) {
 		o_chr = 1;
@@ -531,12 +544,12 @@ static void* load_libfallocate()
 
 static void do_fallocate(int fd, const char* onm)
 {
-	struct stat64 stbuf;
+	struct STAT64 stbuf;
 	loff_t to_falloc, alloced;
 	int rc = 0;
 	if (!estxfer)
 		return;
-	if (fstat64(fd, &stbuf))
+	if (FSTAT64(fd, &stbuf))
 		return;
 	if (!S_ISREG(stbuf.st_mode))
 		return;
@@ -712,8 +725,8 @@ int copyperm(int ifd, int ofd)
 {
 	int err; 
 	mode_t fmode;
-	struct stat64 stbuf;
-	err = fstat64(ifd, &stbuf);
+	struct stat stbuf;
+	err = fstat(ifd, &stbuf);
 	if (err)
 		return err;
 	fmode = stbuf.st_mode & (S_IRWXU | S_IRWXG | S_IRWXO | S_ISUID | S_ISGID | S_ISVTX);
@@ -783,9 +796,9 @@ int copyxattr(const char* inm, const char* onm)
 int copytimes(const char* inm, const char* onm)
 {
 	int err;
-	struct stat64 stbuf;
+	struct stat stbuf;
 	struct utimbuf utbuf;
-	err = stat64(inm, &stbuf);
+	err = stat(inm, &stbuf);
 	if (err)
 		return err;
 	utbuf.actime  = stbuf.st_atime;
@@ -796,11 +809,11 @@ int copytimes(const char* inm, const char* onm)
 
 static int mayexpandfile(const char* onm)
 {
-	struct stat64 st;
+	struct STAT64 st;
 	loff_t maxopos = opos;
 	if (init_opos > opos)
 		maxopos = init_opos;
-	stat64(onm, &st);
+	STAT64(onm, &st);
 	if (!S_ISREG(st.st_mode))
 		return 0;
 	if (st.st_size < maxopos || trunclast)
@@ -1867,8 +1880,8 @@ const char* dirappfile(const char* onm)
 			   (oln > 2 && onm[oln-2] == '.' && onm[oln-3] == '/'))
 			return retstrdupcat3(onm, '/', iname);
 		else { /* Not clear by name, so test */
-			struct stat64 stbuf;
-			int err = stat64(onm, &stbuf);
+			struct stat stbuf;
+			int err = stat(onm, &stbuf);
 			if (!err && S_ISDIR(stbuf.st_mode))
 				return retstrdupcat3(onm, '/', iname);
 		}
@@ -2105,7 +2118,7 @@ int main(int argc, char* argv[])
 	/* Overwrite? */
 	/* Special case '-': stdout */
 	if (strcmp(oname, "-"))
-		odes = open/*64*/(oname, O_WRONLY | o_dir_out, 0640);
+		odes = open64(oname, O_WRONLY | o_dir_out, 0640);
 	else {
 		odes = 1;
 		o_chr = 1;

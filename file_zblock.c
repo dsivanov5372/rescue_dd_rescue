@@ -5,6 +5,8 @@
  */
 
 #define _GNU_SOURCE 1
+//#define _LARGEFILE_SOURCE 1
+//#define FILE_OFFSET_BITS 64
 #include <stdio.h>
 #include <sys/file.h>
 #include <unistd.h>
@@ -15,6 +17,12 @@
 
 #define BUFSZ (64*1024)
 unsigned char buf[BUFSZ];
+
+#if __WORDSIZE == 64
+# define LL "l"
+#else
+# define LL "ll"
+#endif
 
 void usage()
 {
@@ -53,7 +61,7 @@ int main(int argc, char *argv[])
 				unsigned int tocheck = rd-off > chunksz? chunksz: rd-off;
 				if (find_nonzero(buf+off, tocheck) == tocheck) {
 					++found; ++zf;
-					printf("%s,%lli\n", argv[i], off);
+					printf("%s,%" LL "ik\n", argv[i], off/1024);
 					break;
 				}
 			}
