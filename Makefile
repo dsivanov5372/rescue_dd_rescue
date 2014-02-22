@@ -126,7 +126,7 @@ fmt_no: fmt_no.c fmt_no.h
 file_zblock: file_zblock.c $(FNZ_HEADERS) config.h find_nonzero.o $(OBJECTS2)
 	$(CC) $(CFLAGS) -o $@ $< find_nonzero.o $(OBJECTS2)
 
-fiemap: fiemap.c fiemap.h config.h
+fiemap: fiemap.c fiemap.h fstrim.h config.h
 	$(CC) $(CFLAGS) -DTEST_FIEMAP -o $@ $<
 
 distclean: clean
