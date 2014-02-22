@@ -10,16 +10,24 @@
 #ifndef _FIEMAP_H
 #define _FIEMAP_H
 
+#ifdef HAVE_CONFIG_H
+# include "config.h"
+#endif
+
+#ifdef HAVE_LINUX_FS_H
+
 #include <linux/fs.h>
-#ifdef HAVE_LINUX_FIEMAP
+#ifdef HAVE_LINUX_FIEMAP_H
 # include <linux/fiemap.h>
 #else
 # include "linux_fiemap.h"
 #endif
 
-#ifndef FS_IOC_FIEMAP
+#if !defined(FS_IOC_FIEMAP) && defined(__linux__)
 # define FS_IOC_FIEMAP			_IOWR('f', 11, struct fiemap)
 #endif
 
-#endif
+#endif	/* HAVE_LINUX_FS_H */
+
+#endif	/* _FIEMAPH */
 
