@@ -894,7 +894,7 @@ void remove_and_trim(const char* onm)
 			dirnm, strerror(errno), (errno == EPERM? " (have root?)": ""));
 	else
 		fplog(stderr, INFO, "Trimmed %sMiB \n", 
-				fmt_int(1, 2, 1024*1024, trim.len, BOLD, NORM, 1));
+				fmt_int(8, 2, 1024*1024, trim.len, BOLD, NORM, 1));
 	close(fd);
 	free(dirnm);
 #endif
