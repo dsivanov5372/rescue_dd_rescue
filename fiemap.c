@@ -232,7 +232,7 @@ void mydirnm(char* nm)
 #if __WORDSIZE == 64
 #define LL "l"
 #else
-#define LL "L"
+#define LL "ll"
 #endif
 
 
