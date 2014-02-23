@@ -7,6 +7,7 @@
 
 #ifdef HAVE_LINUX_FS_H
 #include <linux/fs.h>
+#include <linux/types.h>
 #include <sys/ioctl.h>
 
 #if defined(__linux__) && !defined(FITRIM)
