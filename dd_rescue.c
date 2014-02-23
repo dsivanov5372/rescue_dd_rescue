@@ -288,7 +288,7 @@ static char* strsignal(int sig)
 }
 #endif
 
-#ifndef HAVE_PREAD64 || defined(TEST_SYSCALL)
+#if !defined(HAVE_PREAD64) || defined(TEST_SYSCALL)
 #include "pread64.h"
 #endif
 
