@@ -1,6 +1,6 @@
 .\" $Id$
 .
-.TH dd_rescue 1 "2013-02-24" "Kurt Garloff" "Rescue copy tool"
+.TH dd_rescue 1 "2014-02-23" "Kurt Garloff" "Rescue copy tool"
 .
 .SH NAME
 dd_rescue \- Rescue copy tool
@@ -548,7 +548,7 @@ zeroes and removing it again prior to this operation will result
 in more sectors with zeroes. dd_rescue -u /dev/zero DUMMY
 will achieve this ...)
 .PP
-See README.dd_rescue to learn about some more possibilities.
+See also README.dd_rescue to learn about the possibilities.
 .SH BUGS/LIMITATIONS
 The source code does use the 64bit functions provided by glibc for file
 positioning. However, your kernel might not support it, so you might be
@@ -634,8 +634,17 @@ Write avoidance -W has been implemented in 1.30
 Multiple output files -Y have been added in 1.32.
 .br
 Long options and man page came with 1.33.
+.br
+Optimized sparse detection (SSE2, arm asm, AVX2) has been
+present since 1.35 and been enhanced until 1.41.
+.br
+We support copying extended attributes since 1.40 using
+libxattr.
+.br
+Removing and (fs)trimming the output file's filesystem
+exists since 1.41.
 .PP
-More detailed information can be found on
+Some additional information can be found on
 .br
 http://garloff.de/kurt/linux/ddrescue/
 
