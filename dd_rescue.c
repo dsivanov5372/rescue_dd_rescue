@@ -143,11 +143,11 @@ void* libfalloc = (void*)0;
 #endif
 
 /* splice */
-#if defined(__linux__) && (!defined(HAVE_SPLICE) || defined(SPLICE_IS_BUGGY))
+#if defined(__linux__) && (!defined(HAVE_SPLICE) || defined(SPLICE_IS_BUGGY) || defined(TEST_SYSCALL))
 #include "splice.h"
 #endif
 /* fallocate64 */
-#if defined(__linux__) && !defined(HAVE_FALLOCATE64)
+#if defined(__linux__) && (!defined(HAVE_FALLOCATE64) || defined(TEST_SYSCALL))
 # include "fallocate64.h"
 #endif
 
@@ -288,7 +288,7 @@ static char* strsignal(int sig)
 }
 #endif
 
-#ifndef HAVE_PREAD64
+#ifndef HAVE_PREAD64 || defined(TEST_SYSCALL)
 #include "pread64.h"
 #endif
 

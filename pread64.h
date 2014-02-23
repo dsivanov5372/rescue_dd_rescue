@@ -14,7 +14,7 @@
 # include "config.h"
 #endif
 
-#ifndef HAVE_PREAD64
+#if !defined(HAVE_PREAD64) || defined(TEST_SYSCALL)
 
 #ifdef __linux__
 # include <sys/syscall.h>
