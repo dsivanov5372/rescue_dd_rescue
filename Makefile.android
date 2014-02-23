@@ -60,5 +60,6 @@ all:
 
 clean:
 	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm $@
+	rm -f config.h crtbegin_dynamic.o crtend_android.o
 
 
