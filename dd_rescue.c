@@ -863,7 +863,7 @@ void mydirnm(char* nm)
 #if __WORDSIZE == 64
 # define LL "l"
 #else
-# define LL "L"
+# define LL "ll"
 #endif
 
 void remove_and_trim(const char* onm)
@@ -893,7 +893,8 @@ void remove_and_trim(const char* onm)
 		fplog(stderr, WARN, "fstrim %s failed: %s%s\n", 
 			dirnm, strerror(errno), (errno == EPERM? " (have root?)": ""));
 	else
-		fplog(stderr, INFO, "Trimmed %" LL "i bytes \n", (__u64)trim.len);
+		fplog(stderr, INFO, "Trimmed %sMiB \n", 
+				fmt_int(1, 2, 1024*1024, trim.len, BOLD, NORM, 1));
 	close(fd);
 	free(dirnm);
 #endif
