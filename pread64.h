@@ -37,7 +37,11 @@ static inline ssize_t pread64(int fd, void *buf, size_t sz, loff_t off)
 #endif
 #else
 # warning 32bit wrapper big endian pread64 untested
+#if 0
 	return syscall(__NR_pread64, fd, buf, 0, sz, (int)(off >> 32), (unsigned int)off);
+#else
+	return syscall(__NR_pread64, fd, buf, sz, (int)(off >> 32), (unsigned int)off);
+#endif
 #endif
 }
 
@@ -52,7 +56,11 @@ static inline ssize_t pwrite64(int fd, const void *buf, size_t sz, loff_t off)
 	return syscall(__NR_pwrite64, fd, buf, sz, (unsigned int)off, (int)(off >> 32));
 #endif
 #else
+#if 0
 	return syscall(__NR_pwrite64, fd, buf, 0, sz, (int)(off >> 32), (unsigned int)off);
+#else
+	return syscall(__NR_pwrite64, fd, buf, sz, (int)(off >> 32), (unsigned int)off);
+#endif
 #endif
 }
 #  define HAVE_PREAD64

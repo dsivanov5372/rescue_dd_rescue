@@ -303,7 +303,7 @@ this is specified with a normal input file and no \-f (\-\-force) is
 used.) This option may be used to ensure that all empty
 blocks of a filesystem are filled with zeros (rather than containing 
 fragments of deleted files with possibly sensitive information).
-.BR
+.br
 The FITRIM ioctl (on Linux) tells the flash storage to consider
 the freed space as unused (like the fstrim tool or the discard
 option) by issuing ATA TRIM commands. This will only succeed with
@@ -312,7 +312,8 @@ ignored). This is useful to ensure full performance of flash
 memory / SSDs. Note that FITRIM can take a while on large
 filesystems, especially if the filesystems are not mounted with
 the discard option and have not been trimmed (with e.g. fstrim)
-for a while.
+for a while. Not all filesystems and not all flash-based storage
+support this.
 .TP 8
 .BR \-k ", " \-\-splice
 tells
@@ -364,10 +365,10 @@ When copying files, this option does result in file metadata (timestamps,
 ownership, access rights, xattrs) to be copied, similar to the option with the
 same name in the cp program.
 .br
-Note that 
+Note that this option is only available if 
 .B dd_rescue
-at this point does not have support for copying extended attributes
-or ACLs. (But the behaviour of -p is still consistent with cp.)
+has been compiled with libxattr support and the library can by dynamically
+loaded on the system.
 .TP 8
 .BR \-t ", " \-\-truncate
 tells
@@ -544,7 +545,7 @@ copies a filesystem image and looks for empty blocks to create a
 sparse output file to save disk space. (If the source filesystem
 has been used a bit, on that filesystem creating a large file with
 zeroes and removing it again prior to this operation will result
-in more sectors with zeroes. dd_rescue /dev/zero DUMMY; rm DUMMY
+in more sectors with zeroes. dd_rescue -u /dev/zero DUMMY
 will achieve this ...)
 .PP
 See README.dd_rescue to learn about some more possibilities.
