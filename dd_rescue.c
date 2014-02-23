@@ -73,10 +73,34 @@
 #define _LARGEFILE_SOURCE
 #define _FILE_OFFSET_BITS 64
 
+#ifdef TEST_SYSCALL
+#define splice _splice
+#define fallocate64 _fallocate64
+#define pread64 _pread64
+#define pwrite64 _pwrite64
+#endif
+// hack around buggy splice definition(!)
+#if defined(__GLIBC__) && __GLIBC__ == 2 && __GLIBC_MINOR__ < 10
+# define SPLICE_IS_BUGGY 1
+# define splice _splice
+#endif
+
+#include <unistd.h>
+#include <fcntl.h>
+
+#ifdef SPLICE_IS_BUGGY
+#undef splice
+#endif
+#ifdef TEST_SYSCALL
+#undef splice
+#undef fallocate64
+#undef pread64
+#undef pwrite64
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
-#include <unistd.h>
 #include <string.h>
 #include <ctype.h>
 #include <errno.h>
@@ -98,18 +122,6 @@
 #ifdef HAVE_GETOPT_LONG
 #include <getopt.h>
 #endif
-
-// hack around buggy splice definition(!)
-#if defined(__GLIBC__) && __GLIBC__ == 2 && __GLIBC_MINOR__ < 10
-# define SPLICE_IS_BUGGY 1
-#endif
-
-#ifdef SPLICE_IS_BUGGY
-#warning work around buggy splice() prototype
-#define splice oldsplice
-#endif
-#include <fcntl.h>
-#undef splice
 
 #ifdef NO_LIBFALLOCATE
 # undef HAVE_LIBFALLOCATE

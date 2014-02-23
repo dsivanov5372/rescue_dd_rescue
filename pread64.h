@@ -30,20 +30,27 @@ static inline ssize_t pread64(int fd, void *buf, size_t sz, loff_t off)
 #if __WORDSIZE == 64
 	return syscall(__NR_pread64, fd, buf, sz, off);
 #elif __BYTE_ORDER == __LITTLE_ENDIAN 
-# warning 32bit wrapper little endian pread64 only tested on arm
+#ifdef __arm__
 	return syscall(__NR_pread64, fd, buf, sz, 0, (unsigned int)off, (int)(off >> 32));
+#else
+	return syscall(__NR_pread64, fd, buf, sz, (unsigned int)off, (int)(off >> 32));
+#endif
 #else
 # warning 32bit wrapper big endian pread64 untested
 	return syscall(__NR_pread64, fd, buf, 0, sz, (int)(off >> 32), (unsigned int)off);
 #endif
 }
 
-static inline ssize_t pwrite64(int fd, void *buf, size_t sz, loff_t off)
+static inline ssize_t pwrite64(int fd, const void *buf, size_t sz, loff_t off)
 {
 #if __WORDSIZE == 64
 	return syscall(__NR_pwrite64, fd, buf, sz, off);
 #elif __BYTE_ORDER == __LITTLE_ENDIAN
+#ifdef __arm__
 	return syscall(__NR_pwrite64, fd, buf, sz, 0, (unsigned int)off, (int)(off >> 32));
+#else
+	return syscall(__NR_pwrite64, fd, buf, sz, (unsigned int)off, (int)(off >> 32));
+#endif
 #else
 	return syscall(__NR_pwrite64, fd, buf, 0, sz, (int)(off >> 32), (unsigned int)off);
 #endif
@@ -61,7 +68,7 @@ static inline ssize_t pread64(int fd, void *buf, size_t sz, loff_t off)
 	return read(fd, buf, sz);
 }
 
-static inline ssize_t pwrite64(int fd, void *buf, size_t sz, loff_t off)
+static inline ssize_t pwrite64(int fd, const void *buf, size_t sz, loff_t off)
 {
 	if (lseek64(fd, off, SEEK_SET))
 		return -1;
@@ -73,7 +80,7 @@ static inline ssize_t pread64(int fd, void *buf, size_t sz, loff_t off)
 {
 	return pread(fd, buf, sz, off);
 }
-static inline ssize_t pwrite(int fd, void *buf, size_t sz, loff_t off)
+static inline ssize_t pwrite(int fd, const void *buf, size_t sz, loff_t off)
 {
 	return pwrite(fd, buf, sz, off);
 }
@@ -85,7 +92,7 @@ static inline ssize_t pread64(int fd, void *buf, size_t sz, loff_t off)
 	return read(fd, buf, sz);
 }
 
-static inline ssize_t pwrite64(int fd, void *buf, size_t sz, loff_t off)
+static inline ssize_t pwrite64(int fd, const void *buf, size_t sz, loff_t off)
 {
 	if (lseek(fd, off, SEEK_SET))
 		return -1;
