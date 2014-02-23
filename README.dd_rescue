@@ -47,7 +47,8 @@ Why?
 * If you have one spot of bad sectors within the partition, it might be a
   good idea, to approach this spot from both sides. Reverse direction copy
   is helpful.
-  dd_rhelp (included in dd_rescue packages) does automate this approach.
+  dd_rhelp (included in my builds of dd_rescue packages on Open Build
+  Service ) does automate this approach.
   There is a GNU ddrescue tool that is a redesigned dd_rescue and also has 
   automation for this built-in.
 * The two block sizes are a performance optimization. Large block sizes
@@ -170,7 +171,9 @@ dd_rescue has a few nifty features:
   faster AVX2 routine. The runtime detection has been fixed in 1.40.
 * Version 1.40 added copying of extended attributes (xattrs) with -p.
 * Version 1.41 brought option -u, removing the output file and 
-  discarding (TRIMming) the filesystem.
+  discarding (TRIMming) the filesystem. 1.41 also added support for 
+  compiling against Android's libc (bionic) using the Android NDK. 
+  See Makefile.android ...
 
 
 Copyright
@@ -205,7 +208,8 @@ The web page of this program, BTW, is
 http://www.garloff.de/kurt/linux/ddrescue/
 frandom.c is adapted from the kernel module from Eli Billauer
 http://www.billauer.co.il
-
+dd_rhelp can be found at
+http://www.kalysto.org/utilities/dd_rhelp/index.en.html
 
 Have fun! 
 (Hopefully you don't need this program. But if you do: I wish it will be
