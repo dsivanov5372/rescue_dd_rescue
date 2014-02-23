@@ -874,12 +874,14 @@ void remove_and_trim(const char* onm)
 	trim.start = 0;
 	trim.len = (__u64)(-1);
 	trim.minlen = 16384;
+	fprintf(stderr, "dd_rescue: FITRIM %s ...\r", dirnm); 
+	fflush(stderr);
 	int trimerr = ioctl(fd, FITRIM, &trim);
 	if (trimerr) 
 		fplog(stderr, WARN, "fstrim %s failed: %s%s\n", 
 			dirnm, strerror(errno), (errno == EPERM? " (have root?)": ""));
 	else
-		fplog(stderr, INFO, "Trimmed %" LL "i bytes\n", (__u64)trim.len);
+		fplog(stderr, INFO, "Trimmed %" LL "i bytes \n", (__u64)trim.len);
 	close(fd);
 	free(dirnm);
 #endif
