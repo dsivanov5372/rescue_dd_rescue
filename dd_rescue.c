@@ -93,6 +93,8 @@
 #include "fmt_no.h"
 #include "find_nonzero.h"
 
+#include "fstrim.h"
+
 #ifdef HAVE_GETOPT_LONG
 #include <getopt.h>
 #endif
@@ -181,14 +183,14 @@ loff_t ipos, opos, xfer, lxfer, sxfer, fxfer, maxxfer, axfer, init_opos, ilen, o
 int ides, odes;
 int o_dir_in, o_dir_out;
 char identical, preserve, falloc, dosplice;
-char i_chr, o_chr;
+char i_chr, o_chr, o_blk, o_lnk;
 char i_repeat, i_rep_init;
 size_t i_rep_zero;
 int  prng_seed;
 char noextend, avoidwrite, avoidnull;
 char prng_libc, prng_frnd;
 char bsim715, bsim715_4, bsim715_2, bsim715_2ndpass;
-char extend;
+char extend, rmvtrim;
 char* prng_sfile;
 
 void *prng_state, *prng_state2;
@@ -468,8 +470,11 @@ int output_length()
 		return -1;
 	if (FSTAT64(odes, &stbuf))
 		return -1;
-	if (S_ISLNK(stbuf.st_mode))
+	if (S_ISLNK(stbuf.st_mode)) {
+		// TODO: Use readlink and follow?
+		o_lnk = 1;
 		return -1;
+	}
 	if (S_ISCHR(stbuf.st_mode)) {
 		o_chr = 1;
 		return -1;
@@ -477,6 +482,7 @@ int output_length()
 	if (S_ISBLK(stbuf.st_mode)) {
 		/* Do magic to figure size of block dev */
 		loff_t p = lseek64(odes, 0, SEEK_CUR);
+		o_blk = 1;
 		if (p == -1)
 			return -1;
 		olen = lseek64(odes, 0, SEEK_END) + 1;
@@ -831,6 +837,54 @@ static int mayexpandfile(const char* onm)
 		return 0;		
 }
 
+void mydirnm(char* nm)
+{
+	char* last = nm+strlen(nm)-1;
+	while (last > nm && *last != '/')
+		--last;
+	if (last == nm) {
+		*nm++ = '.'; *nm = 0;
+	} else 
+		*++nm = 0;
+}
+
+#if __WORDSIZE == 64
+# define LL "l"
+#else
+# define LL "L"
+#endif
+
+void remove_and_trim(const char* onm)
+{
+	int err = unlink(onm);
+	if (err)
+		fplog(stderr, WARN, "remove(%s) failed: %s\n",
+			onm, strerror(errno));
+#ifdef FITRIM
+	char* dirnm = strdup(onm);
+	mydirnm(dirnm);
+	struct fstrim_range trim;
+	int fd = open(dirnm, O_RDONLY);
+	if (fd < 0) {
+		fprintf(stderr, "Can't open dir %s: %s\n",
+			dirnm, strerror(errno));
+		free(dirnm);
+		return;
+	}
+	trim.start = 0;
+	trim.len = (__u64)(-1);
+	trim.minlen = 16384;
+	int trimerr = ioctl(fd, FITRIM, &trim);
+	if (trimerr) 
+		fplog(stderr, WARN, "fstrim %s failed: %s%s\n", 
+			dirnm, strerror(errno), (errno == EPERM? " (have root?)": ""));
+	else
+		fplog(stderr, INFO, "Trimmed %" LL "i bytes\n", (__u64)trim.len);
+	close(fd);
+	free(dirnm);
+#endif
+}
+
 int sync_close(int fd, const char* nm, char chr)
 {
 	int rc, err = 0;
@@ -901,11 +955,16 @@ int cleanup()
 		copyxattr(iname, oname);
 		copytimes(iname, oname);
 	}
-	LISTFOREACH(ofiles, of)
+	if (rmvtrim)
+		remove_and_trim(oname);
+	LISTFOREACH(ofiles, of) {
 		if (preserve) {
 			copyxattr(iname, LISTDATA(of).name);
 			copytimes(iname, LISTDATA(of).name);
 		}
+		if (rmvtrim)
+			remove_and_trim(LISTDATA(of).name);
+	}
 	ZFREE(origbuf);
 	if (prng_state2) {
 		frandom_release(prng_state2);
@@ -1670,6 +1729,9 @@ void printversion()
 #ifdef HAVE_SPLICE
 	fprintf(stderr, "splice ");
 #endif
+#ifdef FITRIM
+	fprintf(stderr, "fitrim ");
+#endif
 #ifdef HAVE_ATTR_XATTR_H
 	fprintf(stderr, "xattr ");
 #endif
@@ -1702,6 +1764,7 @@ struct option longopts[] = { 	{"help", 0, NULL, 'h'}, {"verbose", 0, NULL, 'v'},
 				{"random", 1, NULL, 'z'}, {"frandom", 1, NULL, 'Z'},
  				{"shred3", 1, NULL, '3'}, {"shred4", 1, NULL, '4'},
  				{"shred2", 1, NULL, '2'},
+				{"rmvtrim", 0, NULL, 'u'},
 				/* GNU ddrescue compat */
 				{"block-size", 1, NULL, 'B'}, {"input-position", 1, NULL, 's'},
 				{"output-position", 1, NULL, 'S'}, {"max-size", 1, NULL, 'm'},
@@ -1732,8 +1795,9 @@ void printhelp()
 	fprintf(stderr, "         -o bbfile  name of a file to log bad blocks numbers (def=\"\"),\n");
 	fprintf(stderr, "         -r         reverse direction copy (def=forward),\n");
 	fprintf(stderr, "         -R         repeatedly write same block (def if infile is /dev/zero),\n");
-	fprintf(stderr, "         -t         truncate output file (def=no),\n");
+	fprintf(stderr, "         -t         truncate output file at start (def=no),\n");
 	fprintf(stderr, "         -T         truncate output file at last pos (def=no),\n");
+	fprintf(stderr, "         -u         undo writes by deleting outfile and issueing fstrim\n");
 #ifdef O_DIRECT
 	fprintf(stderr, "         -d/D       use O_DIRECT for input/output (def=no),\n");
 #endif
@@ -1923,12 +1987,12 @@ int main(int argc, char* argv[])
 	reverse = 0; dotrunc = 0; trunclast = 0; abwrerr = 0; sparse = 0; nosparse = 0;
 	verbose = 0; quiet = 0; interact = 0; force = 0; preserve = 0;
 	lname = 0; iname = 0; oname = 0; o_dir_in = 0; o_dir_out = 0;
-	dosplice = 0; falloc = 0;
+	dosplice = 0; falloc = 0; rmvtrim = 0;
 
 	/* Initialization */
 	sxfer = 0; fxfer = 0; lxfer = 0; xfer = 0; axfer = 0;
 	ides = -1; odes = -1; logfd = 0; nrerr = 0; buf = 0; buf2 = 0;
-	i_chr = 0; o_chr = 0;
+	i_chr = 0; o_chr = 0; o_blk = 0; o_lnk = 0;
 
 	i_repeat = 0; i_rep_init = 0; i_rep_zero = 0;
 	noextend = 0; avoidwrite = 0; avoidnull = 0;
@@ -1955,9 +2019,9 @@ int main(int argc, char* argv[])
 #endif
 
 #ifdef LACK_GETOPT_LONG
-	while ((c = getopt(argc, argv, ":rtTfihqvVwWaAdDkMRpPc:b:B:m:e:s:S:l:o:y:z:Z:2:3:4:xY:")) != -1) 
+	while ((c = getopt(argc, argv, ":rtTfihqvVwWaAdDkMRpPuc:b:B:m:e:s:S:l:o:y:z:Z:2:3:4:xY:")) != -1) 
 #else
-	while ((c = getopt_long(argc, argv, ":rtTfihqvVwWaAdDkMRpPc:b:B:m:e:s:S:l:o:y:z:Z:2:3:4:xY:", longopts, NULL)) != -1) 
+	while ((c = getopt_long(argc, argv, ":rtTfihqvVwWaAdDkMRpPuc:b:B:m:e:s:S:l:o:y:z:Z:2:3:4:xY:", longopts, NULL)) != -1) 
 #endif
 	{
 		switch (c) {
@@ -1996,6 +2060,7 @@ int main(int argc, char* argv[])
 			case 'l': lname = optarg; break;
 			case 'o': bbname = optarg; break;
 			case 'x': extend = 1; break;
+			case 'u': rmvtrim = 1; break;
 			case 'Y': do { ofile_t of; of.name = optarg; of.fd = -1; of.cdev = 0; LISTAPPEND(ofiles, of, ofile_t); } while (0); break;
 			case 'z': prng_libc = 1; if (is_filename(optarg)) prng_sfile = optarg; else prng_seed = readint(optarg); break;
 			case 'Z': prng_frnd = 1; if (is_filename(optarg)) prng_sfile = optarg; else prng_seed = readint(optarg); break;
@@ -2112,6 +2177,7 @@ int main(int argc, char* argv[])
 		fplog(stderr, FATAL, "infile and outfile are identical and trunc turned on!\n");
 		cleanup(); exit(14);
 	}
+
 	/* Open input and output files */
 	if (prng_libc || prng_frnd) {
 		init_random();
@@ -2158,10 +2224,33 @@ int main(int argc, char* argv[])
 		}
 	}
 		
+	/* Sanity checks for rmvtrim */
+	if ((o_chr || o_lnk || o_blk) && rmvtrim) {
+		fplog(stderr, FATAL, "Can't delete output file when it's not a normal file\n");
+		cleanup(); exit(23);
+	}
+
+	if (rmvtrim && !(i_repeat || prng_libc || prng_frnd || force)) {
+		int a;
+		do {
+			fprintf(stderr, "dd_rescue: (question): really remove %s at the end [y/n] ?",
+				oname);
+			a = toupper(fgetc(stdin)); //fprintf(stderr, "\n");
+		} while (a != 'Y' && a != 'N');
+		if (a == 'N') {
+			fplog(stderr, FATAL, "exit on user request!\n");
+			cleanup(); exit(23);
+		}
+	}
+
 	if (odes != 1) {
 		if (avoidwrite) {
+			if (dotrunc) {
+				fplog(stderr, WARN, "Disable early trunc(-t) as we can't avoid writes otherwise.\n");
+				dotrunc = 0;
+			}
 			buf2 = zalloc_aligned_buf(softbs, &origbuf2);
-			odes = openfile(oname, O_RDWR | O_CREAT | o_dir_out /*| O_EXCL*/ | dotrunc);
+			odes = openfile(oname, O_RDWR | O_CREAT | o_dir_out /*| O_EXCL*/);
 		} else
 			odes = openfile(oname, O_WRONLY | O_CREAT | o_dir_out /*| O_EXCL*/ | dotrunc);
 	}
