@@ -162,6 +162,15 @@ dd_rescue has a few nifty features:
   at once (option -Y); it can be used more than once.
   Also, if you want to concatenate data from multiple input files,
   the option -x (extend/append) may prove useful.
+* Since 1.35, the numbers are displayed in groups of 3 digits; rather
+  than adding spaces (or ,), the groups are separated by alternating bold
+  and non-bold type.
+* Since 1.35 we use optimized code to detect zero-filled blocks in -A
+  mode; with 1.36 optimized ARM asm was added, with 1.41 an even
+  faster AVX2 routine. The runtime detection has been fixed in 1.40.
+* Version 1.40 added copying of extended attributes (xattrs) with -p.
+* Version 1.41 brought option -u, removing the output file and 
+  discarding (TRIMming) the filesystem.
 
 
 Copyright

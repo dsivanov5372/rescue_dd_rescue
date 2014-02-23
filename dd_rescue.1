@@ -57,6 +57,11 @@ for the output file, using splice copy (in kernel zerocopy) for efficiency,
 looking for empty blocks to create sparse files, or using a pseudo random
 number generator (PRNG) to quickly overwrite data with random numbers.
 .PP
+The modes to overwrite partitions or files with pseudo random numbers make
+.B dd_rescue
+a tool that can be used for secure data deletion and thus not just a
+data recovery and backup tool but also a data protection tool.
+.PP
 You can use "-" as infile or outfile, meaning stdin or stdout. Note that
 this means that either file is not seekable, limiting the usefulness of
 some of dd_rescues features.
@@ -287,6 +292,28 @@ up an output device completely.
 .br
 This option is automatically set, if the input file name equals "/dev/zero".
 .TP 8
+.BR \-u ", " \-\-rmvtrim
+instructs
+.B dd_rescue
+to remove the output file after writing to it has completed and issue
+a FITRIM on the filesystem that contains the output file. This makes
+only sense if writing zeros (or random numbers) as opposed to useful
+content from another file. (dd_rescue will ask for confirmation if
+this is specified with a normal input file and no \-f (\-\-force) is
+used.) This option may be used to ensure that all empty
+blocks of a filesystem are filled with zeros (rather than containing 
+fragments of deleted files with possibly sensitive information).
+.BR
+The FITRIM ioctl (on Linux) tells the flash storage to consider
+the freed space as unused (like the fstrim tool or the discard
+option) by issuing ATA TRIM commands. This will only succeed with
+superuser privileges (but the error can otherwise be safely
+ignored). This is useful to ensure full performance of flash
+memory / SSDs. Note that FITRIM can take a while on large
+filesystems, especially if the filesystems are not mounted with
+the discard option and have not been trimmed (with e.g. fstrim)
+for a while.
+.TP 8
 .BR \-k ", " \-\-splice
 tells
 .B dd_rescue
@@ -346,17 +373,18 @@ or ACLs. (But the behaviour of -p is still consistent with cp.)
 tells
 .B dd_rescue
 to open the output file with O_TRUNC, resulting in the output file
-(if it is a regular file) to be truncated to 0 bytes, removing all
-previous content that the file may have contained. By default,
+(if it is a regular file) to be truncated to 0 bytes before writing
+to it, removing all previous content that the file may have contained.
+By default,
 .B dd_rescue
 does not remove previous content. 
 .TP 8
 .BR \-T ", " \-\-trunclast
 tells 
 .B dd_rescue
-to truncate the output file to the highest copied position, thus
-ensuring there's no data beyond the end of the data that has been
-copied in this run.
+to truncate the output file to the highest copied position after the
+copy operation completed, thus ensuring there's no data beyond the end
+of the data that has been copied in this run.
 .TP 8
 .BR \-d ", " \-\-odir_in
 instructs 
@@ -553,14 +581,14 @@ data to different locations every time. So here, only overwriting a whole
 partition or disk will be effective. The fact that the hard disk firmware
 has spare sectors to be allocated when regular sectors become flaky or
 faulty may leave traces of files on the medium. The Flash Translation Layer
-on SSDs may have similar effects.
+on SSDs makes it even harder to be sure that data is truely gone on SSDs.
 .PP
 dd_rescue does not automate the recovery of faulty files or partitions
 by automatically keeping a list of copied sectors and approaching bad spots
 from both sides. There is a helper script dd_rhelp from LAB Valentin that
 does this. Integration of such a mode into 
 .B dd_rescue
-is non-trivial and due to the complexity of the source code probably
+itself is non-trivial and due to the complexity of the source code probably
 will never happen.
 .br
 There also is a tool, GNU ddrescue, that is a reimplementation of this
