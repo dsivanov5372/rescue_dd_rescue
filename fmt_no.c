@@ -67,13 +67,13 @@ char* fmt_int(unsigned char pre, unsigned char post, unsigned int scale,
 		fmtbuf[--idx] = '.';
 	} else
 		my_no = (no + scale/2) / scale;
-	for (pos = 0; pos < pre; ++pos) {
+	for (pos = 0; pos < pre || (pre == 0 && (pos == 0 || my_no != 0)); ++pos) {
 		int digit = my_no - 10*(my_no/10);
-		if (bold && pos && !(pos % 6)) {
+		if (bold && pos && !(pos % 6) && my_no) {
 			/* insert bold */
 			memcpy(fmtbuf+idx-blen, bold, blen);
 			idx -= blen;
-		} else if (norm && !((pos+3) % 6)) {
+		} else if (norm && !((pos+3) % 6) && (my_no || leadbold)) {
 			/* insert norm */
 			memcpy(fmtbuf+idx-nlen, norm, nlen);
 			idx -= nlen;
@@ -89,7 +89,10 @@ char* fmt_int(unsigned char pre, unsigned char post, unsigned int scale,
 		} else	
 			fmtbuf[--idx] = '0' + digit;
 		my_no /= 10;
+		if (!pre && my_no == 0 && isneg) 
+			fmtbuf[--idx] = '-';
 		/* overflow */
+		/* TODO: Alternative overflow handling */
 		if (pos == pre-1) {
 			if (isneg)
 				fmtbuf[idx] = '<';
@@ -129,6 +132,7 @@ int main(int argc, char **argv)
 			fmt_int(7, 1, 1024, l, BOLD, NORM, 1),
 			fmt_int(6, 1, 1024, l, BOLD, NORM, 1),
 			fmt_int(5, 1, 1024, l, ",", ",", 0));
+		printf(" %s\n", fmt_int(0, 1, 1024, l, BOLD, NORM, 1));
 	}
 	return 0;
 }

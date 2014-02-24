@@ -14,6 +14,12 @@
 # include "config.h"
 #endif
 
+#if !defined(HAVE_PREAD64) && __WORDSIZE == 64 && !defined(TEST_SYSCALL) && defined(HAVE_PREAD)
+#define pread64 pread
+#define pwrite64 pwrite
+#define HAVE_PREAD64
+#endif
+
 #if !defined(HAVE_PREAD64) || defined(TEST_SYSCALL)
 
 #ifdef __linux__
@@ -109,8 +115,6 @@ static inline ssize_t pwrite64(int fd, const void *buf, size_t sz, loff_t off)
 # endif
 #endif /* HAVE_PREAD64 -- after syscall wrapper */
 
-#else
-# warning No need to include pread64.h if we have pread64() in libc
 #endif /* HAVE_PREAD64 */
 
 #endif /* _PREAD64_H */

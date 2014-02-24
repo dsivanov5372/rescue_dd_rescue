@@ -878,7 +878,7 @@ void remove_and_trim(const char* onm)
 	struct fstrim_range trim;
 	int fd = open(dirnm, O_RDONLY);
 	if (fd < 0) {
-		fprintf(stderr, "Can't open dir %s: %s\n",
+		fplog(stderr, WARN, "Can't open dir %s for fstrim: %s\n",
 			dirnm, strerror(errno));
 		free(dirnm);
 		return;
@@ -893,8 +893,8 @@ void remove_and_trim(const char* onm)
 		fplog(stderr, WARN, "fstrim %s failed: %s%s\n", 
 			dirnm, strerror(errno), (errno == EPERM? " (have root?)": ""));
 	else
-		fplog(stderr, INFO, "Trimmed%sMiB \n", 
-				fmt_int(8, 2, 1024*1024, trim.len, BOLD, NORM, 1));
+		fplog(stderr, INFO, "Trimmed %skiB \n", 
+				fmt_int(0, 0, 1024, trim.len, BOLD, NORM, 1));
 	close(fd);
 	free(dirnm);
 #endif
