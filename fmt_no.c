@@ -13,9 +13,11 @@
 #include "fmt_no.h"
 #include <string.h>
 
-//#define BOLD "\x1b[0;7m"
-#define BOLD "\x1b[0;1m"
+#ifdef TEST
+#define BOLD "\x1b[0;32m"
+//#define BOLD "\x1b[0;1m"
 #define NORM "\x1b[0;0m"
+#endif
 
 //typedef long long off_t;
 
@@ -69,7 +71,8 @@ char* fmt_int(unsigned char pre, unsigned char post, unsigned int scale,
 		my_no = (no + scale/2) / scale;
 	for (pos = 0; pos < pre || (pre == 0 && (pos == 0 || my_no != 0)); ++pos) {
 		int digit = my_no - 10*(my_no/10);
-		if (bold && pos && !(pos % 6) && my_no) {
+		// FIXME ...
+		if (bold && pos && !(pos % 6) && (my_no || leadbold)) {
 			/* insert bold */
 			memcpy(fmtbuf+idx-blen, bold, blen);
 			idx -= blen;
@@ -126,12 +129,13 @@ int main(int argc, char **argv)
 			fmt_int(12, 1, 1024, l, BOLD, NORM, 1),
 			fmt_int(11, 1, 1024, l, BOLD, NORM, 1),
 			fmt_int(10, 2, 1024, l, BOLD, NORM, 1));
-		printf(" %s %s %s %s %s\n",
+		printf(" %s %s %s %s %s %s\n",
 			fmt_int(9, 0, 1024, l, BOLD, NORM, 1),
 			fmt_int(8, 1, 1024, l, BOLD, NORM, 1),
 			fmt_int(7, 1, 1024, l, BOLD, NORM, 1),
 			fmt_int(6, 1, 1024, l, BOLD, NORM, 1),
-			fmt_int(5, 1, 1024, l, ",", ",", 0));
+			fmt_int(5, 1, 1024, l, ",", ",", 0),
+			fmt_int(13, 1, 1024, l, ",", ",", 0));
 		printf(" %s\n", fmt_int(0, 1, 1024, l, BOLD, NORM, 1));
 	}
 	return 0;
