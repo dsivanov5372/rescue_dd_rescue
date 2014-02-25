@@ -6,13 +6,14 @@
 #include <sys/types.h>
 char* fmt_int_b(unsigned char pre, unsigned char post, unsigned int scale,
 	       	loff_t no, const char* bold, const char* norm, 
-		const char leadbold, const unsigned char base,
+		const char boldinvis, const unsigned char base,
 		const unsigned char group);
-inline 
+
+static inline 
 char* fmt_int(unsigned char pre, unsigned char post, unsigned int scale,
-	       	loff_t no, const char* bold, const char* norm, const char leadbold)
+	       	loff_t no, const char* bold, const char* norm, const char boldinvis)
 { 
-	return fmt_int_b(pre, post, scale, no, bold, norm, leadbold, 10, 3);
+	return fmt_int_b(pre, post, scale, no, bold, norm, boldinvis, 10, 3);
 }
 
 #endif
