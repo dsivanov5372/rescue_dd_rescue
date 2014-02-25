@@ -56,30 +56,35 @@ char* fmt_int_b(unsigned char pre, unsigned char post, unsigned int scale,
 	loff_t my_no;
 	char* fmtbuf = fmtbufs[++fbno%8];
 	char isneg = no < 0;
+	const unsigned char twogroup = group? 2*group: 127;
 	if (!scale)
 		scale = 1;
 	fmtbuf[idx] = 0;
 	no = (isneg? -no: no);
 	if (post) {
+		/* Avoid 64bit overflow */
 		my_no = (no * mypow(base, post) + scale/2) / scale;
+		if (my_no < 0)
+			my_no = 0;
 		while (post--) {
-			int digit = my_no - base*(my_no/base);
+			unsigned char digit = my_no - base*(my_no/base);
 			fmtbuf[--idx] = digit >= 10? 'a'-10+digit: '0' + digit;
 			my_no /= base;
 		}
 		fmtbuf[--idx] = '.';
+		my_no = no / scale;
 	} else
 		my_no = (no + scale/2) / scale;
 	for (pos = 0; (pos < pre-isneg || !pre) && (my_no || !pos); ++pos) {
-		int digit = my_no - base*(my_no/base);
-		if (bold && pos && !(pos % 6)) {
+		unsigned char digit = my_no - base*(my_no/base);
+		if (bold && pos && !(pos % twogroup)) {
 			/* insert bold */
 			memcpy(fmtbuf+idx-blen, bold, blen);
 			idx -= blen;
 			if (!boldinvis && --pre <= pos+isneg) {
 				pos++; break;
 			}
-		} else if (norm && !((pos+3) % 6)) {
+		} else if (norm && !((pos+group) % twogroup)) {
 			/* insert norm */
 			memcpy(fmtbuf+idx-nlen, norm, nlen);
 			idx -= nlen;
@@ -98,7 +103,7 @@ char* fmt_int_b(unsigned char pre, unsigned char post, unsigned int scale,
 			++idx;
 	}
 	/* Do we need a leading bold? */
-	if (bold && boldinvis && ((pos-1) % 6 >= 3)) {
+	if (bold && boldinvis && group && ((pos-1) % twogroup >= group)) {
 		memcpy(fmtbuf+idx-blen, bold, blen);
 		idx -= blen;
 	}
@@ -147,7 +152,9 @@ int main(int argc, char **argv)
 			fmt_int( 5, 0, 1024, l, ",", ",", 0),
 			fmt_int( 4, 0, 1024, l, ",", ",", 0),
 			fmt_int(13, 0, 1024, l, ",", ",", 0));
-		printf("%s\n", fmt_int(0, 1, 1024, l, BOLD, NORM, 1));
+		printf("\n%s\n", fmt_int(0, 1, 1024, l, BOLD, NORM, 1));
+		printf("%s\n",   fmt_int_b(0, 1, 1024, l, BOLD, NORM, 1, 10, 0));
+		printf("0x%s\n\n", fmt_int_b(0, 1, 1024, l, BOLD, NORM, 1, 16, 4));
 	}
 	return 0;
 }
