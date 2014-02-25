@@ -34,17 +34,19 @@ static char fmtbufs[8][64];
 
 /** Format integers: pre digits before the ., post digits after.
  * The integer is divided by scale prior to being returned as string.
- * The string has groups of 3 digits that are highlighted with bold
+ * The string has groups of <group> digits that are highlighted with bold
  * and norm strings. If leadbold is set, the number will be prefixed
  * with bold if the foremost group should be bold ...
  * Limitations: 
  * - We can't return more than 8 strings in parallel, before
  *   we start overwriting buffers. 
- * - The string can't be longer than 64 chars, which should be i
+ * - The string can't be longer than 64 chars, which should be
  *   enough though to print all possible 64bit ints.
  */
-char* fmt_int(unsigned char pre, unsigned char post, unsigned int scale, 
-	      loff_t no, const char* bold, const char* norm, int leadbold)
+char* fmt_int_b(unsigned char pre, unsigned char post, unsigned int scale,
+	       	loff_t no, const char* bold, const char* norm, 
+		const char leadbold, const unsigned char base,
+		const unsigned char group)
 {
 	static int fbno = 0;
 	const int blen = bold? strlen(bold): 0;
@@ -60,55 +62,49 @@ char* fmt_int(unsigned char pre, unsigned char post, unsigned int scale,
 	fmtbuf[idx] = 0;
 	fbno %= 8;
 	if (post) {
-		my_no = (no * mypow(10, post) + scale/2) / scale;
+		my_no = (no * mypow(base, post) + scale/2) / scale;
 		while (post--) {
-			int digit = my_no - 10*(my_no/10);
-			fmtbuf[--idx] = '0' + digit;
-			my_no /= 10;
+			int digit = my_no - base*(my_no/base);
+			fmtbuf[--idx] = digit >= 10? 'a'-10+digit: '0' + digit;
+			my_no /= base;
 		}
 		fmtbuf[--idx] = '.';
 	} else
 		my_no = (no + scale/2) / scale;
-	for (pos = 0; pos < pre || (pre == 0 && (pos == 0 || my_no != 0)); ++pos) {
-		int digit = my_no - 10*(my_no/10);
-		// FIXME ...
-		if (bold && pos && !(pos % 6) && (my_no || leadbold)) {
+	for (pos = 0; pos < pre-isneg || (pre == 0 && (pos == 0 || my_no != 0)); ++pos) {
+		int digit = my_no - base*(my_no/base);
+		if (bold && pos && !(pos % 6)) {
 			/* insert bold */
 			memcpy(fmtbuf+idx-blen, bold, blen);
 			idx -= blen;
-		} else if (norm && !((pos+3) % 6) && (my_no || leadbold)) {
+		} else if (norm && !((pos+3) % 6)) {
 			/* insert norm */
 			memcpy(fmtbuf+idx-nlen, norm, nlen);
 			idx -= nlen;
 		}
-		if (my_no == 0) {
-			if (pos == 0)
-				fmtbuf[--idx] = '0';
-			else if (isneg) {
-				fmtbuf[--idx] = '-';
-				isneg = 0;
-			} else 
-				break;
-		} else	
-			fmtbuf[--idx] = '0' + digit;
-		my_no /= 10;
-		if (!pre && my_no == 0 && isneg) 
-			fmtbuf[--idx] = '-';
-		/* overflow */
-		/* TODO: Alternative overflow handling */
-		if (pos == pre-1) {
-			if (isneg)
-				fmtbuf[idx] = '<';
-			else if (my_no)
-				fmtbuf[idx] = '>';
-		}
+		fmtbuf[--idx] = digit >= 10? 'a'-10+digit: '0' + digit;
+		my_no /= base;
+		if (!my_no)
+			break;
 	}
+	/* overflow */
+	if (post && my_no)
+		fmtbuf[sizeof(fmtbufs[0])-1] = '+';
+	else if (!isneg && my_no)
+		++idx;
 	/* Do we need a leading bold? */
 	if (bold && leadbold && ((pos-1) % 6 >= 3)) {
 		memcpy(fmtbuf+idx-blen, bold, blen);
 		idx -= blen;
 	}
-	if (pos < pre) {
+	if (isneg) {
+		if (my_no && !post)
+			fmtbuf[idx] = '<';
+		else
+			fmtbuf[idx] = '-';
+	} else if (my_no && !post)
+		fmtbuf[idx] = '>';
+	if (pos+isneg < pre) {
 		memset(fmtbuf+idx+pos-pre, ' ', pre-pos);
 		idx -= pre-pos;
 	}
