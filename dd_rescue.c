@@ -849,22 +849,6 @@ static int mayexpandfile(const char* onm)
 		return 0;		
 }
 
-void mydirnm(char* nm)
-{
-	char* last = nm+strlen(nm)-1;
-	while (last > nm && *last != '/')
-		--last;
-	if (last == nm) {
-		*nm++ = '.'; *nm = 0;
-	} else 
-		*++nm = 0;
-}
-
-#if __WORDSIZE == 64
-# define LL "l"
-#else
-# define LL "ll"
-#endif
 
 void remove_and_trim(const char* onm)
 {
@@ -873,30 +857,13 @@ void remove_and_trim(const char* onm)
 		fplog(stderr, WARN, "remove(%s) failed: %s\n",
 			onm, strerror(errno));
 #ifdef FITRIM
-	char* dirnm = strdup(onm);
-	mydirnm(dirnm);
-	struct fstrim_range trim;
-	int fd = open(dirnm, O_RDONLY);
-	if (fd < 0) {
-		fplog(stderr, WARN, "Can't open dir %s for fstrim: %s\n",
-			dirnm, strerror(errno));
-		free(dirnm);
-		return;
-	}
-	trim.start = 0;
-	trim.len = (__u64)(-1);
-	trim.minlen = 16384;
-	fprintf(stderr, "dd_rescue: FITRIM %s ...\r", dirnm); 
-	fflush(stderr);
-	int trimerr = ioctl(fd, FITRIM, &trim);
-	if (trimerr) 
+	loff_t trimmed = fstrim(onm);
+	if (trimmed < 0) 
 		fplog(stderr, WARN, "fstrim %s failed: %s%s\n", 
-			dirnm, strerror(errno), (errno == EPERM? " (have root?)": ""));
+			onm, strerror(-trimmed), (-trimmed == EPERM? " (have root?)": ""));
 	else
 		fplog(stderr, INFO, "Trimmed %skiB \n", 
-				fmt_int(0, 0, 1024, trim.len, BOLD, NORM, 1));
-	close(fd);
-	free(dirnm);
+				fmt_int(0, 0, 1024, trimmed, BOLD, NORM, 1));
 #endif
 }
 

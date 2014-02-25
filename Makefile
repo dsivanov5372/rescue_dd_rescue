@@ -52,6 +52,11 @@ ifeq ($(MACH),arm)
 	OBJECTS2 = find_nonzero_arm.o
 endif
 
+OS = $(shell uname)
+ifeq ($(OS), Linux)
+	OBJECTS += fstrim.o
+endif
+
 .phony: libfalloc libfalloc-static libfalloc-dl nolib nocolor static strip
 
 default: $(TARGETS)
@@ -72,6 +77,9 @@ frandom.o: frandom.c frandom.h config.h
 
 fmt_no.o: fmt_no.c fmt_no.h config.h
 	$(CC) $(CFLAGS_OPT) -c $<
+
+%.o: %.c %.h config.h
+	$(CC) $(CFLAGS) -c $<
 
 find_nonzero.o: find_nonzero.c $(FNZ_HEADERS) config.h
 	$(CC) $(CFLAGS_OPT) -c $< $(SSE)
@@ -126,8 +134,8 @@ fmt_no: fmt_no.c fmt_no.h
 file_zblock: file_zblock.c $(FNZ_HEADERS) config.h find_nonzero.o $(OBJECTS2)
 	$(CC) $(CFLAGS) -o $@ $< find_nonzero.o $(OBJECTS2)
 
-fiemap: fiemap.c fiemap.h fstrim.h config.h
-	$(CC) $(CFLAGS) -DTEST_FIEMAP -o $@ $<
+fiemap: fiemap.c fiemap.h fstrim.h config.h fstrim.o
+	$(CC) $(CFLAGS) -DTEST_FIEMAP -o $@ $< fstrim.o
 
 distclean: clean
 	rm -f *~ config.h config.h.in config.status config.log configure

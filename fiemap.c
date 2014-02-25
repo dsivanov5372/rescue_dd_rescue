@@ -36,7 +36,10 @@
 # define FITHAW		_IOWR('X', 120, int)	/* Thaw */
 #endif
 
+char quiet = 0;
+
 int unfreeze_fd = 0;
+
 void unfreeze_handler(int sig)
 {
 	if (unfreeze_fd)
@@ -218,17 +221,6 @@ int compare_ext(const int fd1, const int fd2, const struct fiemap_extent* ext, u
 	return res;
 }
 
-void mydirnm(char* nm)
-{
-	char* last = nm+strlen(nm)-1;
-	while (last > nm && *last != '/')
-		--last;
-	if (last == nm) {
-		*nm++ = '.'; *nm = 0;
-	} else 
-		*++nm = 0;
-}
-
 #if __WORDSIZE == 64
 #define LL "l"
 #else
@@ -280,27 +272,6 @@ int64_t fstrim_ext(const char* dirname, const struct fiemap_extent* ext, const i
 	}
 	close(fd);
 	return tottrim;
-}
-
-int64_t fstrim(const char* dirname)
-{
-	struct fstrim_range trim;
-	int fd = open(dirname, O_RDONLY);
-	if (fd < 0) {
-		int err = errno;
-		fprintf(stderr, "Can't open dir %s: %s\n",
-			dirname, strerror(errno));
-		return -err;
-	}
-	trim.start = 0;
-	trim.len = (uint64_t)(-1);
-	trim.minlen = 16384;
-	int trimerr = ioctl(fd, FITRIM, &trim);
-#ifdef DEBUG
-	printf("0x%" LL "x/%" LL "x bytes trimmed\n", trimerr? 0: (uint64_t)trim.len, (uint64_t)-1);
-#endif
-	close(fd);
-	return trimerr? 0: trim.len;
 }
 
 static char _fulldevnm[32]; 
@@ -450,7 +421,7 @@ int main(int argc, char *argv[])
 			mydirnm(trimnm);
 			unlink(argv[fno]);
 #ifdef JUST_DO_FSTRIM
-			trimmed = fstrim(trimnm);
+			trimmed = fstrim(argv[fno]);
 #else
 			trimmed = fstrim_ext(trimnm, extc, err);
 #endif

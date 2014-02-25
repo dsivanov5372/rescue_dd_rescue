@@ -173,7 +173,10 @@ dd_rescue has a few nifty features:
 * Version 1.41 brought option -u, removing the output file and 
   discarding (TRIMming) the filesystem. 1.41 also added support for 
   compiling against Android's libc (bionic) using the Android NDK. 
-  See Makefile.android ...
+  Use 
+  autoconf; make -f Makefile.android config; make -f Makefile.android all
+  to build after editing first few lines of Makefile.android to point
+  to the location of your local NDK installation.
 
 
 Copyright

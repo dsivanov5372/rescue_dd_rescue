@@ -5,6 +5,9 @@
 # include "config.h"
 #endif
 
+void mydirnm(char* nm);
+
+#include <sys/types.h>
 #ifdef HAVE_LINUX_FS_H
 #include <linux/fs.h>
 #include <linux/types.h>
@@ -17,6 +20,10 @@ struct fstrim_range {
 	__u64 minlen;
 };
 # define FITRIM		_IOWR('X', 121, struct fstrim_range)	/* Trim */
+#endif
+
+#ifdef FITRIM
+loff_t fstrim(const char* nm);
 #endif
 
 #endif	/* HAVE_LINUX_FS_H */

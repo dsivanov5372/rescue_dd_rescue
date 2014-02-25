@@ -12,10 +12,6 @@
 
 #ifdef __AVX2__
 
-#if defined(__GNUC__) || defined(__llvm__)
-# warning AVX2 version only tested in simulator
-#endif
-
 #include <immintrin.h>
 volatile unsigned _cmp_mask_probe_avx;
 void probe_avx2()

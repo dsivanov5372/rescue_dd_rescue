@@ -1,3 +1,17 @@
+/** fstrim.c
+ *
+ * issues a FITRIM on the filesystem
+ * resulting in free blocks to be reported
+ * to the underlying storage device.
+ * Relevant for SSDs, MMC and thinly provisioned storage.
+ *
+ * (c) Kurt Garloff <kurt@garloff.de>, 2014, GNU GPL v2 or v3
+ */
+
+#include "fstrim.h"
+#include <string.h>
+
+
 void mydirnm(char* nm)
 {
 	char* last = nm+strlen(nm)-1;
@@ -9,38 +23,39 @@ void mydirnm(char* nm)
 		*++nm = 0;
 }
 
-void remove_and_trim(const char* onm)
-{
-	int err = unlink(onm);
-	if (err)
-		fplog(stderr, WARN, "remove(%s) failed: %s\n",
-			onm, strerror(errno));
 #ifdef FITRIM
+
+#include <stdio.h>
+#include <fcntl.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <errno.h>
+
+extern char quiet;
+loff_t fstrim(const char* onm)
+{
 	char* dirnm = strdup(onm);
 	mydirnm(dirnm);
 	struct fstrim_range trim;
 	int fd = open(dirnm, O_RDONLY);
 	if (fd < 0) {
-		fplog(stderr, WARN, "Can't open dir %s for fstrim: %s\n",
-			dirnm, strerror(errno));
 		free(dirnm);
-		return;
+		return -errno;
 	}
 	trim.start = 0;
 	trim.len = (__u64)(-1);
 	trim.minlen = 16384;
-	fprintf(stderr, "dd_rescue: FITRIM %s ...\r", dirnm); 
-	fflush(stderr);
+	if (!quiet) {
+		fprintf(stderr, "dd_rescue: FITRIM %s ...\r", dirnm); 
+		fflush(stderr);
+	}
 	int trimerr = ioctl(fd, FITRIM, &trim);
-	if (trimerr) 
-		fplog(stderr, WARN, "fstrim %s failed: %s%s\n", 
-			dirnm, strerror(errno), (errno == EPERM? " (have root?)": ""));
-	else
-		fplog(stderr, INFO, "Trimmed %skiB \n", 
-				fmt_int(0, 0, 1024, trim.len, BOLD, NORM, 1));
 	close(fd);
 	free(dirnm);
-#endif
+	return (trimerr? -errno: trim.len);
 }
+#else
+# warning compiling fstrim only makes sense with FITRI support
+#endif
 
 
