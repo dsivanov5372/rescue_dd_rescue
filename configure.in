@@ -23,7 +23,11 @@ AC_DEFUN([CC_FLAGS_CHECK],
     [AC_MSG_RESULT([yes])
      AC_DEFINE_UNQUOTED([CC_FLAGS_$2], $1,
 	[Check whether compiler supports $1])
-    ],[AC_MSG_ERROR([no])] )
+    ],
+    [AC_MSG_RESULT([no])
+     dnl AC_MSG_ERROR([no])
+     dnl AC_DEFINE_UNQUOTED([CC_FLAGS_$2], , [No compiler support for $1])
+    ] )
   CFLAGS="$ac_saved_cflags" 
   dnl AC_LANG_POP([C]) 
 ])
