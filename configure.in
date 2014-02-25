@@ -10,4 +10,5 @@ AC_CHECK_HEADERS([fallocate.h dlfcn.h unistd.h attr/xattr.h sys/acl.h sys/ioctl.
 AC_CHECK_FUNCS([ffs ffsl fallocate64 splice getopt_long open64 pread pread64 lseek64 stat64])
 AC_CHECK_LIB(dl,dlsym)
 AC_CHECK_LIB(fallocate,linux_fallocate64)
+dnl CC_FLAGS_CHECK([-msse4.2 -mavx2])
 AC_OUTPUT

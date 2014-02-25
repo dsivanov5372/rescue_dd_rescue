@@ -36,17 +36,42 @@ ifeq ($(CC),wcl386)
   OUT = ""
 endif
 
+HAVE_AVX2 := $(shell echo "" | $(CC) -mavx2 -xc - 2>&1 | grep unrecognized || echo 1)
+HAVE_SSE42 := $(shell echo "" | $(CC) -msse4.2 -xc - 2>&1 | grep unrecognized || echo 1)
+
 MACH := $(shell uname -m | tr A-Z a-z | sed 's/i[3456]86/i386/')
 
 ifeq ($(MACH),i386)
 	SSE = "-msse2"
 	#SSE = "-msse2 -funroll-loops"
 	#SSE = "-msse2 -funroll-loops -ftree-vectorize"
-	OBJECTS2 = find_nonzero_avx.o find_nonzero_sse2.o ffs_sse42.o
+	OBJECTS2 = find_nonzero_sse2.o 
+ifeq ($(HAVE_SSE42),1))
+	OBJECTS2 += ffs_sse42.o
+else
+	CFLAGS += -DNO_SSE42
 endif
+ifeq ($(HAVE_AVX),1)
+	OBJECTS2 += find_nonzero_avx.o
+else
+	CFLAGS += -DNO_AVX2
+endif
+endif
+
 ifeq ($(MACH),x86_64)
-	OBJECTS2 = find_nonzero_avx.o find_nonzero_sse2.o ffs_sse42.o
+	OBJECTS2 = find_nonzero_sse2.o
+ifeq ($(HAVE_SSE42),1)
+	OBJECTS2 += ffs_sse42.o
+else
+	CFLAGS += -DNO_SSE42
 endif
+ifeq ($(HAVE_AVX),1)
+	OBJECTS2 += find_nonzero_avx.o
+else
+	CFLAGS += -DNO_AVX2
+endif
+endif
+
 MACH := $(shell uname -m |sed 's/armv[0-9a-z]*/arm/')
 ifeq ($(MACH),arm)
 	OBJECTS2 = find_nonzero_arm.o
