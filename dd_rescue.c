@@ -452,7 +452,7 @@ void input_length()
 		loff_t p = lseek64(ides, 0, SEEK_CUR);
 		if (p == -1)
 			return;
-		ilen = lseek64(ides, 0, SEEK_END) + 1;
+		ilen = lseek64(ides, 0, SEEK_END) /* + 1 */;
 		lseek64(ides, p, SEEK_SET);
 	} else {
 		loff_t diff;
@@ -676,8 +676,8 @@ void printstatus(FILE* const file1, FILE* const file2,
 	if (sync) {
 		int err = fsync(odes);
 		if (err && (errno != EINVAL || !einvalwarn) &&!o_chr) {
-			fplog(stderr, WARN, "sync %s (%.1fk): %s!  \n",
-			      oname, (double)ipos/1024.0, strerror(errno));
+			fplog(stderr, WARN, "sync %s (%sskiB): %s!  \n",
+			      oname, fmt_kiB(ipos), strerror(errno));
 			++einvalwarn;
 		}
 		errno = 0;
@@ -869,7 +869,7 @@ void remove_and_trim(const char* onm)
 			onm, strerror(-trimmed), (-trimmed == EPERM? " (have root?)": ""));
 	else
 		fplog(stderr, INFO, "Trimmed %skiB \n", 
-				fmt_int(0, 0, 1024, trimmed, BOLD, NORM, 1));
+				fmt_int(0, 0, 1024, trimmed, (nocol? "": BOLD), (nocol? "": NORM), 1));
 #endif
 }
 
@@ -884,27 +884,27 @@ int sync_close(int fd, const char* nm, char chr)
 			rc = pwrite(fd, buf, 0, opos);
 		rc = fsync(fd);
 		if (rc && !chr) {
-			fplog(stderr, WARN, "fsync %s (%.1fk): %s!\n",
-			      nm, (double)opos/1024, strerror(errno));
+			fplog(stderr, WARN, "fsync %s (%skiB): %s!\n",
+			      nm, fmt_kiB(opos), strerror(errno));
 			++err;
 			errno = 0;
 		}
 		rc = close(fd); 
 		if (rc) {
-			fplog(stderr, WARN, "close %s (%.1fk): %s!\n",
-			      nm, (double)opos/1024, strerror(errno));
+			fplog(stderr, WARN, "close %s (%skiB): %s!\n",
+			      nm, fmt_kiB(opos), strerror(errno));
 			++err;
 		}
 		if (sparse) {
 			rc = mayexpandfile(nm);
 			if (rc)
-				fplog(stderr, WARN, "seek %s (%.1fk): %s!\n",
-				      nm, (double)opos/1024, strerror(errno));
+				fplog(stderr, WARN, "seek %s (%skiB): %s!\n",
+				      nm, fmt_kiB(opos), strerror(errno));
 		} else if (trunclast && !reverse) {
 			rc = truncate(nm, opos);
 			if (rc)
-				fplog(stderr, WARN, "could not truncate %s to %.1fk: %s!\n",
-					nm, (double)opos/1024, strerror(errno));
+				fplog(stderr, WARN, "could not truncate %s to %skiB: %s!\n",
+					nm, fmt_kiB(opos), strerror(errno));
 		}
 
 	}
@@ -925,8 +925,8 @@ int cleanup()
 	if (ides != -1) {
 		rc = close(ides);
 		if (rc) {
-			fplog(stderr, WARN, "close %s (%.1fk): %s!\n",
-			      iname, (double)ipos/1024, strerror(errno));
+			fplog(stderr, WARN, "close %s (%skiB): %s!\n",
+			      iname, fmt_kiB(ipos), strerror(errno));
 			++errs;
 		}
 	}
@@ -1072,8 +1072,8 @@ ssize_t writeblock(const int towrite)
 	if (wr < towrite && err != 0) {
 		/* Write error: handle ? .. */
 		fplog(stderr, (abwrerr? FATAL: WARN),
-				"write %s (%.1fk): %s\n",
-	      			oname, (double)opos/1024, strerror(errno));
+				"write %s (%skiB): %s\n",
+	      			oname, fmt_kiB(opos), strerror(errno));
 		if (abwrerr) 
 			exit_report(21);
 		nrerr++;
@@ -1092,8 +1092,8 @@ ssize_t writeblock(const int towrite)
 		} while ((e2 == -1 && (errno == EINTR || errno == EAGAIN))
 			  || (w2 < towrite && e2 > 0 && errno == 0));
 		if (w2 < towrite && e2 != 0) 
-			fplog(stderr, WARN, "2ndary write %s (%.1fk): %s\n",
-			      oft->name, (double)opos/1024, strerror(errno));
+			fplog(stderr, WARN, "2ndary write %s (%skiB): %s\n",
+			      oft->name, fmt_kiB(opos), strerror(errno));
 	}
 	o_chr = oldochr;
 	errno = oldeno;	
@@ -1130,8 +1130,8 @@ int blockxfer(const loff_t max, const int bs)
 void exitfatalerr(const int eno)
 {
 	if (eno == ESPIPE || eno == EPERM || eno == ENXIO || eno == ENODEV) {
-		fplog(stderr, FATAL, "%s (%.1fk): %s! \n", 
-		      iname, (double)ipos/1024, strerror(eno));
+		fplog(stderr, FATAL, "%s (%skiB): %s! \n", 
+		      iname, fmt_kiB(ipos), strerror(eno));
 		fplog(stderr, NOHDR, "dd_rescue: Last error fatal! Exiting ... \n");
 		exit_report(20);
 	}
@@ -1176,8 +1176,8 @@ ssize_t dowrite(const ssize_t rd)
 	if (err) {
 		fplog(stderr, WARN, "assumption rd(%i) == wr(%i) failed! \n", rd, wr);
 		fplog(stderr, (fatal? FATAL: WARN),
-			"write %s (%.1fk): %s!\n", 
-			oname, (double)(opos+wr)/1024, strerror(weno));
+			"write %s (%skiB): %s!\n", 
+			oname, fmt_kiB(opos+wr), strerror(weno));
 		errno = 0;
 		/* FIXME: This breaks for reverse direction */
 		if (!reverse)
@@ -1299,8 +1299,8 @@ int copyfile_hardbs(const loff_t max)
 		/* EOF */
 		if (rd == 0 && !eno) {
 			if (!quiet)
-				fplog(stderr, INFO, "read %s (%.1fk): EOF\n", 
-				      iname, (double)ipos/1024);
+				fplog(stderr, INFO, "read %s (%skiB): EOF\n", 
+				      iname, fmt_kiB(ipos));
 			return errs;
 		}
 		/* READ ERROR */
@@ -1327,8 +1327,8 @@ int copyfile_hardbs(const loff_t max)
 			}					
 			/* Real error on small blocks: Don't retry */
 			nrerr++; 
-			fplog(stderr, WARN, "read %s (%.1fk): %s!\n", 
-			      iname, (double)ipos/1024, strerror(eno));
+			fplog(stderr, WARN, "read %s (%skiB): %s!\n", 
+			      iname, fmt_kiB(ipos), strerror(eno));
 		
 			errno = 0;
 			if (nosparse || 
@@ -1343,8 +1343,8 @@ int copyfile_hardbs(const loff_t max)
 				if (toread != wr) {
 					fplog(stderr, WARN, "assumption toread(%i) == wr(%i) failed! \n", toread, wr);	
 					/*
-					fplog(stderr, WARN, "%s (%.1fk): %s!\n", 
-					      oname, (double)opos/1024, strerror(eno));
+					fplog(stderr, WARN, "%s (%skiB): %s!\n", 
+					      oname, fmt_kiB(opos), strerror(eno));
 					fprintf(stderr, "%s%s%s%s", down, down, down, down);
 				 	*/
 				}
@@ -1394,8 +1394,8 @@ int copyfile_softbs(const loff_t max)
 	if (!o_chr && !avoidwrite) {
 		rc = pwrite(odes, buf, 0, opos);
 		if (rc)
-			fplog(stderr, WARN, "extending file %s to %.1fk failed\n",
-			      oname, (double)opos/1024);
+			fplog(stderr, WARN, "extending file %s to %skiB failed\n",
+			      oname, fmt_kiB(opos));
 	}
 	while ((toread = blockxfer(max, softbs)) > 0) {
 		int err;
@@ -1405,8 +1405,8 @@ int copyfile_softbs(const loff_t max)
 		/* EOF */
 		if (rd == 0 && !eno) {
 			if (!quiet)
-				fplog(stderr, INFO, "read %s (%.1fk): EOF\n", 
-				      iname, (double)ipos/1024);
+				fplog(stderr, INFO, "read %s (%skiB): EOF\n", 
+				      iname, fmt_kiB(ipos));
 			return errs;
 		}
 		/* READ ERROR or short read */
@@ -1428,8 +1428,8 @@ int copyfile_softbs(const loff_t max)
 				fprintf(stderr, DDR_INFO "problems at ipos %.1fk: %s \n                 fall back to smaller blocksize \n%s%s%s%s",
 				        (double)ipos/1024, strerror(eno), down, down, down, down);
 				 */
-				fprintf(stderr, DDR_INFO "problems at ipos %.1fk: %s \n                 fall back to smaller blocksize \n",
-				        (double)ipos/1024, strerror(eno));
+				fprintf(stderr, DDR_INFO "problems at ipos %skiB: %s \n               fall back to smaller blocksize \n",
+				        fmt_kiB(ipos), strerror(eno));
 				scrollup = 0;
 				printstatus(stderr, logfd, hardbs, 1);
 			}
@@ -1463,8 +1463,8 @@ int copyfile_softbs(const loff_t max)
 			if (!err && xfer == old_xfer)
 				return errs;
 			if (verbose) {
-				fprintf(stderr, DDR_INFO "ipos %.1fk promote to large bs again! \n",
-					(double)ipos/1024);
+				fprintf(stderr, DDR_INFO "ipos %skiB promote to large bs again! \n",
+					fmt_kiB(ipos));
 				scrollup = 0;
 			}
 		} else {
@@ -1497,23 +1497,23 @@ int copyfile_splice(const loff_t max)
 					SPLICE_F_MOVE | SPLICE_F_MORE);
 		if (rd < 0) {
 			if (!quiet)
-				fplog(stderr, INFO, "%s (%.1fk): fall back to userspace copy\n",
-				      iname, (double)ipos/1024);
+				fplog(stderr, INFO, "%s (%skiB): fall back to userspace copy\n",
+				      iname, fmt_kiB(ipos));
 			close(fd_pipe[0]); close(fd_pipe[1]);
 			return copyfile_softbs(max);
 		}
 		if (rd == 0) {
 			if (!quiet)
-				fplog(stderr, INFO, "read %s (%.1fk): EOF (splice)\n",
-				      iname, (double)ipos/1024);
+				fplog(stderr, INFO, "read %s (%skiB): EOF (splice)\n",
+				      iname, fmt_kiB(ipos));
 			break;
 		}
 		while (rd) {
 			ssize_t wr = splice(fd_pipe[0], NULL, odes, &opos, rd,
 					SPLICE_F_MOVE | SPLICE_F_MORE);
 			if (wr < 0) {
-				fplog(stderr, FATAL, "write %s (%.1fk): %s (splice)\n",
-					oname, (double)opos/1024.0, strerror(errno));
+				fplog(stderr, FATAL, "write %s (%skiB): %s (splice)\n",
+					oname, fmt_kiB(opos), strerror(errno));
 
 				close(fd_pipe[0]); close(fd_pipe[1]);
 				exit_report(23);
@@ -1823,11 +1823,11 @@ void printhelp()
 
 void printinfo(FILE* const file)
 {
-	fplog(file, INFO, "about to transfer %.1f kBytes from %s to %s\n",
-	      (double)maxxfer/1024, iname, oname);
+	fplog(file, INFO, "about to transfer %s kiBytes from %s to %s\n",
+	      fmt_kiB(maxxfer), iname, oname);
 	fplog(file, INFO, "blocksizes: soft %i, hard %i\n", softbs, hardbs);
-	fplog(file, INFO, "starting positions: in %.1fk, out %.1fk\n",
-	      (double)ipos/1024, (double)opos/1024);
+	fplog(file, INFO, "starting positions: in %skiB, out %SkiB\n",
+	      fmt_kiB(ipos), fmt_kiB(opos));
 	fplog(file, INFO, "Logfile: %s, Maxerr: %li\n",
 	      (lname? lname: "(none)"), maxerr);
 	fplog(file, INFO, "Reverse: %s, Trunc: %s, interactive: %s\n",
@@ -2281,8 +2281,8 @@ int main(int argc, char* argv[])
 			perror("dd_rescue"); cleanup(); exit(19);
 		}
 		if (verbose) 
-			fprintf(stderr, DDR_INFO "ipos set to the end: %.1fk\n", 
-			        (double)ipos/1024);
+			fprintf(stderr, DDR_INFO "ipos set to the end: %skiB\n", 
+			        fmt_kiB(ipos));
 		/* if opos not set, assume same position */
 		if (opos == (loff_t)-INT_MAX) 
 			opos = ipos;
@@ -2297,8 +2297,8 @@ int main(int argc, char* argv[])
 			if (opos == 0) 
 				opos = ipos;
 			if (verbose) 
-				fprintf(stderr, DDR_INFO "opos set to: %.1fk\n",
-					(double)opos/1024);
+				fprintf(stderr, DDR_INFO "opos set to: %skiB\n",
+					fmt_kiB(opos));
     		}
 	}
 
@@ -2348,7 +2348,8 @@ int main(int argc, char* argv[])
 	input_length();
 
 	if (ipos < 0 || opos < 0) {
-		fplog(stderr, FATAL, "negative position requested (%.1fk)\n", (double)ipos/1024);
+		fplog(stderr, FATAL, "negative position requested (%skiB)\n", 
+			fmt_kiB(ipos));
 		cleanup(); exit(25);
 	}
 
@@ -2374,8 +2375,8 @@ int main(int argc, char* argv[])
 	}
 	if (reverse && trunclast)
 		if (ftruncate(odes, opos))
-			fplog(stderr, WARN, "Could not truncate %s to %.1fk: %s!\n",
-				oname, (double)opos/1024, strerror(errno));
+			fplog(stderr, WARN, "Could not truncate %s to %skiB: %s!\n",
+				oname, fmt_kiB(opos), strerror(errno));
 
 	LISTTYPE(ofile_t) *of;
 	LISTFOREACH(ofiles, of) {
@@ -2395,8 +2396,8 @@ int main(int argc, char* argv[])
 #endif
 		if (reverse && trunclast)
 			if (ftruncate(oft->fd, opos))
-				fplog(stderr, WARN, "Could not truncate %s to %.1fk: %s!\n",
-					oft->name, (double)opos/1024, strerror(errno));
+				fplog(stderr, WARN, "Could not truncate %s to %skiB: %s!\n",
+					oft->name, fmt_kiB(opos), strerror(errno));
 	}
 
 	/* Install signal handler */
