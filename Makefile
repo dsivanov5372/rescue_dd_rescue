@@ -51,7 +51,7 @@ ifeq ($(HAVE_SSE42),1))
 else
 	CFLAGS += -DNO_SSE42
 endif
-ifeq ($(HAVE_AVX),1)
+ifeq ($(HAVE_AVX2),1)
 	OBJECTS2 += find_nonzero_avx.o
 else
 	CFLAGS += -DNO_AVX2
@@ -65,7 +65,7 @@ ifeq ($(HAVE_SSE42),1)
 else
 	CFLAGS += -DNO_SSE42
 endif
-ifeq ($(HAVE_AVX),1)
+ifeq ($(HAVE_AVX2),1)
 	OBJECTS2 += find_nonzero_avx.o
 else
 	CFLAGS += -DNO_AVX2
