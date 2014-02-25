@@ -292,6 +292,11 @@ static char* strsignal(int sig)
 #include "pread64.h"
 #endif
 
+inline char* fmt_kiB(loff_t no)
+{
+	return fmt_int(0, 1, 1024, no, (nocol? "": BOLD), (nocol? "": NORM), 1);
+}
+
 inline float difftimetv(const struct timeval* const t2, 
 			const struct timeval* const t1)
 {
@@ -469,8 +474,8 @@ void input_length()
 	if (estxfer < 0)
 		estxfer = 0;
 	if (!quiet)
-		fplog(stderr, INFO, "expect to copy %llikB from %s\n",
-			estxfer/1024, iname);
+		fplog(stderr, INFO, "expect to copy %skiB from %s\n",
+			fmt_kiB(estxfer), iname);
 	if (!graph)
 		preparegraph();
 }
@@ -520,12 +525,12 @@ int output_length()
 		if (!maxxfer || maxxfer > newmax) {
 			maxxfer = newmax;
 			if (!quiet)
-				fplog(stderr, INFO, "limit max xfer to %llikB\n",
-					maxxfer/1024);
+				fplog(stderr, INFO, "limit max xfer to %skiB\n",
+					fmt_kiB(maxxfer));
 		}
 	} else if (opos > olen) {
-		fplog(stderr, WARN, "change output position %xllikB to endpos %llikb due to -M\n",
-			opos/1024, olen/1024);
+		fplog(stderr, WARN, "change output position %skiB to endpos %skiB due to -M\n",
+			fmt_kiB(opos), fmt_kiB(olen));
 		opos = olen;
 	}
 	return 0;
@@ -551,8 +556,8 @@ static void sparse_output_warn()
 	}
 	eff_opos = (opos == (loff_t)-INT_MAX? ipos: opos);
 	if (sparse && (eff_opos < stbuf.st_size))
-		fplog(stderr, WARN, "write into %s (@%li/%li): sparse not recommended\n", 
-				oname, eff_opos, stbuf.st_size);
+		fplog(stderr, WARN, "write into %s (@%sk/%sk): sparse not recommended\n", 
+				oname, fmt_kiB(eff_opos), fmt_kiB(stbuf.st_size));
 }
 
 #if defined(HAVE_FALLOCATE64) || defined(HAVE_LIBFALLOCATE)
@@ -602,8 +607,8 @@ static void do_fallocate(int fd, const char* onm)
 	rc = fallocate64(fd, 1, opos, to_falloc);
 #endif
 	if (rc)
-	       fplog(stderr, WARN, "fallocate %s (%lli, %lli) failed: %s\n",
-			       onm, opos, to_falloc, strerror(errno));
+	       fplog(stderr, WARN, "fallocate %s (%sk, %sk) failed: %s\n",
+			       onm, fmt_kiB(opos), fmt_kiB(to_falloc), strerror(errno));
 }
 #endif
 
@@ -707,15 +712,15 @@ void printstatus(FILE* const file1, FILE* const file2,
 	}
 }
 
-static void savebb(unsigned long block)
+static void savebb(loff_t block)
 {
 	FILE *bbfile;
-	fplog(stderr, WARN, "Bad block reading %s: %lu \n", 
-			iname, block);
+	fplog(stderr, WARN, "Bad block reading %s: %s \n", 
+			iname, fmt_int(0, 0, 1, block, (nocol? "": BOLD), (nocol? "": NORM), 1));
 	if (bbname == NULL)
 		return;
 	bbfile = fopen(bbname, "a");
-	fprintf(bbfile, "%lu\n", block);
+	fprintf(bbfile, "%s\n", fmt_int(0, 0, 1, block, "", "", 0));
 	fclose(bbfile);
 }
 
@@ -734,7 +739,8 @@ void printreport()
 		fprintf(report, "\n");
 		printstatus(report, logfd, 0, 1);
 		if (avoidwrite) 
-			fplog(report, INFO, "Avoided %llikB of writes (performed %llikB)\n", axfer/1024, (sxfer-axfer)/1024);
+			fplog(report, INFO, "Avoided %skiB of writes (performed %skiB)\n", 
+				fmt_kiB(axfer), fmt_kiB(sxfer-axfer));
 	}
 }
 
@@ -2101,7 +2107,8 @@ int main(int argc, char* argv[])
 			hardbs = BUF_HARDBLOCKSIZE;
 	}
 	if (!quiet)
-		fplog(stderr, INFO, "Using softbs=%lu, hardbs=%lu\n", softbs, hardbs);
+		fplog(stderr, INFO, "Using softbs=%skiB, hardbs=%skiB\n", 
+			fmt_kiB(softbs), fmt_kiB(hardbs));
 
 	/* sanity checks */
 #ifdef O_DIRECT
@@ -2187,7 +2194,7 @@ int main(int argc, char* argv[])
 	if (odes > 1 && interact) {
 		int a;
 		do {
-			fprintf(stderr, "dd_rescue: (question): %s existing %s [y/n] ?", 
+			fprintf(stderr, "dd_rescue: (question): %s existing %s [y/n]? ", 
 				(dotrunc? "Overwrite": "Write into"), oname);
 			a = toupper(fgetc(stdin)); //fprintf(stderr, "\n");
 		} while (a != 'Y' && a != 'N');
@@ -2215,12 +2222,13 @@ int main(int argc, char* argv[])
 	if (rmvtrim && !(i_repeat || prng_libc || prng_frnd || force)) {
 		int a;
 		do {
-			fprintf(stderr, "dd_rescue: (question): really remove %s at the end [y/n] ?",
+			fprintf(stderr, "dd_rescue: (question): really remove %s at the end [y/n]? ",
 				oname);
 			a = toupper(fgetc(stdin)); //fprintf(stderr, "\n");
 		} while (a != 'Y' && a != 'N');
 		if (a == 'N') {
 			fplog(stderr, FATAL, "exit on user request!\n");
+			rmvtrim = 0;
 			cleanup(); exit(23);
 		}
 	}
