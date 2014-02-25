@@ -10,5 +10,24 @@ AC_CHECK_HEADERS([fallocate.h dlfcn.h unistd.h attr/xattr.h sys/acl.h sys/ioctl.
 AC_CHECK_FUNCS([ffs ffsl fallocate64 splice getopt_long open64 pread pread64 lseek64 stat64])
 AC_CHECK_LIB(dl,dlsym)
 AC_CHECK_LIB(fallocate,linux_fallocate64)
-dnl CC_FLAGS_CHECK([-msse4.2 -mavx2])
+
+dnl @synopsis CC_FLAGS_CHECK [compiler flags] 
+dnl @summary check whether compiler supports given C flags or not 
+AC_DEFUN([CC_FLAGS_CHECK],
+[dnl 
+  AC_MSG_CHECKING([if $CC supports $1]) 
+  dnl AC_LANG_PUSH([C]) 
+  ac_saved_cflags="$CFLAGS" 
+  CFLAGS="-Werror $1" 
+  AC_COMPILE_IFELSE([AC_LANG_PROGRAM([])], 
+    [AC_MSG_RESULT([yes])
+     AC_DEFINE_UNQUOTED([CC_FLAGS_$2], $1,
+	[Check whether compiler supports $1])
+    ],[AC_MSG_ERROR([no])] )
+  CFLAGS="$ac_saved_cflags" 
+  dnl AC_LANG_POP([C]) 
+])
+
+CC_FLAGS_CHECK(-msse4.2,SSE42)
+CC_FLAGS_CHECK(-mavx2,AVX2)
 AC_OUTPUT
