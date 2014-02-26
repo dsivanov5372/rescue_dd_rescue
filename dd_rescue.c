@@ -196,7 +196,8 @@ char trunclast, reverse, abwrerr, sparse, nosparse;
 char verbose, quiet, interact, force, in_report, nocol;
 unsigned char *buf, *buf2, *origbuf, *origbuf2;
 const char *lname, *iname, *oname, *bbname = NULL;
-loff_t ipos, opos, xfer, lxfer, sxfer, fxfer, maxxfer, axfer, init_opos, ilen, olen, estxfer;
+loff_t ipos, opos, xfer, lxfer, sxfer, fxfer, maxxfer, axfer, estxfer;
+loff_t init_ipos, init_opos, ilen, olen;
 
 int ides, odes;
 int o_dir_in, o_dir_out;
@@ -437,6 +438,26 @@ void unload_plugins()
 	LISTFOREACH(ddr_plug_handles, plug_hdl)
 		dlclose(LISTDATA(plug_hdl));
 }
+#endif
+
+#if defined(HAVE_POSIX_FADVISE) && !defined(HAVE_POSIX_FADVISE64)
+#define posix_fadvise64 posix_fadvise
+#endif
+#ifdef HAVE_POSIX_FADVISE
+static inline void fadvise(char after)
+{
+	if (!reverse) {
+		if (after) 
+			posix_fadvise64(ides, init_ipos, xfer, POSIX_FADV_NOREUSE);
+		else {
+			posix_fadvise64(ides, ipos, estxfer, POSIX_FADV_SEQUENTIAL);
+			init_ipos = ipos;
+		}
+	}
+}
+#else
+static inline void fadvise(char after)
+{}
 #endif
 
 
@@ -2543,6 +2564,7 @@ int main(int argc, char* argv[])
 	if (bsim715) {
 		c = tripleoverwrite(maxxfer);
 	} else {
+		fadvise(0);
 #ifdef HAVE_SPLICE
 		if (dosplice)
 			c = copyfile_splice(maxxfer);
@@ -2559,6 +2581,7 @@ int main(int argc, char* argv[])
 
 	gettimeofday(&currenttime, NULL);
 	printreport();
+	fadvise(1);
 	c += cleanup();
 	if (c && verbose)
 		fplog(stderr, WARN, "There were %i errors! \n", c);
