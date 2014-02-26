@@ -87,7 +87,7 @@ endif
 
 default: $(TARGETS)
 
-all: $(TARGETS) find_nonzero fiemap file_zblock fmt_no
+all: $(TARGETS) find_nonzero fiemap file_zblock fmt_no md5
 
 config.h: configure config.h.in
 	./configure
@@ -133,6 +133,9 @@ libfalloc-static: dd_rescue.c $(HEADERS) $(OBJECTS) $(OBJECTS2)
 
 dd_rescue: dd_rescue.c $(HEADERS) $(OBJECTS) $(OBJECTS2)
 	$(CC) $(CFLAGS) $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2) -ldl
+
+md5: md5.c md5.h config.h
+	$(CC) $(CFLAGS_OPT) -DMD5_MAIN -o $@ $<
 
 libfalloc-dl: dd_rescue
 

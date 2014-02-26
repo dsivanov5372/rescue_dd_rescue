@@ -5,6 +5,8 @@
  *
  * Compile with: gcc -o md5 md5.c
  */
+#include "md5.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -67,10 +69,6 @@ static inline uint32_t to_int32(const uint8_t *bytes)
         | ((uint32_t) bytes[3] << 24);
 }
 #endif
-
-typedef struct _md5_ctx {
-	uint32_t h0, h1, h2, h3;
-} md5_ctx __attribute__((aligned(16)));
 
 void md5_64(uint8_t *ptr, md5_ctx* ctx)
 {

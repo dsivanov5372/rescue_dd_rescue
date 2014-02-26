@@ -7,7 +7,7 @@ AC_HEADER_STDC
 #AC_PROG_INSTALL
 #CFLAGS="$CFLAGS -DHAVE_CONFIG_H"
 AC_CHECK_HEADERS([fallocate.h dlfcn.h unistd.h attr/xattr.h sys/acl.h sys/ioctl.h endian.h linux/fs.h linux/fiemap.h stdint.h])
-AC_CHECK_FUNCS([ffs ffsl fallocate64 splice getopt_long open64 pread pread64 lseek64 stat64 posix_fadvise posix_fadvise64])
+AC_CHECK_FUNCS([ffs ffsl fallocate64 splice getopt_long open64 pread pread64 lseek64 stat64 posix_fadvise posix_fadvise64 __builtin_prefetch])
 AC_CHECK_LIB(dl,dlsym)
 AC_CHECK_LIB(fallocate,linux_fallocate64)
 
