@@ -390,9 +390,20 @@ typedef void* VOIDP;
 LISTDECL(VOIDP);
 LISTTYPE(VOIDP) *ddr_plug_handles;
 
-#ifndef PLUGSEARCH
-#define PLUGSEARCH "/usr/lib/"
-#endif
+void insert_plugin(void* hdl, const char* nm)
+{
+	LISTAPPEND(ddr_plug_handles, hdl, VOIDP);
+	ddr_plugin_t *plug = dlsym(hdl, "ddr_plug");
+	if (!plug) {
+		fplog(stderr, WARN, "plugin %s loaded, but ddr_plug not found!\n", nm);
+		return;
+	}
+	if (!plug->name)
+		plug->name = nm;
+	LISTAPPEND(ddr_plugins, *plug, ddr_plugin_t);
+	plugins_loaded++;
+}
+
 
 void load_plugins(char* plugs)
 {
@@ -404,21 +415,17 @@ void load_plugins(char* plugs)
 			*next++ = 0;
 		snprintf(path, 255, "libddr_%s.so", plugs);
 		void* hdl = dlopen(path, RTLD_NOW);
-		if (hdl) {
-			LISTAPPEND(ddr_plug_handles, hdl, VOIDP);
-			plugins_loaded++;
-			plugs = next;
-			continue;
+#ifdef TEST_LOCAL_PLUGIN
+		if (!hdl) {
+			snprintf(path, 255, "./libddr_%s.so", plugs);
+			hdl = dlopen(path, RTLD_NOW);
 		}
-		snprintf(path, 255, "%s/libddr_%s.so", PLUGSEARCH, plugs);
-		hdl = dlopen(path, RTLD_NOW);
+#endif
 		if (!hdl)
 			fplog(stderr, WARN, "Could not load plugin %s: %s\n",
 				plugs, strerror(errno));
-		else {
-			LISTAPPEND(ddr_plug_handles, hdl, VOIDP);
-			plugins_loaded++;
-		}
+		else 
+			insert_plugin(hdl, plugs);
 		plugs = next;
 	}
 }
@@ -1859,7 +1866,7 @@ struct option longopts[] = { 	{"help", 0, NULL, 'h'}, {"verbose", 0, NULL, 'v'},
 				{"random", 1, NULL, 'z'}, {"frandom", 1, NULL, 'Z'},
  				{"shred3", 1, NULL, '3'}, {"shred4", 1, NULL, '4'},
  				{"shred2", 1, NULL, '2'},
-				{"rmvtrim", 0, NULL, 'u'},
+				{"rmvtrim", 0, NULL, 'u'}, {"plugins", 1, NULL, 'L'},
 				/* GNU ddrescue compat */
 				{"block-size", 1, NULL, 'B'}, {"input-position", 1, NULL, 's'},
 				{"output-position", 1, NULL, 'S'}, {"max-size", 1, NULL, 'm'},
@@ -1901,6 +1908,9 @@ void printhelp()
 #endif       	
 #if defined(HAVE_FALLOCATE64) || defined(HAVE_LIBFALLOCATE)
 	fprintf(stderr, "         -P         use fallocate to preallocate target space,\n");
+#endif
+#ifdef USE_LIBDL
+	fprintf(stderr, "         -L plug1[,plug2[,..]]    load plugins,\n");
 #endif
 	fprintf(stderr, "         -w         abort on Write errors (def=no),\n");
 	fprintf(stderr, "         -W         read target block and avoid Writes if identical (def=no),\n");
@@ -2074,6 +2084,7 @@ char test_nocolor_term()
 int main(int argc, char* argv[])
 {
 	int c;
+	char* plugins = NULL;
 	loff_t syncsz = -1;
 
   	/* defaults */
@@ -2114,9 +2125,9 @@ int main(int argc, char* argv[])
 #endif
 
 #ifdef LACK_GETOPT_LONG
-	while ((c = getopt(argc, argv, ":rtTfihqvVwWaAdDkMRpPuc:b:B:m:e:s:S:l:o:y:z:Z:2:3:4:xY:")) != -1) 
+	while ((c = getopt(argc, argv, ":rtTfihqvVwWaAdDkMRpPuc:b:B:m:e:s:S:l:L:o:y:z:Z:2:3:4:xY:")) != -1) 
 #else
-	while ((c = getopt_long(argc, argv, ":rtTfihqvVwWaAdDkMRpPuc:b:B:m:e:s:S:l:o:y:z:Z:2:3:4:xY:", longopts, NULL)) != -1) 
+	while ((c = getopt_long(argc, argv, ":rtTfihqvVwWaAdDkMRpPuc:b:B:m:e:s:S:l:L:o:y:z:Z:2:3:4:xY:", longopts, NULL)) != -1) 
 #endif
 	{
 		switch (c) {
@@ -2153,6 +2164,7 @@ int main(int argc, char* argv[])
 			case 's': ipos = readint(optarg); break;
 			case 'S': opos = readint(optarg); break;
 			case 'l': lname = optarg; break;
+			case 'L': plugins = optarg; break;
 			case 'o': bbname = optarg; break;
 			case 'x': extend = 1; break;
 			case 'u': rmvtrim = 1; break;
@@ -2199,6 +2211,11 @@ int main(int argc, char* argv[])
 		c = openfile(lname, O_WRONLY | O_CREAT /*| O_EXCL*/);
 		logfd = fdopen(c, "a");
 	}
+
+#ifdef USE_LIBDL
+	if (plugins)
+		load_plugins(plugins);
+#endif
 
 	/* Defaults for blocksizes */
 	if (softbs == 0) {

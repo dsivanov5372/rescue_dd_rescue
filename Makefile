@@ -2,7 +2,7 @@
 # (c) garloff@suse.de, 99/10/09, GNU GPL
 # $Id$
 
-VERSION = 1.41
+VERSION = 1.42
 
 DESTDIR = 
 
@@ -22,12 +22,12 @@ TARGETS = dd_rescue
 #TARGETS = libfalloc-dl
 OBJECTS = frandom.o fmt_no.o find_nonzero.o 
 FNZ_HEADERS = find_nonzero.h archdep.h ffs.h
-HEADERS = frandom.h fmt_no.h config.h list.h fstrim.h $(FNZ_HEADERS) splice.h fallocate64.h pread64.h
+HEADERS = frandom.h fmt_no.h config.h list.h fstrim.h $(FNZ_HEADERS) splice.h fallocate64.h pread64.h ddr_plugin.h
 DOCDIR = $(prefix)/share/doc/packages
 INSTASROOT = -o root -g root
 LIBDIR = /usr/lib
 COMPILER = $(shell $(CC) --version | head -n1)
-DEFINES = -DVERSION=\"$(VERSION)\"  -D__COMPILER__="\"$(COMPILER)\""
+DEFINES = -DVERSION=\"$(VERSION)\"  -D__COMPILER__="\"$(COMPILER)\"" # -DPLUGSEARCH="\"$(LIBDIR)\""
 OUT = -o dd_rescue
 
 ifeq ($(CC),wcl386)
@@ -59,6 +59,7 @@ endif
 endif
 
 ifeq ($(MACH),x86_64)
+	LIBDIR = /usr/lib64
 	OBJECTS2 = find_nonzero_sse2.o
 ifeq ($(HAVE_SSE42),1)
 	OBJECTS2 += ffs_sse42.o
