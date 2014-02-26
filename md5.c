@@ -12,6 +12,11 @@
 #include <string.h>
 #include <stdint.h>
 #include <endian.h>
+
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
  
 // Constants are the integer part of the sines of integers (in radians) * 2^32.
 static const uint32_t k[64] = {
