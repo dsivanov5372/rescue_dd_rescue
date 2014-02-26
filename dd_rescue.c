@@ -119,6 +119,8 @@
 
 #include "fstrim.h"
 
+#include "ddr_plugin.h"
+
 #ifdef HAVE_GETOPT_LONG
 #include <getopt.h>
 #endif
@@ -177,6 +179,10 @@ void* libfalloc = (void*)0;
 /* This is not critical -- most platforms have an internal 64bit offset with plain open() */
 #ifndef HAVE_OPEN64
 # define open64 open
+#endif
+
+#if !defined(HAVE_PREAD64) || defined(TEST_SYSCALL)
+#include "pread64.h"
 #endif
 
 
@@ -288,10 +294,6 @@ static char* strsignal(int sig)
 }
 #endif
 
-#if !defined(HAVE_PREAD64) || defined(TEST_SYSCALL)
-#include "pread64.h"
-#endif
-
 inline char* fmt_kiB(loff_t no)
 {
 	return fmt_int(0, 1, 1024, no, (nocol? "": BOLD), (nocol? "": NORM), 1);
@@ -303,6 +305,7 @@ inline float difftimetv(const struct timeval* const t2,
 	return  (float) (t2->tv_sec  - t1->tv_sec ) +
 		(float) (t2->tv_usec - t1->tv_usec) * 1e-6;
 }
+
 
 /** Write to file and simultaneously log to logfdile, if existing */
 int fplog(FILE* const file, enum ddrlog_t logpre, const char * const fmt, ...)
@@ -330,6 +333,105 @@ int fplog(FILE* const file, enum ddrlog_t logpre, const char * const fmt, ...)
 	scrollup = 0;
 	return ret;
 }
+
+/** Plugin infrastructure */
+char plugins_loaded = 0;
+char plugins_opened = 0;
+LISTDECL(ddr_plugin_t);
+LISTTYPE(ddr_plugin_t) *ddr_plugins;
+
+void call_plugins_open()
+{
+	/* Do iterate over list */
+	LISTTYPE(ddr_plugin_t) *plug;
+	LISTFOREACH(ddr_plugins, plug) {
+		if (LISTDATA(plug).open_callback) {
+			int err = LISTDATA(plug).open_callback(ides, iname, ipos,
+						odes, oname, opos,
+						softbs, hardbs,
+						estxfer, &LISTDATA(plug).state);
+			if (err)
+				fplog(stderr, WARN, "Error initializing plugin %s: %s!\n",
+					LISTDATA(plug).name, strerror(err));
+		}
+		++plugins_opened;
+	}
+}
+
+void call_plugins_close()
+{
+	if (!plugins_opened)
+		return;
+	LISTTYPE(ddr_plugin_t) *plug;
+	LISTFOREACH(ddr_plugins, plug) {
+		if (LISTDATA(plug).close_callback) {
+			int err = LISTDATA(plug).close_callback(opos, &LISTDATA(plug).state);
+			if (err)
+				fplog(stderr, WARN, "Error closing plugin %s: %s!\n",
+					LISTDATA(plug).name, strerror(err));
+		}
+		--plugins_opened;
+	}
+}
+
+unsigned char* call_plugins_block(unsigned char *bf, int *towr, loff_t ooff)
+{
+	if (!plugins_opened)
+		return bf;
+	LISTTYPE(ddr_plugin_t) *plug;
+	LISTFOREACH(ddr_plugins, plug)
+		if (LISTDATA(plug).block_callback)
+			bf = LISTDATA(plug).block_callback(bf, towr, ooff, &LISTDATA(plug).state);
+	return bf;
+}
+
+#ifdef USE_LIBDL
+typedef void* VOIDP;
+LISTDECL(VOIDP);
+LISTTYPE(VOIDP) *ddr_plug_handles;
+
+#ifndef PLUGSEARCH
+#define PLUGSEARCH "/usr/lib/"
+#endif
+
+void load_plugins(char* plugs)
+{
+	char* next;
+	char path[256];
+	while (plugs) {
+		next = strchr(plugs, ',');
+		if (next)
+			*next++ = 0;
+		snprintf(path, 255, "libddr_%s.so", plugs);
+		void* hdl = dlopen(path, RTLD_NOW);
+		if (hdl) {
+			LISTAPPEND(ddr_plug_handles, hdl, VOIDP);
+			plugins_loaded++;
+			plugs = next;
+			continue;
+		}
+		snprintf(path, 255, "%s/libddr_%s.so", PLUGSEARCH, plugs);
+		hdl = dlopen(path, RTLD_NOW);
+		if (!hdl)
+			fplog(stderr, WARN, "Could not load plugin %s: %s\n",
+				plugs, strerror(errno));
+		else {
+			LISTAPPEND(ddr_plug_handles, hdl, VOIDP);
+			plugins_loaded++;
+		}
+		plugs = next;
+	}
+}
+
+void unload_plugins()
+{
+	LISTTYPE(VOIDP) *plug_hdl;
+	/* FIXME: Freeing in reverse order would be better ... */
+	LISTFOREACH(ddr_plug_handles, plug_hdl)
+		dlclose(LISTDATA(plug_hdl));
+}
+#endif
+
 
 static int check_identical(const char* const in, const char* const on)
 {
@@ -937,6 +1039,8 @@ int cleanup()
 		ofile_t *oft = &(LISTDATA(of));
 		rc = sync_close(oft->fd, oft->name, oft->cdev);
 	}
+	if (!dosplice && !bsim715)
+		call_plugins_close();
 	ZFREE(origbuf2);
 	ZFREE(graph);
 	if (preserve) {
@@ -972,6 +1076,8 @@ int cleanup()
 #if USE_LIBDL
 	if (libfalloc)
 		dlclose(libfalloc);
+	if (plugins_loaded)
+		unload_plugins();
 #endif
 	return errs;
 }
@@ -1059,12 +1165,13 @@ ssize_t readblock(const int toread)
 	return (/*err == -1? err:*/ rd);
 }
 
-ssize_t writeblock(const int towrite)
+ssize_t writeblock(int towrite)
 {
 	ssize_t err, wr = 0;
+	unsigned char* wbuf = call_plugins_block(buf, &towrite, opos);
 	//errno = 0; /* should not be necessary */
 	do {
-		wr += (err = mypwrite(odes, buf+wr, towrite-wr, opos+wr-reverse*towrite));
+		wr += (err = mypwrite(odes, wbuf+wr, towrite-wr, opos+wr-reverse*towrite));
 		if (err == -1) 
 			wr++;
 	} while ((err == -1 && (errno == EINTR || errno == EAGAIN))
@@ -1086,7 +1193,7 @@ ssize_t writeblock(const int towrite)
 		ofile_t *oft = &(LISTDATA(of));
 		o_chr = oft->cdev;
 		do {
-			w2 += (e2 = mypwrite(oft->fd, buf+w2, towrite-w2, opos+w2-reverse*towrite));
+			w2 += (e2 = mypwrite(oft->fd, wbuf+w2, towrite-w2, opos+w2-reverse*towrite));
 			if (e2 == -1) 
 				w2++;
 		} while ((e2 == -1 && (errno == EINTR || errno == EAGAIN))
@@ -1159,7 +1266,7 @@ static int is_writeerr_fatal(int err)
 
 int weno;
 
-/* Do write,  update positions ... 
+/* Do write, update positions ... 
  * Returns number of successfully written bytes. */
 ssize_t dowrite(const ssize_t rd)
 {
@@ -2425,6 +2532,7 @@ int main(int argc, char* argv[])
 		else 
 #endif
 		{
+			call_plugins_open();
 			if (softbs > hardbs)
 				c = copyfile_softbs(maxxfer);
 			else
