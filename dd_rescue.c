@@ -335,6 +335,7 @@ int fplog(FILE* const file, enum ddrlog_t logpre, const char * const fmt, ...)
 }
 
 /** Plugin infrastructure */
+size_t max_slack = 0;
 char plugins_loaded = 0;
 char plugins_opened = 0;
 LISTDECL(ddr_plugin_t);
@@ -400,6 +401,9 @@ void insert_plugin(void* hdl, const char* nm)
 	}
 	if (!plug->name)
 		plug->name = nm;
+	plug->fplog = fplog;
+	if (plug->slackspace > max_slack)
+		max_slack = plug->slackspace;
 	LISTAPPEND(ddr_plugins, *plug, ddr_plugin_t);
 	plugins_loaded++;
 }
@@ -1995,10 +1999,10 @@ unsigned char* zalloc_aligned_buf(unsigned int bs, unsigned char**obuf)
 {
 	unsigned char *ptr;
 #if defined (__DragonFly__) || defined(__NetBSD__) || defined(__BIONIC__)
-	ptr = (unsigned char*)valloc(bs);
+	ptr = (unsigned char*)valloc(bs + max_slack);
 #else
 	void *mp;
-	if (posix_memalign(&mp, pagesize, bs))
+	if (posix_memalign(&mp, pagesize, bs + max_slack))
 		ptr = 0;
 	else
 		ptr = (unsigned char*)mp;
@@ -2007,7 +2011,7 @@ unsigned char* zalloc_aligned_buf(unsigned int bs, unsigned char**obuf)
 		*obuf = ptr;
 	if (!ptr) {
 		fplog(stderr, WARN, "allocation of aligned buffer failed -- use malloc\n");
-		ptr = (unsigned char*)malloc(bs + pagesize);
+		ptr = (unsigned char*)malloc(bs + pagesize * max_slack);
 		if (!ptr) {
 			fplog(stderr, FATAL, "allocation of buffer failed!\n");
 			cleanup(); exit(18);
@@ -2017,7 +2021,7 @@ unsigned char* zalloc_aligned_buf(unsigned int bs, unsigned char**obuf)
 		ptr += pagesize-1;
 		ptr -= (unsigned long)ptr % pagesize;
 	}
-	memset(ptr, 0, bs);
+	memset(ptr, 0, bs+max_slack);
 	return ptr;
 }
 
