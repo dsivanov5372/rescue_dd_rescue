@@ -107,6 +107,9 @@ fmt_no.o: fmt_no.c fmt_no.h config.h
 %.o: %.c %.h config.h
 	$(CC) $(CFLAGS) -c $<
 
+%.po: %.c ddr_plugin.h config.h
+	$(CC) $(CFLAGS) -fPIC -o $@ -c $<
+
 find_nonzero.o: find_nonzero.c $(FNZ_HEADERS) config.h
 	$(CC) $(CFLAGS_OPT) -c $< $(SSE)
 
