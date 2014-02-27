@@ -281,7 +281,6 @@ char *graph;
 #define DDR_WARN_C  AMBER DDR_WARN NORM
 #define DDR_FATAL_C RED DDR_FATAL NORM
 
-enum ddrlog_t { NOHDR=0, INFO, WARN, FATAL };
 const char* ddrlogpre[] = {"", DDR_INFO, DDR_WARN, DDR_FATAL };
 const char* ddrlogpre_c[] = {"", DDR_INFO_C, DDR_WARN_C, DDR_FATAL_C };
 
@@ -1051,6 +1050,8 @@ int sync_close(int fd, const char* nm, char chr)
 int cleanup()
 {
 	int rc, errs = 0;
+	if (!dosplice && !bsim715)
+		call_plugins_close();
 	errs += sync_close(odes, oname, o_chr);
 	if (ides != -1) {
 		rc = close(ides);
@@ -1067,8 +1068,6 @@ int cleanup()
 		ofile_t *oft = &(LISTDATA(of));
 		rc = sync_close(oft->fd, oft->name, oft->cdev);
 	}
-	if (!dosplice && !bsim715)
-		call_plugins_close();
 	ZFREE(origbuf2);
 	ZFREE(graph);
 	if (preserve) {
