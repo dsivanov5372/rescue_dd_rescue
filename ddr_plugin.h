@@ -7,6 +7,7 @@
 #define _DDR_PLUGIN_H
 
 #include <sys/types.h>
+#include <stdio.h>
 typedef int (_open_callback)(int ifd, const char* inm, loff_t ioff, 
 			     int ofd, const char* onm, loff_t ooff, 
 			     unsigned int bsz, unsigned int hsz,

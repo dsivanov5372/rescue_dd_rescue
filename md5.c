@@ -127,7 +127,7 @@ void md5_64(uint8_t *ptr, md5_ctx* ctx)
         ctx->h3 += _d;
 }
 
-void init_ctx(md5_ctx* ctx)
+void md5_init(md5_ctx* ctx)
 {
 	ctx->h0 = 0x67452301; 
 	ctx->h1 = 0xefcdab89; 
@@ -136,7 +136,7 @@ void init_ctx(md5_ctx* ctx)
 }
 
 /* We assume we have a few bytes behind ln  ... */
-void calc_md5(uint8_t *ptr, size_t chunk_ln, size_t final_len, md5_ctx* ctx)
+void md5_calc(uint8_t *ptr, size_t chunk_ln, size_t final_len, md5_ctx* ctx)
 {
 	if (final_len) {
 		ptr[chunk_ln] = 0x80;
