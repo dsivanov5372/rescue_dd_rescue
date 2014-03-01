@@ -223,6 +223,7 @@ clock_t startclock;
 float printint = 0.1;
 
 unsigned int pagesize = 4096;
+sig_atomic_t interrupted = 0;
 
 /* multiple output files */
 typedef struct _ofile {
@@ -1433,7 +1434,7 @@ int copyfile_hardbs(const loff_t max)
 		(double)ipos/1024, (double)xfer/1024, (double)max/1024, hardbs,
 		down, down, down, down);
 #endif
-	while ((toread = blockxfer(max, hardbs)) > 0) { 
+	while ((toread = blockxfer(max, hardbs)) > 0 && !interrupted) { 
 		int eno;
 		ssize_t rd = readblock(toread);
 		eno = errno;
@@ -1539,7 +1540,7 @@ int copyfile_softbs(const loff_t max)
 			fplog(stderr, WARN, "extending file %s to %skiB failed\n",
 			      oname, fmt_kiB(opos));
 	}
-	while ((toread = blockxfer(max, softbs)) > 0) {
+	while ((toread = blockxfer(max, softbs)) > 0 && !interrupted) {
 		int err;
 		ssize_t rd = readblock(toread);
 		eno = errno;
@@ -1633,7 +1634,7 @@ int copyfile_splice(const loff_t max)
 	LISTTYPE(ofile_t) *oft;
 	if (pipe(fd_pipe) < 0)
 		return copyfile_softbs(max);
-	while ((toread	= blockxfer(max, softbs)) > 0) {
+	while ((toread	= blockxfer(max, softbs) && !interrupted) > 0) {
 		loff_t old_ipos = ipos, old_opos = opos;
 		ssize_t rd = splice(ides, &ipos, fd_pipe[1], NULL, toread,
 					SPLICE_F_MOVE | SPLICE_F_MORE);
@@ -1993,10 +1994,12 @@ void breakhandler(int sig)
 {
 	fplog(stderr, FATAL, "Caught signal %i \"%s\". Exiting!\n",
 	      sig, strsignal(sig));
-	printreport();
-	cleanup();
-	signal(sig, SIG_DFL);
-	raise(sig);
+	if (interrupted++) {
+		printreport();
+		cleanup();
+		signal(sig, SIG_DFL);
+		raise(sig);
+	}
 }
 
 unsigned char* zalloc_aligned_buf(unsigned int bs, unsigned char**obuf)
