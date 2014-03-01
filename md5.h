@@ -15,6 +15,7 @@ typedef struct _md5_ctx {
 } md5_ctx ALIGNED(16);
 
 void md5_init(md5_ctx* ctx);
+void md5_64(uint8_t *ptr, md5_ctx* ctx);
 void md5_calc(uint8_t *ptr, size_t chunk_ln, size_t final_len, md5_ctx* ctx);
 void md5_result(md5_ctx *ctx, uint8_t* digest);
 
