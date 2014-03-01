@@ -126,7 +126,7 @@ int md5_close(loff_t ooff, void **stat)
 
 ddr_plugin_t ddr_plug = {
 	.name = "MD5",
-	.slackspace = 64,
+	.slackspace = 0 /*128*/,
 	.open_callback = md5_open,
 	.block_callback = md5_block,
 	.close_callback = md5_close,

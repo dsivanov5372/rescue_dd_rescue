@@ -213,11 +213,11 @@ int main(int argc, char **argv)
 #ifdef BENCH
     for (i = 0; i < 10000; ++i) {
 #endif
-    init_ctx(&ctx);
+    md5_init(&ctx);
     while (1) {
 	ssize_t rd = read(fd, bf, BUFSIZE);
 	if (rd == 0) {
-		calc_md5(bf, 0, len, &ctx);
+		md5_calc(bf, 0, len, &ctx);
 		break;
 	}
 	if (rd < 0) {
@@ -227,10 +227,10 @@ int main(int argc, char **argv)
 		exit(4);
 	}
 	if (rd < BUFSIZE) {
-		calc_md5(bf, rd, len, &ctx);
+		md5_calc(bf, rd, len, &ctx);
 		break;
 	} else
-		calc_md5(bf, BUFSIZE, 0, &ctx);
+		md5_calc(bf, BUFSIZE, 0, &ctx);
     }
 
     md5_result(&ctx, result);
