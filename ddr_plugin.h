@@ -25,6 +25,10 @@ typedef struct _ddr_plugin {
 	const char* name;
 	/* Amount of extra bytes required in buffer */
 	size_t slackspace;
+	/* Alignment need */
+	unsigned int needs_align;
+	/* Handles sparse */
+	char handles_sparse;
 	/* Internal individual state of plugin */
 	void* state;
 	/* Will be called after opening the input and output files */

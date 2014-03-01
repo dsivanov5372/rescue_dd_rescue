@@ -117,8 +117,8 @@ int md5_close(loff_t ooff, void **stat)
 	state->md5_pos += left;
 	uint8_t res[16];
 	md5_result(&state->md5, res);
-	ddr_plug.fplog(stderr, INFO, "md5sum %s (%i bytes): %s\n",
-		state->onm, ooff-state->first_ooff, md5_out(res));
+	ddr_plug.fplog(stderr, INFO, "md5sum %s (%li-%li): %s\n",
+		state->onm, state->first_ooff, ooff, md5_out(res));
 	free(*stat);
 	return 0;
 }
@@ -127,6 +127,8 @@ int md5_close(loff_t ooff, void **stat)
 ddr_plugin_t ddr_plug = {
 	.name = "MD5",
 	.slackspace = 0 /*128*/,
+	.needs_align = 0,
+	.handles_sparse = 1,
 	.open_callback = md5_open,
 	.block_callback = md5_block,
 	.close_callback = md5_close,

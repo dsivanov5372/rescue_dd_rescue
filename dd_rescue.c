@@ -336,6 +336,9 @@ int fplog(FILE* const file, enum ddrlog_t logpre, const char * const fmt, ...)
 
 /** Plugin infrastructure */
 size_t max_slack = 0;
+int max_align = 0;
+char not_sparse = 0;
+
 char plugins_loaded = 0;
 char plugins_opened = 0;
 LISTDECL(ddr_plugin_t);
@@ -404,6 +407,10 @@ void insert_plugin(void* hdl, const char* nm)
 	plug->fplog = fplog;
 	if (plug->slackspace > max_slack)
 		max_slack = plug->slackspace;
+	if (plug->needs_align > max_align)
+		max_align = plug->needs_align;
+	if (!plug->handles_sparse)
+		not_sparse = 1;
 	LISTAPPEND(ddr_plugins, *plug, ddr_plugin_t);
 	plugins_loaded++;
 }
@@ -1254,13 +1261,10 @@ int blockxfer(const loff_t max, const int bs)
 	/* If we write the first block and it's a full block, do alignment ... */
 	if (block == bs && !xfer && ((opos % bs && !o_chr) || (ipos % bs && !i_chr))) {
 		/* Write alignment is more important except if o_chr == 1 */
-		int off = opos % bs;
-		if (o_chr)
-			off = ipos % bs;
-		if (reverse)
-			block = off;
-		else
-			block = bs - off;
+		int off = o_chr? ipos % bs: opos % bs;
+		int aligned = reverse? off: bs-off;
+		if (!max_align || !(aligned % max_align))
+			block = aligned;
 	}
 	return block;
 }
@@ -1938,7 +1942,7 @@ void printhelp()
 #endif
 	fprintf(stderr, "         -w         abort on Write errors (def=no),\n");
 	fprintf(stderr, "         -W         read target block and avoid Writes if identical (def=no),\n");
-	fprintf(stderr, "         -a         spArse file writing (def=no),\n");
+	fprintf(stderr, "         -a         detect zero-filled blocks and write spArsely (def=no),\n");
 	fprintf(stderr, "         -A         Always write blocks, zeroed if err (def=no),\n");
 	fprintf(stderr, "         -i         interactive: ask before overwriting data (def=no),\n");
 	fprintf(stderr, "         -f         force: skip some sanity checks (def=no),\n");
@@ -2239,6 +2243,14 @@ int main(int argc, char* argv[])
 #ifdef USE_LIBDL
 	if (plugins)
 		load_plugins(plugins);
+	if (not_sparse && sparse) {
+		fplog(stderr, FATAL, "not all plugins handle -a/--sparse!\n");
+		exit(13);
+	}
+	if (not_sparse && !nosparse) {
+		fplog(stderr, WARN, "some plugins don't handle sparse, enable -A/--nosparse!\n");
+		nosparse = 1;
+	}
 #endif
 
 	/* Defaults for blocksizes */
