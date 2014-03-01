@@ -1207,7 +1207,10 @@ ssize_t readblock(const int toread)
 ssize_t writeblock(int towrite)
 {
 	ssize_t err, wr = 0;
+	int lasterr = 0;
 	unsigned char* wbuf = call_plugins_block(buf, &towrite, opos);
+	if (!wbuf)
+		return towrite;
 	//errno = 0; /* should not be necessary */
 	do {
 		wr += (err = mypwrite(odes, wbuf+wr, towrite-wr, opos+wr-reverse*towrite));
@@ -1217,6 +1220,7 @@ ssize_t writeblock(int towrite)
 		  || (wr < towrite && err > 0 && errno == 0));
 	if (wr < towrite && err != 0) {
 		/* Write error: handle ? .. */
+		lasterr = errno;
 		fplog(stderr, (abwrerr? FATAL: WARN),
 				"write %s (%skiB): %s\n",
 	      			oname, fmt_kiB(opos), strerror(errno));
@@ -1243,7 +1247,7 @@ ssize_t writeblock(int towrite)
 	}
 	o_chr = oldochr;
 	errno = oldeno;	
-	return (/*err == -1? err:*/ wr);
+	return (lasterr? -lasterr: wr);
 }
 
 int blockxfer(const loff_t max, const int bs)
@@ -1281,13 +1285,13 @@ void exitfatalerr(const int eno)
 }
 
 /* Update positions after successful copy, rd = progress, wr = really written */
-static void advancepos(const ssize_t rd, const ssize_t wr)
+static void advancepos(const ssize_t rd, const ssize_t wr, const ssize_t rwr)
 {
-	sxfer += wr; xfer += rd;
+	sxfer += rwr; xfer += rd;
 	if (reverse) { 
-		ipos -= rd; opos -= rd; 
+		ipos -= rd; opos -= wr; 
 	} else { 
-		ipos += rd; opos += rd; 
+		ipos += rd; opos += wr; 
 	}
 }
 
@@ -1311,7 +1315,7 @@ ssize_t dowrite(const ssize_t rd)
 	ssize_t wr = 0;
 	weno = 0;
 	errno = 0;
-	err = ((wr = writeblock(rd)) < rd ? 1: 0);
+	err = ((wr = writeblock(rd)) < 0 ? -wr: 0);
 	weno = errno;
 
 	if (err && is_writeerr_fatal(weno))
@@ -1324,11 +1328,11 @@ ssize_t dowrite(const ssize_t rd)
 		errno = 0;
 		/* FIXME: This breaks for reverse direction */
 		if (!reverse)
-			advancepos(wr, wr);
+			advancepos(wr, wr, wr);
 		else
 			return 0;
 	} else
-		advancepos(rd, wr);
+		advancepos(rd, wr, wr);
 	return wr;
 }
 
@@ -1342,7 +1346,7 @@ ssize_t dowrite_sparse(const ssize_t rd)
 	ssize_t zln = blockiszero(buf, rd);
 	/* Also simple: Whole block is empty, so just move on */
 	if (zln >= rd) {
-		advancepos(rd, 0);
+		advancepos(rd, rd, 0);
 		weno = 0;
 		return 0;
 	}
@@ -1356,7 +1360,7 @@ ssize_t dowrite_sparse(const ssize_t rd)
 	/* First half is empty */
 	if (zln >= mid) {
 		unsigned char* oldbuf = buf;
-		advancepos(zln, zln);
+		advancepos(zln, zln, 0);
 		buf += zln;
 		ssize_t wr = dowrite(rd-zln);
 		buf = oldbuf;
@@ -1371,7 +1375,7 @@ ssize_t dowrite_sparse(const ssize_t rd)
 		//advancepos(mid, wr);
 		if (wr != mid) 
 			return wr;
-		advancepos(rd-mid, 0);
+		advancepos(rd-mid, wr, 0);
 		return wr;
 	}
 }
@@ -1386,7 +1390,7 @@ int dowrite_retry(const ssize_t rd)
 		return 0;
 	if ((rd <= (ssize_t)hardbs) || (weno != ENOSPC && weno != EFBIG)) {
 		/* No retry, move on */
-		advancepos(rd-wr, 0);
+		advancepos(rd-wr, rd-wr, 0);
 		return is_writeerr_fatal(weno)? -1: 1;
 	} else {
 		ssize_t rwr = wr;
@@ -1406,7 +1410,7 @@ int dowrite_retry(const ssize_t rd)
 				return -1;
 			}
 			if (wr2 < towr) {
-				advancepos(towr-wr2, 0);
+				advancepos(towr-wr2, towr-wr2, 0);
 				++errs;
 			}
 			rwr += towr; buf += towr*adv;
@@ -1478,7 +1482,7 @@ int copyfile_hardbs(const loff_t max)
 			    (rd > 0 && (!sparse || blockiszero(buf, rd) < rd))) {
 				ssize_t wr = 0;
 				memset(buf+rd, 0, toread-rd);
-				errs += ((wr = writeblock(toread)) < toread ? 1: 0);
+				errs += ((wr = writeblock(toread)) < 0? -wr: 0);
 				eno = errno;
 				if (wr <= 0 && (eno == ENOSPC 
 					   || (eno == EFBIG && !reverse))) 
@@ -1694,7 +1698,7 @@ int copyfile_splice(const loff_t max)
 				ipos, new_ipos, opos, new_opos);
 			ipos = new_ipos; opos = new_opos;
 		}	
-		advancepos(0, 0);
+		advancepos(0, 0, 0);
 		if (syncfreq && !(xfer % (syncfreq*softbs)))
 			printstatus((quiet? 0: stderr), 0, softbs, 1);
 		else if (!quiet && !(xfer % (16*softbs)))

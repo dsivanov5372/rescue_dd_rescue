@@ -19,6 +19,8 @@ PATH = $(shell echo $$PATH)
 config.h:
 	ln -sf $(LIBD)/crtbegin_dynamic.o .
 	ln -sf $(LIBD)/crtend_android.o .
+	ln -sf $(LIBD)/crtbegin_so.o .
+	ln -sf $(LIBD)/crtend_so.o .
 	PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" ./configure --host x86-64-linux-gnu
 
 config:
@@ -60,6 +62,6 @@ all:
 
 clean:
 	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm $@
-	rm -f config.h crtbegin_dynamic.o crtend_android.o
+	rm -f config.h crtbegin_dynamic.o crtend_android.o crtend_so.o crtbegin_so.o
 
 

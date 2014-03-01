@@ -42,7 +42,7 @@ extern size_t find_nonzero_arm6 (const unsigned char* blk, const size_t ln);
 extern size_t find_nonzero_sse2o(const unsigned char* blk, const size_t ln);
 #endif
 
-#if 1 //defined(TEST) || !(defined(__x86_64__) || defined(__arm__))
+#if defined(TEST) || !defined(__arm__) //1 //defined(TEST) || !(defined(__x86_64__) || defined(__arm__))
 /** return number of bytes at beginning of blk that are all zero, assumes __WORDSIZE bit alignment */
 static size_t find_nonzero_c(const unsigned char* blk, const size_t ln)
 {

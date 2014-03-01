@@ -161,7 +161,7 @@ strip: dd_rescue
 	strip -S $<
 
 clean:
-	rm -f $(TARGETS) $(OBJECTS) $(OBJECTS2) dd_rescue.o core test log find_nonzero fmt_no file_zblock find_nonzero_main.o fiemap
+	rm -f $(TARGETS) $(OBJECTS) $(OBJECTS2) dd_rescue.o core test log find_nonzero fmt_no file_zblock find_nonzero_main.o fiemap *.o *.po
 
 find_nonzero: find_nonzero_main.o $(OBJECTS2)
 	$(CC) $(CFLAGS_OPT) -o $@ $^ 
