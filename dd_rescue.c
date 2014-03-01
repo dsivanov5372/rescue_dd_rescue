@@ -1992,9 +1992,12 @@ void printinfo(FILE* const file)
 
 void breakhandler(int sig)
 {
-	fplog(stderr, FATAL, "Caught signal %i \"%s\". Exiting!\n",
-	      sig, strsignal(sig));
-	if (interrupted++) {
+	if (!interrupted++) {
+		fplog(stderr, FATAL, "Caught signal %i \"%s\". Flush and exit after current block!\n",
+		      sig, strsignal(sig));
+	} else {
+		fplog(stderr, FATAL, "Caught signal %i \"%s\". Flush and exit immediately!\n",
+		      sig, strsignal(sig));
 		printreport();
 		cleanup();
 		signal(sig, SIG_DFL);
