@@ -110,6 +110,12 @@ fmt_no.o: fmt_no.c fmt_no.h config.h
 %.po: %.c ddr_plugin.h config.h
 	$(CC) $(CFLAGS) -fPIC -o $@ -c $<
 
+md5.po: md5.c md5.h config.h
+	$(CC) $(CFLAGS_OPT) -fPIC -o $@ -c $<
+
+libddr_MD5.so: libddr_MD5.po md5.po
+	$(CC) -shared -o $@ $^
+
 find_nonzero.o: find_nonzero.c $(FNZ_HEADERS) config.h
 	$(CC) $(CFLAGS_OPT) -c $< $(SSE)
 
