@@ -8,6 +8,14 @@
 
 #include <sys/types.h>
 #include <stdio.h>
+
+
+typedef int (_init_callback)(void **stat, char* param);
+/** open_calback parameters: input file descriptor, input file name,
+ * 	initial offset input file, same 3 params for output file,
+ * 	soft (large) block size, hard (fallback) block size,
+ * 	estimated xfer size, opaque handle
+ */
 typedef int (_open_callback)(int ifd, const char* inm, loff_t ioff, 
 			     int ofd, const char* onm, loff_t ooff, 
 			     unsigned int bsz, unsigned int hsz,
@@ -31,6 +39,8 @@ typedef struct _ddr_plugin {
 	char handles_sparse;
 	/* Internal individual state of plugin */
 	void* state;
+	/* Will be called after loading the plugin */
+	 _init_callback * init_callback;
 	/* Will be called after opening the input and output files */
 	 _open_callback * open_callback;
 	/* Will be called before a block is written */
@@ -39,5 +49,7 @@ typedef struct _ddr_plugin {
 	_close_callback *close_callback;
 	/* Callback filled by the loader: Logging */
 	_fplog_callback *fplog;
+	/* Filled by loader: Parameters */
+	char* param;
 } ddr_plugin_t;
 #endif	/* _DDR_PLUGIN_H */

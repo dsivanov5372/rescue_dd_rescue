@@ -26,6 +26,30 @@ typedef struct _md5_state {
 	unsigned char buflen;
 } md5_state;
 
+char *md5_help = "The MD5 plugin for dd_rescue calculates the md5sum on the fly.\n"
+		" It supports unaligned blocks (arbitrary offsets) and sparse writing.\n"
+		" Parameters: None\n";
+
+int md5_plug_init(void **stat, char* param)
+{
+	int err = 0;
+	while (param) {
+		char* next = strchr(param, ':');
+		if (next)
+			*next++ = 0;
+		if (!strcmp(param, "help"))
+			ddr_plug.fplog(stderr, INFO, "%s", md5_help);
+		/* elif .... */
+		else {
+			ddr_plug.fplog(stderr, FATAL, "MD5 plugin doesn't understand param %s\n",
+				param);
+			++err;
+		}
+		param = next;
+	}
+	return err;
+}
+
 int md5_open(int ifd, const char* inm, loff_t ioff, 
 	     int ofd, const char* onm, loff_t ooff, 
 	     unsigned int bsz, unsigned int hsz,
@@ -129,7 +153,8 @@ ddr_plugin_t ddr_plug = {
 	.slackspace = 0 /*128*/,
 	.needs_align = 0,
 	.handles_sparse = 1,
-	.open_callback = md5_open,
+	.init_callback  = md5_plug_init,
+	.open_callback  = md5_open,
 	.block_callback = md5_block,
 	.close_callback = md5_close,
 };

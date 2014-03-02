@@ -339,6 +339,7 @@ int fplog(FILE* const file, enum ddrlog_t logpre, const char * const fmt, ...)
 size_t max_slack = 0;
 int max_align = 0;
 char not_sparse = 0;
+char plugin_help = 0;
 
 char plugins_loaded = 0;
 char plugins_opened = 0;
@@ -395,7 +396,7 @@ typedef void* VOIDP;
 LISTDECL(VOIDP);
 LISTTYPE(VOIDP) *ddr_plug_handles;
 
-void insert_plugin(void* hdl, const char* nm)
+void insert_plugin(void* hdl, const char* nm, char* param)
 {
 	LISTAPPEND(ddr_plug_handles, hdl, VOIDP);
 	ddr_plugin_t *plug = dlsym(hdl, "ddr_plug");
@@ -414,6 +415,16 @@ void insert_plugin(void* hdl, const char* nm)
 		not_sparse = 1;
 	LISTAPPEND(ddr_plugins, *plug, ddr_plugin_t);
 	plugins_loaded++;
+	if (param && !plug->init_callback) {
+		fplog(stderr, FATAL, "Plugin %s has no init callback to consume passed param %s\n",
+			nm, param);
+		exit(13);
+	}
+	if (plug->init_callback)
+		if (plug->init_callback(&plug->state, param))
+			exit(13);
+	if (param && !memcmp(param, "help", 4))
+		plugin_help++;
 }
 
 
@@ -425,6 +436,9 @@ void load_plugins(char* plugs)
 		next = strchr(plugs, ',');
 		if (next)
 			*next++ = 0;
+		char* param = strchr(plugs, '=');
+		if (param)
+			*param++ = 0;
 		snprintf(path, 255, "libddr_%s.so", plugs);
 		void* hdl = dlopen(path, RTLD_NOW);
 #ifdef TEST_LOCAL_PLUGIN
@@ -437,7 +451,7 @@ void load_plugins(char* plugs)
 			fplog(stderr, WARN, "Could not load plugin %s: %s\n",
 				plugs, strerror(errno));
 		else 
-			insert_plugin(hdl, plugs);
+			insert_plugin(hdl, plugs, param);
 		plugs = next;
 	}
 }
@@ -1943,7 +1957,7 @@ void printhelp()
 	fprintf(stderr, "         -P         use fallocate to preallocate target space,\n");
 #endif
 #ifdef USE_LIBDL
-	fprintf(stderr, "         -L plug1[,plug2[,..]]    load plugins,\n");
+	fprintf(stderr, "         -L plug1[=par1[:par2]][,plug2[,..]]    load plugins,\n");
 #endif
 	fprintf(stderr, "         -w         abort on Write errors (def=no),\n");
 	fprintf(stderr, "         -W         read target block and avoid Writes if identical (def=no),\n");
@@ -2239,16 +2253,6 @@ int main(int argc, char* argv[])
 		printhelp();
 		exit(12);
 	}
-	if (!iname || !oname) {
-		fplog(stderr, FATAL, "both input and output files have to be specified!\n");
-		printhelp();
-		exit(12);
-	}
-
-	if (lname) {
-		c = openfile(lname, O_WRONLY | O_CREAT /*| O_EXCL*/);
-		logfd = fdopen(c, "a");
-	}
 
 #ifdef USE_LIBDL
 	if (plugins)
@@ -2261,7 +2265,22 @@ int main(int argc, char* argv[])
 		fplog(stderr, WARN, "some plugins don't handle sparse, enable -A/--nosparse!\n");
 		nosparse = 1;
 	}
+	if (plugins && reverse) {
+		fplog(stderr, FATAL, "Plugins currently don't handle reverse\n");
+		exit(13);
+	}
 #endif
+
+	if (!iname || !oname) {
+		fplog(stderr, FATAL, "both input and output files have to be specified!\n");
+		printhelp();
+		exit(12);
+	}
+
+	if (lname) {
+		c = openfile(lname, O_WRONLY | O_CREAT /*| O_EXCL*/);
+		logfd = fdopen(c, "a");
+	}
 
 	/* Defaults for blocksizes */
 	if (softbs == 0) {
