@@ -447,7 +447,7 @@ with the primary output file
 .IR outfile .
 Errors when writing to a secondary output file are ignored.
 
-.SS Random data generation
+.SS Data protection by overwriting with random numbers
 .TP 8
 .BI \-z\  RANDSEED \fR,\ \fB\-\-random= RANDSEED
 .PD 0
@@ -506,6 +506,40 @@ generated random numbers and a zero pass; the second PRNG pass writes the
 inverse (bitwise reversed) numbers from the first pass. -4 / --shred4 works
 like -3 / --shred3, with an additional pass with independent random numbers
 as third pass.
+
+.SS Plugins
+Since version 1.42,
+.B dd_rescue
+has an interface for plugins. Plugins have the ability to analyze the
+copied data or to transform it prior to it being written.
+
+.TP 8
+.BI \-L\  plugin1[=param1[:param2[:..]]][,plugin2[=..][,..]]
+.PD 0
+.TP
+.BI \-\-plugins= plugin1[=param1[:param2[:..]]][,plugin2[=..][,..]]
+.PD 1
+loads plugins plugin1 ... and passes parameters to it. All plugins should support
+at least the help parameter and provide information on their usage.
+.br
+Plugins may impose limits on dd_rescue. Plugins that look at the data
+can't work with splice, as this avoids copying data to userspace. Also the
+interface currently does not facilitate reverse direction copy.
+Some plugins may impose further restrictions w.r.t. alignment of data in
+the file or not using sparse detection.
+.br
+See section 
+.B PLUGINS
+for an overview of available plugins.
+
+.SH PLUGINS
+.SS MD5
+When the MD5 plugin is loaded, it will calculate an MD5 hash over the 
+copied data and print the result at the end of the copy operations. 
+It's output should be identical to calling md5sum on the target file 
+(unless you only write part of the file),
+but saves time by not accessing the (possibly large) file a second time.
+THe MD5 plugin handles sparse writes and arbitrary offsets fine.
 
 .SH EXIT STATUS
 On successful completion, 
@@ -566,24 +600,6 @@ but it should use the terminal description database instead.
 Since dd_rescue-1.10, non-seekable input or output files are supported,
 but there's of course limitations to recover errors in such cases.
 .PP
-The modes for overwriting data with pseudo random numbers to securely
-delete sensitive data on purpose only implement a limited number of
-overwrites. While Peter Gutmann's classic analysis concludes that the
-then current harddisk technology requires more overwrites to be really
-secure, the author believes that modern hard disk technology does not
-allow data restoration in sectors that have been overwritten with the
---shred4 mode. This is in compliance with the recommendations from
-BSI GSDS M7.15.
-.br
-However, users should be aware that depending on your filesystem, overwriting
-files with this technology may not render file content safely overwritten
-on hard disk. This is due to journals keeping data or filesystems writing
-data to different locations every time. So here, only overwriting a whole
-partition or disk will be effective. The fact that the hard disk firmware
-has spare sectors to be allocated when regular sectors become flaky or
-faulty may leave traces of files on the medium. The Flash Translation Layer
-on SSDs makes it even harder to be sure that data is truely gone on SSDs.
-.PP
 dd_rescue does not automate the recovery of faulty files or partitions
 by automatically keeping a list of copied sectors and approaching bad spots
 from both sides. There is a helper script dd_rhelp from LAB Valentin that
@@ -597,6 +613,35 @@ tool and which contains the capabilities to automate recovery of bad
 files in the way dd_rhelp does.
 .PP
 Please report bugs to me via email.
+.SS Data destruction considerations
+The modes for overwriting data with pseudo random numbers to securely
+delete sensitive data on purpose only implement a limited number of
+overwrites. While Peter Gutmann's classic analysis concludes that the
+then current harddisk technology requires more overwrites to be really
+secure, the author believes that modern hard disk technology does not
+allow data restoration in sectors that have been overwritten with the
+--shred4 mode. This is in compliance with the recommendations from
+BSI GSDS M7.15.
+.br
+Overwriting whole partitions or disks with random numbers is a fairly safe
+way to destroy data, unless the underlying storage device does too much
+magic. SSDs are doing fancy stuff in their Flash Translation Layer (FTL),
+so this tool might be insufficient to get rid of data. Use 
+SECURITY_ERASE (use hdparm) there (or if available encrypt data with 
+AES256 and safely destroy the key). 
+Normal harddisks have a small risk of leaking a few sectors
+due to reallocation of flaky sectors.
+.br
+For securely destroying single files, your mileage may vary. The more advanced
+your filesystem, the less likely dd_rescue's destruction will be effective.
+In particular, journalling filesystems may carry old data in the journal.
+Filesystems that do copy-on-write (COW) such as btrfs, are very likely to have
+old copies of your supposedly erased file. It might help somewhat to fill the
+filesystems with zeros (dd_rescue -u /dev/zero /path/to/fs/DUMMYNAME) to force
+the filesystem to release and overwrite non-current data after overwriting
+critical files with random numbers. If you can, better destroy a whole
+partition or disk.
+
 .SH SEE ALSO
 .BR README.dd_rescue 
 .BR README.dd_rhelp 
@@ -645,6 +690,8 @@ Removing and (fs)trimming the output file's filesystem
 exists since 1.41. Support for compilation with bionic
 (Android's C library) with most features enabled also 
 came with 1.41.
+.br 
+Plugins exist since 1.42.
 .PP
 Some additional information can be found on
 .br
