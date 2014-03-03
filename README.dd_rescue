@@ -177,6 +177,9 @@ dd_rescue has a few nifty features:
   autogen.sh; make -f Makefile.android config; make -f Makefile.android all
   to build after editing first few lines of Makefile.android to point
   to the location of your local NDK installation.
+* Version 1.42 brought a plugin interface (still evolving) that allows
+  to analyze or transform blocks prior to being written. 1.42 shipped with
+  an MD5 plugin.
 
 
 Copyright
