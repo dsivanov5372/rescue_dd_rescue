@@ -340,6 +340,7 @@ size_t max_slack = 0;
 int max_align = 0;
 char not_sparse = 0;
 char plugin_help = 0;
+char have_block_cb = 0;
 
 char plugins_loaded = 0;
 char plugins_opened = 0;
@@ -425,6 +426,8 @@ void insert_plugin(void* hdl, const char* nm, char* param)
 			exit(13);
 	if (param && !memcmp(param, "help", 4))
 		plugin_help++;
+	if (plug->block_callback)
+		have_block_cb++;
 }
 
 
@@ -1926,10 +1929,10 @@ struct option longopts[] = { 	{"help", 0, NULL, 'h'}, {"verbose", 0, NULL, 'v'},
 #endif
 
 
-void printhelp()
+void printlonghelp()
 {
 	printversion();
-	fprintf(stderr, "dd_rescue copies data from one file (or block device) to another.\n");
+	fprintf(stderr, "dd_rescue copies data from one file (or block device) to others.\n");
 	fprintf(stderr, "USAGE: dd_rescue [options] infile outfile\n");
 	fprintf(stderr, "Options: -s ipos    start position in  input file (default=0),\n");
 	fprintf(stderr, "         -S opos    start position in output file (def=ipos),\n");
@@ -1980,7 +1983,17 @@ void printhelp()
 	fprintf(stderr, " With -2 SEED/SEEDFILE you only get one random pass (r,0).\n\n");
 	fprintf(stderr, "Sizes may be given in units b(=512), k(=1024), M(=1024^2) or G(1024^3) bytes\n");
 	fprintf(stderr, "This program is useful to rescue data in case of I/O errors, because\n");
-	fprintf(stderr, " it does not necessarily abort or truncate the output.\n");
+	fprintf(stderr, " it does not normally abort or truncate the output.\n");
+	fprintf(stderr, "It may also help with securly overwriting data.\n");
+	fprintf(stderr, "Have a look a the man page for more details and long options.\n");
+}
+
+void shortusage()
+{
+	fplog(stderr, INFO, "USAGE: dd_rescue [options] infile outfile\n"
+		"   or: dd_rescue [options] -z/Z/2/3/4 SEED[FILE] outfile\n"
+		" Use dd_rescue -h or dd_rescue --help for more information\n"
+		"  or consult the manpage dd_rescue(1).\n");
 }
 
 #define YESNO(flag) (flag? "yes": "no ")
@@ -2202,7 +2215,7 @@ int main(int argc, char* argv[])
 			case 'A': nosparse = 1; sparse = 0; break;
 			case 'w': abwrerr = 1; break;
 			case 'W': avoidwrite = 1; break;
-			case 'h': printhelp(); exit(0); break;
+			case 'h': printlonghelp(); exit(0); break;
 			case 'V': printversion(); exit(0); break;
 			case 'v': quiet = 0; verbose = 1; break;
 			case 'q': verbose = 0; quiet = 1; break;
@@ -2227,10 +2240,10 @@ int main(int argc, char* argv[])
 			case '3': prng_frnd = 1; if (is_filename(optarg)) prng_sfile = optarg; else prng_seed = readint(optarg); bsim715 = 1; break;
 			case '4': prng_frnd = 1; if (is_filename(optarg)) prng_sfile = optarg; else prng_seed = readint(optarg); bsim715 = 1; bsim715_4 = 1; break;
 			case ':': fplog(stderr, FATAL, "option %c requires an argument!\n", optopt); 
-				printhelp();
+				shortusage();
 				exit(11); break;
 			case '?': fplog(stderr, FATAL, "unknown option %c!\n", optopt, argv[0]);
-				printhelp();
+				shortusage();
 				exit(11); break;
 			default: fplog(stderr, FATAL, "your getopt() is buggy!\n");
 				exit(255);
@@ -2250,7 +2263,7 @@ int main(int argc, char* argv[])
 		oname = argv[optind++];
 	if (optind < argc) {
 		fplog(stderr, FATAL, "spurious options: %s ...\n", argv[optind]);
-		printhelp();
+		shortusage();
 		exit(12);
 	}
 
@@ -2265,15 +2278,19 @@ int main(int argc, char* argv[])
 		fplog(stderr, WARN, "some plugins don't handle sparse, enable -A/--nosparse!\n");
 		nosparse = 1;
 	}
-	if (plugins && reverse) {
+	if (have_block_cb && reverse) {
 		fplog(stderr, FATAL, "Plugins currently don't handle reverse\n");
+		exit(13);
+	}
+	if (have_block_cb && dosplice) {
+		fplog(stderr, FATAL, "Plugins can't handle splice\n");
 		exit(13);
 	}
 #endif
 
 	if (!iname || !oname) {
 		fplog(stderr, FATAL, "both input and output files have to be specified!\n");
-		printhelp();
+		shortusage();
 		exit(12);
 	}
 
