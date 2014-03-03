@@ -23,6 +23,7 @@ BINTARGETS = dd_rescue
 LIBTARGETS = libddr_MD5.so
 TARGETS = $(BINTARGETS) $(LIBTARGETS)
 #TARGETS = libfalloc-dl
+OTHTARGETS = find_nonzero fiemap file_zblock fmt_no md5
 OBJECTS = frandom.o fmt_no.o find_nonzero.o 
 FNZ_HEADERS = find_nonzero.h archdep.h ffs.h
 HEADERS = frandom.h fmt_no.h config.h list.h fstrim.h $(FNZ_HEADERS) splice.h fallocate64.h pread64.h ddr_plugin.h
@@ -90,7 +91,7 @@ endif
 
 default: $(TARGETS)
 
-all: $(TARGETS) find_nonzero fiemap file_zblock fmt_no md5
+all: $(TARGETS) $(OTHTARGETS)
 
 config.h: configure config.h.in
 	./configure
@@ -164,7 +165,7 @@ strip: dd_rescue
 	strip -S $<
 
 clean:
-	rm -f $(TARGETS) $(OBJECTS) $(OBJECTS2) dd_rescue.o core test log find_nonzero fmt_no file_zblock find_nonzero_main.o fiemap *.o *.po
+	rm -f $(TARGETS) $(OTHTARGETS) $(OBJECTS) $(OBJECTS2) core test log *.o *.po
 
 find_nonzero: find_nonzero_main.o $(OBJECTS2)
 	$(CC) $(CFLAGS_OPT) -o $@ $^ 
