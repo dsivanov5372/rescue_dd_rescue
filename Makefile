@@ -161,8 +161,11 @@ nocolor: dd_rescue.c $(HEADERS) $(OBJECTS) $(OBJECTS2)
 static: dd_rescue.c $(HEADERS) $(OBJECTS)
 	$(CC) $(CFLAGS) -DNO_LIBDL -DNO_LIBFALLOCATE -static $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2)
 
-strip: dd_rescue
-	strip -S $<
+strip: $(TARGETS)
+	strip -S $^
+
+strip-all: $(OTHTARGETS)
+	strip -S $^
 
 clean:
 	rm -f $(TARGETS) $(OTHTARGETS) $(OBJECTS) $(OBJECTS2) core test log *.o *.po
