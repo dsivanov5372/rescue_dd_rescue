@@ -50,7 +50,7 @@ ifeq ($(MACH),i386)
 	#SSE = "-msse2 -funroll-loops"
 	#SSE = "-msse2 -funroll-loops -ftree-vectorize"
 	OBJECTS2 = find_nonzero_sse2.o 
-ifeq ($(HAVE_SSE42),1))
+ifeq ($(HAVE_SSE42),1)
 	OBJECTS2 += ffs_sse42.o
 else
 	CFLAGS += -DNO_SSE42
