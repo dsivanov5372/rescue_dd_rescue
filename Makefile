@@ -13,12 +13,15 @@ CFLAGS_OPT = $(CFLAGS) -O3
 INSTALL = install
 INSTALLFLAGS = -s
 prefix = $(DESTDIR)/usr
-#INSTALLDIR = $(prefix)/bin
-INSTALLDIR = $(DESTDIR)/bin
-MANDIR = $(prefix)/share/man/
+INSTALLDIR = $(prefix)/bin
+#INSTALLDIR = $(DESTDIR)/bin
+INSTALLLIBDIR = $(DESTDIR)$(LIBDIR)
+MANDIR = $(prefix)/share/man
 #MYDIR = dd_rescue-$(VERSION)
 MYDIR = dd_rescue
-TARGETS = dd_rescue libddr_MD5.so
+BINTARGETS = dd_rescue 
+LIBTARGETS = libddr_MD5.so
+TARGETS = $(BINTARGETS) $(LIBTARGETS)
 #TARGETS = libfalloc-dl
 OBJECTS = frandom.o fmt_no.o find_nonzero.o 
 FNZ_HEADERS = find_nonzero.h archdep.h ffs.h
@@ -184,9 +187,11 @@ dist: distclean
 
 install: $(TARGETS)
 	mkdir -p $(INSTALLDIR)
-	$(INSTALL) $(INSTALLFLAGS) $(INSTASROOT) -m 755 $(TARGETS) $(INSTALLDIR)
+	$(INSTALL) $(INSTALLFLAGS) $(INSTASROOT) -m 755 $(BINTARGETS) $(INSTALLDIR)
 	#$(INSTALL) $(INSTASROOT) -m 755 -d $(DOCDIR)/dd_rescue
 	#$(INSTALL) $(INSTASROOT) -g root -m 644 README.dd_rescue $(DOCDIR)/dd_rescue/
+	mkdir -p $(INSTALLLIBDIR)
+	$(INSTALL) $(INSTALLFLAGS) $(INSTASROOT) -m 755 $(LIBTARGETS) $(INSTALLLIBDIR)
 	mkdir -p $(MANDIR)/man1
 	$(INSTALL) $(INSTASROOT) -m 644 dd_rescue.1 $(MANDIR)/man1/
 	gzip -9 $(MANDIR)/man1/dd_rescue.1

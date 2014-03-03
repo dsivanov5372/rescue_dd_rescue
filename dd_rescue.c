@@ -444,12 +444,9 @@ void load_plugins(char* plugs)
 			*param++ = 0;
 		snprintf(path, 255, "libddr_%s.so", plugs);
 		void* hdl = dlopen(path, RTLD_NOW);
-#ifdef TEST_LOCAL_PLUGIN
-		if (!hdl) {
-			snprintf(path, 255, "./libddr_%s.so", plugs);
-			hdl = dlopen(path, RTLD_NOW);
-		}
-#endif
+		/* Allow full name (with absolute path if wanted) */
+		if (!hdl) 
+			hdl = dlopen(plugs, RTLD_NOW);
 		if (!hdl)
 			fplog(stderr, WARN, "Could not load plugin %s: %s\n",
 				plugs, strerror(errno));
