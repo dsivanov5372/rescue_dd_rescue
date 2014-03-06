@@ -28,7 +28,7 @@ void probe_sse2();
 #define have_avx2 0
 #define have_sse42 0
 #define ARCH_DETECT do {} while (0)
-#define ARCH_DECLS
+#define ARCH_DECLS ARCH_DECL_386
 #elif defined(NO_AVX2) /* compiler does not support -mavx2 */
 #define have_avx2 0
 extern char have_sse42;
