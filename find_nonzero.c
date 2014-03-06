@@ -24,14 +24,14 @@ static jmp_buf sigill_jmp;
 static void ill_handler(int sig)
 {
 	have_feature = 0;
-	/* As we can't return from handler (as it would resulting in 
-	 * reexecuting the illegal instruction again), we jump back
-	 * using longjmp -- we have restore signal delivery, so the
+	/* As we can't return from handler (as it would result in 
+	 * reexecuting the illegal instruction again - we jump back
+	 * using longjmp) -- we have to restore signal delivery, so the
 	 * program context is back to normal. Otherwise a second
 	 * probe_procedure would not handle SIGILL. */
 	sigset_t sigmask;
- 	sigemptyset(&sigmask); sigaddset(&sigmask, sig);
-       	sigprocmask(SIG_UNBLOCK, &sigmask, NULL);
+	sigemptyset(&sigmask); sigaddset(&sigmask, sig);
+	sigprocmask(SIG_UNBLOCK, &sigmask, NULL);
 	longjmp(sigill_jmp, 1);
 }
 
