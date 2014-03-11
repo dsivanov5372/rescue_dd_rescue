@@ -201,6 +201,7 @@ install: $(TARGETS)
 	gzip -9 $(MANDIR)/man1/dd_rescue.1
 
 check: $(TARGETS) find_nonzero
+	./dd_rescue --version
 	./find_nonzero 2
 	rm -f dd_rescue.copy dd_rescue.copy2
 	./dd_rescue -apP dd_rescue dd_rescue.copy

@@ -23,7 +23,6 @@ static sig_atomic_t have_feature;
 static jmp_buf sigill_jmp;
 static void ill_handler(int sig)
 {
-	have_feature = 0;
 	/* As we can't return from handler (as it would result in 
 	 * reexecuting the illegal instruction again - we jump back
 	 * using longjmp) -- we have to restore signal delivery, so the
@@ -38,7 +37,6 @@ static void ill_handler(int sig)
 char probe_procedure(void (*probefn)(void))
 {
 	signal(SIGILL, ill_handler);
-	signal(SIGSEGV, ill_handler);
 	if (setjmp(sigill_jmp) == 0) {
 		probefn();
 		asm volatile("" : : : "memory");
@@ -46,7 +44,6 @@ char probe_procedure(void (*probefn)(void))
 	} else {
 		have_feature = 0;
 	}
-	signal(SIGSEGV, SIG_DFL);
 	signal(SIGILL, SIG_DFL);
 	return have_feature;
 }
