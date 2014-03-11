@@ -223,8 +223,10 @@ int compare_ext(const int fd1, const int fd2, const struct fiemap_extent* ext, u
 
 #if __WORDSIZE == 64
 #define LL "l"
-#else
+#elif __WORDSIZE == 32
 #define LL "ll"
+#else
+#error __WORDSIZE undefined
 #endif
 
 
@@ -315,7 +317,7 @@ int64_t partoffset(const char* devnm)
 		return -1;
 	err = fscanf(f, "%" LL "i", &val);
 	if (err != 1)
-		fprintf(stderr, "Ouch, failed parsing start ...%lli\n", val);
+		fprintf(stderr, "Ouch, failed parsing start ...%" LL "i\n", val);
 	fclose(f);
 	if ((val & 0xffffffff) != ret) {
 		fprintf(stderr, "Val. inconsistent: %" LL "x <-> %" LL "x\n",

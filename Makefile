@@ -15,7 +15,7 @@ INSTALLFLAGS = -s
 prefix = $(DESTDIR)/usr
 INSTALLDIR = $(prefix)/bin
 #INSTALLDIR = $(DESTDIR)/bin
-INSTALLLIBDIR = $(DESTDIR)$(LIBDIR)
+INSTALLLIBDIR = $(prefix)$(LIB)
 MANDIR = $(prefix)/share/man
 #MYDIR = dd_rescue-$(VERSION)
 MYDIR = dd_rescue
@@ -29,7 +29,8 @@ FNZ_HEADERS = find_nonzero.h archdep.h ffs.h
 HEADERS = frandom.h fmt_no.h config.h list.h fstrim.h $(FNZ_HEADERS) splice.h fallocate64.h pread64.h ddr_plugin.h
 DOCDIR = $(prefix)/share/doc/packages
 INSTASROOT = -o root -g root
-LIBDIR = /usr/lib
+LIB = lib
+LIBDIR = /usr/$(LIB)
 COMPILER = $(shell $(CC) --version | head -n1)
 DEFINES = -DVERSION=\"$(VERSION)\"  -D__COMPILER__="\"$(COMPILER)\"" # -DPLUGSEARCH="\"$(LIBDIR)\""
 OUT = -o dd_rescue
@@ -63,7 +64,7 @@ endif
 endif
 
 ifeq ($(MACH),x86_64)
-	LIBDIR = /usr/lib64
+	LIB = lib64
 	OBJECTS2 = find_nonzero_sse2.o
 ifeq ($(HAVE_SSE42),1)
 	OBJECTS2 += ffs_sse42.o

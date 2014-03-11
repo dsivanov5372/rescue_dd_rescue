@@ -118,6 +118,14 @@ unsigned char* md5_block(unsigned char* bf, int *towr,
 	return bf;
 }
 
+#if __WORDSIZE == 64
+#define LL "l"
+#elif __WORDSIZE == 32
+#define LL "ll"
+#else
+#error __WORDSIZE unknown
+#endif
+
 static char _md5_out_str[36];
 char* md5_out(uint8_t* res)
 {
@@ -141,7 +149,7 @@ int md5_close(loff_t ooff, void **stat)
 	state->md5_pos += left;
 	uint8_t res[16];
 	md5_result(&state->md5, res);
-	ddr_plug.fplog(stderr, INFO, "md5sum %s (%li-%li): %s\n",
+	ddr_plug.fplog(stderr, INFO, "md5sum %s (%" LL "i-%" LL "i): %s\n",
 		state->onm, state->first_ooff, ooff, md5_out(res));
 	free(*stat);
 	return 0;
