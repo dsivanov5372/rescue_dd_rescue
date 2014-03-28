@@ -2,7 +2,7 @@
 # (c) garloff@suse.de, 99/10/09, GNU GPL
 # $Id$
 
-VERSION = 1.42.1
+VERSION = 1.42.2
 
 DESTDIR = 
 
@@ -230,5 +230,11 @@ check: $(TARGETS) find_nonzero
 	du zero zero2
 	cmp zero zero2
 	rm zero zero2
+	rm -f TEST TEST2
+	./dd_rescue -a -b 16k -m 32k /dev/zero TEST
+	./dd_rescue -x -a -b 16k -m32k dd_rescue TEST
+	./dd_rescue -x -a -b 16k -m17k /dev/zero TEST
+	MD5=$$(./dd_rescue -c0 -a -b16k -L ./libddr_MD5.so TEST TEST2 2>&1 | grep md5sum | sed 's/^dd_rescue: (info): md5sum[^:]*: //'); MD5S=$$(md5sum TEST | sed 's/ .*$$//'); echo $$MD5 $$MD5S; if test "$$MD5" != "$$MD5S"; then false; fi
+	rm -f TEST TEST2
 	
 

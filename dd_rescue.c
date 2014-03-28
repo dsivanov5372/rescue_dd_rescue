@@ -2458,8 +2458,9 @@ int main(int argc, char* argv[])
 			
 	check_seekable(ides, &i_chr, "input");
 	check_seekable(odes, &o_chr, "output");
-
-	sparse_output_warn();
+	
+	if (!extend)
+		sparse_output_warn();
 	if (o_chr) {
 		if (!nosparse)
 			fplog(stderr, WARN, "Not using sparse writes for non-seekable output\n");
