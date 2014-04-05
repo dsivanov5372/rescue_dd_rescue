@@ -6,7 +6,7 @@
 
 #include "find_nonzero.h"
 
-#if defined(__arm__)
+#if defined(__a32__)
 /** ASM optimized version for ARM.
  * Inspired by Linaro's strlen() implementation; 
  * we don't even need NEON here, ldmia does the 3x speedup on Cortexes */
