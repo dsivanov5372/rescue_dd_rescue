@@ -47,7 +47,7 @@ void probe_avx2(); void probe_sse42();
 #define OPT_STR (have_avx2? "avx2": (have_sse42? "sse4.2": (have_sse2? "sse2": "c")))
 #define OPT_STR2 (have_avx2? "avx2": (have_sse2? "sse2": "c"))
 
-#elif defined(__arm__)
+#elif defined(__a32__)
 #define HAVE_OPT
 #define have_arm  1
 #define have_avx2 0
@@ -58,6 +58,18 @@ void probe_avx2(); void probe_sse42();
 #define FIND_NONZERO_OPT(x,y) find_nonzero_arm6(x,y)
 #define OPT_STR "arm6"
 #define OPT_STR2 "arm6"
+
+#elif defined(__a64__)
+#define HAVE_OPT
+#define have_arm  1
+#define have_avx2 0
+#define have_sse2 0
+#define have_sse42 0
+#define ARCH_DECLS
+#define ARCH_DETECT do {} while (0)
+#define FIND_NONZERO_OPT(x,y) find_nonzero_arm8(x,y)
+#define OPT_STR "arm8"
+#define OPT_STR2 "arm8"
 
 #else
 #define have_ldmia 0
