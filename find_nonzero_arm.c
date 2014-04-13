@@ -6,7 +6,7 @@
 
 #include "find_nonzero.h"
 
-#if defined(__a32__)
+#if defined(__arm__) && !defined(__a64__)
 /** ASM optimized version for ARM.
  * Inspired by Linaro's strlen() implementation; 
  * we don't even need NEON here, ldmia does the 3x speedup on Cortexes */
@@ -73,5 +73,5 @@ size_t find_nonzero_arm6(const unsigned char *blk, const size_t ln)
 	return res-blk;
 }
 #else
-#warning no point compiling this on non-ARM arch
+#warning no point compiling this on non-ARM 32bit arch
 #endif
