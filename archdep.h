@@ -47,7 +47,7 @@ void probe_avx2(); void probe_sse42();
 #define OPT_STR (have_avx2? "avx2": (have_sse42? "sse4.2": (have_sse2? "sse2": "c")))
 #define OPT_STR2 (have_avx2? "avx2": (have_sse2? "sse2": "c"))
 
-#elif defined(__arm__) && !defined(__a64__)
+#elif defined(__arm__)
 #define HAVE_OPT
 #define have_arm  1
 #define have_avx2 0
@@ -59,7 +59,7 @@ void probe_avx2(); void probe_sse42();
 #define OPT_STR "arm6"
 #define OPT_STR2 "arm6"
 
-#elif defined(__a64__)
+#elif defined(__aarch64__)
 #define HAVE_OPT
 #define have_arm  1
 #define have_avx2 0

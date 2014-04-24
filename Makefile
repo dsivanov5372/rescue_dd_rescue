@@ -82,6 +82,9 @@ MACH := $(shell uname -m |sed 's/armv[0-9a-z]*/arm/')
 ifeq ($(MACH),arm)
 	OBJECTS2 = find_nonzero_arm.o
 endif
+ifeq ($(MACH),aarch64)
+	OBJECTS2 = find_nonzero_arm64.o
+endif
 
 OS = $(shell uname)
 ifeq ($(OS), Linux)

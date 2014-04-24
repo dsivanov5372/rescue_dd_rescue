@@ -6,7 +6,7 @@
 
 #include "find_nonzero.h"
 
-#if defined(__a64__)
+#if defined(__aarch64__)
 /** ASM optimized version for ARMv8.
  * transform the armv6 ldmia form into ldp
  */
