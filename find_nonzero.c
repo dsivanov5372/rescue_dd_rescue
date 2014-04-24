@@ -88,6 +88,7 @@ size_t find_nonzero_rep(const unsigned char* blk, const size_t ln)
 #define mem_clobber	asm("": : : "memory")
 #define RTESTC(sz,routine,rnm,rep,tsz) 	\
 	memset(buf, 0, sz);		\
+	if (sz<tsz) buf[sz] = 1;	\
 	expect = (tsz<sz? tsz: sz);	\
 	gettimeofday(&t1, NULL);	\
 	for (i = 0; i < rep; ++i) {	\
@@ -104,6 +105,7 @@ size_t find_nonzero_rep(const unsigned char* blk, const size_t ln)
 
 #define RTEST2C(sz,routine,rnm,rep,tsz) \
 	memset(buf, 0, tsz);		\
+	if (sz<tsz) buf[sz]= 1;		\
 	expect = (tsz<sz? tsz: sz);	\
 	gettimeofday(&t1, NULL);	\
 	buf[sz] = 0x4c;			\
