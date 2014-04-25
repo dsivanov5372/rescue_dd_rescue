@@ -6,6 +6,10 @@
 #ifndef _DDR_PLUGIN_H
 #define _DDR_PLUGIN_H
 
+#ifdef HAVE_CONFIG_H
+# include "config.h"
+#endif
+
 #include <sys/types.h>
 #include <stdio.h>
 

@@ -6,6 +6,9 @@
  * License: GNU GPLv2 or v3
  */
 
+#define _LARGEFILE64_SOURCE 1
+#define _FILE_OFFSET_BITS 64
+
 #include "ddr_plugin.h"
 
 #include <stdlib.h>
@@ -15,6 +18,9 @@
 #include <assert.h>
 #include <netinet/in.h>
 #include <lzo/lzo1x.h>
+#if !defined(HAVE_PREAD64) || defined(TEST_SYSCALL)
+#include "pread64.h"
+#endif
 
 /* Some bits from lzop -- we strive for some level of compatibility */
 
@@ -47,13 +53,16 @@ typedef struct
     uint32_t extra_seglen;
     uint32_t extrafield_checksum;
      */
+} header_t;
+
+typedef struct {
     uint32_t uncmpr_len;   
     uint32_t cmpr_len;   
-} header_t;
+} blockhdr_t;
 
 #define ADLER32_INIT_VALUE 1
 
-void dummy_hdr(header_t* hdr, uint32_t ln, int seq, uint32_t ucmp_ln)
+void dummy_hdr(header_t* hdr, int seq)
 {
 	memset(hdr, 0, sizeof(header_t));
 	hdr->version = 0x4010;	/* 0x1030 big endian, sigh */
@@ -72,8 +81,12 @@ void dummy_hdr(header_t* hdr, uint32_t ln, int seq, uint32_t ucmp_ln)
 	hdr->extra_seglen = htonl(ln);
 	hdr->extrafield_checksum = htonl(lzo_adler32(ADLER32_INIT_VALUE, (void*)&hdr->extrafield_len, 8));
 	 */
-	hdr->uncmpr_len = htonl(ucmp_ln);
-	hdr->cmpr_len = htonl(ln);
+}
+
+void block_hdr(blockhdr_t* hdr, uint32_t uncompr, uint32_t compr)
+{
+	hdr->uncmpr_len = htonl(uncompr);
+	hdr->cmpr_len = htonl(compr);
 }
 
 /* fwd decl */
@@ -177,11 +190,20 @@ unsigned char* lzo_block(unsigned char* bf, int *towr,
 	size_t dst_len;
 	/* Bulk buffer process */
 	if (state->mode == COMPRESS) {
-		lzo1x_1_compress(bf, *towr, state->buf+3+sizeof(lzop_hdr)+sizeof(header_t), &dst_len, state->workspace);
-		memcpy(state->buf+3, lzop_hdr, sizeof(lzop_hdr));
-		dummy_hdr((header_t*)(state->buf+3+sizeof(lzop_hdr)), dst_len, state->seg_no++, *towr);
-		*towr = dst_len + sizeof(header_t) + sizeof(lzop_hdr);
-		return state->buf+3;
+		lzo1x_1_compress(bf, *towr, 
+				state->buf+3+sizeof(lzop_hdr)+sizeof(header_t)+sizeof(blockhdr_t), 
+				&dst_len, state->workspace);
+		if (ooff == state->first_ooff) {
+			memcpy(state->buf+3, lzop_hdr, sizeof(lzop_hdr));
+			dummy_hdr((header_t*)(state->buf+3+sizeof(lzop_hdr)), state->seg_no++);
+			block_hdr((blockhdr_t*)(state->buf+3+sizeof(lzop_hdr)+sizeof(header_t)), *towr, dst_len);
+			*towr = dst_len + sizeof(header_t) + sizeof(lzop_hdr) + sizeof(blockhdr_t);
+			return state->buf+3; 
+		} else {
+			block_hdr((blockhdr_t*)(state->buf+3+sizeof(lzop_hdr)+sizeof(header_t)), *towr, dst_len);
+			*towr = dst_len + sizeof(blockhdr_t);
+			return state->buf+3+sizeof(lzop_hdr)+sizeof(header_t);
+		}
 	}
 	/* Decompression is more tricky */
 	int err; 
@@ -236,9 +258,9 @@ int lzo_close(loff_t *ooff, void **stat)
 		free(state->buf);
 	if (state->workspace)
 		free(state->workspace);
-	ddr_plug.fplog(stderr, INFO, "Write 4 bytes of zero @ %i to end it all ....\n", *ooff);
 	unsigned int zero = 0;
-	pwrite(state->ofd, &zero, 4, *ooff);
+	if (pwrite64(state->ofd, &zero, 4, *ooff) != 4)
+		ddr_plug.fplog(stderr, WARN, "Writing 4 bytes of zero @ %i to end failed\n", *ooff);
 	*ooff += 4;
 	free(*stat);
 	return 0;
