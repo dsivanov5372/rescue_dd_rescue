@@ -23,8 +23,8 @@ typedef struct _lzo_state {
 	loff_t lzo_pos;
 	const char* onm;
 	void* workspace;
-	void* decombuf;
-	size_t decombuflen;
+	void* buf;
+	size_t buflen;
 	enum compmode mode;
 } lzo_state;
 
@@ -43,7 +43,7 @@ int lzo_plug_init(void **stat, char* param)
 	*stat = (void*)state;
 	state->mode = AUTO;
 	state->workspace = NULL;
-	state->decombuflen = 0;
+	state->buflen = 0;
 	while (param) {
 		char* next = strchr(param, ':');
 		if (next)
@@ -83,8 +83,20 @@ int lzo_open(int ifd, const char* inm, loff_t ioff,
 			return -1;
 		}
 	}
-	if (state->mode == COMPRESS)
+	if (state->mode == COMPRESS) {
 		state->workspace = malloc(LZO1X_1_MEM_COMPRESS);
+		if (!state->workspace)
+			abort();
+		state->buflen = bsz + (bsz>>6) + 8;
+	} else {
+		state->buflen = 4*bsz;
+	}
+	state->buf = malloc(state->buflen);
+	if (!state->buf) {
+		ddr_plug.fplog(stderr, FATAL, "Can't allocate buffer of size %i for de/compression!\n", state->buflen);
+		state->buflen = 0;
+		return -1;
+	}
 	return 0;
 }
 
@@ -162,8 +174,8 @@ int lzo_close(loff_t ooff, void **stat)
 	state->lzo_pos += left;
 	//ddr_plug.fplog(stderr, INFO, "md5sum %s (%" LL "i-%" LL "i): %s\n",
 	//	state->onm, state->first_ooff, ooff, md5_out(res));
-	if (state->decombuflen)
-		free(state->decombuf);
+	if (state->buflen)
+		free(state->buf);
 	if (state->workspace)
 		free(state->workspace);
 	free(*stat);
