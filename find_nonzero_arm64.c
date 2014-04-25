@@ -10,6 +10,12 @@
 /** ASM optimized version for ARMv8.
  * transform the armv6 ldmia form into ldp
  */
+
+#ifdef  USE_PREFETCH
+#define PREFETCH(x) "	prfm pldl1keep,[%0," #x "]	\n"
+#else
+#define PREFETCH(x) 
+#endif
 size_t find_nonzero_arm8(const unsigned char *blk, const size_t ln)
 {
 	/*
@@ -19,18 +25,23 @@ size_t find_nonzero_arm8(const unsigned char *blk, const size_t ln)
 	register unsigned char* res;
 	const register unsigned char* end = blk+ln;
 	asm volatile(
-	//".align 4			\n"
+//	".align 4			\n"
+	PREFETCH(0)
+	PREFETCH(64)
+	PREFETCH(128)
+	PREFETCH(192)
 	"1:				\n"
 	"	ldp x10,x11,[%0],#16	\n"	/* Need #16; #8 is not scaled here. (WHY?) */
 	"	cmp x10, #0		\n"
 	"	bne 2f			\n"
-	"	ldp x12,x13,[%0],#16	\n"	/* Should we use ldnp - don't cache ? */
+	"	ldp x12,x13,[%0],#16	\n"	/* ldnp (don't cache) does not support post-indexed */
 	"	cmp x11, #0		\n"
 	"	bne 3f			\n"
 	"	cmp x12, #0		\n"
 	"	bne 4f			\n"
 	"	cmp x13, #0		\n"
 	"	bne 5f			\n"
+	PREFETCH(256)
 	"	cmp %0, %2		\n"	/* end? */
 	"	blt 1b			\n"
 	"	mov %0, %2		\n"	
