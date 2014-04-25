@@ -20,7 +20,7 @@ MANDIR = $(prefix)/share/man
 #MYDIR = dd_rescue-$(VERSION)
 MYDIR = dd_rescue
 BINTARGETS = dd_rescue 
-LIBTARGETS = libddr_MD5.so
+LIBTARGETS = libddr_MD5.so libddr_lzo.so
 TARGETS = $(BINTARGETS) $(LIBTARGETS)
 #TARGETS = libfalloc-dl
 OTHTARGETS = find_nonzero fiemap file_zblock fmt_no md5
@@ -123,6 +123,9 @@ md5.po: md5.c md5.h config.h
 
 libddr_MD5.so: libddr_MD5.po md5.po
 	$(CC) -shared -o $@ $^
+
+libddr_lzo.so: libddr_lzo.po
+	$(CC) -shared -o $@ $^ -llzo2
 
 find_nonzero.o: find_nonzero.c $(FNZ_HEADERS) config.h
 	$(CC) $(CFLAGS_OPT) -c $< $(SSE)

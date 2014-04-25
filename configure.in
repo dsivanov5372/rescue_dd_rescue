@@ -1,4 +1,4 @@
-AC_INIT(dd_rescue, 1.41, kurt@garloff.de)
+AC_INIT(dd_rescue, 1.43, kurt@garloff.de)
 AC_CONFIG_HEADER(config.h)
 AC_PROG_CC
 AC_C_CONST
@@ -6,10 +6,11 @@ AC_C_INLINE
 AC_HEADER_STDC
 #AC_PROG_INSTALL
 #CFLAGS="$CFLAGS -DHAVE_CONFIG_H"
-AC_CHECK_HEADERS([fallocate.h dlfcn.h unistd.h attr/xattr.h sys/acl.h sys/ioctl.h endian.h linux/fs.h linux/fiemap.h stdint.h])
+AC_CHECK_HEADERS([fallocate.h dlfcn.h unistd.h attr/xattr.h sys/acl.h sys/ioctl.h endian.h linux/fs.h linux/fiemap.h stdint.h lzo/lzo1x.h])
 AC_CHECK_FUNCS([ffs ffsl fallocate64 splice getopt_long open64 pread pread64 lseek64 stat64 posix_fadvise posix_fadvise64 __builtin_prefetch])
 AC_CHECK_LIB(dl,dlsym)
 AC_CHECK_LIB(fallocate,linux_fallocate64)
+AC_CHECK_LIB(lzo2,lzo1x_1_compress)
 
 dnl @synopsis CC_FLAGS_CHECK [compiler flags] 
 dnl @summary check whether compiler supports given C flags or not 
