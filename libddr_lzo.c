@@ -183,30 +183,32 @@ int lzo_open(int ifd, const char* inm, loff_t ioff,
 	return 0;
 }
 
-unsigned char* lzo_block(unsigned char* bf, int *towr, 
-			 loff_t ooff, void **stat)
+unsigned char* lzo_compress(unsigned char *bf, int *towr,
+			    loff_t ooff, lzo_state *state)
 {
-	lzo_state *state = (lzo_state*)*stat;
 	size_t dst_len;
-	/* Bulk buffer process */
-	if (state->mode == COMPRESS) {
-		lzo1x_1_compress(bf, *towr, 
-				state->buf+3+sizeof(lzop_hdr)+sizeof(header_t)+sizeof(blockhdr_t), 
-				&dst_len, state->workspace);
-		if (ooff == state->first_ooff) {
-			memcpy(state->buf+3, lzop_hdr, sizeof(lzop_hdr));
-			dummy_hdr((header_t*)(state->buf+3+sizeof(lzop_hdr)), state->seg_no++);
-			block_hdr((blockhdr_t*)(state->buf+3+sizeof(lzop_hdr)+sizeof(header_t)), *towr, dst_len);
-			*towr = dst_len + sizeof(header_t) + sizeof(lzop_hdr) + sizeof(blockhdr_t);
-			return state->buf+3; 
-		} else {
-			block_hdr((blockhdr_t*)(state->buf+3+sizeof(lzop_hdr)+sizeof(header_t)), *towr, dst_len);
-			*towr = dst_len + sizeof(blockhdr_t);
-			return state->buf+3+sizeof(lzop_hdr)+sizeof(header_t);
-		}
+	lzo1x_1_compress(bf, *towr, 
+			state->buf+3+sizeof(lzop_hdr)+sizeof(header_t)+sizeof(blockhdr_t), 
+			&dst_len, state->workspace);
+	if (ooff == state->first_ooff) {
+		memcpy(state->buf+3, lzop_hdr, sizeof(lzop_hdr));
+		dummy_hdr((header_t*)(state->buf+3+sizeof(lzop_hdr)), state->seg_no++);
+		block_hdr((blockhdr_t*)(state->buf+3+sizeof(lzop_hdr)+sizeof(header_t)), *towr, dst_len);
+		*towr = dst_len + sizeof(header_t) + sizeof(lzop_hdr) + sizeof(blockhdr_t);
+		return state->buf+3; 
+	} else {
+		block_hdr((blockhdr_t*)(state->buf+3+sizeof(lzop_hdr)+sizeof(header_t)), *towr, dst_len);
+		*towr = dst_len + sizeof(blockhdr_t);
+		return state->buf+3+sizeof(lzop_hdr)+sizeof(header_t);
 	}
-	/* Decompression is more tricky */
+}
+
+unsigned char* lzo_decompress(unsigned char* bf, int *towr,
+				loff_t ooff, lzo_state *state)
+{
+	/* Decompression is tricky */
 	int err; 
+	size_t dst_len;
 	do {
 		dst_len = state->buflen;
 		err = lzo1x_decompress_safe(bf, *towr, state->buf, &dst_len, NULL);
@@ -246,6 +248,18 @@ unsigned char* lzo_block(unsigned char* bf, int *towr,
 	} while (err == LZO_E_OUTPUT_OVERRUN);
 	*towr = dst_len;
 	return state->buf;
+}
+
+
+unsigned char* lzo_block(unsigned char* bf, int *towr, 
+			 loff_t ooff, void **stat)
+{
+	lzo_state *state = (lzo_state*)*stat;
+	/* Bulk buffer process */
+	if (state->mode == COMPRESS) 
+		return lzo_compress(bf, towr, ooff, state);
+	else
+		return lzo_decompress(bf, towr, ooff, state);
 }
 
 int lzo_close(loff_t *ooff, void **stat)
