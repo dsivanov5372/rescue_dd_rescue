@@ -17,6 +17,7 @@
 #include <unistd.h>
 #include <assert.h>
 #include <netinet/in.h>
+#include <sys/stat.h>
 #include <lzo/lzo1x.h>
 #if !defined(HAVE_PREAD64) || defined(TEST_SYSCALL)
 #include "pread64.h"
@@ -43,9 +44,10 @@ typedef struct
     uint32_t mtime_high;
     // Do this for alignment
     unsigned char nmlen;
-    char name[7];
+    char name[15];
     
     uint32_t hdr_checksum;	/* crc32 or adler32 */
+
     /* only if flags & F_H_EXTRA_FIELD */
    
     /* 
@@ -58,22 +60,51 @@ typedef struct
 typedef struct {
     uint32_t uncmpr_len;   
     uint32_t cmpr_len;   
+    uint32_t uncmpr_chksum;
+    uint32_t cmpr_chksum;
 } blockhdr_t;
 
 #define ADLER32_INIT_VALUE 1
 
-void dummy_hdr(header_t* hdr, int seq)
+#define MIN(a,b) ((a)<(b)? (a): (b))
+
+/* fwd decl */
+ddr_plugin_t ddr_plug;
+
+enum compmode {AUTO, COMPRESS, DECOMPRESS};
+
+typedef struct _lzo_state {
+	loff_t first_ooff;
+	const char *iname, *oname;
+	void *workspace;
+	void *buf, *carry;
+	size_t buflen, carrylen;
+	uint32_t flags;
+	int ofd;
+	enum compmode mode;
+} lzo_state;
+
+void lzo_hdr(header_t* hdr, lzo_state *state)
 {
 	memset(hdr, 0, sizeof(header_t));
-	hdr->version = 0x4010;	/* 0x1030 big endian, sigh */
-	hdr->lib_version = 0x6020;
-	hdr->version_needed_to_extract = 0x4009;
+	hdr->version = ntohs(0x1024);
+	hdr->lib_version = ntohs(LZO_VERSION);
+	hdr->version_needed_to_extract = ntohs(0x0940);
 	hdr->method = 1;
 	hdr->level = 5;
-	hdr->flags = 0x00000003UL;	/* Unix | Extra_Field */
-	hdr->nmlen = 7;
-	char name[8];
-	sprintf(name, "%07x", seq); memcpy(hdr->name, name, 7);
+	/* Notes: We want checksums on compressed content; lzop forces us to do both then 
+	 * CRC32C has better error protection quality than adler32 -- but the implementation
+	 * in liblzo is rather slow, so stick with adler32 for now ... */
+	state->flags = 0x03000003UL;	/* UNIX | ADLER32_C | ADLER32_D */
+	hdr->flags = ntohl(state->flags);
+	hdr->nmlen = 15;
+	memcpy(hdr->name, state->oname, MIN(15,strlen(state->oname)));
+	struct stat stbf;
+	if (!stat(state->iname, &stbf)) {
+		hdr->mode = ntohl(stbf.st_mode);
+		hdr->mtime_low = ntohl(stbf.st_mtime & 0xffffffff);
+		hdr->mtime_high = ntohl(stbf.st_mtime >> 32);
+	}
 	hdr->hdr_checksum = htonl(lzo_adler32(ADLER32_INIT_VALUE, (void*)hdr, offsetof(header_t, hdr_checksum)));
 	
 	/*
@@ -83,26 +114,13 @@ void dummy_hdr(header_t* hdr, int seq)
 	 */
 }
 
-void block_hdr(blockhdr_t* hdr, uint32_t uncompr, uint32_t compr)
+void block_hdr(blockhdr_t* hdr, uint32_t uncompr, uint32_t compr, uint32_t unc_adl, void *cdata)
 {
 	hdr->uncmpr_len = htonl(uncompr);
 	hdr->cmpr_len = htonl(compr);
+	hdr->uncmpr_chksum = htonl(unc_adl);
+	hdr->cmpr_chksum = htonl(lzo_adler32(ADLER32_INIT_VALUE, cdata, compr));
 }
-
-/* fwd decl */
-ddr_plugin_t ddr_plug;
-
-enum compmode {AUTO, COMPRESS, DECOMPRESS};
-
-typedef struct _lzo_state {
-	loff_t first_ooff;
-	void *workspace;
-	void *buf, *carry;
-	size_t buflen, carrylen;
-	unsigned int seg_no;
-	int ofd;
-	enum compmode mode;
-} lzo_state;
 
 char *lzo_help = "The lzo plugin for dd_rescue de/compresses data on the fly.\n"
 	//	" It supports unaligned blocks (arbitrary offsets) and sparse writing.\n"
@@ -148,7 +166,8 @@ int lzo_open(int ifd, const char* inm, loff_t ioff,
 {
 	lzo_state *state = (lzo_state*)*stat;
 	state->first_ooff = ooff;
-	state->seg_no = 0;
+	state->iname = inm;
+	state->oname = onm;
 	state->ofd = ofd;
 	if (lzo_init() != LZO_E_OK) {
 		ddr_plug.fplog(stderr, FATAL, "Failed to initialize lzo library!");
@@ -187,19 +206,21 @@ unsigned char* lzo_compress(unsigned char *bf, int *towr,
 			    loff_t ooff, lzo_state *state)
 {
 	size_t dst_len;
-	lzo1x_1_compress(bf, *towr, 
-			state->buf+3+sizeof(lzop_hdr)+sizeof(header_t)+sizeof(blockhdr_t), 
-			&dst_len, state->workspace);
+	void *hdrp = state->buf+3+sizeof(lzop_hdr);
+	void *cdata = hdrp+sizeof(header_t)+sizeof(blockhdr_t);
+	/* Compat with lzop forces us to compute adler32 also on uncompressed data
+	 * when doing it for compressed (I would preder only the latter) */
+	uint32_t unc_adl = lzo_adler32(ADLER32_INIT_VALUE, bf, *towr);
+	lzo1x_1_compress(bf, *towr, cdata, &dst_len, state->workspace);
+	block_hdr((blockhdr_t*)(hdrp+sizeof(header_t)), *towr, dst_len, unc_adl, cdata);
 	if (ooff == state->first_ooff) {
 		memcpy(state->buf+3, lzop_hdr, sizeof(lzop_hdr));
-		dummy_hdr((header_t*)(state->buf+3+sizeof(lzop_hdr)), state->seg_no++);
-		block_hdr((blockhdr_t*)(state->buf+3+sizeof(lzop_hdr)+sizeof(header_t)), *towr, dst_len);
+		lzo_hdr((header_t*)hdrp, state);
 		*towr = dst_len + sizeof(header_t) + sizeof(lzop_hdr) + sizeof(blockhdr_t);
 		return state->buf+3; 
 	} else {
-		block_hdr((blockhdr_t*)(state->buf+3+sizeof(lzop_hdr)+sizeof(header_t)), *towr, dst_len);
 		*towr = dst_len + sizeof(blockhdr_t);
-		return state->buf+3+sizeof(lzop_hdr)+sizeof(header_t);
+		return hdrp+sizeof(header_t);
 	}
 }
 
@@ -209,6 +230,11 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 	/* Decompression is tricky */
 	int err; 
 	size_t dst_len;
+	if (ooff == 0) {
+		/* Parse header */
+		/* Validate header checksum */
+	}
+	/* Now do processing: Do we have a full block */
 	do {
 		dst_len = state->buflen;
 		err = lzo1x_decompress_safe(bf, *towr, state->buf, &dst_len, NULL);
