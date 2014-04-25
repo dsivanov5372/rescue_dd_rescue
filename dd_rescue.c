@@ -372,7 +372,7 @@ void call_plugins_close()
 	LISTTYPE(ddr_plugin_t) *plug;
 	LISTFOREACH(ddr_plugins, plug) {
 		if (LISTDATA(plug).close_callback) {
-			int err = LISTDATA(plug).close_callback(opos, &LISTDATA(plug).state);
+			int err = LISTDATA(plug).close_callback(&opos, &LISTDATA(plug).state);
 			if (err)
 				fplog(stderr, WARN, "Error closing plugin %s: %s!\n",
 					LISTDATA(plug).name, strerror(err));

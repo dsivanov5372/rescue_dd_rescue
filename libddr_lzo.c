@@ -11,7 +11,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <unistd.h>
 #include <assert.h>
+#include <netinet/in.h>
 #include <lzo/lzo1x.h>
 
 /* Some bits from lzop -- we strive for some level of compatibility */
@@ -29,40 +31,49 @@ typedef struct
     unsigned char method;
     unsigned char level;
     uint32_t flags;
-    uint32_t filter;
+    //uint32_t filter;
     uint32_t mode;
     uint32_t mtime_low;
     uint32_t mtime_high;
     // Do this for alignment
     unsigned char nmlen;
-    union { 
-	char name[7];
-	struct {
-		char pad[3];
-	    	uint32_t seglen;
-	};
-    };
+    char name[7];
     
     uint32_t hdr_checksum;	/* crc32 or adler32 */
     /* only if flags & F_H_EXTRA_FIELD */
-    /*
+   
+    /* 
     uint32_t extrafield_len;
+    uint32_t extra_seglen;
     uint32_t extrafield_checksum;
      */
+    uint32_t uncmpr_len;   
+    uint32_t cmpr_len;   
 } header_t;
 
+#define ADLER32_INIT_VALUE 1
 
-void dummy_hdr(header_t* hdr, uint32_t ln)
+void dummy_hdr(header_t* hdr, uint32_t ln, int seq, uint32_t ucmp_ln)
 {
 	memset(hdr, 0, sizeof(header_t));
-	hdr->version = 0x3010;	/* 0x1030 big endian, sigh */
+	hdr->version = 0x4010;	/* 0x1030 big endian, sigh */
 	hdr->lib_version = 0x6020;
 	hdr->version_needed_to_extract = 0x4009;
 	hdr->method = 1;
 	hdr->level = 5;
-	hdr->flags = 3;	/* Unix */
+	hdr->flags = 0x00000003UL;	/* Unix | Extra_Field */
 	hdr->nmlen = 7;
-	hdr->seglen = ln;
+	char name[8];
+	sprintf(name, "%07x", seq); memcpy(hdr->name, name, 7);
+	hdr->hdr_checksum = htonl(lzo_adler32(ADLER32_INIT_VALUE, (void*)hdr, offsetof(header_t, hdr_checksum)));
+	
+	/*
+	hdr->extrafield_len = htonl(4);
+	hdr->extra_seglen = htonl(ln);
+	hdr->extrafield_checksum = htonl(lzo_adler32(ADLER32_INIT_VALUE, (void*)&hdr->extrafield_len, 8));
+	 */
+	hdr->uncmpr_len = htonl(ucmp_ln);
+	hdr->cmpr_len = htonl(ln);
 }
 
 /* fwd decl */
@@ -72,11 +83,11 @@ enum compmode {AUTO, COMPRESS, DECOMPRESS};
 
 typedef struct _lzo_state {
 	loff_t first_ooff;
-	//loff_t lzo_pos;
-	//const char* onm;
-	void* workspace;
-	void* buf;
-	size_t buflen;
+	void *workspace;
+	void *buf, *carry;
+	size_t buflen, carrylen;
+	unsigned int seg_no;
+	int ofd;
 	enum compmode mode;
 } lzo_state;
 
@@ -96,6 +107,7 @@ int lzo_plug_init(void **stat, char* param)
 	state->mode = AUTO;
 	state->workspace = NULL;
 	state->buflen = 0;
+	state->carrylen = 0;
 	while (param) {
 		char* next = strchr(param, ':');
 		if (next)
@@ -123,8 +135,8 @@ int lzo_open(int ifd, const char* inm, loff_t ioff,
 {
 	lzo_state *state = (lzo_state*)*stat;
 	state->first_ooff = ooff;
-	//state->lzo_pos = 0;
-	//state->onm = onm;
+	state->seg_no = 0;
+	state->ofd = ofd;
 	if (lzo_init() != LZO_E_OK) {
 		ddr_plug.fplog(stderr, FATAL, "Failed to initialize lzo library!");
 		return -1;
@@ -145,7 +157,7 @@ int lzo_open(int ifd, const char* inm, loff_t ioff,
 			ddr_plug.fplog(stderr, FATAL, "Can't allocate workspace of size %i for compression!\n", LZO1X_1_MEM_COMPRESS);
 			return -1;
 		}
-		state->buflen = bsz + (bsz>>4) + 64 + sizeof(lzop_hdr) + sizeof(header_t);
+		state->buflen = bsz + (bsz>>4) + 72 + sizeof(lzop_hdr) + sizeof(header_t);
 	} else 
 		state->buflen = 4*bsz;
 
@@ -165,13 +177,13 @@ unsigned char* lzo_block(unsigned char* bf, int *towr,
 	size_t dst_len;
 	/* Bulk buffer process */
 	if (state->mode == COMPRESS) {
-		lzo1x_1_compress(bf, *towr, state->buf+sizeof(lzop_hdr)+sizeof(header_t), &dst_len, state->workspace);
-		memcpy(state->buf, lzop_hdr, sizeof(lzop_hdr));
-		dummy_hdr((header_t*)(state->buf+sizeof(lzop_hdr)), *towr);
-		*towr = dst_len + sizeof(header_t) + (ooff == state->first_ooff? sizeof(lzop_hdr): 0);
-		return state->buf + (ooff == state->first_ooff? 0: sizeof(lzop_hdr));
+		lzo1x_1_compress(bf, *towr, state->buf+3+sizeof(lzop_hdr)+sizeof(header_t), &dst_len, state->workspace);
+		memcpy(state->buf+3, lzop_hdr, sizeof(lzop_hdr));
+		dummy_hdr((header_t*)(state->buf+3+sizeof(lzop_hdr)), dst_len, state->seg_no++, *towr);
+		*towr = dst_len + sizeof(header_t) + sizeof(lzop_hdr);
+		return state->buf+3;
 	}
-	/*Decompression is more tricky */
+	/* Decompression is more tricky */
 	int err; 
 	do {
 		dst_len = state->buflen;
@@ -214,22 +226,20 @@ unsigned char* lzo_block(unsigned char* bf, int *towr,
 	return state->buf;
 }
 
-#if __WORDSIZE == 64
-#define LL "l"
-#elif __WORDSIZE == 32
-#define LL "ll"
-#else
-#error __WORDSIZE unknown
-#endif
-
-int lzo_close(loff_t ooff, void **stat)
+int lzo_close(loff_t *ooff, void **stat)
 {
 	lzo_state *state = (lzo_state*)*stat;
 	//loff_t len = ooff-state->first_ooff;
+	if (state->carrylen)
+		free(state->carry);
 	if (state->buflen)
 		free(state->buf);
 	if (state->workspace)
 		free(state->workspace);
+	ddr_plug.fplog(stderr, INFO, "Write 4 bytes of zero @ %i to end it all ....\n", *ooff);
+	unsigned int zero = 0;
+	pwrite(state->ofd, &zero, 4, *ooff);
+	*ooff += 4;
 	free(*stat);
 	return 0;
 }

@@ -22,7 +22,7 @@ typedef int (_open_callback)(int ifd, const char* inm, loff_t ioff,
 			     loff_t exfer, void **stat);
 typedef unsigned char* (_block_callback)(unsigned char* bf, int *towr, 
 				         loff_t ooff, void **stat);
-typedef int (_close_callback)(loff_t ooff, void **stat);
+typedef int (_close_callback)(loff_t *ooff, void **stat);
 
 enum ddrlog_t { NOHDR=0, INFO, WARN, FATAL };
 typedef int (_fplog_callback)(FILE* const f, enum ddrlog_t logpre, 

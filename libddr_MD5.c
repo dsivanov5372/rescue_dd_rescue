@@ -135,11 +135,11 @@ char* md5_out(uint8_t* res)
 	return _md5_out_str;
 }
 
-int md5_close(loff_t ooff, void **stat)
+int md5_close(loff_t *ooff, void **stat)
 {
-	md5_block(0, 0, ooff, stat);
+	md5_block(0, 0, *ooff, stat);
 	md5_state *state = (md5_state*)*stat;
-	loff_t len = ooff-state->first_ooff;
+	loff_t len = *ooff-state->first_ooff;
 	int left = len - state->md5_pos;
 	/*
 	fprintf(stderr, "DEBUG: %s: len=%li, md5pos=%li\n", 
@@ -150,7 +150,7 @@ int md5_close(loff_t ooff, void **stat)
 	uint8_t res[16];
 	md5_result(&state->md5, res);
 	ddr_plug.fplog(stderr, INFO, "md5sum %s (%" LL "i-%" LL "i): %s\n",
-		state->onm, state->first_ooff, ooff, md5_out(res));
+		state->onm, state->first_ooff, *ooff, md5_out(res));
 	free(*stat);
 	return 0;
 }
