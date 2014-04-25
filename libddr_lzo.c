@@ -20,8 +20,8 @@ enum compmode {AUTO, COMPRESS, DECOMPRESS};
 
 typedef struct _lzo_state {
 	loff_t first_ooff;
-	loff_t lzo_pos;
-	const char* onm;
+	//loff_t lzo_pos;
+	//const char* onm;
 	void* workspace;
 	void* buf;
 	size_t buflen;
@@ -71,8 +71,12 @@ int lzo_open(int ifd, const char* inm, loff_t ioff,
 {
 	lzo_state *state = (lzo_state*)*stat;
 	state->first_ooff = ooff;
-	state->lzo_pos = 0;
-	state->onm = onm;
+	//state->lzo_pos = 0;
+	//state->onm = onm;
+	if (lzo_init() != LZO_E_OK) {
+		ddr_plug.fplog(stderr, FATAL, "Failed to initialize lzo library!");
+		return -1;
+	}
 	if (state->mode == AUTO) {
 		if (!strcmp(inm+strlen(inm)-2, "zo"))
 			state->mode = DECOMPRESS;
@@ -85,12 +89,14 @@ int lzo_open(int ifd, const char* inm, loff_t ioff,
 	}
 	if (state->mode == COMPRESS) {
 		state->workspace = malloc(LZO1X_1_MEM_COMPRESS);
-		if (!state->workspace)
-			abort();
+		if (!state->workspace) {
+			ddr_plug.fplog(stderr, FATAL, "Can't allocate workspace of size %i for compression!\n", LZO1X_1_MEM_COMPRESS);
+			return -1;
+		}
 		state->buflen = bsz + (bsz>>6) + 8;
-	} else {
+	} else 
 		state->buflen = 4*bsz;
-	}
+
 	state->buf = malloc(state->buflen);
 	if (!state->buf) {
 		ddr_plug.fplog(stderr, FATAL, "Can't allocate buffer of size %i for de/compression!\n", state->buflen);
@@ -100,56 +106,57 @@ int lzo_open(int ifd, const char* inm, loff_t ioff,
 	return 0;
 }
 
-/* This is rather complex, as we handle both non-aligned first block size
- * as well as sparse files */
 unsigned char* lzo_block(unsigned char* bf, int *towr, 
 			 loff_t ooff, void **stat)
 {
 	lzo_state *state = (lzo_state*)*stat;
-	int off = 0;
-	/* First block */
-	if (state->buflen) {
-		/* Handle leftover bytes ... */
-		if (ooff-state->first_ooff > state->lzo_pos+state->buflen) {
-			/* Sparse: We have skipped writes ... */
-			memset(state->buf+state->buflen, 0, 64-state->buflen);
-			lzo_64(state->buf, &state->md5);
-			state->lzo_pos += 64;
-			memset(state->buf, 0, state->buflen);
-		} else if (bf) {
-			off = 64-state->buflen;
-			memcpy(state->buf+state->buflen, bf, off);
-			lzo_64(state->buf, &state->md5);
-			state->lzo_pos += 64;
-			memset(state->buf, 0, 64);
-		}
-	}
-	assert(state->lzo_pos <= ooff+off-state->first_ooff);
-	/* Bulk sparse process */
-	while (ooff-state->first_ooff > state->lzo_pos+63) {
-		lzo_64(state->buf, &state->md5);
-		state->lzo_pos += 64;
-	}
-	if (!bf)
-		return bf;
-	int left = ooff-state->first_ooff - state->lzo_pos;
-	if (left > 0) {
-		memcpy(state->buf+64-left, bf, left);
-		lzo_64(state->buf, &state->md5);
-		state->lzo_pos += 64;
-		off += left;
-		memset(state->buf+64-left, 0, left);
-	}
+	size_t dst_len;
 	/* Bulk buffer process */
-	int mylen = *towr - off; mylen -= mylen%64;
-	lzo_calc(bf+off, mylen, 0, &state->md5);
-	off += mylen; state->lzo_pos += mylen;
-	/* Copy remainder into buffer */
-	assert(state->lzo_pos == ooff+off-state->first_ooff);
-	state->buflen = *towr - off;
-	if (state->buflen)
-		memcpy(state->buf, bf+off, state->buflen);
-	return bf;
+	if (state->mode == COMPRESS) {
+		lzo1x_1_compress(bf, *towr, state->buf, &dst_len, state->workspace);
+		*towr = dst_len;
+		return state->buf;
+	}
+	/* Decompression is more tricky */
+	int err; 
+	do {
+		dst_len = state->buflen;
+		err = lzo1x_decompress_safe(bf, *towr, state->buf, &dst_len, NULL);
+		switch (err) {
+		case LZO_E_INPUT_OVERRUN:
+			/* TODO: Partial block, handle! */
+			ddr_plug.fplog(stderr, FATAL, "Overrun %i %i %i; try larger block sizes\n", *towr, state->buflen, dst_len);
+			abort();
+			break;
+		case LZO_E_EOF_NOT_FOUND:
+			/* TODO: Partial block, handle! */
+			ddr_plug.fplog(stderr, FATAL, "EOF not found %i %i %i; try larger block sizes\n", *towr, state->buflen, dst_len);
+			abort();
+			break;
+		case LZO_E_OUTPUT_OVERRUN:
+			state->buflen *= 2;
+			state->buf = realloc(state->buf, state->buflen);
+			if (!state->buf) {
+				ddr_plug.fplog(stderr, FATAL, "Could not allocate output buffer of %i bytes!\n", state->buflen);
+				abort();
+			}
+			break;
+		case LZO_E_LOOKBEHIND_OVERRUN:
+			ddr_plug.fplog(stderr, FATAL, "Lookbehind overrun %i %i %i; data corrupt?\n", *towr, state->buflen, dst_len);
+			abort();
+			break;
+		case LZO_E_ERROR:
+			ddr_plug.fplog(stderr, FATAL, "Unspecified error %i %i %i; data corrupt?\n", *towr, state->buflen, dst_len);
+			abort();
+			break;
+		case LZO_E_INPUT_NOT_CONSUMED:
+			/* TODO: Leftover bytes, store */
+			ddr_plug.fplog(stderr, INFO, "Input not fully consumed %i %i %i\n", *towr, state->buflen, dst_len);
+			break;
+		}
+	} while (err == LZO_E_OUTPUT_OVERRUN);
+	*towr = dst_len;
+	return state->buf;
 }
 
 #if __WORDSIZE == 64
@@ -162,18 +169,8 @@ unsigned char* lzo_block(unsigned char* bf, int *towr,
 
 int lzo_close(loff_t ooff, void **stat)
 {
-	lzo_block(0, 0, ooff, stat);
 	lzo_state *state = (lzo_state*)*stat;
-	loff_t len = ooff-state->first_ooff;
-	int left = len - state->lzo_pos;
-	/*
-	fprintf(stderr, "DEBUG: %s: len=%li, md5pos=%li\n", 
-		state->onm, len, state->md5_pos);
-	 */
-	lzo_calc(state->buf, left, len, &state->md5);
-	state->lzo_pos += left;
-	//ddr_plug.fplog(stderr, INFO, "md5sum %s (%" LL "i-%" LL "i): %s\n",
-	//	state->onm, state->first_ooff, ooff, md5_out(res));
+	//loff_t len = ooff-state->first_ooff;
 	if (state->buflen)
 		free(state->buf);
 	if (state->workspace)
