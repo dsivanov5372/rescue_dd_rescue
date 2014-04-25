@@ -10,8 +10,60 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 #include <assert.h>
 #include <lzo/lzo1x.h>
+
+/* Some bits from lzop -- we strive for some level of compatibility */
+
+static const unsigned char 
+	lzop_hdr[] = { 0x89, 0x4c, 0x5a, 0x4f, 0x00, 0x0d, 0x0a, 0x1a, 0x0a };
+
+/* 9 bytes, ugh --- and header_t has not been designed with alignment considerations either */
+
+typedef struct
+{
+    uint16_t version;
+    uint16_t lib_version;
+    uint16_t version_needed_to_extract;
+    unsigned char method;
+    unsigned char level;
+    uint32_t flags;
+    uint32_t filter;
+    uint32_t mode;
+    uint32_t mtime_low;
+    uint32_t mtime_high;
+    // Do this for alignment
+    unsigned char nmlen;
+    union { 
+	char name[7];
+	struct {
+		char pad[3];
+	    	uint32_t seglen;
+	};
+    };
+    
+    uint32_t hdr_checksum;	/* crc32 or adler32 */
+    /* only if flags & F_H_EXTRA_FIELD */
+    /*
+    uint32_t extrafield_len;
+    uint32_t extrafield_checksum;
+     */
+} header_t;
+
+
+void dummy_hdr(header_t* hdr, uint32_t ln)
+{
+	memset(hdr, 0, sizeof(header_t));
+	hdr->version = 0x3010;	/* 0x1030 big endian, sigh */
+	hdr->lib_version = 0x6020;
+	hdr->version_needed_to_extract = 0x4009;
+	hdr->method = 1;
+	hdr->level = 5;
+	hdr->flags = 3;	/* Unix */
+	hdr->nmlen = 7;
+	hdr->seglen = ln;
+}
 
 /* fwd decl */
 ddr_plugin_t ddr_plug;
@@ -93,7 +145,7 @@ int lzo_open(int ifd, const char* inm, loff_t ioff,
 			ddr_plug.fplog(stderr, FATAL, "Can't allocate workspace of size %i for compression!\n", LZO1X_1_MEM_COMPRESS);
 			return -1;
 		}
-		state->buflen = bsz + (bsz>>6) + 8;
+		state->buflen = bsz + (bsz>>4) + 64 + sizeof(lzop_hdr) + sizeof(header_t);
 	} else 
 		state->buflen = 4*bsz;
 
@@ -113,11 +165,13 @@ unsigned char* lzo_block(unsigned char* bf, int *towr,
 	size_t dst_len;
 	/* Bulk buffer process */
 	if (state->mode == COMPRESS) {
-		lzo1x_1_compress(bf, *towr, state->buf, &dst_len, state->workspace);
-		*towr = dst_len;
-		return state->buf;
+		lzo1x_1_compress(bf, *towr, state->buf+sizeof(lzop_hdr)+sizeof(header_t), &dst_len, state->workspace);
+		memcpy(state->buf, lzop_hdr, sizeof(lzop_hdr));
+		dummy_hdr((header_t*)(state->buf+sizeof(lzop_hdr)), *towr);
+		*towr = dst_len + sizeof(header_t) + (ooff == state->first_ooff? sizeof(lzop_hdr): 0);
+		return state->buf + (ooff == state->first_ooff? 0: sizeof(lzop_hdr));
 	}
-	/* Decompression is more tricky */
+	/*Decompression is more tricky */
 	int err; 
 	do {
 		dst_len = state->buflen;
@@ -151,6 +205,7 @@ unsigned char* lzo_block(unsigned char* bf, int *towr,
 			break;
 		case LZO_E_INPUT_NOT_CONSUMED:
 			/* TODO: Leftover bytes, store */
+			/* FIXME: We can't know how many input bytes we consumed, can we? */
 			ddr_plug.fplog(stderr, INFO, "Input not fully consumed %i %i %i\n", *towr, state->buflen, dst_len);
 			break;
 		}
