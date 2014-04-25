@@ -414,8 +414,6 @@ void insert_plugin(void* hdl, const char* nm, char* param)
 		max_align = plug->needs_align;
 	if (!plug->handles_sparse)
 		not_sparse = 1;
-	LISTAPPEND(ddr_plugins, *plug, ddr_plugin_t);
-	plugins_loaded++;
 	if (param && !plug->init_callback) {
 		fplog(stderr, FATAL, "Plugin %s has no init callback to consume passed param %s\n",
 			nm, param);
@@ -424,6 +422,8 @@ void insert_plugin(void* hdl, const char* nm, char* param)
 	if (plug->init_callback)
 		if (plug->init_callback(&plug->state, param))
 			exit(13);
+	plugins_loaded++;
+	LISTAPPEND(ddr_plugins, *plug, ddr_plugin_t);
 	if (param && !memcmp(param, "help", 4))
 		plugin_help++;
 	if (plug->block_callback)
