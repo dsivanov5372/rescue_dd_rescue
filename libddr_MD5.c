@@ -42,7 +42,7 @@ int md5_plug_init(void **stat, char* param)
 			ddr_plug.fplog(stderr, INFO, "%s", md5_help);
 		/* elif .... */
 		else {
-			ddr_plug.fplog(stderr, FATAL, "MD5 plugin doesn't understand param %s\n",
+			ddr_plug.fplog(stderr, FATAL, "MD5: plugin doesn't understand param %s\n",
 				param);
 			++err;
 		}

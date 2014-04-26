@@ -30,6 +30,15 @@ static const unsigned char
 
 /* 9 bytes, ugh --- and header_t has not been designed with alignment considerations either */
 
+#define F_ADLER32_D     0x00000001L
+#define F_ADLER32_C     0x00000002L
+#define F_H_EXTRA_FIELD 0x00000040L
+#define F_CRC32_D       0x00000100L
+#define F_CRC32_C       0x00000200L
+#define F_MULTIPART     0x00000400L
+#define F_H_CRC32       0x00001000L
+
+
 typedef struct
 {
     uint16_t version;
@@ -65,6 +74,7 @@ typedef struct {
 } blockhdr_t;
 
 #define ADLER32_INIT_VALUE 1
+#define CRC32_INIT_VALUE 0
 
 #define MIN(a,b) ((a)<(b)? (a): (b))
 
@@ -118,6 +128,46 @@ void lzo_hdr(header_t* hdr, lzo_state *state)
 	 */
 }
 
+int lzo_parse_hdr(unsigned char* bf, lzo_state *state)
+{
+	if (memcmp(bf, lzop_hdr, sizeof(lzop_hdr))) {
+		ddr_plug.fplog(stderr, FATAL, "lzo: lzop magic broken\n");
+		return -1;
+	}
+	header_t *hdr = (header_t*)(bf+sizeof(lzop_hdr));
+	if (hdr->version_needed_to_extract > htons(0x1030)) {
+		ddr_plug.fplog(stderr, FATAL, "lzo: requires version %02x.%02x to extract\n",
+			ntohs(hdr->version_needed_to_extract) >> 8,
+			ntohs(hdr->version_needed_to_extract) & 0xff);
+		return -2;
+	}
+	if (hdr->method != 1 /*|| hdr->level != 5*/) {
+		ddr_plug.fplog(stderr, FATAL, "lzo: unsupported method %i level %i\n",
+			hdr->method, hdr->level);
+		return -3;
+	}
+	state->flags = ntohl(hdr->flags);
+	if (state->flags & F_MULTIPART) {
+		ddr_plug.fplog(stderr, FATAL, "lzo: unsupported multipart archive\n");
+		return -4;
+	}
+	uint32_t cksum = ntohl(*(uint32_t*)((char*)hdr+offsetof(header_t,name)+hdr->nmlen));
+	uint32_t comp = (state->flags & F_H_CRC32 ? lzo_crc32(  CRC32_INIT_VALUE, (void*)hdr, sizeof(header_t)-15+hdr->nmlen-4)
+						: lzo_adler32(ADLER32_INIT_VALUE, (void*)hdr, sizeof(header_t)-15+hdr->nmlen-4));
+	if (cksum != comp) {
+		ddr_plug.fplog(stderr, FATAL, "lzo: header fails checksum %08x != %08x\n",
+			cksum, comp);
+		return -5;
+	}
+	int off = sizeof(lzop_hdr) + sizeof(header_t) + hdr->nmlen-15;
+	if (state->flags & F_H_EXTRA_FIELD) {
+		off += 8 + ntohl(*(uint32_t*)(bf+off));
+		if (off > 4096)
+			abort();
+	}
+	return off;
+}
+
 void block_hdr(blockhdr_t* hdr, uint32_t uncompr, uint32_t compr, uint32_t unc_adl, void *cdata)
 {
 	hdr->uncmpr_len = htonl(uncompr);
@@ -135,7 +185,7 @@ int lzo_plug_init(void **stat, char* param)
 	int err = 0;
 	lzo_state *state = (lzo_state*)malloc(sizeof(lzo_state));
 	if (!state) {
-		ddr_plug.fplog(stderr, FATAL, "lzo plugin can't allocate %i bytes\n", sizeof(lzo_state));
+		ddr_plug.fplog(stderr, FATAL, "lzo: can't allocate %i bytes\n", sizeof(lzo_state));
 		return -1;
 	}
 	*stat = (void*)state;
@@ -156,7 +206,7 @@ int lzo_plug_init(void **stat, char* param)
 		else if (!strcmp(param, "decompress"))
 			state->mode = DECOMPRESS;
 		else {
-			ddr_plug.fplog(stderr, FATAL, "lzo plugin doesn't understand param %s\n",
+			ddr_plug.fplog(stderr, FATAL, "lzo: plugin doesn't understand param %s\n",
 				param);
 			++err;
 		}
@@ -178,7 +228,7 @@ int lzo_open(int ifd, const char* inm, loff_t ioff,
 	state->bufp = bufp;
 	state->softbs = bsz;
 	if (lzo_init() != LZO_E_OK) {
-		ddr_plug.fplog(stderr, FATAL, "Failed to initialize lzo library!");
+		ddr_plug.fplog(stderr, FATAL, "lzo: failed to initialize lzo library!");
 		return -1;
 	}
 	if (state->mode == AUTO) {
@@ -187,14 +237,14 @@ int lzo_open(int ifd, const char* inm, loff_t ioff,
 		else if (!strcmp(onm+strlen(onm)-2, "zo"))
 			state->mode = COMPRESS;
 		else {
-			ddr_plug.fplog(stderr, FATAL, "Can't determine compression/decompression from filenames (and not set)!\n");
+			ddr_plug.fplog(stderr, FATAL, "lzo: can't determine compression/decompression from filenames (and not set)!\n");
 			return -1;
 		}
 	}
 	if (state->mode == COMPRESS) {
 		state->workspace = malloc(LZO1X_1_MEM_COMPRESS);
 		if (!state->workspace) {
-			ddr_plug.fplog(stderr, FATAL, "Can't allocate workspace of size %i for compression!\n", LZO1X_1_MEM_COMPRESS);
+			ddr_plug.fplog(stderr, FATAL, "lzo: can't allocate workspace of size %i for compression!\n", LZO1X_1_MEM_COMPRESS);
 			return -1;
 		}
 		state->buflen = bsz + (bsz>>4) + 72 + sizeof(lzop_hdr) + sizeof(header_t);
@@ -203,7 +253,7 @@ int lzo_open(int ifd, const char* inm, loff_t ioff,
 
 	state->buf = malloc(state->buflen);
 	if (!state->buf) {
-		ddr_plug.fplog(stderr, FATAL, "Can't allocate buffer of size %i for de/compression!\n", state->buflen);
+		ddr_plug.fplog(stderr, FATAL, "lzo: can't allocate buffer of size %i for de/compression!\n", state->buflen);
 		state->buflen = 0;
 		return -1;
 	}
@@ -258,34 +308,34 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 		switch (err) {
 		case LZO_E_INPUT_OVERRUN:
 			/* TODO: Partial block, handle! */
-			ddr_plug.fplog(stderr, FATAL, "Overrun %i %i %i; try larger block sizes\n", *towr, state->buflen, dst_len);
+			ddr_plug.fplog(stderr, FATAL, "lzo: ocverrun %i %i %i; try larger block sizes\n", *towr, state->buflen, dst_len);
 			abort();
 			break;
 		case LZO_E_EOF_NOT_FOUND:
 			/* TODO: Partial block, handle! */
-			ddr_plug.fplog(stderr, FATAL, "EOF not found %i %i %i; try larger block sizes\n", *towr, state->buflen, dst_len);
+			ddr_plug.fplog(stderr, FATAL, "lzo: EOF not found %i %i %i; try larger block sizes\n", *towr, state->buflen, dst_len);
 			abort();
 			break;
 		case LZO_E_OUTPUT_OVERRUN:
 			state->buflen *= 2;
 			state->buf = realloc(state->buf, state->buflen);
 			if (!state->buf) {
-				ddr_plug.fplog(stderr, FATAL, "Could not allocate output buffer of %i bytes!\n", state->buflen);
+				ddr_plug.fplog(stderr, FATAL, "lzo: could not allocate output buffer of %i bytes!\n", state->buflen);
 				abort();
 			}
 			break;
 		case LZO_E_LOOKBEHIND_OVERRUN:
-			ddr_plug.fplog(stderr, FATAL, "Lookbehind overrun %i %i %i; data corrupt?\n", *towr, state->buflen, dst_len);
+			ddr_plug.fplog(stderr, FATAL, "lzo: lookbehind overrun %i %i %i; data corrupt?\n", *towr, state->buflen, dst_len);
 			abort();
 			break;
 		case LZO_E_ERROR:
-			ddr_plug.fplog(stderr, FATAL, "Unspecified error %i %i %i; data corrupt?\n", *towr, state->buflen, dst_len);
+			ddr_plug.fplog(stderr, FATAL, "lzo: unspecified error %i %i %i; data corrupt?\n", *towr, state->buflen, dst_len);
 			abort();
 			break;
 		case LZO_E_INPUT_NOT_CONSUMED:
 			/* TODO: Leftover bytes, store */
 			/* FIXME: We can't know how many input bytes we consumed, can we? */
-			ddr_plug.fplog(stderr, INFO, "Input not fully consumed %i %i %i\n", *towr, state->buflen, dst_len);
+			ddr_plug.fplog(stderr, INFO, "lzo: input not fully consumed %i %i %i\n", *towr, state->buflen, dst_len);
 			break;
 		}
 	} while (err == LZO_E_OUTPUT_OVERRUN);
