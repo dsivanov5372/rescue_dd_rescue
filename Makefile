@@ -20,7 +20,7 @@ MANDIR = $(prefix)/share/man
 #MYDIR = dd_rescue-$(VERSION)
 MYDIR = dd_rescue
 BINTARGETS = dd_rescue 
-LIBTARGETS = libddr_MD5.so libddr_lzo.so
+LIBTARGETS = libddr_MD5.so 
 TARGETS = $(BINTARGETS) $(LIBTARGETS)
 #TARGETS = libfalloc-dl
 OTHTARGETS = find_nonzero fiemap file_zblock fmt_no md5
@@ -34,6 +34,10 @@ LIBDIR = /usr/$(LIB)
 COMPILER = $(shell $(CC) --version | head -n1)
 DEFINES = -DVERSION=\"$(VERSION)\"  -D__COMPILER__="\"$(COMPILER)\"" # -DPLUGSEARCH="\"$(LIBDIR)\""
 OUT = -o dd_rescue
+
+ifeq ($(shell grep 'HAVE_LZO_LZO1X_H 1' config.h >/dev/null 2>&1 && echo 1), 1)
+  LIBTARGETS += libddr_lzo.so
+endif
 
 ifeq ($(CC),wcl386)
   CFLAGS = "-ox -wx $(EXTRA_CFLAGS)"
