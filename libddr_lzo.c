@@ -203,29 +203,33 @@ int lzo_open(int ifd, const char* inm, loff_t ioff,
 }
 
 unsigned char* lzo_compress(unsigned char *bf, int *towr,
-			    loff_t ooff, lzo_state *state)
+			    int eof, loff_t ooff, lzo_state *state)
 {
 	size_t dst_len;
-	void *hdrp = state->buf+3+sizeof(lzop_hdr);
+	void *hdrp  = state->buf+3+sizeof(lzop_hdr);
 	void *cdata = hdrp+sizeof(header_t)+sizeof(blockhdr_t);
 	/* Compat with lzop forces us to compute adler32 also on uncompressed data
 	 * when doing it for compressed (I would preder only the latter) */
 	uint32_t unc_adl = lzo_adler32(ADLER32_INIT_VALUE, bf, *towr);
 	lzo1x_1_compress(bf, *towr, cdata, &dst_len, state->workspace);
 	block_hdr((blockhdr_t*)(hdrp+sizeof(header_t)), *towr, dst_len, unc_adl, cdata);
+	*towr = dst_len + sizeof(blockhdr_t);
+	void* wrbf = hdrp+sizeof(header_t);
 	if (ooff == state->first_ooff) {
 		memcpy(state->buf+3, lzop_hdr, sizeof(lzop_hdr));
 		lzo_hdr((header_t*)hdrp, state);
-		*towr = dst_len + sizeof(header_t) + sizeof(lzop_hdr) + sizeof(blockhdr_t);
-		return state->buf+3; 
-	} else {
-		*towr = dst_len + sizeof(blockhdr_t);
-		return hdrp+sizeof(header_t);
+		*towr += sizeof(header_t) + sizeof(lzop_hdr);
+		wrbf = state->buf+3;
 	}
+	if (eof) {
+		memset(wrbf+*towr, 0, 4);
+		*towr += 4;
+	}
+	return wrbf;
 }
 
 unsigned char* lzo_decompress(unsigned char* bf, int *towr,
-				loff_t ooff, lzo_state *state)
+			      int eof, loff_t ooff, lzo_state *state)
 {
 	/* Decompression is tricky */
 	int err; 
@@ -278,17 +282,17 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 
 
 unsigned char* lzo_block(unsigned char* bf, int *towr, 
-			 loff_t ooff, void **stat)
+			 int eof, loff_t ooff, void **stat)
 {
 	lzo_state *state = (lzo_state*)*stat;
 	/* Bulk buffer process */
 	if (state->mode == COMPRESS) 
-		return lzo_compress(bf, towr, ooff, state);
+		return lzo_compress(bf, towr, eof, ooff, state);
 	else
-		return lzo_decompress(bf, towr, ooff, state);
+		return lzo_decompress(bf, towr, eof, ooff, state);
 }
 
-int lzo_close(loff_t *ooff, void **stat)
+int lzo_close(loff_t ooff, void **stat)
 {
 	lzo_state *state = (lzo_state*)*stat;
 	//loff_t len = ooff-state->first_ooff;
@@ -298,10 +302,6 @@ int lzo_close(loff_t *ooff, void **stat)
 		free(state->buf);
 	if (state->workspace)
 		free(state->workspace);
-	unsigned int zero = 0;
-	if (pwrite64(state->ofd, &zero, 4, *ooff) != 4)
-		ddr_plug.fplog(stderr, WARN, "Writing 4 bytes of zero @ %i to end failed\n", *ooff);
-	*ooff += 4;
 	free(*stat);
 	return 0;
 }

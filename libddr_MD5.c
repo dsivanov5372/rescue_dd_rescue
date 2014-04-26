@@ -66,10 +66,23 @@ int md5_open(int ifd, const char* inm, loff_t ioff,
 	return 0;
 }
 
+void md5_last(md5_state *state, loff_t ooff)
+{
+	//md5_block(0, 0, ooff, stat);
+	loff_t len = ooff - state->first_ooff;
+	int left = len - state->md5_pos;
+	/*
+	fprintf(stderr, "DEBUG: %s: len=%li, md5pos=%li\n", 
+		state->onm, len, state->md5_pos);
+	 */
+	md5_calc(state->buf, left, len, &state->md5);
+	state->md5_pos += left;
+}
+
 /* This is rather complex, as we handle both non-aligned first block size
  * as well as sparse files */
 unsigned char* md5_block(unsigned char* bf, int *towr, 
-			 loff_t ooff, void **stat)
+			 int eof, loff_t ooff, void **stat)
 {
 	md5_state *state = (md5_state*)*stat;
 	int off = 0;
@@ -96,6 +109,8 @@ unsigned char* md5_block(unsigned char* bf, int *towr,
 		md5_64(state->buf, &state->md5);
 		state->md5_pos += 64;
 	}
+	if (eof)
+		md5_last(state, ooff);
 	if (!bf)
 		return bf;
 	int left = ooff-state->first_ooff - state->md5_pos;
@@ -111,12 +126,14 @@ unsigned char* md5_block(unsigned char* bf, int *towr,
 	md5_calc(bf+off, mylen, 0, &state->md5);
 	off += mylen; state->md5_pos += mylen;
 	/* Copy remainder into buffer */
-	assert(state->md5_pos == ooff+off-state->first_ooff);
+	assert(state->md5_pos == ooff + off - state->first_ooff);
 	state->buflen = *towr - off;
 	if (state->buflen)
 		memcpy(state->buf, bf+off, state->buflen);
 	return bf;
 }
+
+
 
 #if __WORDSIZE == 64
 #define LL "l"
@@ -135,22 +152,13 @@ char* md5_out(uint8_t* res)
 	return _md5_out_str;
 }
 
-int md5_close(loff_t *ooff, void **stat)
+int md5_close(loff_t ooff, void **stat)
 {
-	md5_block(0, 0, *ooff, stat);
 	md5_state *state = (md5_state*)*stat;
-	loff_t len = *ooff-state->first_ooff;
-	int left = len - state->md5_pos;
-	/*
-	fprintf(stderr, "DEBUG: %s: len=%li, md5pos=%li\n", 
-		state->onm, len, state->md5_pos);
-	 */
-	md5_calc(state->buf, left, len, &state->md5);
-	state->md5_pos += left;
 	uint8_t res[16];
 	md5_result(&state->md5, res);
 	ddr_plug.fplog(stderr, INFO, "md5sum %s (%" LL "i-%" LL "i): %s\n",
-		state->onm, state->first_ooff, *ooff, md5_out(res));
+		state->onm, state->first_ooff, ooff, md5_out(res));
 	free(*stat);
 	return 0;
 }

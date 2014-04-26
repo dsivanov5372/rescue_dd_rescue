@@ -372,7 +372,7 @@ void call_plugins_close()
 	LISTTYPE(ddr_plugin_t) *plug;
 	LISTFOREACH(ddr_plugins, plug) {
 		if (LISTDATA(plug).close_callback) {
-			int err = LISTDATA(plug).close_callback(&opos, &LISTDATA(plug).state);
+			int err = LISTDATA(plug).close_callback(opos, &LISTDATA(plug).state);
 			if (err)
 				fplog(stderr, WARN, "Error closing plugin %s: %s!\n",
 					LISTDATA(plug).name, strerror(err));
@@ -381,14 +381,14 @@ void call_plugins_close()
 	}
 }
 
-unsigned char* call_plugins_block(unsigned char *bf, int *towr, loff_t ooff)
+unsigned char* call_plugins_block(unsigned char *bf, int *towr, int eof, loff_t ooff)
 {
 	if (!plugins_opened)
 		return bf;
 	LISTTYPE(ddr_plugin_t) *plug;
 	LISTFOREACH(ddr_plugins, plug)
 		if (LISTDATA(plug).block_callback)
-			bf = LISTDATA(plug).block_callback(bf, towr, ooff, &LISTDATA(plug).state);
+			bf = LISTDATA(plug).block_callback(bf, towr, eof, ooff, &LISTDATA(plug).state);
 	return bf;
 }
 
@@ -1073,11 +1073,18 @@ int sync_close(int fd, const char* nm, char chr)
 	  ptr = 0;	\
 	} while(0)
 
+
+ssize_t writeblock(int towrite);
+
 int cleanup()
 {
 	int rc, errs = 0;
-	if (!dosplice && !bsim715)
+	if (!dosplice && !bsim715) {
+		/* EOF notifiction */
+		writeblock(0);
+		/* And finalize */
 		call_plugins_close();
+	}
 	errs += sync_close(odes, oname, o_chr);
 	if (ides != -1) {
 		rc = close(ides);
@@ -1222,8 +1229,9 @@ ssize_t writeblock(int towrite)
 {
 	ssize_t err, wr = 0;
 	int lasterr = 0;
-	unsigned char* wbuf = call_plugins_block(buf, &towrite, opos);
-	if (!wbuf)
+	int eof = towrite? 0: 1;
+	unsigned char* wbuf = call_plugins_block(buf, &towrite, eof, opos);
+	if (!wbuf || !towrite)
 		return towrite;
 	//errno = 0; /* should not be necessary */
 	do {
