@@ -78,7 +78,7 @@ typedef struct _lzo_state {
 	const char *iname, *oname;
 	void *workspace;
 	void *buf, *carry;
-	size_t buflen, carrylen;
+	size_t buflen, carrylen, carried;
 	uint32_t flags;
 	int ofd;
 	enum compmode mode;
@@ -98,12 +98,14 @@ void lzo_hdr(header_t* hdr, lzo_state *state)
 	state->flags = 0x03000003UL;	/* UNIX | ADLER32_C | ADLER32_D */
 	hdr->flags = ntohl(state->flags);
 	hdr->nmlen = 15;
-	memcpy(hdr->name, state->oname, MIN(15,strlen(state->oname)));
-	struct stat stbf;
-	if (!stat(state->iname, &stbf)) {
-		hdr->mode = ntohl(stbf.st_mode);
-		hdr->mtime_low = ntohl(stbf.st_mtime & 0xffffffff);
-		hdr->mtime_high = ntohl(stbf.st_mtime >> 32);
+	if (state->iname) {
+		memcpy(hdr->name, state->iname, MIN(15,strlen(state->iname)));
+		struct stat stbf;
+		if (0 == stat(state->iname, &stbf)) {
+			hdr->mode = ntohl(stbf.st_mode);
+			hdr->mtime_low = ntohl(stbf.st_mtime & 0xffffffff);
+			hdr->mtime_high = ntohl(stbf.st_mtime >> 32);
+		}
 	}
 	hdr->hdr_checksum = htonl(lzo_adler32(ADLER32_INIT_VALUE, (void*)hdr, offsetof(header_t, hdr_checksum)));
 	
@@ -135,10 +137,12 @@ int lzo_plug_init(void **stat, char* param)
 		return -1;
 	}
 	*stat = (void*)state;
+	//memset(state, 0, sizeof(lzo_state));
 	state->mode = AUTO;
 	state->workspace = NULL;
 	state->buflen = 0;
 	state->carrylen = 0;
+	state->carry = NULL;
 	while (param) {
 		char* next = strchr(param, ':');
 		if (next)
@@ -207,21 +211,26 @@ unsigned char* lzo_compress(unsigned char *bf, int *towr,
 {
 	size_t dst_len;
 	void *hdrp  = state->buf+3+sizeof(lzop_hdr);
-	void *cdata = hdrp+sizeof(header_t)+sizeof(blockhdr_t);
-	/* Compat with lzop forces us to compute adler32 also on uncompressed data
-	 * when doing it for compressed (I would preder only the latter) */
-	uint32_t unc_adl = lzo_adler32(ADLER32_INIT_VALUE, bf, *towr);
-	lzo1x_1_compress(bf, *towr, cdata, &dst_len, state->workspace);
-	block_hdr((blockhdr_t*)(hdrp+sizeof(header_t)), *towr, dst_len, unc_adl, cdata);
-	*towr = dst_len + sizeof(blockhdr_t);
-	void* wrbf = hdrp+sizeof(header_t);
-	if (ooff == state->first_ooff) {
-		memcpy(state->buf+3, lzop_hdr, sizeof(lzop_hdr));
-		lzo_hdr((header_t*)hdrp, state);
-		*towr += sizeof(header_t) + sizeof(lzop_hdr);
-		wrbf = state->buf+3;
+	void *bhdp  = hdrp+sizeof(header_t);
+	void* wrbf = bhdp;
+	if (*towr) {
+		void *cdata = bhdp+sizeof(blockhdr_t);
+		/* Compat with lzop forces us to compute adler32 also on uncompressed data
+		 * when doing it for compressed (I would preder only the latter and I would
+		 * also prefer crc32,but that's slow in liblzo ...) */
+		uint32_t unc_adl = lzo_adler32(ADLER32_INIT_VALUE, bf, *towr);
+		lzo1x_1_compress(bf, *towr, cdata, &dst_len, state->workspace);
+		block_hdr((blockhdr_t*)bhdp, *towr, dst_len, unc_adl, cdata);
+		*towr = dst_len + sizeof(blockhdr_t);
+		if (ooff == state->first_ooff) {
+			memcpy(state->buf+3, lzop_hdr, sizeof(lzop_hdr));
+			lzo_hdr((header_t*)hdrp, state);
+			*towr += sizeof(header_t) + sizeof(lzop_hdr);
+			wrbf = state->buf+3;
+		}
 	}
 	if (eof) {
+		//memset(cdata+dst_len, 0, 4);
 		memset(wrbf+*towr, 0, 4);
 		*towr += 4;
 	}
@@ -296,7 +305,7 @@ int lzo_close(loff_t ooff, void **stat)
 {
 	lzo_state *state = (lzo_state*)*stat;
 	//loff_t len = ooff-state->first_ooff;
-	if (state->carrylen)
+	if (state->carry)
 		free(state->carry);
 	if (state->buflen)
 		free(state->buf);

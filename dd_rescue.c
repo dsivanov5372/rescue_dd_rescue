@@ -1077,13 +1077,16 @@ int sync_close(int fd, const char* nm, char chr)
 
 
 ssize_t writeblock(int towrite);
+static void advancepos(const ssize_t rd, const ssize_t wr, const ssize_t rwr);
 
 int cleanup()
 {
 	int rc, errs = 0;
 	if (!dosplice && !bsim715) {
 		/* EOF notifiction */
-		writeblock(0);
+		int fbytes = writeblock(0);
+		if (fbytes > 0)
+			advancepos(0, fbytes, fbytes);
 		/* And finalize */
 		call_plugins_close();
 	}
