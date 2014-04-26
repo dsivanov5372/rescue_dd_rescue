@@ -79,41 +79,45 @@ void md5_last(md5_state *state, loff_t ooff)
 	state->md5_pos += left;
 }
 
+#define MIN(a,b) ((a)<(b)? (a): (b))
+
 /* This is rather complex, as we handle both non-aligned first block size
  * as well as sparse files */
 unsigned char* md5_block(unsigned char* bf, int *towr, 
 			 int eof, loff_t ooff, void **stat)
 {
 	md5_state *state = (md5_state*)*stat;
-	int off = 0;
+	int off = 0; //64 - state->buflen; /* 
 	/* First block */
+	assert(bf);
 	if (state->buflen) {
 		/* Handle leftover bytes ... */
 		if (ooff-state->first_ooff > state->md5_pos+state->buflen) {
-			/* Sparse: We have skipped writes ... */
+			/* First sparse piece  ... */
 			memset(state->buf+state->buflen, 0, 64-state->buflen);
 			md5_64(state->buf, &state->md5);
 			state->md5_pos += 64;
 			memset(state->buf, 0, state->buflen);
-		} else if (bf) {
-			off = 64-state->buflen;
+		} else if (*towr) {
+			/* Reassemble and process first block */
+			off = MIN(64-state->buflen, *towr);
 			memcpy(state->buf+state->buflen, bf, off);
-			md5_64(state->buf, &state->md5);
-			state->md5_pos += 64;
-			memset(state->buf, 0, 64);
+			if (off+state->buflen == 64) {
+				md5_64(state->buf, &state->md5);
+				state->md5_pos += 64;
+				memset(state->buf, 0, 64);
+			} else 
+				state->buflen += off;
 		}
 	}
 	assert(state->md5_pos <= ooff+off-state->first_ooff);
 	/* Bulk sparse process */
-	while (ooff-state->first_ooff > state->md5_pos+63) {
+	while (ooff - state->first_ooff > state->md5_pos+63) {
 		md5_64(state->buf, &state->md5);
 		state->md5_pos += 64;
 	}
-	if (eof)
-		md5_last(state, ooff);
-	if (!bf)
-		return bf;
-	int left = ooff-state->first_ooff - state->md5_pos;
+	/* Last sparse block */
+	int left = ooff - state->first_ooff - state->md5_pos;
 	if (left > 0) {
 		memcpy(state->buf+64-left, bf, left);
 		md5_64(state->buf, &state->md5);
@@ -130,6 +134,8 @@ unsigned char* md5_block(unsigned char* bf, int *towr,
 	state->buflen = *towr - off;
 	if (state->buflen)
 		memcpy(state->buf, bf+off, state->buflen);
+	if (eof)
+		md5_last(state, ooff);
 	return bf;
 }
 
