@@ -462,6 +462,8 @@ void unload_plugins()
 	/* FIXME: Freeing in reverse order would be better ... */
 	LISTFOREACH(ddr_plug_handles, plug_hdl)
 		dlclose(LISTDATA(plug_hdl));
+	LISTTREEDEL(ddr_plug_handles, VOIDP);
+	LISTTREEDEL(ddr_plugins, ddr_plugin_t);
 }
 #endif
 

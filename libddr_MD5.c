@@ -87,53 +87,65 @@ unsigned char* md5_block(unsigned char* bf, int *towr,
 			 int eof, loff_t ooff, void **stat)
 {
 	md5_state *state = (md5_state*)*stat;
-	int off = 0; //64 - state->buflen; /* 
+	const loff_t opos = ooff - state->first_ooff;
+	int consumed = 0;
 	/* First block */
 	assert(bf);
 	if (state->buflen) {
 		/* Handle leftover bytes ... */
-		if (ooff-state->first_ooff > state->md5_pos+state->buflen) {
+		if (opos > state->md5_pos+state->buflen) {
 			/* First sparse piece  ... */
 			memset(state->buf+state->buflen, 0, 64-state->buflen);
 			md5_64(state->buf, &state->md5);
 			state->md5_pos += 64;
 			memset(state->buf, 0, state->buflen);
+			state->buflen = 0;
 		} else if (*towr) {
 			/* Reassemble and process first block */
-			off = MIN(64-state->buflen, *towr);
-			memcpy(state->buf+state->buflen, bf, off);
-			if (off+state->buflen == 64) {
+			consumed = MIN(64-state->buflen, *towr);
+			memcpy(state->buf+state->buflen, bf, consumed);
+			if (consumed+state->buflen == 64) {
 				md5_64(state->buf, &state->md5);
 				state->md5_pos += 64;
 				memset(state->buf, 0, 64);
+				state->buflen = 0;
 			} else 
-				state->buflen += off;
+				state->buflen += consumed;
 		}
 	}
-	assert(state->md5_pos <= ooff+off-state->first_ooff);
+	assert(state->md5_pos <= opos + consumed);
 	/* Bulk sparse process */
-	while (ooff - state->first_ooff > state->md5_pos+63) {
+	while (opos > state->md5_pos+63) {
+		assert(state->buflen == 0);
 		md5_64(state->buf, &state->md5);
 		state->md5_pos += 64;
 	}
 	/* Last sparse block */
-	int left = ooff - state->first_ooff - state->md5_pos;
-	if (left > 0) {
+	int left = opos - state->md5_pos;
+	if (left > 0 && *towr >= left) {
+		assert(consumed == 0);
 		memcpy(state->buf+64-left, bf, left);
 		md5_64(state->buf, &state->md5);
 		state->md5_pos += 64;
-		off += left;
+		state->buflen = 0;
+		consumed = left;
 		memset(state->buf+64-left, 0, left);
 	}
 	/* Bulk buffer process */
-	int mylen = *towr - off; mylen -= mylen%64;
-	md5_calc(bf+off, mylen, 0, &state->md5);
-	off += mylen; state->md5_pos += mylen;
+	int mylen = *towr - consumed; 
+	assert(mylen >= 0);
+	mylen -= mylen%64;
+	if (mylen) {
+		md5_calc(bf+consumed, mylen, 0, &state->md5);
+		consumed += mylen; state->md5_pos += mylen;
+	}
 	/* Copy remainder into buffer */
-	assert(state->md5_pos == ooff + off - state->first_ooff);
-	state->buflen = *towr - off;
-	if (state->buflen)
-		memcpy(state->buf, bf+off, state->buflen);
+	assert(state->md5_pos + state->buflen == opos + consumed);
+	if (*towr - consumed) {
+		assert(state->buflen+*towr-consumed < 64);
+		memcpy(state->buf+state->buflen, bf+consumed, *towr-consumed);
+		state->buflen += *towr-consumed;
+	}
 	if (eof)
 		md5_last(state, ooff);
 	return bf;
