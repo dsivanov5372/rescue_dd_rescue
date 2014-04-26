@@ -210,8 +210,8 @@ unsigned char* lzo_compress(unsigned char *bf, int *towr,
 			    int eof, loff_t ooff, lzo_state *state)
 {
 	size_t dst_len;
-	void *hdrp  = state->buf+3+sizeof(lzop_hdr);
-	void *bhdp  = hdrp+sizeof(header_t);
+	void *hdrp = state->buf+3+sizeof(lzop_hdr);
+	void *bhdp = hdrp+sizeof(header_t);
 	void* wrbf = bhdp;
 	if (*towr) {
 		void *cdata = bhdp+sizeof(blockhdr_t);

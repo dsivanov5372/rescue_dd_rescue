@@ -15,17 +15,28 @@
 
 
 typedef int (_init_callback)(void **stat, char* param);
-/** open_calback parameters: input file descriptor, input file name,
+/** open_callback parameters: input file descriptor, input file name,
  * 	initial offset input file, same 3 params for output file,
  * 	soft (large) block size, hard (fallback) block size,
- * 	estimated xfer size, opaque handle
+ * 	estimated xfer size, opaque handle.
+ * 	Return value: 0 = OK, -x = ERROR.
  */
 typedef int (_open_callback)(int ifd, const char* inm, loff_t ioff, 
 			     int ofd, const char* onm, loff_t ooff, 
 			     unsigned int bsz, unsigned int hsz,
 			     loff_t exfer, void **stat);
+/** block_callback parameters: buffer to be written (can be modified),
+ *  	number of bytes to be written (can be modified), eof flag,
+ *  	output stream offset, handle.
+ *  Will be called with eof=1 once at the end.
+ *  Return value: buffer to be really written.
+ */
 typedef unsigned char* (_block_callback)(unsigned char* bf, int *towr, 
 				         int eof, loff_t ooff, void **stat);
+/** close_callback parameters: final output position and handle.
+ * Return value: 0 = OK, -x = ERROR
+ * close_callback is called before files are fsynced and closed
+ */
 typedef int (_close_callback)(loff_t ooff, void **stat);
 
 enum ddrlog_t { NOHDR=0, INFO, WARN, FATAL };
