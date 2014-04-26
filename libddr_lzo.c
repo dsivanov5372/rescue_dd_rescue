@@ -79,6 +79,8 @@ typedef struct _lzo_state {
 	void *workspace;
 	void *buf, *carry;
 	size_t buflen, carrylen, carried;
+	unsigned char **bufp;
+	size_t softbs;
 	uint32_t flags;
 	int ofd;
 	enum compmode mode;
@@ -166,13 +168,15 @@ int lzo_plug_init(void **stat, char* param)
 int lzo_open(int ifd, const char* inm, loff_t ioff, 
 	     int ofd, const char* onm, loff_t ooff, 
 	     unsigned int bsz, unsigned int hsz,
-	     loff_t exfer, void **stat)
+	     loff_t exfer, unsigned char **bufp, void **stat)
 {
 	lzo_state *state = (lzo_state*)*stat;
 	state->first_ooff = ooff;
 	state->iname = inm;
 	state->oname = onm;
 	state->ofd = ofd;
+	state->bufp = bufp;
+	state->softbs = bsz;
 	if (lzo_init() != LZO_E_OK) {
 		ddr_plug.fplog(stderr, FATAL, "Failed to initialize lzo library!");
 		return -1;

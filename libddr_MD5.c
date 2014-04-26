@@ -21,6 +21,7 @@ typedef struct _md5_state {
 	md5_ctx md5;
 	loff_t first_ooff;
 	loff_t md5_pos;
+	unsigned char **bufp;
 	const char* onm;
 	uint8_t buf[128];
 	unsigned char buflen;
@@ -53,7 +54,7 @@ int md5_plug_init(void **stat, char* param)
 int md5_open(int ifd, const char* inm, loff_t ioff, 
 	     int ofd, const char* onm, loff_t ooff, 
 	     unsigned int bsz, unsigned int hsz,
-	     loff_t exfer, void **stat)
+	     loff_t exfer, unsigned char **bufp, void **stat)
 {
 	md5_state *state = (md5_state*)malloc(sizeof(md5_state));
 	*stat = (void*)state;
@@ -63,6 +64,9 @@ int md5_open(int ifd, const char* inm, loff_t ioff,
 	state->onm = onm;
 	memset(state->buf, 0, 128);
 	state->buflen = 0;
+	state->bufp = bufp;
+	/* breaks direct io -- set slackspace to 4096+64 and increase buf by 4096 to fix */
+	*bufp += 64;
 	return 0;
 }
 
@@ -184,7 +188,7 @@ int md5_close(loff_t ooff, void **stat)
 
 ddr_plugin_t ddr_plug = {
 	.name = "MD5",
-	.slackspace = 0 /*128*/,
+	.slackspace = 128,
 	.needs_align = 0,
 	.handles_sparse = 1,
 	.init_callback  = md5_plug_init,

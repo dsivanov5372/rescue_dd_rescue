@@ -18,13 +18,13 @@ typedef int (_init_callback)(void **stat, char* param);
 /** open_callback parameters: input file descriptor, input file name,
  * 	initial offset input file, same 3 params for output file,
  * 	soft (large) block size, hard (fallback) block size,
- * 	estimated xfer size, opaque handle.
+ * 	estimated xfer size, ptr to buffer ptr, opaque handle.
  * 	Return value: 0 = OK, -x = ERROR.
  */
 typedef int (_open_callback)(int ifd, const char* inm, loff_t ioff, 
 			     int ofd, const char* onm, loff_t ooff, 
 			     unsigned int bsz, unsigned int hsz,
-			     loff_t exfer, void **stat);
+			     loff_t exfer, unsigned char **bufp, void **stat);
 /** block_callback parameters: buffer to be written (can be modified),
  *  	number of bytes to be written (can be modified), eof flag,
  *  	output stream offset, handle.
@@ -46,7 +46,7 @@ typedef int (_fplog_callback)(FILE* const f, enum ddrlog_t logpre,
 typedef struct _ddr_plugin {
 	/* Name of the plugin -- will be filled by loader if left empty */
 	const char* name;
-	/* Amount of extra bytes required in buffer */
+	/* Amount of extra bytes required in buffer, negative => softbs*slackspace/16 */
 	size_t slackspace;
 	/* Alignment need */
 	unsigned int needs_align;
