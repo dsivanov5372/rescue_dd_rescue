@@ -337,7 +337,7 @@ int fplog(FILE* const file, enum ddrlog_t logpre, const char * const fmt, ...)
 
 /** Plugin infrastructure */
 size_t max_slack = 0;
-int max_neg_slack = 0;
+double max_neg_slack = 0;
 int max_align = 0;
 char not_sparse = 0;
 char plugin_help = 0;
@@ -409,10 +409,10 @@ void insert_plugin(void* hdl, const char* nm, char* param)
 	if (!plug->name)
 		plug->name = nm;
 	plug->fplog = fplog;
-	if (plug->slackspace > max_slack)
-		max_slack = plug->slackspace;
-	else if (plug->slackspace < max_neg_slack)
-		max_neg_slack = plug->slackspace;
+	if (plug->slackspace > 0)
+		max_slack += plug->slackspace;
+	else if (plug->slackspace < 0)
+		max_neg_slack += plug->slackspace;
 	if (plug->needs_align > max_align)
 		max_align = plug->needs_align;
 	if (!plug->handles_sparse)
@@ -2367,8 +2367,7 @@ int main(int argc, char* argv[])
 		fplog(stderr, WARN, "disable write avoidance (-W) for splice copy\n");
 		avoidwrite = 0;
 	}
-	if (-max_neg_slack*softbs/16 > max_slack)
-		max_slack = -max_neg_slack*softbs/16;
+	max_slack += -max_neg_slack*softbs/16;
 	buf = zalloc_aligned_buf(softbs, &origbuf);
 
 	/* Optimization: Don't reread from /dev/zero over and over ... */
