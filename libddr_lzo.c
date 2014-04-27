@@ -91,7 +91,7 @@ typedef struct _lzo_state {
 	void *buf, *carry;
 	size_t buflen, carrylen, carried;
 	unsigned char **bufp;
-	size_t addslack;
+	size_t addslack, slackoff;
 	size_t softbs;
 	uint32_t flags;
 	int ofd;
@@ -227,16 +227,23 @@ void* slackalloc(size_t ln, lzo_state *state)
 			ln+state->addslack, strerror(errno));
 		exit(13);
 	}
-	/* FIXME: This happens to work for md5, needs more generic approach */
-	return ptr+state->addslack/2;
+	return ptr+state->slackoff;
 }
 
-void slackrealloc(void* base, size_t newln, lzo_state *state)
+void* slackrealloc(void* base, size_t newln, lzo_state *state)
 {
+	void* ptr = realloc(base-state->slackoff, newln+state->addslack);
+	if (!ptr) {
+		ddr_plug.fplog(stderr, FATAL, "lzo: reallocation of %i bytes failed: %s\n",
+			newln+state->addslack, strerror(errno));
+		exit(13);
+	}
+	return ptr+state->slackoff;
 }
 
 void slackfree(void* base, lzo_state *state)
 {
+	free(base-state->slackoff);
 }
 
 int lzo_open(int ifd, const char* inm, loff_t ioff, 
@@ -278,12 +285,9 @@ int lzo_open(int ifd, const char* inm, loff_t ioff,
 
 	size_t ownslack = -ddr_plug.slackspace*bsz;
 	state->addslack = totslack - ownslack;	
+	/* FIXME: This happens to work for md5, needs more generic approach */
+	state->slackoff = state->addslack/2;
 	state->buf = slackalloc(state->buflen, state);
-	if (!state->buf) {
-		ddr_plug.fplog(stderr, FATAL, "lzo: can't allocate buffer of size %i for de/compression!\n", state->buflen);
-		state->buflen = 0;
-		return -1;
-	}
 	return 0;
 }
 
@@ -345,11 +349,7 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 			break;
 		case LZO_E_OUTPUT_OVERRUN:
 			state->buflen *= 2;
-			state->buf = realloc(state->buf, state->buflen);
-			if (!state->buf) {
-				ddr_plug.fplog(stderr, FATAL, "lzo: could not allocate output buffer of %i bytes!\n", state->buflen);
-				abort();
-			}
+			state->buf = slackrealloc(state->buf, state->buflen, state);
 			break;
 		case LZO_E_LOOKBEHIND_OVERRUN:
 			ddr_plug.fplog(stderr, FATAL, "lzo: lookbehind overrun %i %i %i; data corrupt?\n", *towr, state->buflen, dst_len);
@@ -389,7 +389,7 @@ int lzo_close(loff_t ooff, void **stat)
 	if (state->carry)
 		free(state->carry);
 	if (state->buflen)
-		free(state->buf);
+		slackfree(state->buf, state);
 	if (state->workspace)
 		free(state->workspace);
 	free(*stat);
