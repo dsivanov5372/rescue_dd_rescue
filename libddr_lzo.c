@@ -116,7 +116,9 @@ void lzo_hdr(header_t* hdr, lzo_state *state)
 		if (0 == stat(state->iname, &stbf)) {
 			hdr->mode = ntohl(stbf.st_mode);
 			hdr->mtime_low = ntohl(stbf.st_mtime & 0xffffffff);
+#if __WORDSIZE != 32
 			hdr->mtime_high = ntohl(stbf.st_mtime >> 32);
+#endif
 		}
 	}
 	hdr->hdr_checksum = htonl(lzo_adler32(ADLER32_INIT_VALUE, (void*)hdr, offsetof(header_t, hdr_checksum)));
@@ -263,7 +265,7 @@ int lzo_open(int ifd, const char* inm, loff_t ioff,
 unsigned char* lzo_compress(unsigned char *bf, int *towr,
 			    int eof, loff_t ooff, lzo_state *state)
 {
-	size_t dst_len;
+	lzo_uint dst_len;
 	void *hdrp = state->buf+3+sizeof(lzop_hdr);
 	void *bhdp = hdrp+sizeof(header_t);
 	void* wrbf = bhdp;
@@ -296,7 +298,7 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 {
 	/* Decompression is tricky */
 	int err; 
-	size_t dst_len;
+	lzo_uint dst_len;
 	if (ooff == 0) {
 		/* Parse header */
 		/* Validate header checksum */
@@ -375,6 +377,8 @@ ddr_plugin_t ddr_plug = {
 	.slackspace = 0 /*128*/,
 	.needs_align = 1,
 	.handles_sparse = 0,
+	.changes_output = 1,
+	.changes_output_len = 1,
 	.init_callback  = lzo_plug_init,
 	.open_callback  = lzo_open,
 	.block_callback = lzo_block,

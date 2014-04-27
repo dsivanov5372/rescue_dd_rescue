@@ -52,6 +52,10 @@ typedef struct _ddr_plugin {
 	unsigned int needs_align;
 	/* Handles sparse */
 	char handles_sparse;
+	/* Transforms output */
+	char changes_output;
+	/* Output transformation changes length -- breaks sparse detection on subsequent plugins */
+	char changes_output_len;
 	/* Internal individual state of plugin */
 	void* state;
 	/* Will be called after loading the plugin */
