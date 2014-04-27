@@ -180,6 +180,33 @@ void block_hdr(blockhdr_t* hdr, uint32_t uncompr, uint32_t compr, uint32_t unc_a
 	hdr->cmpr_chksum = htonl(lzo_adler32(ADLER32_INIT_VALUE, cdata, compr));
 }
 
+/* Returns compressed len */
+int parse_block_hdr(unsigned char *bf, unsigned int ln, lzo_state *state, unsigned int* unc_len, uint32_t *unc_cksm)
+{
+	int off = sizeof(blockhdr_t);
+	blockhdr_t *hdr = (blockhdr_t*)bf;
+	*unc_len = ntohl(hdr->uncmpr_len);
+	unsigned int cmp_ln = ntohl(hdr->cmpr_len);
+	unsigned int uncmpr_cksum, cmpr_cksum;
+	if (state->flags & (F_ADLER32_D | F_CRC32_D)) {
+		uncmpr_cksum = ntohl(hdr->uncmpr_chksum);
+		if (state->flags & (F_ADLER32_C | F_CRC32_C))
+			cmpr_cksum = ntohl(hdr->cmpr_chksum);
+		else
+			off -= 4;
+	} else if (state->flags & (F_ADLER32_C | F_CRC32_C)) {
+		cmpr_cksum = ntohl(hdr->uncmpr_chksum);
+		off -= 4;
+	} else {
+		off -= 8;
+	}
+	/* validate compressed checksum if we have enough data */
+	if (ln-off >= cmp_ln) {
+	
+	}
+	return ln;		
+}
+
 char *lzo_help = "The lzo plugin for dd_rescue de/compresses data on the fly.\n"
 	//	" It supports unaligned blocks (arbitrary offsets) and sparse writing.\n"
 		" Parameters: compress/decompress\n";
@@ -327,8 +354,10 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 {
 	/* Decompression is tricky */
 	int err; 
+	int off = 0;
 	lzo_uint dst_len;
 	if (ooff == 0) {
+		off = lzo_parse_hdr(bf, state);
 		/* Parse header */
 		/* Validate header checksum */
 	}
