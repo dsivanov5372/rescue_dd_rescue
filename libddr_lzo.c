@@ -16,6 +16,7 @@
 #include <stdint.h>
 #include <unistd.h>
 #include <assert.h>
+#include <errno.h>
 #include <netinet/in.h>
 #include <sys/stat.h>
 #include <lzo/lzo1x.h>
@@ -90,6 +91,7 @@ typedef struct _lzo_state {
 	void *buf, *carry;
 	size_t buflen, carrylen, carried;
 	unsigned char **bufp;
+	size_t addslack;
 	size_t softbs;
 	uint32_t flags;
 	int ofd;
@@ -217,10 +219,31 @@ int lzo_plug_init(void **stat, char* param)
 	return err;
 }
 
+void* slackalloc(size_t ln, lzo_state *state)
+{
+	void* ptr = malloc(ln+state->addslack);
+	if (!ptr) {
+		ddr_plug.fplog(stderr, FATAL, "lzo: allocation of %i bytes failed: %s\n",
+			ln+state->addslack, strerror(errno));
+		exit(13);
+	}
+	/* FIXME: This happens to work for md5, needs more generic approach */
+	return ptr+state->addslack/2;
+}
+
+void slackrealloc(void* base, size_t newln, lzo_state *state)
+{
+}
+
+void slackfree(void* base, lzo_state *state)
+{
+}
+
 int lzo_open(int ifd, const char* inm, loff_t ioff, 
 	     int ofd, const char* onm, loff_t ooff, 
 	     unsigned int bsz, unsigned int hsz,
-	     loff_t exfer, unsigned char **bufp, void **stat)
+	     loff_t exfer, int olnchg, size_t totslack,
+	     unsigned char **bufp, void **stat)
 {
 	lzo_state *state = (lzo_state*)*stat;
 	state->first_ooff = ooff;
@@ -253,7 +276,9 @@ int lzo_open(int ifd, const char* inm, loff_t ioff,
 	} else 
 		state->buflen = 4*bsz;
 
-	state->buf = malloc(state->buflen);
+	size_t ownslack = -ddr_plug.slackspace*bsz;
+	state->addslack = totslack - ownslack;	
+	state->buf = slackalloc(state->buflen, state);
 	if (!state->buf) {
 		ddr_plug.fplog(stderr, FATAL, "lzo: can't allocate buffer of size %i for de/compression!\n", state->buflen);
 		state->buflen = 0;

@@ -18,13 +18,16 @@ typedef int (_init_callback)(void **stat, char* param);
 /** open_callback parameters: input file descriptor, input file name,
  * 	initial offset input file, same 3 params for output file,
  * 	soft (large) block size, hard (fallback) block size,
- * 	estimated xfer size, ptr to buffer ptr, opaque handle.
+ * 	estimated xfer size, flag that olen will change after writing,
+ *	total slack size for all plugins,
+ *	ptr to buffer ptr, opaque handle.
  * 	Return value: 0 = OK, -x = ERROR.
  */
 typedef int (_open_callback)(int ifd, const char* inm, loff_t ioff, 
 			     int ofd, const char* onm, loff_t ooff, 
 			     unsigned int bsz, unsigned int hsz,
-			     loff_t exfer, unsigned char **bufp, void **stat);
+			     loff_t exfer, int olnchange, size_t totslack,
+			     unsigned char **bufp, void **stat);
 /** block_callback parameters: buffer to be written (can be modified),
  *  	number of bytes to be written (can be modified), eof flag,
  *  	output stream offset, handle.

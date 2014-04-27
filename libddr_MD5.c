@@ -54,7 +54,8 @@ int md5_plug_init(void **stat, char* param)
 int md5_open(int ifd, const char* inm, loff_t ioff, 
 	     int ofd, const char* onm, loff_t ooff, 
 	     unsigned int bsz, unsigned int hsz,
-	     loff_t exfer, unsigned char **bufp, void **stat)
+	     loff_t exfer, int olnchg, size_t totslack,
+	     unsigned char **bufp, void **stat)
 {
 	md5_state *state = (md5_state*)malloc(sizeof(md5_state));
 	*stat = (void*)state;

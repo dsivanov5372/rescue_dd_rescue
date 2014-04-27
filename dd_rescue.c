@@ -338,6 +338,7 @@ int fplog(FILE* const file, enum ddrlog_t logpre, const char * const fmt, ...)
 /** Plugin infrastructure */
 size_t max_slack = 0;
 double max_neg_slack = 0;
+int first_lnchg = -1;
 int max_align = 0;
 char not_sparse = 0;
 char plugin_help = 0;
@@ -357,7 +358,8 @@ void call_plugins_open()
 			int err = LISTDATA(plug).open_callback(ides, iname, ipos,
 						odes, oname, opos,
 						softbs, hardbs, estxfer, 
-						&buf, &LISTDATA(plug).state);
+						(plugins_opened < first_lnchg? 1: 0),
+						max_slack, &buf, &LISTDATA(plug).state);
 			if (err)
 				fplog(stderr, WARN, "Error initializing plugin %s: %s!\n",
 					LISTDATA(plug).name, strerror(err));
@@ -398,13 +400,13 @@ typedef void* VOIDP;
 LISTDECL(VOIDP);
 LISTTYPE(VOIDP) *ddr_plug_handles;
 
-void insert_plugin(void* hdl, const char* nm, char* param)
+ddr_plugin_t* insert_plugin(void* hdl, const char* nm, char* param)
 {
 	LISTAPPEND(ddr_plug_handles, hdl, VOIDP);
 	ddr_plugin_t *plug = dlsym(hdl, "ddr_plug");
 	if (!plug) {
 		fplog(stderr, WARN, "plugin %s loaded, but ddr_plug not found!\n", nm);
-		return;
+		return NULL;
 	}
 	if (!plug->name)
 		plug->name = nm;
@@ -431,6 +433,7 @@ void insert_plugin(void* hdl, const char* nm, char* param)
 		plugin_help++;
 	if (plug->block_callback)
 		have_block_cb++;
+	return plug;
 }
 
 
@@ -438,6 +441,7 @@ void load_plugins(char* plugs)
 {
 	char* next;
 	char path[256];
+	int plugno = 0;
 	while (plugs) {
 		next = strchr(plugs, ',');
 		if (next)
@@ -453,8 +457,14 @@ void load_plugins(char* plugs)
 		if (!hdl)
 			fplog(stderr, WARN, "Could not load plugin %s: %s\n",
 				plugs, strerror(errno));
-		else 
-			insert_plugin(hdl, plugs, param);
+		else {
+			ddr_plugin_t *plug = insert_plugin(hdl, plugs, param);
+			if (!plug)
+				continue;
+			if (first_lnchg < 0 && plug->changes_output_len)
+				first_lnchg = plugno;
+			++plugno;
+		}
 		plugs = next;
 	}
 }
