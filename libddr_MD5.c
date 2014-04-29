@@ -54,7 +54,8 @@ int md5_plug_init(void **stat, char* param)
 int md5_open(int ifd, const char* inm, loff_t ioff, 
 	     int ofd, const char* onm, loff_t ooff, 
 	     unsigned int bsz, unsigned int hsz,
-	     loff_t exfer, int olnchg, size_t totslack,
+	     loff_t exfer, int olnchg, 
+	     unsigned int totslack_pre, unsigned int totslack_post,
 	     unsigned char **bufp, void **stat)
 {
 	md5_state *state = (md5_state*)malloc(sizeof(md5_state));
@@ -189,7 +190,8 @@ int md5_close(loff_t ooff, void **stat)
 
 ddr_plugin_t ddr_plug = {
 	.name = "MD5",
-	.slackspace = 128,
+	.slack_pre = 64,
+	.slack_post = 64,
 	.needs_align = 0,
 	.handles_sparse = 1,
 	.init_callback  = md5_plug_init,

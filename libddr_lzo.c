@@ -91,7 +91,7 @@ typedef struct _lzo_state {
 	void *buf, *carry;
 	size_t buflen, carrylen, carried;
 	unsigned char **bufp;
-	size_t addslack, slackoff;
+	unsigned int slackpre, slackpost;
 	size_t softbs;
 	uint32_t flags;
 	int ofd;
@@ -134,12 +134,14 @@ void lzo_hdr(header_t* hdr, lzo_state *state)
 
 int lzo_parse_hdr(unsigned char* bf, lzo_state *state)
 {
+	/*
 	if (memcmp(bf, lzop_hdr, sizeof(lzop_hdr))) {
 		ddr_plug.fplog(stderr, FATAL, "lzo: lzop magic broken\n");
 		return -1;
 	}
-	header_t *hdr = (header_t*)(bf+sizeof(lzop_hdr));
-	if (hdr->version_needed_to_extract > htons(0x1030)) {
+	*/
+	header_t *hdr = (header_t*)(bf/*+sizeof(lzop_hdr)*/);
+	if (ntohs(hdr->version_needed_to_extract) > 0x1030) {
 		ddr_plug.fplog(stderr, FATAL, "lzo: requires version %02x.%02x to extract\n",
 			ntohs(hdr->version_needed_to_extract) >> 8,
 			ntohs(hdr->version_needed_to_extract) & 0xff);
@@ -163,7 +165,7 @@ int lzo_parse_hdr(unsigned char* bf, lzo_state *state)
 			cksum, comp);
 		return -5;
 	}
-	int off = sizeof(lzop_hdr) + sizeof(header_t) + hdr->nmlen-15;
+	int off = /*sizeof(lzop_hdr) +*/ sizeof(header_t) + hdr->nmlen-15;
 	if (state->flags & F_H_EXTRA_FIELD) {
 		off += 8 + ntohl(*(uint32_t*)(bf+off));
 		if (off > 4096)
@@ -248,37 +250,40 @@ int lzo_plug_init(void **stat, char* param)
 
 void* slackalloc(size_t ln, lzo_state *state)
 {
-	void* ptr = malloc(ln+state->addslack);
+	/* TODO: pagesize alignment ... */
+	void* ptr = malloc(ln+state->slackpre+state->slackpost);
 	if (!ptr) {
 		ddr_plug.fplog(stderr, FATAL, "lzo: allocation of %i bytes failed: %s\n",
-			ln+state->addslack, strerror(errno));
+			ln+state->slackpre+state->slackpost, strerror(errno));
 		exit(13);
 	}
-	return ptr+state->slackoff;
+	return ptr+state->slackpre;
 }
 
 void* slackrealloc(void* base, size_t newln, lzo_state *state)
 {
-	void* ptr = realloc(base-state->slackoff, newln+state->addslack);
+	void* ptr = realloc(base-state->slackpre, newln+state->slackpre+state->slackpost);
 	if (!ptr) {
 		ddr_plug.fplog(stderr, FATAL, "lzo: reallocation of %i bytes failed: %s\n",
-			newln+state->addslack, strerror(errno));
+			newln+state->slackpre+state->slackpost, strerror(errno));
 		exit(13);
 	}
-	return ptr+state->slackoff;
+	return ptr+state->slackpre;
 }
 
 void slackfree(void* base, lzo_state *state)
 {
-	free(base-state->slackoff);
+	free(base-state->slackpre);
 }
 
 int lzo_open(int ifd, const char* inm, loff_t ioff, 
 	     int ofd, const char* onm, loff_t ooff, 
 	     unsigned int bsz, unsigned int hsz,
-	     loff_t exfer, int olnchg, size_t totslack,
+	     loff_t exfer, int olnchg, 
+	     unsigned int totslack_pre, unsigned int totslack_post,
 	     unsigned char **bufp, void **stat)
 {
+	int consumed = 0;
 	lzo_state *state = (lzo_state*)*stat;
 	state->first_ooff = ooff;
 	state->iname = inm;
@@ -307,15 +312,20 @@ int lzo_open(int ifd, const char* inm, loff_t ioff,
 			return -1;
 		}
 		state->buflen = bsz + (bsz>>4) + 72 + sizeof(lzop_hdr) + sizeof(header_t);
-	} else 
+	} else {
 		state->buflen = 4*bsz;
-
-	size_t ownslack = -ddr_plug.slackspace*bsz;
-	state->addslack = totslack - ownslack;	
-	/* FIXME: This happens to work for md5, needs more generic approach */
-	state->slackoff = state->addslack/2;
+		lseek(ifd, ioff, SEEK_SET);
+		consumed = read(ifd, *bufp-sizeof(lzop_hdr), sizeof(lzop_hdr));
+		if (memcmp(*bufp-sizeof(lzop_hdr), lzop_hdr, sizeof(lzop_hdr))) {
+			ddr_plug.fplog(stderr, FATAL, "lzo: lzop magic broken\n");
+			return -1;
+		}
+	}
+	size_t ownslack = -ddr_plug.slack_post*bsz;
+	state->slackpost = totslack_post - ownslack;
+	state->slackpre  = totslack_pre  - ddr_plug.slack_pre;
 	state->buf = slackalloc(state->buflen, state);
-	return 0;
+	return consumed;
 }
 
 unsigned char* lzo_compress(unsigned char *bf, int *towr,
@@ -428,7 +438,8 @@ int lzo_close(loff_t ooff, void **stat)
 
 ddr_plugin_t ddr_plug = {
 	.name = "lzo",
-	.slackspace = 0 /*128*/,
+	.slack_pre = sizeof(lzop_hdr),
+	.slack_post = -16,
 	.needs_align = 1,
 	.handles_sparse = 0,
 	.changes_output = 1,

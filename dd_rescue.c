@@ -336,8 +336,10 @@ int fplog(FILE* const file, enum ddrlog_t logpre, const char * const fmt, ...)
 }
 
 /** Plugin infrastructure */
-size_t max_slack = 0;
-double max_neg_slack = 0;
+unsigned int max_slack_pre = 0;
+int max_neg_slack_pre = 0;
+unsigned int max_slack_post = 0;
+int max_neg_slack_post = 0;
 int first_lnchg = -1;
 int max_align = 0;
 char not_sparse = 0;
@@ -355,14 +357,17 @@ void call_plugins_open()
 	LISTTYPE(ddr_plugin_t) *plug;
 	LISTFOREACH(ddr_plugins, plug) {
 		if (LISTDATA(plug).open_callback) {
+			/* TODO: Only pass slack of subseq. plugins */
 			int err = LISTDATA(plug).open_callback(ides, iname, ipos,
 						odes, oname, opos,
 						softbs, hardbs, estxfer, 
 						(plugins_opened < first_lnchg? 1: 0),
-						max_slack, &buf, &LISTDATA(plug).state);
-			if (err)
+						max_slack_pre, max_slack_post, &buf, &LISTDATA(plug).state);
+			if (err < 0)
 				fplog(stderr, WARN, "Error initializing plugin %s: %s!\n",
 					LISTDATA(plug).name, strerror(err));
+			else
+				ipos += err;
 		}
 		++plugins_opened;
 	}
@@ -411,10 +416,16 @@ ddr_plugin_t* insert_plugin(void* hdl, const char* nm, char* param)
 	if (!plug->name)
 		plug->name = nm;
 	plug->fplog = fplog;
-	if (plug->slackspace > 0)
-		max_slack += plug->slackspace;
-	else if (plug->slackspace < 0)
-		max_neg_slack += plug->slackspace;
+
+	if (plug->slack_pre > 0)
+		max_slack_pre += plug->slack_pre;
+	else if (plug->slack_pre < 0)
+		max_neg_slack_pre += plug->slack_pre;
+	if (plug->slack_post > 0)
+		max_slack_post += plug->slack_post;
+	else if (plug->slack_post < 0)
+		max_neg_slack_post += plug->slack_post;
+
 	if (plug->needs_align > max_align)
 		max_align = plug->needs_align;
 	if (!plug->handles_sparse)
@@ -2065,10 +2076,10 @@ unsigned char* zalloc_aligned_buf(unsigned int bs, unsigned char**obuf)
 {
 	unsigned char *ptr;
 #if defined (__DragonFly__) || defined(__NetBSD__) || defined(__BIONIC__)
-	ptr = (unsigned char*)valloc(bs + max_slack);
+	ptr = max_slack_pre%pagesize? 0: (unsigned char*)valloc(bs + max_slack_pre + max_slack_post);
 #else
 	void *mp;
-	if (posix_memalign(&mp, pagesize, bs + max_slack))
+	if (max_slack_pre%pagesize || posix_memalign(&mp, pagesize, bs + max_slack_pre + max_slack_post))
 		ptr = 0;
 	else
 		ptr = (unsigned char*)mp;
@@ -2076,18 +2087,21 @@ unsigned char* zalloc_aligned_buf(unsigned int bs, unsigned char**obuf)
 	if (obuf) 
 		*obuf = ptr;
 	if (!ptr) {
-		fplog(stderr, WARN, "allocation of aligned buffer failed -- use malloc\n");
-		ptr = (unsigned char*)malloc(bs + pagesize * max_slack);
+		if (0 == max_slack_pre%pagesize)
+			fplog(stderr, WARN, "allocation of aligned buffer failed -- use malloc\n");
+		ptr = (unsigned char*)malloc(bs + pagesize + max_slack_pre + max_slack_post);
 		if (!ptr) {
-			fplog(stderr, FATAL, "allocation of buffer failed!\n");
+			fplog(stderr, FATAL, "allocation of buffer of size %li failed!\n", 
+				bs+pagesize+max_slack_pre+max_slack_post);
 			cleanup(); exit(18);
 		}
 		if (obuf)
 			*obuf = ptr;
-		ptr += pagesize-1;
+		ptr += max_slack_pre+pagesize-1;
 		ptr -= (unsigned long)ptr % pagesize;
-	}
-	memset(ptr, 0, bs+max_slack);
+	} else
+		ptr += max_slack_pre;
+	memset(ptr-max_slack_pre, 0, bs+max_slack_pre+max_slack_post);
 	return ptr;
 }
 
@@ -2377,7 +2391,8 @@ int main(int argc, char* argv[])
 		fplog(stderr, WARN, "disable write avoidance (-W) for splice copy\n");
 		avoidwrite = 0;
 	}
-	max_slack += -max_neg_slack*softbs/16;
+	max_slack_pre += -max_neg_slack_pre*softbs/16;
+	max_slack_post += -max_neg_slack_post*softbs/16;
 	buf = zalloc_aligned_buf(softbs, &origbuf);
 
 	/* Optimization: Don't reread from /dev/zero over and over ... */

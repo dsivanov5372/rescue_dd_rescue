@@ -21,12 +21,13 @@ typedef int (_init_callback)(void **stat, char* param);
  * 	estimated xfer size, flag that olen will change after writing,
  *	total slack size for all plugins,
  *	ptr to buffer ptr, opaque handle.
- * 	Return value: 0 = OK, -x = ERROR.
+ * 	Return value: 0 = OK, -x = ERROR, +x = Bytes consumed from input file.
  */
 typedef int (_open_callback)(int ifd, const char* inm, loff_t ioff, 
 			     int ofd, const char* onm, loff_t ooff, 
 			     unsigned int bsz, unsigned int hsz,
-			     loff_t exfer, int olnchange, size_t totslack,
+			     loff_t exfer, int olnchange, 
+			     unsigned int totslack_pre, unsigned int totslack_post,
 			     unsigned char **bufp, void **stat);
 /** block_callback parameters: buffer to be written (can be modified),
  *  	number of bytes to be written (can be modified), eof flag,
@@ -50,7 +51,8 @@ typedef struct _ddr_plugin {
 	/* Name of the plugin -- will be filled by loader if left empty */
 	const char* name;
 	/* Amount of extra bytes required in buffer, negative => softbs*slackspace/16 */
-	size_t slackspace;
+	int slack_pre;
+	int slack_post;
 	/* Alignment need */
 	unsigned int needs_align;
 	/* Handles sparse */
