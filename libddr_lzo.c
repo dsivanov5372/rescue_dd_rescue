@@ -89,8 +89,9 @@ typedef struct _lzo_state {
 	loff_t first_ooff;
 	const char *iname, *oname;
 	void *workspace;
-	void *dbuf, *carry;
-	size_t dbuflen, carrylen, carried;
+	void *dbuf;
+	size_t dbuflen, sbufoff;
+	unsigned char *obuf;
 	unsigned char **bufp;
 	unsigned int slackpre, slackpost;
 	size_t softbs;
@@ -179,13 +180,16 @@ int parse_block_hdr(blockhdr_t *hdr, unsigned int *unc_cksum, unsigned int *cmp_
 {
 	int off = sizeof(blockhdr_t);
 	if (state->flags & (F_ADLER32_D | F_CRC32_D)) {
-		*unc_cksum = ntohl(hdr->uncmpr_chksum);
-		if (state->flags & (F_ADLER32_C | F_CRC32_C))
-			*cmp_cksum = ntohl(hdr->cmpr_chksum);
-		else
+		if (unc_cksum)
+			*unc_cksum = ntohl(hdr->uncmpr_chksum);
+		if (state->flags & (F_ADLER32_C | F_CRC32_C)) {
+			if (cmp_cksum)
+				*cmp_cksum = ntohl(hdr->cmpr_chksum);
+		} else
 			off -= 4;
 	} else if (state->flags & (F_ADLER32_C | F_CRC32_C)) {
-		*cmp_cksum = ntohl(hdr->uncmpr_chksum);
+		if (cmp_cksum)
+			*cmp_cksum = ntohl(hdr->uncmpr_chksum);
 		off -= 4;
 	} else {
 		off -= 8;
@@ -210,8 +214,6 @@ int lzo_plug_init(void **stat, char* param, int seq)
 	state->mode = AUTO;
 	state->workspace = NULL;
 	state->dbuflen = 0;
-	state->carrylen = 0;
-	state->carry = NULL;
 	state->seq = seq;
 	state->hdr_seen = 0;
 	while (param) {
@@ -275,7 +277,9 @@ int lzo_open(int ifd, const char* inm, loff_t ioff,
 	state->oname = onm;
 	state->ofd = ofd;
 	state->bufp = bufp;
+	state->obuf = *bufp;
 	state->softbs = bsz;
+	state->sbufoff = 0;
 	if (lzo_init() != LZO_E_OK) {
 		ddr_plug.fplog(stderr, FATAL, "lzo: failed to initialize lzo library!");
 		return -1;
@@ -363,25 +367,66 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 	}
 	/* Now do processing: Do we have a full block? */
 	do {
-		uint32_t cmp_len, unc_len;
+		uint32_t cmp_len, unc_len = 0;
 		lzo_uint dst_len;
-		blockhdr_t *hdr = (blockhdr_t*)(bf+c_off);
-		unc_len = ntohl(hdr->uncmpr_len);
-		if (!unc_len)	/* EOF */
+		const size_t totbufln = state->softbs-ddr_plug.slack_post*state->softbs/16;
+		unsigned char* effbf = bf+c_off-state->sbufoff;
+		blockhdr_t *hdr = (blockhdr_t*)effbf;
+		/* No more bytes left: This is ideal :-) */
+		if (c_off == *towr) {
+			state->sbufoff = 0;
+			*state->bufp = state->obuf;
 			break;
+		}
+		/* EOF marker */
+		if (*towr - c_off >= 4) {
+			unc_len = ntohl(hdr->uncmpr_len);
+			if (!unc_len)	/* EOF */
+				break;
+		}
+		/* Not enough data to read header; move to beginning of buffer */
+		if (*towr - c_off < 8) {
+			if (effbf != state->obuf)
+				memmove(state->obuf, effbf, *towr-c_off);
+			state->sbufoff = *towr-c_off;
+			*state->bufp = state->obuf+state->sbufoff;
+			break;
+		}
+		/* Parse rest of header header */
 		cmp_len = ntohl(hdr->cmpr_len);
 		unsigned int unc_cksum, cmp_cksum;
-		int addoff = parse_block_hdr(hdr, &unc_cksum, &cmp_cksum, state);
-		if (c_off+addoff+cmp_len > *towr) {
+		int addoff;
+		if (*towr - c_off >= 16)
+			addoff = parse_block_hdr(hdr, &unc_cksum, &cmp_cksum, state);
+		else
+			addoff = parse_block_hdr(hdr, NULL, NULL, state);
+		/* Block incomplete? */
+		if (c_off+addoff+cmp_len > *towr+state->sbufoff) {
 			/* incomplete block */
-			ddr_plug.fplog(stderr, FATAL, "lzo: we don't handle partial blocks yet!\n");
-			raise(SIGQUIT);
+			if (c_off+state->sbufoff+addoff+cmp_len <= totbufln 
+				&& totbufln - state->sbufoff >= state->softbs) {
+				/* We have enough space to just append: 
+				 * Block will fit and so will next read ... */
+				state->sbufoff += *towr;
+				*state->bufp += *towr;
+			} else if (addoff+cmp_len < totbufln) {
+				/* We need to move block to beg of buffer */
+				if (effbf != state->obuf)
+					memmove(state->obuf, effbf, *towr-c_off);
+				state->sbufoff = *towr-c_off;
+				*state->bufp = state->obuf+state->sbufoff;
+			} else {
+				/* Our buffer is too small */
+				ddr_plug.fplog(stderr, FATAL, "Can't assemble blocks larger than %i, increase softblocksize\n", 
+						totbufln);
+				raise(SIGQUIT);
+			}
 			break;
 		}
 		if (state->flags & ( F_ADLER32_C | F_CRC32_C)) {
 			uint32_t cksum = state->flags & F_ADLER32_C ?
-				lzo_adler32(ADLER32_INIT_VALUE, bf+c_off+addoff, cmp_len) :
-				lzo_crc32  (  CRC32_INIT_VALUE, bf+c_off+addoff, cmp_len);
+				lzo_adler32(ADLER32_INIT_VALUE, effbf+addoff, cmp_len) :
+				lzo_crc32  (  CRC32_INIT_VALUE, effbf+addoff, cmp_len);
 			if (cksum != cmp_cksum) {
 				ddr_plug.fplog(stderr, FATAL, "lzo: compr checksum mismatch @ %i\n",
 						ooff+d_off);
@@ -399,7 +444,7 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 			state->dbuf = slackrealloc(state->dbuf, state->dbuflen, state);
 			dst_len = state->dbuflen-d_off; /* unc_len */
 		}
-		int err = lzo1x_decompress_safe(bf+c_off+addoff, cmp_len, state->dbuf+d_off, &dst_len, NULL);
+		int err = lzo1x_decompress_safe(effbf+addoff, cmp_len, state->dbuf+d_off, &dst_len, NULL);
 		if (dst_len != unc_len)
 			ddr_plug.fplog(stderr, WARN, "lzo: inconsistent uncompressed size @%i: %i <-> %i\n",
 					ooff+d_off, unc_len, dst_len);
@@ -433,8 +478,8 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 		}
 		if (state->flags & ( F_ADLER32_D | F_CRC32_D)) {
 			uint32_t cksum = state->flags & F_ADLER32_D ?
-				lzo_adler32(ADLER32_INIT_VALUE, state->dbuf+d_off, unc_len) :
-				lzo_crc32  (  CRC32_INIT_VALUE, state->dbuf+d_off, unc_len);
+				lzo_adler32(ADLER32_INIT_VALUE, state->dbuf+d_off, dst_len) :
+				lzo_crc32  (  CRC32_INIT_VALUE, state->dbuf+d_off, dst_len);
 			if (cksum != unc_cksum) {
 				ddr_plug.fplog(stderr, FATAL, "lzo: decompr checksum mismatch @ %i\n",
 						ooff+d_off);
@@ -444,7 +489,14 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 		}
 		c_off += cmp_len+addoff;
 		d_off += dst_len;
+		/* FIXME */
+		if (0 && c_off > state->sbufoff) {
+			c_off -= state->sbufoff;
+			state->sbufoff = 0;
+			*state->bufp = state->obuf;
+		}
 	} while (1);
+	/* reset to normal buffer start */
 	*towr = d_off;
 	return state->dbuf;
 }
@@ -465,8 +517,6 @@ int lzo_close(loff_t ooff, void **stat)
 {
 	lzo_state *state = (lzo_state*)*stat;
 	//loff_t len = ooff-state->first_ooff;
-	if (state->carry)
-		free(state->carry);
 	if (state->dbuflen)
 		slackfree(state->dbuf, state);
 	if (state->workspace)
