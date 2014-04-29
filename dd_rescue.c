@@ -470,6 +470,7 @@ void load_plugins(char* plugs)
 	char* next;
 	char path[256];
 	int plugno = 0;
+	int errs = 0;
 	while (plugs) {
 		next = strchr(plugs, ',');
 		if (next)
@@ -478,23 +479,28 @@ void load_plugins(char* plugs)
 		if (param)
 			*param++ = 0;
 		snprintf(path, 255, "libddr_%s.so", plugs);
+		//errno = ENOENT;
 		void* hdl = dlopen(path, RTLD_NOW);
 		/* Allow full name (with absolute path if wanted) */
 		if (!hdl) 
 			hdl = dlopen(plugs, RTLD_NOW);
-		if (!hdl)
-			fplog(stderr, WARN, "Could not load plugin %s: %s\n",
-				plugs, strerror(errno));
-		else {
+		if (!hdl) {
+			fplog(stderr, FATAL, "Could not load plugin %s\n", plugs);
+			++errs;
+		} else {
 			ddr_plugin_t *plug = insert_plugin(hdl, plugs, param);
-			if (!plug)
+			if (!plug) {
+				++errs;
 				continue;
+			}
 			if (plug->changes_output_len)
 				last_lnchg = plugno;
 			++plugno;
 		}
 		plugs = next;
 	}
+	if (errs)
+		exit(13);
 }
 
 void unload_plugins()
