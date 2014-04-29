@@ -98,6 +98,7 @@ typedef struct _lzo_state {
 	int ofd;
 	int seq;
 	enum compmode mode;
+	int hdr_seen;
 } lzo_state;
 
 void lzo_hdr(header_t* hdr, lzo_state *state)
@@ -126,12 +127,6 @@ void lzo_hdr(header_t* hdr, lzo_state *state)
 		}
 	}
 	hdr->hdr_checksum = htonl(lzo_adler32(ADLER32_INIT_VALUE, (void*)hdr, offsetof(header_t, hdr_checksum)));
-	
-	/*
-	hdr->extrafield_len = htonl(4);
-	hdr->extra_seglen = htonl(ln);
-	hdr->extrafield_checksum = htonl(lzo_adler32(ADLER32_INIT_VALUE, (void*)&hdr->extrafield_len, 8));
-	 */
 }
 
 int lzo_parse_hdr(unsigned char* bf, lzo_state *state)
@@ -167,6 +162,7 @@ int lzo_parse_hdr(unsigned char* bf, lzo_state *state)
 		if (off > 4096)
 			abort();
 	}
+	state->hdr_seen = 1;
 	return off;
 }
 
@@ -217,6 +213,7 @@ int lzo_plug_init(void **stat, char* param, int seq)
 	state->carrylen = 0;
 	state->carry = NULL;
 	state->seq = seq;
+	state->hdr_seen = 0;
 	while (param) {
 		char* next = strchr(param, ':');
 		if (next)
@@ -352,7 +349,8 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 	if (!*towr)
 		return bf;
 	/* header parsing has happened in _open callback ... */
-	if (ooff - state->first_ooff == 0) {
+	if (!state->hdr_seen) {
+		assert(ooff - state->first_ooff == 0);
 		if (memcmp(bf, lzop_hdr, sizeof(lzop_hdr))) {
 			ddr_plug.fplog(stderr, FATAL, "lzo: lzop magic broken\n");
 			abort();
@@ -380,12 +378,13 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 			raise(SIGQUIT);
 			break;
 		}
-		/* TODO: Check compressed checksum */
-		if (state->flags & F_ADLER32_C) {
-			uint32_t cksum = lzo_adler32(ADLER32_INIT_VALUE, bf+c_off+addoff, cmp_len);
+		if (state->flags & ( F_ADLER32_C | F_CRC32_C)) {
+			uint32_t cksum = state->flags & F_ADLER32_C ?
+				lzo_adler32(ADLER32_INIT_VALUE, bf+c_off+addoff, cmp_len) :
+				lzo_crc32  (  CRC32_INIT_VALUE, bf+c_off+addoff, cmp_len);
 			if (cksum != cmp_cksum) {
 				ddr_plug.fplog(stderr, FATAL, "lzo: compr checksum mismatch @ %i\n",
-						ooff+c_off);
+						ooff+d_off);
 				raise(SIGQUIT);
 				break;
 			}
@@ -398,6 +397,9 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 			dst_len = state->dbuflen-d_off; /* unc_len */
 		}
 		int err = lzo1x_decompress_safe(bf+c_off+addoff, cmp_len, state->dbuf+d_off, &dst_len, NULL);
+		if (dst_len != unc_len)
+			ddr_plug.fplog(stderr, WARN, "lzo: inconsistent uncompressed size @%i: %i <-> %i\n",
+					ooff+d_off, unc_len, dst_len);
 		switch (err) {
 		case LZO_E_INPUT_OVERRUN:
 			/* TODO: Partial block, handle! */
@@ -426,7 +428,17 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 			ddr_plug.fplog(stderr, INFO, "lzo: input not fully consumed %i %i %i\n", *towr, state->dbuflen, dst_len);
 			break;
 		}
-		/* TODO: Check uncompressed checksum */
+		if (state->flags & ( F_ADLER32_D | F_CRC32_D)) {
+			uint32_t cksum = state->flags & F_ADLER32_D ?
+				lzo_adler32(ADLER32_INIT_VALUE, state->dbuf+d_off, unc_len) :
+				lzo_crc32  (  CRC32_INIT_VALUE, state->dbuf+d_off, unc_len);
+			if (cksum != unc_cksum) {
+				ddr_plug.fplog(stderr, FATAL, "lzo: decompr checksum mismatch @ %i\n",
+						ooff+d_off);
+				raise(SIGQUIT);
+				break;
+			}
+		}
 		c_off += cmp_len+addoff;
 		d_off += dst_len;
 	} while (1);
