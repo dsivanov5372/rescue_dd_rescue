@@ -88,8 +88,8 @@ typedef struct _lzo_state {
 	loff_t first_ooff;
 	const char *iname, *oname;
 	void *workspace;
-	void *buf, *carry;
-	size_t buflen, carrylen, carried;
+	void *dbuf, *carry;
+	size_t dbuflen, carrylen, carried;
 	unsigned char **bufp;
 	unsigned int slackpre, slackpost;
 	size_t softbs;
@@ -178,30 +178,22 @@ void block_hdr(blockhdr_t* hdr, uint32_t uncompr, uint32_t compr, uint32_t unc_a
 }
 
 /* Returns compressed len */
-int parse_block_hdr(unsigned char *bf, unsigned int ln, lzo_state *state, unsigned int* unc_len, uint32_t *unc_cksm)
+int parse_block_hdr(blockhdr_t *hdr, unsigned int *unc_cksum, unsigned int *cmp_cksum, lzo_state *state)
 {
 	int off = sizeof(blockhdr_t);
-	blockhdr_t *hdr = (blockhdr_t*)bf;
-	*unc_len = ntohl(hdr->uncmpr_len);
-	unsigned int cmp_ln = ntohl(hdr->cmpr_len);
-	unsigned int uncmpr_cksum, cmpr_cksum;
 	if (state->flags & (F_ADLER32_D | F_CRC32_D)) {
-		uncmpr_cksum = ntohl(hdr->uncmpr_chksum);
+		*unc_cksum = ntohl(hdr->uncmpr_chksum);
 		if (state->flags & (F_ADLER32_C | F_CRC32_C))
-			cmpr_cksum = ntohl(hdr->cmpr_chksum);
+			*cmp_cksum = ntohl(hdr->cmpr_chksum);
 		else
 			off -= 4;
 	} else if (state->flags & (F_ADLER32_C | F_CRC32_C)) {
-		cmpr_cksum = ntohl(hdr->uncmpr_chksum);
+		*cmp_cksum = ntohl(hdr->uncmpr_chksum);
 		off -= 4;
 	} else {
 		off -= 8;
 	}
-	/* validate compressed checksum if we have enough data */
-	if (ln-off >= cmp_ln) {
-	
-	}
-	return ln;		
+	return off;
 }
 
 char *lzo_help = "The lzo plugin for dd_rescue de/compresses data on the fly.\n"
@@ -220,7 +212,7 @@ int lzo_plug_init(void **stat, char* param)
 	//memset(state, 0, sizeof(lzo_state));
 	state->mode = AUTO;
 	state->workspace = NULL;
-	state->buflen = 0;
+	state->dbuflen = 0;
 	state->carrylen = 0;
 	state->carry = NULL;
 	while (param) {
@@ -306,10 +298,10 @@ int lzo_open(int ifd, const char* inm, loff_t ioff,
 			ddr_plug.fplog(stderr, FATAL, "lzo: can't allocate workspace of size %i for compression!\n", LZO1X_1_MEM_COMPRESS);
 			return -1;
 		}
-		state->buflen = bsz + (bsz>>4) + 72 + sizeof(lzop_hdr) + sizeof(header_t);
+		state->dbuflen = bsz + (bsz>>4) + 72 + sizeof(lzop_hdr) + sizeof(header_t);
 	} else {
 		unsigned char bf[sizeof(lzop_hdr)];
-		state->buflen = 4*bsz;
+		state->dbuflen = 4*bsz;
 		lseek(ifd, ioff, SEEK_SET);
 		consumed = read(ifd, bf, sizeof(lzop_hdr));
 		if (memcmp(bf, lzop_hdr, sizeof(lzop_hdr))) {
@@ -331,7 +323,7 @@ int lzo_open(int ifd, const char* inm, loff_t ioff,
 	}
 	state->slackpost = totslack_post;
 	state->slackpre  = totslack_pre ;
-	state->buf = slackalloc(state->buflen, state);
+	state->dbuf = slackalloc(state->dbuflen, state);
 	return 0;
 	/* This breaks MD5 in chain before us
 	return consumed;
@@ -342,7 +334,7 @@ unsigned char* lzo_compress(unsigned char *bf, int *towr,
 			    int eof, loff_t ooff, lzo_state *state)
 {
 	lzo_uint dst_len;
-	void *hdrp = state->buf+3+sizeof(lzop_hdr);
+	void *hdrp = state->dbuf+3+sizeof(lzop_hdr);
 	void *bhdp = hdrp+sizeof(header_t);
 	void* wrbf = bhdp;
 	if (*towr) {
@@ -355,10 +347,10 @@ unsigned char* lzo_compress(unsigned char *bf, int *towr,
 		block_hdr((blockhdr_t*)bhdp, *towr, dst_len, unc_adl, cdata);
 		*towr = dst_len + sizeof(blockhdr_t);
 		if (ooff == state->first_ooff) {
-			memcpy(state->buf+3, lzop_hdr, sizeof(lzop_hdr));
+			memcpy(state->dbuf+3, lzop_hdr, sizeof(lzop_hdr));
 			lzo_hdr((header_t*)hdrp, state);
 			*towr += sizeof(header_t) + sizeof(lzop_hdr);
-			wrbf = state->buf+3;
+			wrbf = state->dbuf+3;
 		}
 	}
 	if (eof) {
@@ -373,46 +365,71 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 			      int eof, loff_t ooff, lzo_state *state)
 {
 	/* Decompression is tricky */
-	int err; 
+	if (!*towr)
+		return bf;
 	/* header parsing has happened in _open callback ... */
-	int off = ooff-state->first_ooff? 0: state->firstblkoff;;
-	lzo_uint dst_len;
-	/* Now do processing: Do we have a full block */
+	int c_off = ooff-state->first_ooff? 0: state->firstblkoff;
+	int d_off = 0;
+	/* Now do processing: Do we have a full block? */
 	do {
-		dst_len = state->buflen;
-		err = lzo1x_decompress_safe(bf, *towr, state->buf, &dst_len, NULL);
+		uint32_t cmp_len, unc_len;
+		lzo_uint dst_len;
+		blockhdr_t *hdr = (blockhdr_t*)(bf+c_off);
+		unc_len = ntohl(hdr->uncmpr_len);
+		if (!unc_len)	/* EOF */
+			break;
+		cmp_len = ntohl(hdr->cmpr_len);
+		unsigned int unc_cksum, cmp_cksum;
+		int addoff = parse_block_hdr(hdr, &unc_cksum, &cmp_cksum, state);
+		if (c_off+addoff+cmp_len > *towr) {
+			/* incomplete block */
+			ddr_plug.fplog(stderr, FATAL, "lzo: we don't handle partial blocks yet");
+			abort();
+			continue;
+		}
+		/* TODO: Check compressed checksum */
+		dst_len = state->dbuflen-d_off;
+		if (dst_len < unc_len) {
+			state->dbuflen = unc_len+d_off;
+			/* TODO: Sanity check */
+			state->dbuf = slackrealloc(state->dbuf, state->dbuflen, state);
+			dst_len = state->dbuflen-d_off; /* unc_len */
+		}
+		int err = lzo1x_decompress_safe(bf+c_off+addoff, cmp_len, state->dbuf+d_off, &dst_len, NULL);
 		switch (err) {
 		case LZO_E_INPUT_OVERRUN:
 			/* TODO: Partial block, handle! */
-			ddr_plug.fplog(stderr, FATAL, "lzo: ocverrun %i %i %i; try larger block sizes\n", *towr, state->buflen, dst_len);
+			ddr_plug.fplog(stderr, FATAL, "lzo: input overrun %i %i %i; try larger block sizes\n", *towr, state->dbuflen, dst_len);
 			abort();
 			break;
 		case LZO_E_EOF_NOT_FOUND:
 			/* TODO: Partial block, handle! */
-			ddr_plug.fplog(stderr, FATAL, "lzo: EOF not found %i %i %i; try larger block sizes\n", *towr, state->buflen, dst_len);
+			ddr_plug.fplog(stderr, FATAL, "lzo: EOF not found %i %i %i; try larger block sizes\n", *towr, state->dbuflen, dst_len);
 			abort();
 			break;
 		case LZO_E_OUTPUT_OVERRUN:
-			state->buflen *= 2;
-			state->buf = slackrealloc(state->buf, state->buflen, state);
+			ddr_plug.fplog(stderr, FATAL, "lzo: output overrun %i %i %i; try larger block sizes\n", *towr, state->dbuflen, dst_len);
+			abort();
 			break;
 		case LZO_E_LOOKBEHIND_OVERRUN:
-			ddr_plug.fplog(stderr, FATAL, "lzo: lookbehind overrun %i %i %i; data corrupt?\n", *towr, state->buflen, dst_len);
+			ddr_plug.fplog(stderr, FATAL, "lzo: lookbehind overrun %i %i %i; data corrupt?\n", *towr, state->dbuflen, dst_len);
 			abort();
 			break;
 		case LZO_E_ERROR:
-			ddr_plug.fplog(stderr, FATAL, "lzo: unspecified error %i %i %i; data corrupt?\n", *towr, state->buflen, dst_len);
+			ddr_plug.fplog(stderr, FATAL, "lzo: unspecified error %i %i %i; data corrupt?\n", *towr, state->dbuflen, dst_len);
 			abort();
 			break;
 		case LZO_E_INPUT_NOT_CONSUMED:
 			/* TODO: Leftover bytes, store */
-			/* FIXME: We can't know how many input bytes we consumed, can we? */
-			ddr_plug.fplog(stderr, INFO, "lzo: input not fully consumed %i %i %i\n", *towr, state->buflen, dst_len);
+			ddr_plug.fplog(stderr, INFO, "lzo: input not fully consumed %i %i %i\n", *towr, state->dbuflen, dst_len);
 			break;
 		}
-	} while (err == LZO_E_OUTPUT_OVERRUN);
-	*towr = dst_len;
-	return state->buf;
+		/* TODO: Check uncompressed checksum */
+		c_off += cmp_len+addoff;
+		d_off += dst_len;
+	} while (1);
+	*towr = d_off;
+	return state->dbuf;
 }
 
 
@@ -433,8 +450,8 @@ int lzo_close(loff_t ooff, void **stat)
 	//loff_t len = ooff-state->first_ooff;
 	if (state->carry)
 		free(state->carry);
-	if (state->buflen)
-		slackfree(state->buf, state);
+	if (state->dbuflen)
+		slackfree(state->dbuf, state);
 	if (state->workspace)
 		free(state->workspace);
 	free(*stat);
