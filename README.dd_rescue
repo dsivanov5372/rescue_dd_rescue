@@ -180,6 +180,8 @@ dd_rescue has a few nifty features:
 * Version 1.42 brought a plugin interface (still evolving) that allows
   to analyze or transform blocks prior to being written. 1.42 shipped with
   an MD5 plugin.
+* Version 1.43 brought the lzo plugin, allowing data compression/
+  decompression using the fast lzo algorithm.
 
 
 Copyright

@@ -345,6 +345,8 @@ unsigned char* lzo_compress(unsigned char *bf, int *towr,
 		 * also prefer crc32,but that's slow in liblzo ...) */
 		uint32_t unc_adl = lzo_adler32(ADLER32_INIT_VALUE, bf, *towr);
 		lzo1x_1_compress(bf, *towr, cdata, &dst_len, state->workspace);
+		/* lzop does cleverly store the original if the compressed size is
+		 * larger -- should we do the same? */
 		state->cmp_ln += dst_len; state->unc_ln += *towr;
 		block_hdr((blockhdr_t*)bhdp, *towr, dst_len, unc_adl, cdata);
 		*towr = dst_len + sizeof(blockhdr_t);
