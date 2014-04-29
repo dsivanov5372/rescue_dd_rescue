@@ -138,7 +138,7 @@ int lzo_parse_hdr(unsigned char* bf, lzo_state *state)
 			ntohs(hdr->version_needed_to_extract) & 0xff);
 		return -2;
 	}
-	if (hdr->method != 1 /*|| hdr->level != 5*/) {
+	if (hdr->method != 1 && hdr->method != 2 && hdr->method != 3 /*|| hdr->level != 5*/) {
 		ddr_plug.fplog(stderr, FATAL, "lzo: unsupported method %i level %i\n",
 			hdr->method, hdr->level);
 		return -3;
