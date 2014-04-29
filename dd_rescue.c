@@ -362,8 +362,8 @@ void call_plugins_open()
 		if (LISTDATA(plug).open_callback) {
 			int spre  = LISTDATA(plug).slack_pre ;
 			int spost = LISTDATA(plug).slack_post;
-			slk_pre  += spre  >= 0? spre : -spre *softbs/16;
-			slk_post += spost >= 0? spost: -spost*softbs/16;
+			slk_pre  += spre  >= 0? spre : -spre *((softbs+15)/16);
+			slk_post += spost >= 0? spost: -spost*((softbs+15)/16);
 			/*
 			fplog(stderr, INFO, "Pre %i Post %i TPre %i TPost %i\n",
 				spre, spost, slk_pre, slk_post);
@@ -2409,8 +2409,8 @@ int main(int argc, char* argv[])
 		fplog(stderr, WARN, "disable write avoidance (-W) for splice copy\n");
 		avoidwrite = 0;
 	}
-	max_slack_pre += -max_neg_slack_pre*softbs/16;
-	max_slack_post += -max_neg_slack_post*softbs/16;
+	max_slack_pre  += -max_neg_slack_pre *((softbs+15)/16);
+	max_slack_post += -max_neg_slack_post*((softbs+15)/16);
 	buf = zalloc_aligned_buf(softbs, &origbuf);
 
 	/* Optimization: Don't reread from /dev/zero over and over ... */
