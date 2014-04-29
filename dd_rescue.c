@@ -363,10 +363,11 @@ void call_plugins_open()
 						softbs, hardbs, estxfer, 
 						(plugins_opened < first_lnchg? 1: 0),
 						max_slack_pre, max_slack_post, &buf, &LISTDATA(plug).state);
-			if (err < 0)
+			if (err < 0) {
 				fplog(stderr, WARN, "Error initializing plugin %s: %s!\n",
 					LISTDATA(plug).name, strerror(err));
-			else
+				exit(13);
+			} else
 				ipos += err;
 		}
 		++plugins_opened;

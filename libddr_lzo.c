@@ -134,13 +134,7 @@ void lzo_hdr(header_t* hdr, lzo_state *state)
 
 int lzo_parse_hdr(unsigned char* bf, lzo_state *state)
 {
-	/*
-	if (memcmp(bf, lzop_hdr, sizeof(lzop_hdr))) {
-		ddr_plug.fplog(stderr, FATAL, "lzo: lzop magic broken\n");
-		return -1;
-	}
-	*/
-	header_t *hdr = (header_t*)(bf/*+sizeof(lzop_hdr)*/);
+	header_t *hdr = (header_t*)bf;
 	if (ntohs(hdr->version_needed_to_extract) > 0x1030) {
 		ddr_plug.fplog(stderr, FATAL, "lzo: requires version %02x.%02x to extract\n",
 			ntohs(hdr->version_needed_to_extract) >> 8,
@@ -165,7 +159,7 @@ int lzo_parse_hdr(unsigned char* bf, lzo_state *state)
 			cksum, comp);
 		return -5;
 	}
-	int off = /*sizeof(lzop_hdr) +*/ sizeof(header_t) + hdr->nmlen-15;
+	int off = sizeof(header_t) + hdr->nmlen-15;
 	if (state->flags & F_H_EXTRA_FIELD) {
 		off += 8 + ntohl(*(uint32_t*)(bf+off));
 		if (off > 4096)
@@ -313,13 +307,25 @@ int lzo_open(int ifd, const char* inm, loff_t ioff,
 		}
 		state->buflen = bsz + (bsz>>4) + 72 + sizeof(lzop_hdr) + sizeof(header_t);
 	} else {
+		unsigned char bf[sizeof(lzop_hdr)];
 		state->buflen = 4*bsz;
 		lseek(ifd, ioff, SEEK_SET);
-		consumed = read(ifd, *bufp-sizeof(lzop_hdr), sizeof(lzop_hdr));
-		if (memcmp(*bufp-sizeof(lzop_hdr), lzop_hdr, sizeof(lzop_hdr))) {
+		consumed = read(ifd, bf, sizeof(lzop_hdr));
+		if (memcmp(bf, lzop_hdr, sizeof(lzop_hdr))) {
 			ddr_plug.fplog(stderr, FATAL, "lzo: lzop magic broken\n");
 			return -1;
 		}
+		//lseek(ifd, ioff+consumed, SEEK_SET);
+		unsigned char realhdr[sizeof(header_t)+256];
+		if (read(ifd, realhdr, sizeof(header_t)+256) < sizeof(header_t)) {
+			ddr_plug.fplog(stderr, FATAL, "lzo: short read on header\n");
+			return -1;
+		}
+		int err = lzo_parse_hdr(realhdr, state);
+		if (err < 0)
+			return err; 
+		consumed += err;
+		lseek(ifd, ioff+consumed, SEEK_SET);
 	}
 	size_t ownslack = -ddr_plug.slack_post*bsz;
 	state->slackpost = totslack_post - ownslack;
@@ -366,11 +372,7 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 	int err; 
 	int off = 0;
 	lzo_uint dst_len;
-	if (ooff == 0) {
-		off = lzo_parse_hdr(bf, state);
-		/* Parse header */
-		/* Validate header checksum */
-	}
+	/* header parsing has happened in _open callback ... */
 	/* Now do processing: Do we have a full block */
 	do {
 		dst_len = state->buflen;
@@ -438,7 +440,7 @@ int lzo_close(loff_t ooff, void **stat)
 
 ddr_plugin_t ddr_plug = {
 	.name = "lzo",
-	.slack_pre = sizeof(lzop_hdr),
+	.slack_pre = 0, /* sizeof(lzop_hdr), */
 	.slack_post = -16,
 	.needs_align = 1,
 	.handles_sparse = 0,
