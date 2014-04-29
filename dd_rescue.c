@@ -111,6 +111,7 @@
 #include <sys/time.h>
 #include <sys/stat.h>
 #include <libgen.h>
+#include <assert.h>
 
 #include "frandom.h"
 #include "list.h"
@@ -353,16 +354,25 @@ LISTTYPE(ddr_plugin_t) *ddr_plugins;
 
 void call_plugins_open()
 {
+	unsigned int slk_pre = 0, slk_post = 0;
 	/* Do iterate over list */
 	LISTTYPE(ddr_plugin_t) *plug;
 	LISTFOREACH(ddr_plugins, plug) {
 		if (LISTDATA(plug).open_callback) {
-			/* TODO: Only pass slack of subseq. plugins */
+			int spre  = LISTDATA(plug).slack_pre ;
+			int spost = LISTDATA(plug).slack_post;
+			slk_pre  += spre  >= 0? spre : -spre *softbs/16;
+			slk_post += spost >= 0? spost: -spost*softbs/16;
+			/*
+			fplog(stderr, INFO, "Pre %i Post %i TPre %i TPost %i\n",
+				spre, spost, slk_pre, slk_post);
+			 */
 			int err = LISTDATA(plug).open_callback(ides, iname, ipos,
 						odes, oname, opos,
 						softbs, hardbs, estxfer, 
 						(plugins_opened < first_lnchg? 1: 0),
-						max_slack_pre, max_slack_post, &buf, &LISTDATA(plug).state);
+						max_slack_pre-slk_pre, max_slack_post-slk_post,
+					       	&buf, &LISTDATA(plug).state);
 			if (err < 0) {
 				fplog(stderr, WARN, "Error initializing plugin %s: %s!\n",
 					LISTDATA(plug).name, strerror(err));
@@ -372,6 +382,8 @@ void call_plugins_open()
 		}
 		++plugins_opened;
 	}
+	assert(slk_pre  == max_slack_pre );
+	assert(slk_post == max_slack_post);
 }
 
 void call_plugins_close()

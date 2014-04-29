@@ -94,6 +94,7 @@ typedef struct _lzo_state {
 	unsigned int slackpre, slackpost;
 	size_t softbs;
 	uint32_t flags;
+	unsigned int firstblkoff;
 	int ofd;
 	enum compmode mode;
 } lzo_state;
@@ -326,12 +327,15 @@ int lzo_open(int ifd, const char* inm, loff_t ioff,
 			return err; 
 		consumed += err;
 		lseek(ifd, ioff+consumed, SEEK_SET);
+		state->firstblkoff = consumed;
 	}
-	size_t ownslack = -ddr_plug.slack_post*bsz;
-	state->slackpost = totslack_post - ownslack;
-	state->slackpre  = totslack_pre  - ddr_plug.slack_pre;
+	state->slackpost = totslack_post;
+	state->slackpre  = totslack_pre ;
 	state->buf = slackalloc(state->buflen, state);
+	return 0;
+	/* This breaks MD5 in chain before us
 	return consumed;
+	*/
 }
 
 unsigned char* lzo_compress(unsigned char *bf, int *towr,
@@ -370,9 +374,9 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 {
 	/* Decompression is tricky */
 	int err; 
-	int off = 0;
-	lzo_uint dst_len;
 	/* header parsing has happened in _open callback ... */
+	int off = ooff-state->first_ooff? 0: state->firstblkoff;;
+	lzo_uint dst_len;
 	/* Now do processing: Do we have a full block */
 	do {
 		dst_len = state->buflen;
