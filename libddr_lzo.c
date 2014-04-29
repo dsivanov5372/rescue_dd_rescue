@@ -374,7 +374,7 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 		int addoff = parse_block_hdr(hdr, &unc_cksum, &cmp_cksum, state);
 		if (c_off+addoff+cmp_len > *towr) {
 			/* incomplete block */
-			ddr_plug.fplog(stderr, FATAL, "lzo: we don't handle partial blocks yet");
+			ddr_plug.fplog(stderr, FATAL, "lzo: we don't handle partial blocks yet!\n");
 			raise(SIGQUIT);
 			break;
 		}
@@ -392,7 +392,10 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 		dst_len = state->dbuflen-d_off;
 		if (dst_len < unc_len) {
 			state->dbuflen = unc_len+d_off;
-			/* TODO: Sanity check */
+			/* If memalloc fails, we'll abort in a second, so warn ... */
+			if (unc_len > 16*1024*1024)
+				ddr_plug.fplog(stderr, WARN, "lzo: large uncompressed block sz %i @%i\n",
+						unc_len, ooff+d_off);
 			state->dbuf = slackrealloc(state->dbuf, state->dbuflen, state);
 			dst_len = state->dbuflen-d_off; /* unc_len */
 		}
