@@ -15,6 +15,7 @@
 #include <assert.h>
 
 //#define DEBUG(x) x
+//#define DEBUG(x) if (!state->olnchg) x
 #define DEBUG(x) do {} while(0)
 
 /* fwd decl */
@@ -27,6 +28,7 @@ typedef struct _md5_state {
 	unsigned char **bufp;
 	const char* onm;
 	uint8_t buf[128];
+	int seq;
 	unsigned char buflen;
 	unsigned char olnchg;
 } md5_state;
@@ -35,7 +37,7 @@ char *md5_help = "The MD5 plugin for dd_rescue calculates the md5sum on the fly.
 		" It supports unaligned blocks (arbitrary offsets) and sparse writing.\n"
 		" Parameters: None\n";
 
-int md5_plug_init(void **stat, char* param)
+int md5_plug_init(void **stat, char* param, int seq)
 {
 	int err = 0;
 	while (param) {
@@ -52,6 +54,9 @@ int md5_plug_init(void **stat, char* param)
 		}
 		param = next;
 	}
+	md5_state *state = (md5_state*)malloc(sizeof(md5_state));
+	*stat = (void*)state;
+	state->seq = seq;
 	return err;
 }
 
@@ -62,8 +67,7 @@ int md5_open(int ifd, const char* inm, loff_t ioff,
 	     unsigned int totslack_pre, unsigned int totslack_post,
 	     unsigned char **bufp, void **stat)
 {
-	md5_state *state = (md5_state*)malloc(sizeof(md5_state));
-	*stat = (void*)state;
+	md5_state *state = (md5_state*)*stat;
 	md5_init(&state->md5);
 	state->first_ooff = ooff;
 	state->md5_pos = 0;
@@ -100,8 +104,10 @@ unsigned char* md5_block(unsigned char* bf, int *towr,
 	md5_state *state = (md5_state*)*stat;
 	const loff_t opos = ooff - state->first_ooff;
 	int consumed = 0;
-	/* First block */
 	assert(bf);
+	DEBUG(ddr_plug.fplog(stderr, INFO, "MD5: block(%i/%i): towr=%i, eof=%i, ooff=%i, md5_pos=%i, buflen=%i\n",
+				state->seq, state->olnchg, *towr, eof, ooff, state->md5_pos, state->buflen));
+	/* First block */
 	if (state->buflen) {
 		/* Handle leftover bytes ... */
 		if (!state->olnchg && opos > state->md5_pos+state->buflen) {
@@ -153,6 +159,9 @@ unsigned char* md5_block(unsigned char* bf, int *towr,
 		consumed += mylen; state->md5_pos += mylen;
 	}
 	/* Copy remainder into buffer */
+	if (!state->olnchg && state->md5_pos + state->buflen != opos + consumed)
+		ddr_plug.fplog(stderr, FATAL, "MD5: Inconsistency: MD5 pos %i, buff %i, st pos %i, cons %i, tbw %i\n",
+				state->md5_pos, state->buflen, opos, consumed, *towr);
 	assert(state->olnchg || state->md5_pos + state->buflen == opos + consumed);
 	if (*towr - consumed) {
 		assert(state->buflen+*towr-consumed < 64);

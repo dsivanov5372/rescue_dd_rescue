@@ -94,8 +94,8 @@ typedef struct _lzo_state {
 	unsigned int slackpre, slackpost;
 	size_t softbs;
 	uint32_t flags;
-	unsigned int firstblkoff;
 	int ofd;
+	int seq;
 	enum compmode mode;
 } lzo_state;
 
@@ -200,7 +200,7 @@ char *lzo_help = "The lzo plugin for dd_rescue de/compresses data on the fly.\n"
 	//	" It supports unaligned blocks (arbitrary offsets) and sparse writing.\n"
 		" Parameters: compress/decompress\n";
 
-int lzo_plug_init(void **stat, char* param)
+int lzo_plug_init(void **stat, char* param, int seq)
 {
 	int err = 0;
 	lzo_state *state = (lzo_state*)malloc(sizeof(lzo_state));
@@ -215,6 +215,7 @@ int lzo_plug_init(void **stat, char* param)
 	state->dbuflen = 0;
 	state->carrylen = 0;
 	state->carry = NULL;
+	state->seq = seq;
 	while (param) {
 		char* next = strchr(param, ':');
 		if (next)
@@ -270,7 +271,6 @@ int lzo_open(int ifd, const char* inm, loff_t ioff,
 	     unsigned int totslack_pre, unsigned int totslack_post,
 	     unsigned char **bufp, void **stat)
 {
-	int consumed = 0;
 	lzo_state *state = (lzo_state*)*stat;
 	state->first_ooff = ooff;
 	state->iname = inm;
@@ -300,26 +300,7 @@ int lzo_open(int ifd, const char* inm, loff_t ioff,
 		}
 		state->dbuflen = bsz + (bsz>>4) + 72 + sizeof(lzop_hdr) + sizeof(header_t);
 	} else {
-		unsigned char bf[sizeof(lzop_hdr)];
 		state->dbuflen = 4*bsz;
-		lseek(ifd, ioff, SEEK_SET);
-		consumed = read(ifd, bf, sizeof(lzop_hdr));
-		if (memcmp(bf, lzop_hdr, sizeof(lzop_hdr))) {
-			ddr_plug.fplog(stderr, FATAL, "lzo: lzop magic broken\n");
-			return -1;
-		}
-		//lseek(ifd, ioff+consumed, SEEK_SET);
-		unsigned char realhdr[sizeof(header_t)+256];
-		if (read(ifd, realhdr, sizeof(header_t)+256) < sizeof(header_t)) {
-			ddr_plug.fplog(stderr, FATAL, "lzo: short read on header\n");
-			return -1;
-		}
-		int err = lzo_parse_hdr(realhdr, state);
-		if (err < 0)
-			return err; 
-		consumed += err;
-		lseek(ifd, ioff+consumed, SEEK_SET);
-		state->firstblkoff = consumed;
 	}
 	state->slackpost = totslack_post;
 	state->slackpre  = totslack_pre ;
@@ -365,11 +346,22 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 			      int eof, loff_t ooff, lzo_state *state)
 {
 	/* Decompression is tricky */
+	int c_off = 0;
+	int d_off = 0;
 	if (!*towr)
 		return bf;
 	/* header parsing has happened in _open callback ... */
-	int c_off = ooff-state->first_ooff? 0: state->firstblkoff;
-	int d_off = 0;
+	if (ooff - state->first_ooff == 0) {
+		if (memcmp(bf, lzop_hdr, sizeof(lzop_hdr))) {
+			ddr_plug.fplog(stderr, FATAL, "lzo: lzop magic broken\n");
+			abort();
+		}
+		c_off += sizeof(lzop_hdr);
+		int err = lzo_parse_hdr(bf+c_off, state);
+		if (err < 0)
+			abort();
+		c_off += err;
+	}
 	/* Now do processing: Do we have a full block? */
 	do {
 		uint32_t cmp_len, unc_len;

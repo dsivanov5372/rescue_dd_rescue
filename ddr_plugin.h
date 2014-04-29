@@ -14,7 +14,10 @@
 #include <stdio.h>
 
 
-typedef int (_init_callback)(void **stat, char* param);
+/** init callback parameters:
+ * opaque handle, parameters from commandline, sequece in filter chain
+ */
+typedef int (_init_callback)(void **stat, char* param, int seq);
 /** open_callback parameters: input file descriptor, input file name,
  * 	initial offset input file, same 3 params for output file,
  * 	soft (large) block size, hard (fallback) block size,

@@ -341,7 +341,7 @@ unsigned int max_slack_pre = 0;
 int max_neg_slack_pre = 0;
 unsigned int max_slack_post = 0;
 int max_neg_slack_post = 0;
-int first_lnchg = -1;
+int last_lnchg = -1;
 int max_align = 0;
 char not_sparse = 0;
 char plugin_help = 0;
@@ -370,7 +370,7 @@ void call_plugins_open()
 			int err = LISTDATA(plug).open_callback(ides, iname, ipos,
 						odes, oname, opos,
 						softbs, hardbs, estxfer, 
-						(plugins_opened < first_lnchg? 1: 0),
+						(plugins_opened < last_lnchg ? 1: 0),
 						max_slack_pre-slk_pre, max_slack_post-slk_post,
 					       	&buf, &LISTDATA(plug).state);
 			if (err < 0) {
@@ -449,7 +449,7 @@ ddr_plugin_t* insert_plugin(void* hdl, const char* nm, char* param)
 		exit(13);
 	}
 	if (plug->init_callback)
-		if (plug->init_callback(&plug->state, param))
+		if (plug->init_callback(&plug->state, param, plugins_loaded))
 			exit(13);
 	plugins_loaded++;
 	LISTAPPEND(ddr_plugins, *plug, ddr_plugin_t);
@@ -485,8 +485,8 @@ void load_plugins(char* plugs)
 			ddr_plugin_t *plug = insert_plugin(hdl, plugs, param);
 			if (!plug)
 				continue;
-			if (first_lnchg < 0 && plug->changes_output_len)
-				first_lnchg = plugno;
+			if (plug->changes_output_len)
+				last_lnchg = plugno;
 			++plugno;
 		}
 		plugs = next;
