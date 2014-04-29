@@ -213,21 +213,24 @@ install: $(TARGETS)
 
 check: $(TARGETS) find_nonzero
 	./dd_rescue --version
+	@echo "***** find_nonzero tests *****"
 	./find_nonzero 2
-	rm -f dd_rescue.copy dd_rescue.copy2
+	@echo "***** dd_rescue tests *****"
+	@rm -f dd_rescue.copy dd_rescue.copy2
 	./dd_rescue -apP dd_rescue dd_rescue.copy
 	cmp dd_rescue dd_rescue.copy 
-	rm dd_rescue.copy
+	@rm dd_rescue.copy
 	./dd_rescue -b16k -B16k -a dd_rescue dd_rescue.copy
 	cmp dd_rescue dd_rescue.copy
-	rm dd_rescue.copy
+	@rm dd_rescue.copy
 	./dd_rescue -r dd_rescue dd_rescue.copy
 	cmp dd_rescue dd_rescue.copy
 	./dd_rescue -x dd_rescue dd_rescue.copy
 	cat dd_rescue dd_rescue > dd_rescue.copy2
 	cmp dd_rescue.copy dd_rescue.copy2
-	rm dd_rescue.copy dd_rescue.copy2
-	rm -f zero zero2
+	@rm dd_rescue.copy dd_rescue.copy2
+	@rm -f zero zero2
+	@echo "***** dd_rescue sparse tests *****"
 	./dd_rescue -a -m 261k /dev/zero zero
 	du zero
 	./dd_rescue -S 12k -m 4k -b 4k -Z 0 zero
@@ -235,39 +238,41 @@ check: $(TARGETS) find_nonzero
 	./dd_rescue -a -b 8k zero zero2
 	du zero zero2
 	cmp zero zero2
-	rm zero2
+	@rm zero2
 	./dd_rescue -a -b 16k zero zero2
 	du zero zero2
 	cmp zero zero2
-	rm zero zero2
-	rm -f TEST TEST2
+	@rm zero zero2
+	@rm -f TEST TEST2
+	@echo "***** dd_rescue MD5 plugin tests *****"
 	./dd_rescue -a -b 16k -m 32k /dev/zero TEST
 	./dd_rescue -x -a -b 16k -m32k dd_rescue TEST
 	./dd_rescue -x -a -b 16k -m17k /dev/zero TEST
 	MD5=$$(./dd_rescue -c0 -a -b16k -L ./libddr_MD5.so TEST TEST2 2>&1 | grep MD5: | tail -n1 | sed 's/^dd_rescue: (info): MD5:[^:]*: //'); MD5S=$$(md5sum TEST | sed 's/ .*$$//'); echo $$MD5 $$MD5S; if test "$$MD5" != "$$MD5S"; then false; fi
 	rm -f TEST TEST2
+	@echo "***** dd_rescue lzo (and MD5) plugin tests *****"
 	./dd_rescue -b32k -TL ./libddr_lzo.so dd_rescue dd_rescue.ddr.lzo
 	lzop -t dd_rescue.ddr.lzo
-	rm -f dd_rescue.ddr
+	@rm -f dd_rescue.ddr
 	lzop -d dd_rescue.ddr.lzo
 	cmp dd_rescue dd_rescue.ddr
-	rm -f dd_rescue.ddr dd_rescue.ddr.lzo
+	@rm -f dd_rescue.ddr dd_rescue.ddr.lzo
 	./dd_rescue -b1M -L ./libddr_lzo.so=compress,./libddr_MD5.so dd_rescue dd_rescue.ddr.lzo
 	# TODO: Compare md5sums ...
 	md5sum dd_rescue dd_rescue.ddr.lzo
 	lzop -t dd_rescue.ddr.lzo
 	./dd_rescue -b1M -TL ./libddr_MD5.so,./libddr_lzo.so=compress,./libddr_MD5.so,./libddr_lzo.so=decompress,./libddr_MD5.so dd_rescue dd_rescue.ddr
 	cmp dd_rescue dd_rescue.ddr
-	rm -f dd_rescue.ddr dd_rescue.ddr.lzo dd_rescue.lzo
+	@rm -f dd_rescue.ddr dd_rescue.ddr.lzo dd_rescue.lzo
 	lzop dd_rescue
 	./dd_rescue -b1M -L ./libddr_lzo.so dd_rescue.lzo dd_rescue.cmp
 	cmp dd_rescue dd_rescue.cmp
-	rm -f dd_rescue.cmp dd_rescue.lzo
+	@rm -f dd_rescue.cmp dd_rescue.lzo
 	./dd_rescue -b16k -L ./libddr_MD5.so,./libddr_lzo.so,./libddr_MD5.so dd_rescue dd_rescue.lzo
 	./dd_rescue -b8k -L ./libddr_MD5.so,./libddr_lzo.so,./libddr_MD5.so dd_rescue.lzo dd_rescue.cmp
 	cmp dd_rescue dd_rescue.cmp
 	md5sum dd_rescue dd_rescue.lzo
-	rm -f dd_rescue.lzo dd_rescue.cmp
+	@rm -f dd_rescue.lzo dd_rescue.cmp
 
 	
 
