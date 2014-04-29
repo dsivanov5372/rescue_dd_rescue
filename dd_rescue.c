@@ -225,6 +225,7 @@ float printint = 0.1;
 
 unsigned int pagesize = 4096;
 sig_atomic_t interrupted = 0;
+int int_by = 0;
 
 /* multiple output files */
 typedef struct _ofile {
@@ -2075,6 +2076,7 @@ void printinfo(FILE* const file)
 
 void breakhandler(int sig)
 {
+	int_by = sig;
 	if (!interrupted++) {
 		fplog(stderr, FATAL, "Caught signal %i \"%s\". Flush and exit after current block!\n",
 		      sig, strsignal(sig));
@@ -2703,8 +2705,12 @@ int main(int argc, char* argv[])
 	printreport();
 	fadvise(1);
 	c += cleanup();
+	if (int_by == SIGQUIT)
+		++c;
 	if (c && verbose)
 		fplog(stderr, WARN, "There were %i errors! \n", c);
-	return c;
+	if (interrupted && int_by != SIGQUIT)
+		return 128+int_by;
+	else
+		return c;
 }
-
