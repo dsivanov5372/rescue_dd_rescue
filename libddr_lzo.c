@@ -19,6 +19,7 @@
 #include <errno.h>
 #include <netinet/in.h>
 #include <sys/stat.h>
+#include <signal.h>
 #include <lzo/lzo1x.h>
 #if !defined(HAVE_PREAD64) || defined(TEST_SYSCALL)
 #include "pread64.h"
@@ -376,10 +377,19 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 		if (c_off+addoff+cmp_len > *towr) {
 			/* incomplete block */
 			ddr_plug.fplog(stderr, FATAL, "lzo: we don't handle partial blocks yet");
-			abort();
-			continue;
+			raise(SIGQUIT);
+			break;
 		}
 		/* TODO: Check compressed checksum */
+		if (state->flags & F_ADLER32_C) {
+			uint32_t cksum = lzo_adler32(ADLER32_INIT_VALUE, bf+c_off+addoff, cmp_len);
+			if (cksum != cmp_cksum) {
+				ddr_plug.fplog(stderr, FATAL, "lzo: compr checksum mismatch @ %i\n",
+						ooff+c_off);
+				raise(SIGQUIT);
+				break;
+			}
+		}
 		dst_len = state->dbuflen-d_off;
 		if (dst_len < unc_len) {
 			state->dbuflen = unc_len+d_off;
@@ -392,24 +402,24 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 		case LZO_E_INPUT_OVERRUN:
 			/* TODO: Partial block, handle! */
 			ddr_plug.fplog(stderr, FATAL, "lzo: input overrun %i %i %i; try larger block sizes\n", *towr, state->dbuflen, dst_len);
-			abort();
+			raise(SIGQUIT);
 			break;
 		case LZO_E_EOF_NOT_FOUND:
 			/* TODO: Partial block, handle! */
 			ddr_plug.fplog(stderr, FATAL, "lzo: EOF not found %i %i %i; try larger block sizes\n", *towr, state->dbuflen, dst_len);
-			abort();
+			raise(SIGQUIT);
 			break;
 		case LZO_E_OUTPUT_OVERRUN:
 			ddr_plug.fplog(stderr, FATAL, "lzo: output overrun %i %i %i; try larger block sizes\n", *towr, state->dbuflen, dst_len);
-			abort();
+			raise(SIGQUIT);
 			break;
 		case LZO_E_LOOKBEHIND_OVERRUN:
 			ddr_plug.fplog(stderr, FATAL, "lzo: lookbehind overrun %i %i %i; data corrupt?\n", *towr, state->dbuflen, dst_len);
-			abort();
+			raise(SIGQUIT);
 			break;
 		case LZO_E_ERROR:
 			ddr_plug.fplog(stderr, FATAL, "lzo: unspecified error %i %i %i; data corrupt?\n", *towr, state->dbuflen, dst_len);
-			abort();
+			raise(SIGQUIT);
 			break;
 		case LZO_E_INPUT_NOT_CONSUMED:
 			/* TODO: Leftover bytes, store */

@@ -2668,6 +2668,7 @@ int main(int argc, char* argv[])
 	signal(SIGHUP , breakhandler);
 	signal(SIGINT , breakhandler);
 	signal(SIGTERM, breakhandler);
+	/* Used to signal clean abort from plugins */
 	signal(SIGQUIT, breakhandler);
 
 	/* Save time and start to work */
