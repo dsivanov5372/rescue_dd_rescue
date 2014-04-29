@@ -377,8 +377,11 @@ void call_plugins_open()
 				fplog(stderr, WARN, "Error initializing plugin %s: %s!\n",
 					LISTDATA(plug).name, strerror(err));
 				exit(13);
-			} else
+			} else if (err>0) {
 				ipos += err;
+				fplog(stderr, WARN, "Plugin %s skipping %i bytes might break other plugins!\n",
+					LISTDATA(plug).name, err);
+			}
 		}
 		++plugins_opened;
 	}
