@@ -14,9 +14,13 @@
 #include <string.h>
 #include <assert.h>
 
-//#define DEBUG(x) x
-//#define DEBUG(x) if (!state->olnchg) x
-#define DEBUG(x) do {} while(0)
+// TODO: pass at runtime rather than compile time
+#ifdef DEBUG
+# define MD5_DEBUG(x) x
+//# define MD5_DEBUG(x) if (!state->olnchg) x
+#else
+# define MD5_DEBUG(x) do {} while (0)
+#endif
 
 /* fwd decl */
 ddr_plugin_t ddr_plug;
@@ -86,10 +90,10 @@ void md5_last(md5_state *state, loff_t ooff)
 	int left = len - state->md5_pos;
 	assert(state->olnchg || state->buflen == left);
 	/*
-	fprintf(stderr, "DEBUG: %s: len=%li, md5pos=%li\n", 
+	fprintf(stderr, "MD5_DEBUG: %s: len=%li, md5pos=%li\n", 
 		state->onm, len, state->md5_pos);
 	 */
-	DEBUG(ddr_plug.fplog(stderr, INFO, "MD5: Last block with %i bytes\n", state->buflen));
+	MD5_DEBUG(ddr_plug.fplog(stderr, INFO, "MD5: Last block with %i bytes\n", state->buflen));
 	md5_calc(state->buf, state->buflen, state->md5_pos+state->buflen, &state->md5);
 	state->md5_pos += state->buflen;
 }
@@ -105,7 +109,7 @@ unsigned char* md5_block(unsigned char* bf, int *towr,
 	const loff_t opos = ooff - state->first_ooff;
 	int consumed = 0;
 	assert(bf);
-	DEBUG(ddr_plug.fplog(stderr, INFO, "MD5: block(%i/%i): towr=%i, eof=%i, ooff=%i, md5_pos=%i, buflen=%i\n",
+	MD5_DEBUG(ddr_plug.fplog(stderr, INFO, "MD5: block(%i/%i): towr=%i, eof=%i, ooff=%i, md5_pos=%i, buflen=%i\n",
 				state->seq, state->olnchg, *towr, eof, ooff, state->md5_pos, state->buflen));
 	/* First block */
 	if (state->buflen) {
@@ -120,7 +124,7 @@ unsigned char* md5_block(unsigned char* bf, int *towr,
 		} else if (*towr) {
 			/* Reassemble and process first block */
 			consumed = MIN(64-state->buflen, *towr);
-			DEBUG(ddr_plug.fplog(stderr, INFO, "MD5: Append %i bytes @ %i to store\n", consumed, ooff));
+			MD5_DEBUG(ddr_plug.fplog(stderr, INFO, "MD5: Append %i bytes @ %i to store\n", consumed, ooff));
 			memcpy(state->buf+state->buflen, bf, consumed);
 			if (consumed+state->buflen == 64) {
 				md5_64(state->buf, &state->md5);
@@ -154,7 +158,7 @@ unsigned char* md5_block(unsigned char* bf, int *towr,
 	assert(mylen >= 0);
 	mylen -= mylen%64;
 	if (mylen) {
-		DEBUG(ddr_plug.fplog(stderr, INFO, "MD5: Consume %i bytes @ %i\n", mylen, ooff+consumed));
+		MD5_DEBUG(ddr_plug.fplog(stderr, INFO, "MD5: Consume %i bytes @ %i\n", mylen, ooff+consumed));
 		md5_calc(bf+consumed, mylen, 0, &state->md5);
 		consumed += mylen; state->md5_pos += mylen;
 	}
@@ -165,7 +169,7 @@ unsigned char* md5_block(unsigned char* bf, int *towr,
 	assert(state->olnchg || state->md5_pos + state->buflen == opos + consumed);
 	if (*towr - consumed) {
 		assert(state->buflen+*towr-consumed < 64);
-		DEBUG(ddr_plug.fplog(stderr, INFO, "MD5: Store %i bytes @ %i\n", *towr-consumed, ooff+consumed));
+		MD5_DEBUG(ddr_plug.fplog(stderr, INFO, "MD5: Store %i bytes @ %i\n", *towr-consumed, ooff+consumed));
 		memcpy(state->buf+state->buflen, bf+consumed, *towr-consumed);
 		state->buflen += *towr-consumed;
 	}
@@ -198,7 +202,7 @@ int md5_close(loff_t ooff, void **stat)
 	md5_state *state = (md5_state*)*stat;
 	uint8_t res[16];
 	md5_result(&state->md5, res);
-	ddr_plug.fplog(stderr, INFO, "md5sum %s (%" LL "i-%" LL "i): %s\n",
+	ddr_plug.fplog(stderr, INFO, "MD5: %s (%" LL "i-%" LL "i): %s\n",
 		state->onm, state->first_ooff, state->first_ooff+state->md5_pos, md5_out(res));
 	free(*stat);
 	return 0;

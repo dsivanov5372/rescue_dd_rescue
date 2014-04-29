@@ -21,8 +21,12 @@
 #include <sys/stat.h>
 #include <signal.h>
 #include <lzo/lzo1x.h>
-#if !defined(HAVE_PREAD64) || defined(TEST_SYSCALL)
-#include "pread64.h"
+
+// TODO: pass at runtime rather than compile time
+#ifdef DEBUG
+# define LZO_DEBUG(x) x
+#else
+# define LZO_DEBUG(x) do {} while (0)
 #endif
 
 /* Some bits from lzop -- we strive for some level of compatibility */
@@ -101,6 +105,9 @@ typedef struct _lzo_state {
 	int seq;
 	enum compmode mode;
 	int hdr_seen;
+	/* Statistics */
+	unsigned int nr_memmove, nr_realloc;
+	size_t cmp_ln, unc_ln;
 } lzo_state;
 
 void lzo_hdr(header_t* hdr, lzo_state *state)
@@ -234,6 +241,8 @@ int lzo_plug_init(void **stat, char* param, int seq)
 		}
 		param = next;
 	}
+	state->nr_memmove = 0; state->nr_realloc = 0;
+	state->cmp_ln = 0; state->unc_ln = 0;
 	return err;
 }
 
@@ -251,12 +260,20 @@ void* slackalloc(size_t ln, lzo_state *state)
 
 void* slackrealloc(void* base, size_t newln, lzo_state *state)
 {
-	void* ptr = realloc(base-state->slackpre, newln+state->slackpre+state->slackpost);
+	void* ptr;
+	/* This does not preserve pagesize alignment */
+	if (state->slackpre + state->slackpost)
+		ptr = realloc(base-state->slackpre, newln+state->slackpre+state->slackpost);
+	else {
+		free(base-state->slackpre);
+		ptr = malloc(newln+state->slackpre+state->slackpost);
+	}
 	if (!ptr) {
 		ddr_plug.fplog(stderr, FATAL, "lzo: reallocation of %i bytes failed: %s\n",
 			newln+state->slackpre+state->slackpost, strerror(errno));
 		exit(13);
 	}
+	++state->nr_realloc;
 	return ptr+state->slackpre;
 }
 
@@ -303,7 +320,7 @@ int lzo_open(int ifd, const char* inm, loff_t ioff,
 		}
 		state->dbuflen = bsz + (bsz>>4) + 72 + sizeof(lzop_hdr) + sizeof(header_t);
 	} else {
-		state->dbuflen = 4*bsz;
+		state->dbuflen = 2*bsz+128;
 	}
 	state->slackpost = totslack_post;
 	state->slackpre  = totslack_pre ;
@@ -328,6 +345,7 @@ unsigned char* lzo_compress(unsigned char *bf, int *towr,
 		 * also prefer crc32,but that's slow in liblzo ...) */
 		uint32_t unc_adl = lzo_adler32(ADLER32_INIT_VALUE, bf, *towr);
 		lzo1x_1_compress(bf, *towr, cdata, &dst_len, state->workspace);
+		state->cmp_ln += dst_len; state->unc_ln += *towr;
 		block_hdr((blockhdr_t*)bhdp, *towr, dst_len, unc_adl, cdata);
 		*towr = dst_len + sizeof(blockhdr_t);
 		if (ooff == state->first_ooff) {
@@ -372,8 +390,8 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 		lzo_uint dst_len;
 		const size_t totbufln = state->softbs - ddr_plug.slack_post*((state->softbs+15)/16);
 		unsigned char* effbf = bf+c_off+state->hdroff;
-		ddr_plug.fplog(stderr, INFO, "lzo: dec blk @ %p (offs %i, stoffs %i, bln %zi, tbw %i)\n",
-				effbf, effbf-state->obuf, state->hdroff, totbufln, *towr);
+		LZO_DEBUG(ddr_plug.fplog(stderr, INFO, "lzo: dec blk @ %p (offs %i, stoffs %i, bln %zi, tbw %i)\n",
+				effbf, effbf-state->obuf, state->hdroff, totbufln, *towr));
 		blockhdr_t *hdr = (blockhdr_t*)effbf;
 		const size_t have_len = *towr-state->hdroff-c_off;
 		/* No more bytes left: This is ideal :-) */
@@ -390,8 +408,10 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 		}
 		/* Not enough data to read header; move to beginning of buffer */
 		if (have_len < 8) {
-			if (effbf != state->obuf)
+			if (effbf != state->obuf) {
 				memmove(state->obuf, effbf, have_len);
+				++state->nr_memmove;
+			}
 			state->hdroff = -have_len;
 			*state->bufp = state->obuf+have_len;
 			break;
@@ -404,8 +424,8 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 			addoff = parse_block_hdr(hdr, &unc_cksum, &cmp_cksum, state);
 		else
 			addoff = parse_block_hdr(hdr, NULL, NULL, state);
-		ddr_plug.fplog(stderr, INFO, "lzo: dec blk @ %p (hdroff %i, cln %i, uln %i, have %i)\n",
-				effbf, c_off+state->hdroff, cmp_len, unc_len, have_len);
+		LZO_DEBUG(ddr_plug.fplog(stderr, INFO, "lzo: dec blk @ %p (hdroff %i, cln %i, uln %i, have %i)\n",
+				effbf, c_off+state->hdroff, cmp_len, unc_len, have_len));
 		/* Block incomplete? */
 		if (addoff+cmp_len > have_len) {
 			/* incomplete block */
@@ -415,17 +435,23 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 				 * Block will fit and so will next read ... */
 				state->hdroff -= *towr-c_off;
 				*state->bufp += *towr;
-				ddr_plug.fplog(stderr, INFO, "lzo: append  @ %p\n", *state->bufp);
-			} else if (addoff+cmp_len < totbufln) {
+				LZO_DEBUG(ddr_plug.fplog(stderr, INFO, "lzo: append  @ %p\n", *state->bufp));
+				/* Simplify to addoff+cmp_len+state->softbs < totbufln ? */
+			} else if (addoff+cmp_len < totbufln &&
+					have_len+state->softbs < totbufln) {
 				/* We need to move block to beg of buffer */
-				if (effbf != state->obuf)
+				LZO_DEBUG(ddr_plug.fplog(stderr, INFO, "lzo: move %i bytes to buffer head\n", have_len));
+				if (effbf != state->obuf) {
 					memmove(state->obuf, effbf, have_len);
+					++state->nr_memmove;
+				}
 				state->hdroff = -have_len;
 				*state->bufp = state->obuf+have_len;
+				//c_off = 0;
 			} else {
 				/* Our buffer is too small */
-				ddr_plug.fplog(stderr, FATAL, "Can't assemble blocks larger than %i, increase softblocksize to at least %i\n", 
-						totbufln, cmp_len/2);
+				ddr_plug.fplog(stderr, FATAL, "Can't assemble block of size %i, increase softblocksize to at least %i\n", 
+						cmp_len, cmp_len/2);
 				raise(SIGQUIT);
 			}
 			break;
@@ -452,8 +478,8 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 			dst_len = state->dbuflen-d_off; /* unc_len */
 		}
 		int err = lzo1x_decompress_safe(effbf+addoff, cmp_len, state->dbuf+d_off, &dst_len, NULL);
-		ddr_plug.fplog(stderr, INFO, "lzo: decompressed %i@%p -> %i\n",
-				cmp_len, effbf+addoff, dst_len);
+		LZO_DEBUG(ddr_plug.fplog(stderr, INFO, "lzo: decompressed %i@%p -> %i\n",
+				cmp_len, effbf+addoff, dst_len));
 		if (dst_len != unc_len)
 			ddr_plug.fplog(stderr, WARN, "lzo: inconsistent uncompressed size @%i: %i <-> %i\n",
 					ooff+d_off, unc_len, dst_len);
@@ -498,6 +524,8 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 		}
 		c_off += cmp_len+addoff;
 		d_off += dst_len;
+		state->cmp_ln += cmp_len; 
+		state->unc_ln += dst_len;
 	} while (1);
 	/* reset to normal buffer start */
 	*towr = d_off;
@@ -524,6 +552,16 @@ int lzo_close(loff_t ooff, void **stat)
 		slackfree(state->dbuf, state);
 	if (state->workspace)
 		free(state->workspace);
+	if (state->mode == COMPRESS)
+		ddr_plug.fplog(stderr, INFO, "lzo: compr %.1fkiB <- %.1fkiB (%.1f%)\n",
+			state->cmp_ln/1024.0, state->unc_ln/1024.0,
+			100.0*((double)state->cmp_ln/state->unc_ln - 1.0));
+	else
+		ddr_plug.fplog(stderr, INFO, "lzo: compr %.1fkiB -> %.1fkiB (%.1f%), %i reallocs (%ikiB), %i moves\n",
+			state->cmp_ln/1024.0, state->unc_ln/1024.0,
+			100.0*((double)state->cmp_ln/state->unc_ln - 1.0),
+			state->nr_realloc, state->dbuflen/1024, 
+			state->nr_memmove);
 	free(*stat);
 	return 0;
 }
@@ -532,7 +570,7 @@ int lzo_close(loff_t ooff, void **stat)
 ddr_plugin_t ddr_plug = {
 	.name = "lzo",
 	.slack_pre = 0, /* sizeof(lzop_hdr), */
-	.slack_post = -17,
+	.slack_post = -33,
 	.needs_align = 1,
 	.handles_sparse = 0,
 	.changes_output = 1,
