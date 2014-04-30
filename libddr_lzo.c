@@ -71,7 +71,7 @@ typedef struct
     uint32_t extra_seglen;
     uint32_t extrafield_checksum;
      */
-} header_t __attribute__((packed));
+} __attribute__((packed)) header_t;
 
 typedef struct {
     uint32_t uncmpr_len;   
@@ -159,14 +159,14 @@ int lzo_parse_hdr(unsigned char* bf, lzo_state *state)
 		return -4;
 	}
 	uint32_t cksum = ntohl(*(uint32_t*)((char*)hdr+offsetof(header_t,name)+hdr->nmlen));
-	uint32_t comp = (state->flags & F_H_CRC32 ? lzo_crc32(  CRC32_INIT_VALUE, (void*)hdr, sizeof(header_t)-15+hdr->nmlen-4)
-						: lzo_adler32(ADLER32_INIT_VALUE, (void*)hdr, sizeof(header_t)-15+hdr->nmlen-4));
+	uint32_t comp = (state->flags & F_H_CRC32 ? lzo_crc32(  CRC32_INIT_VALUE, (void*)hdr, sizeof(header_t)-NAMELEN+hdr->nmlen-4)
+						: lzo_adler32(ADLER32_INIT_VALUE, (void*)hdr, sizeof(header_t)-NAMELEN+hdr->nmlen-4));
 	if (cksum != comp) {
 		ddr_plug.fplog(stderr, FATAL, "lzo: header fails checksum %08x != %08x\n",
 			cksum, comp);
 		return -5;
 	}
-	int off = sizeof(header_t) + hdr->nmlen-15;
+	int off = sizeof(header_t) + hdr->nmlen-NAMELEN;
 	if (state->flags & F_H_EXTRA_FIELD) {
 		off += 8 + ntohl(*(uint32_t*)(bf+off));
 		if (off > 4096)
@@ -263,9 +263,9 @@ void* slackrealloc(void* base, size_t newln, lzo_state *state)
 {
 	void* ptr;
 	/* This does not preserve pagesize alignment */
-	if (state->slackpre + state->slackpost)
+	if (1 || state->slackpre + state->slackpost)
 		ptr = realloc(base-state->slackpre, newln+state->slackpre+state->slackpost);
-	else {
+	else {	/* We might have stored data ourselves! */
 		free(base-state->slackpre);
 		ptr = malloc(newln+state->slackpre+state->slackpost);
 	}
@@ -321,7 +321,7 @@ int lzo_open(int ifd, const char* inm, loff_t ioff,
 		}
 		state->dbuflen = bsz + (bsz>>4) + 72 + sizeof(lzop_hdr) + sizeof(header_t);
 	} else {
-		state->dbuflen = 2*bsz+128;
+		state->dbuflen = 4*bsz;
 	}
 	state->slackpost = totslack_post;
 	state->slackpre  = totslack_pre ;
