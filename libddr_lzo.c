@@ -44,6 +44,7 @@ static const unsigned char
 #define F_MULTIPART     0x00000400L
 #define F_H_CRC32       0x00001000L
 
+#define NAMELEN 14
 
 typedef struct
 {
@@ -59,7 +60,7 @@ typedef struct
     uint32_t mtime_high;
     // Do this for alignment
     unsigned char nmlen;
-    char name[15];
+    char name[NAMELEN];
     
     uint32_t hdr_checksum;	/* crc32 or adler32 */
 
@@ -70,7 +71,7 @@ typedef struct
     uint32_t extra_seglen;
     uint32_t extrafield_checksum;
      */
-} header_t;
+} header_t __attribute__((packed));
 
 typedef struct {
     uint32_t uncmpr_len;   
@@ -123,9 +124,9 @@ void lzo_hdr(header_t* hdr, lzo_state *state)
 	 * in liblzo is rather slow, so stick with adler32 for now ... */
 	state->flags = 0x03000003UL;	/* UNIX | ADLER32_C | ADLER32_D */
 	hdr->flags = ntohl(state->flags);
-	hdr->nmlen = 15;
+	hdr->nmlen = NAMELEN;
 	if (state->iname) {
-		memcpy(hdr->name, state->iname, MIN(15,strlen(state->iname)));
+		memcpy(hdr->name, state->iname, MIN(NAMELEN,strlen(state->iname)));
 		struct stat stbf;
 		if (0 == stat(state->iname, &stbf)) {
 			hdr->mode = ntohl(stbf.st_mode);
