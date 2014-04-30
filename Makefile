@@ -248,7 +248,7 @@ check: $(TARGETS) find_nonzero
 	./dd_rescue -a -b 16k -m 32k /dev/zero TEST
 	./dd_rescue -x -a -b 16k -m32k dd_rescue TEST
 	./dd_rescue -x -a -b 16k -m17k /dev/zero TEST
-	MD5=$$(./dd_rescue -c0 -a -b16k -L ./libddr_MD5.so TEST TEST2 2>&1 | grep MD5: | tail -n1 | sed 's/^dd_rescue: (info): MD5:[^:]*: //'); MD5S=$$(md5sum TEST | sed 's/ .*$$//'); echo $$MD5 $$MD5S; if test "$$MD5" != "$$MD5S"; then false; fi
+	MD5=$$(./dd_rescue -c0 -a -b16k -L ./libddr_MD5.so TEST TEST2 2>&1 | grep 'MD5(0)': | tail -n1 | sed 's/^dd_rescue: (info): MD5(0):[^:]*: //'); MD5S=$$(md5sum TEST | sed 's/ .*$$//'); echo $$MD5 $$MD5S; if test "$$MD5" != "$$MD5S"; then false; fi
 	rm -f TEST TEST2
 	@echo "***** dd_rescue lzo (and MD5) plugin tests *****"
 	./dd_rescue -b32k -TL ./libddr_lzo.so dd_rescue dd_rescue.ddr.lzo
