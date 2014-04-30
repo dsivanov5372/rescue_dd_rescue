@@ -181,7 +181,10 @@ void block_hdr(blockhdr_t* hdr, uint32_t uncompr, uint32_t compr, uint32_t unc_a
 	hdr->uncmpr_len = htonl(uncompr);
 	hdr->cmpr_len = htonl(compr);
 	hdr->uncmpr_chksum = htonl(unc_adl);
-	hdr->cmpr_chksum = htonl(lzo_adler32(ADLER32_INIT_VALUE, cdata, compr));
+	/* Don't compute a second time if we've just done a copy */
+	hdr->cmpr_chksum = (uncompr == compr ?
+			hdr->uncmpr_chksum :
+			htonl(lzo_adler32(ADLER32_INIT_VALUE, cdata, compr)));
 }
 
 /* Returns compressed len */
@@ -349,8 +352,20 @@ unsigned char* lzo_compress(unsigned char *bf, int *towr,
 		 * also prefer crc32,but that's slow in liblzo ...) */
 		uint32_t unc_adl = lzo_adler32(ADLER32_INIT_VALUE, bf, *towr);
 		lzo1x_1_compress(bf, *towr, cdata, &dst_len, state->workspace);
-		/* lzop does cleverly store the original if the compressed size is
-		 * larger -- should we do the same? */
+		/* We NEED to do the same optimization as lzop if dst_len >= *towr, if we
+		 * want to be compatible, as the * lzop ddecompression code otherwise bails
+		 * out, sigh.
+		 * So if this is the case, copy original block; decompression recognizes
+		 * this by cmp_len == unc_len ....
+		 */
+		if (dst_len >= *towr) {
+			/* TODO: We could return original buffer instead
+			 * and save a copy -- don't bother for now ...
+			 * as the added header makes this somewhat complex.
+			 */
+			memcpy(cdata, bf, *towr);
+			dst_len = *towr;
+		}
 		state->cmp_ln += dst_len; state->unc_ln += *towr;
 		block_hdr((blockhdr_t*)bhdp, *towr, dst_len, unc_adl, cdata);
 		*towr = dst_len + sizeof(blockhdr_t);
@@ -490,12 +505,19 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 			state->dbuflen = newlen;
 			dst_len = newlen-d_off;
 		}
-		int err = lzo1x_decompress_safe(effbf+addoff, cmp_len, state->dbuf+d_off, &dst_len, NULL);
-		LZO_DEBUG(ddr_plug.fplog(stderr, INFO, "lzo: decompressed %i@%p -> %i\n",
+		int err = 0;
+		/* lzop: cmp_len == unc_len means that we just have a copy of the original */
+		if (cmp_len != unc_len) {
+			err = lzo1x_decompress_safe(effbf+addoff, cmp_len, state->dbuf+d_off, &dst_len, NULL);
+			LZO_DEBUG(ddr_plug.fplog(stderr, INFO, "lzo: decompressed %i@%p -> %i\n",
 				cmp_len, effbf+addoff, dst_len));
-		if (dst_len != unc_len)
-			ddr_plug.fplog(stderr, WARN, "lzo: inconsistent uncompressed size @%i: %i <-> %i\n",
+			if (dst_len != unc_len)
+				ddr_plug.fplog(stderr, WARN, "lzo: inconsistent uncompressed size @%i: %i <-> %i\n",
 					ooff+d_off, unc_len, dst_len);
+		} else {
+			memcpy(state->dbuf+d_off, effbf+addoff, unc_len);
+			dst_len = unc_len;
+		}
 		switch (err) {
 		case LZO_E_INPUT_OVERRUN:
 			/* TODO: Partial block, handle! */
@@ -525,9 +547,15 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 			break;
 		}
 		if (state->flags & ( F_ADLER32_D | F_CRC32_D)) {
-			uint32_t cksum = state->flags & F_ADLER32_D ?
-				lzo_adler32(ADLER32_INIT_VALUE, state->dbuf+d_off, dst_len) :
-				lzo_crc32  (  CRC32_INIT_VALUE, state->dbuf+d_off, dst_len);
+			uint32_t cksum;
+			/* If we have just copied and tested the compressed checksum before,
+			 * no need to adler32/crc32 the same memory again ... */
+		       	if (cmp_len == unc_len && state->flags & (F_ADLER32_C | F_CRC32_C))
+				cksum = cmp_cksum;
+			else
+				cksum = state->flags & F_ADLER32_D ?
+					lzo_adler32(ADLER32_INIT_VALUE, state->dbuf+d_off, dst_len) :
+					lzo_crc32  (  CRC32_INIT_VALUE, state->dbuf+d_off, dst_len);
 			if (cksum != unc_cksum) {
 				ddr_plug.fplog(stderr, FATAL, "lzo: decompr checksum mismatch @ %i\n",
 						ooff+d_off);
