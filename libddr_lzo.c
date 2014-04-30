@@ -368,7 +368,10 @@ unsigned char* lzo_compress(unsigned char *bf, int *towr,
 		}
 		state->cmp_ln += dst_len; state->unc_ln += *towr;
 		block_hdr((blockhdr_t*)bhdp, *towr, dst_len, unc_adl, cdata);
-		*towr = dst_len + sizeof(blockhdr_t);
+		/* Crazy: lzop does not write second checksum IF it's just a mem copy */
+		*towr = dst_len + (dst_len == *towr ?
+				   sizeof(blockhdr_t)-4 :
+				   sizeof(blockhdr_t));
 		if (ooff == state->first_ooff) {
 			memcpy(state->dbuf+3, lzop_hdr, sizeof(lzop_hdr));
 			lzo_hdr((header_t*)hdrp, state);
@@ -508,6 +511,9 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 		int err = 0;
 		/* lzop: cmp_len == unc_len means that we just have a copy of the original */
 		if (cmp_len != unc_len) {
+			if (cmp_len > unc_len)
+				ddr_plug.fplog(stderr, WARN, "lzo: compressed %i > uncompressed %i breaks lzop\n",
+					cmp_len, unc_len);
 			err = lzo1x_decompress_safe(effbf+addoff, cmp_len, state->dbuf+d_off, &dst_len, NULL);
 			LZO_DEBUG(ddr_plug.fplog(stderr, INFO, "lzo: decompressed %i@%p -> %i\n",
 				cmp_len, effbf+addoff, dst_len));
@@ -515,6 +521,8 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 				ddr_plug.fplog(stderr, WARN, "lzo: inconsistent uncompressed size @%i: %i <-> %i\n",
 					ooff+d_off, unc_len, dst_len);
 		} else {
+			/* No second checksum .... */
+			addoff -= 4;
 			memcpy(state->dbuf+d_off, effbf+addoff, unc_len);
 			dst_len = unc_len;
 		}
