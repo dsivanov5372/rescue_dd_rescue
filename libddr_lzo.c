@@ -485,12 +485,12 @@ unsigned char* lzo_compress(unsigned char *bf, int *towr,
 		*towr = dst_len + (dst_len == *towr ?
 				   sizeof(blockhdr_t)-4 :
 				   sizeof(blockhdr_t));
-		if (ooff == state->first_ooff) {
-			memcpy(state->dbuf+3, lzop_hdr, sizeof(lzop_hdr));
-			lzo_hdr((header_t*)hdrp, state);
-			*towr += sizeof(header_t) + sizeof(lzop_hdr);
-			wrbf = state->dbuf+3;
-		}
+	}
+	if (ooff == state->first_ooff) {
+		memcpy(state->dbuf+3, lzop_hdr, sizeof(lzop_hdr));
+		lzo_hdr((header_t*)hdrp, state);
+		*towr += sizeof(header_t) + sizeof(lzop_hdr);
+		wrbf = state->dbuf+3;
 	}
 	if (eof) {
 		//memset(cdata+dst_len, 0, 4);

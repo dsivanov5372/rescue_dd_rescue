@@ -21,7 +21,6 @@ MANDIR = $(prefix)/share/man
 MYDIR = dd_rescue
 BINTARGETS = dd_rescue 
 LIBTARGETS = libddr_MD5.so 
-TARGETS = $(BINTARGETS) $(LIBTARGETS)
 #TARGETS = libfalloc-dl
 OTHTARGETS = find_nonzero fiemap file_zblock fmt_no md5
 OBJECTS = frandom.o fmt_no.o find_nonzero.o 
@@ -94,6 +93,8 @@ OS = $(shell uname)
 ifeq ($(OS), Linux)
 	OBJECTS += fstrim.o
 endif
+
+TARGETS = $(BINTARGETS) $(LIBTARGETS)
 
 .phony: libfalloc libfalloc-static libfalloc-dl nolib nocolor static strip
 
