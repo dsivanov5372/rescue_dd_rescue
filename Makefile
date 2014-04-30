@@ -209,7 +209,7 @@ install: $(TARGETS)
 	$(INSTALL) $(INSTALLFLAGS) $(INSTASROOT) -m 755 $(LIBTARGETS) $(INSTALLLIBDIR)
 	mkdir -p $(MANDIR)/man1
 	$(INSTALL) $(INSTASROOT) -m 644 dd_rescue.1 $(MANDIR)/man1/
-	gzip -9 $(MANDIR)/man1/dd_rescue.1
+	gzip -9f $(MANDIR)/man1/dd_rescue.1
 
 check: $(TARGETS) find_nonzero
 	./dd_rescue --version
