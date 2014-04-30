@@ -49,7 +49,7 @@ int md5_plug_init(void **stat, char* param, int seq)
 		if (next)
 			*next++ = 0;
 		if (!strcmp(param, "help"))
-			ddr_plug.fplog(stderr, INFO, "%s", md5_help);
+			ddr_plug.fplog(stderr, INFO, "MD5: %s", md5_help);
 		/* elif .... */
 		else {
 			ddr_plug.fplog(stderr, FATAL, "MD5: plugin doesn't understand param %s\n",
@@ -111,6 +111,7 @@ unsigned char* md5_block(unsigned char* bf, int *towr,
 	assert(bf);
 	MD5_DEBUG(ddr_plug.fplog(stderr, INFO, "MD5: block(%i/%i): towr=%i, eof=%i, ooff=%i, md5_pos=%i, buflen=%i\n",
 				state->seq, state->olnchg, *towr, eof, ooff, state->md5_pos, state->buflen));
+	/* TODO: Replace usage of state->buf by using slack space */
 	/* First block */
 	if (state->buflen) {
 		/* Handle leftover bytes ... */
@@ -211,8 +212,8 @@ int md5_close(loff_t ooff, void **stat)
 
 ddr_plugin_t ddr_plug = {
 	.name = "MD5",
-	.slack_pre = 64,
-	.slack_post = 64,
+	.slack_pre = 64,	// not yet used
+	.slack_post = 64,	// not yet used
 	.needs_align = 0,
 	.handles_sparse = 1,
 	.init_callback  = md5_plug_init,

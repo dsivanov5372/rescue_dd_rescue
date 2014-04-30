@@ -21,6 +21,10 @@
 #include <sys/stat.h>
 #include <signal.h>
 #include <lzo/lzo1x.h>
+#include <lzo/lzo1y.h>
+#include <lzo/lzo1f.h>
+#include <lzo/lzo1b.h>
+#include <time.h>
 
 // TODO: pass at runtime rather than compile time
 #ifdef DEBUG
@@ -85,6 +89,50 @@ typedef struct {
 
 #define MIN(a,b) ((a)<(b)? (a): (b))
 
+/*
+int lzo1x_1_compress ( const lzo_bytep src, lzo_uint  src_len,
+                             lzo_bytep dst, lzo_uintp dst_len,
+                             lzo_voidp wrkmem );
+*/
+
+typedef int (_cmpr_method)(const lzo_bytep src, lzo_uint  sln,
+			   	 lzo_bytep dst, lzo_uintp dln,
+			   	 lzo_voidp wrkmem);
+typedef int (_decm_method)(const lzo_bytep src, lzo_uint  sln,
+			   	 lzo_bytep dst, lzo_uintp dln,
+				 lzo_voidp wrkmem);
+
+typedef struct {
+	char* name;
+	_cmpr_method *compress;
+	_decm_method *decompr;
+	unsigned int workmem;
+	unsigned char meth, lev;
+} comp_alg;
+
+comp_alg calgos[] = { {"lzo1x_1", lzo1x_1_compress, lzo1x_decompress_safe, LZO1X_1_MEM_COMPRESS, 1, 5},
+		      {"lzo1x_1_15", lzo1x_1_15_compress, lzo1x_decompress_safe, LZO1X_1_15_MEM_COMPRESS, 2, 1},
+      		      {"lzo1x_999", lzo1x_999_compress, lzo1x_decompress_safe, LZO1X_999_MEM_COMPRESS, 3, 9},
+		      /* We DON'T use a different method indicator for the variants unlike lzop */
+		      {"lzo1y_1", lzo1y_1_compress, lzo1y_decompress_safe, LZO1Y_MEM_COMPRESS, 64, 1},
+		      {"lzo1y_999", lzo1y_999_compress, lzo1y_decompress_safe, LZO1Y_999_MEM_COMPRESS, 65, 9},
+		      {"lzo1f_1", lzo1f_1_compress, lzo1f_decompress_safe, LZO1F_MEM_COMPRESS, 66, 1},
+		      {"lzo1f_999", lzo1f_999_compress, lzo1f_decompress_safe, LZO1F_999_MEM_COMPRESS, 67, 9},
+		      {"lzo1b_1", lzo1b_1_compress, lzo1b_decompress_safe, LZO1B_MEM_COMPRESS, 68, 1},
+		      {"lzo1b_2", lzo1b_2_compress, lzo1b_decompress_safe, LZO1B_MEM_COMPRESS, 68, 2},
+		      {"lzo1b_3", lzo1b_3_compress, lzo1b_decompress_safe, LZO1B_MEM_COMPRESS, 68, 3},
+		      {"lzo1b_4", lzo1b_4_compress, lzo1b_decompress_safe, LZO1B_MEM_COMPRESS, 68, 4},
+		      {"lzo1b_5", lzo1b_5_compress, lzo1b_decompress_safe, LZO1B_MEM_COMPRESS, 68, 5},
+		      {"lzo1b_6", lzo1b_6_compress, lzo1b_decompress_safe, LZO1B_MEM_COMPRESS, 68, 6},
+		      {"lzo1b_7", lzo1b_7_compress, lzo1b_decompress_safe, LZO1B_MEM_COMPRESS, 68, 7},
+		      {"lzo1b_8", lzo1b_8_compress, lzo1b_decompress_safe, LZO1B_MEM_COMPRESS, 68, 8},
+		      {"lzo1b_9", lzo1b_9_compress, lzo1b_decompress_safe, LZO1B_MEM_COMPRESS, 68, 9},
+		      {"lzo1b_99", lzo1b_99_compress, lzo1b_decompress_safe, LZO1B_99_MEM_COMPRESS, 69, 9},
+		      {"lzo1b_999", lzo1b_999_compress, lzo1b_decompress_safe, LZO1B_999_MEM_COMPRESS, 70, 9},
+
+		    };	      
+
+
 /* fwd decl */
 ddr_plugin_t ddr_plug;
 
@@ -104,21 +152,30 @@ typedef struct _lzo_state {
 	uint32_t flags;
 	int ofd;
 	int seq;
-	enum compmode mode;
 	int hdr_seen;
+	enum compmode mode;
+	comp_alg *algo;
 	/* Statistics */
 	unsigned int nr_memmove, nr_realloc;
 	size_t cmp_ln, unc_ln;
+	/* Bench */
+	clock_t cpu;
+	int do_bench;
 } lzo_state;
+
+
 
 void lzo_hdr(header_t* hdr, lzo_state *state)
 {
 	memset(hdr, 0, sizeof(header_t));
-	hdr->version = ntohs(0x1024);
+	hdr->version = ntohs(0x1080);
 	hdr->lib_version = ntohs(LZO_VERSION);
-	hdr->version_needed_to_extract = ntohs(0x0940);
-	hdr->method = 1;
-	hdr->level = 5;
+	if (state->algo->meth <= 3)
+		hdr->version_needed_to_extract = ntohs(0x0940);
+	else
+		hdr->version_needed_to_extract = ntohs(0x1500);
+	hdr->method = state->algo->meth;
+	hdr->level = state->algo->lev;
 	/* Notes: We want checksums on compressed content; lzop forces us to do both then 
 	 * CRC32C has better error protection quality than adler32 -- but the implementation
 	 * in liblzo is rather slow, so stick with adler32 for now ... */
@@ -142,17 +199,31 @@ void lzo_hdr(header_t* hdr, lzo_state *state)
 int lzo_parse_hdr(unsigned char* bf, lzo_state *state)
 {
 	header_t *hdr = (header_t*)bf;
-	if (ntohs(hdr->version_needed_to_extract) > 0x1030) {
+	if (ntohs(hdr->version_needed_to_extract) > 0x1500) {
 		ddr_plug.fplog(stderr, FATAL, "lzo: requires version %02x.%02x to extract\n",
 			ntohs(hdr->version_needed_to_extract) >> 8,
 			ntohs(hdr->version_needed_to_extract) & 0xff);
 		return -2;
 	}
-	if (hdr->method != 1 && hdr->method != 2 && hdr->method != 3 /*|| hdr->level != 5*/) {
+	comp_alg *ca, *ca2 = NULL;
+	state->algo = NULL;
+	for (ca = calgos; ca < calgos+sizeof(calgos)/sizeof(comp_alg); ++ca) {
+		if (hdr->method == ca->meth) {
+			ca2 = ca;
+			if (hdr->level == ca->lev) {
+				state->algo = ca;
+				break;
+			}
+		}
+	}
+	if (!ca2) {
 		ddr_plug.fplog(stderr, FATAL, "lzo: unsupported method %i level %i\n",
 			hdr->method, hdr->level);
 		return -3;
 	}
+	if (!state->algo)
+		state->algo = ca2;
+
 	state->flags = ntohl(hdr->flags);
 	if (state->flags & F_MULTIPART) {
 		ddr_plug.fplog(stderr, FATAL, "lzo: unsupported multipart archive\n");
@@ -209,8 +280,31 @@ int parse_block_hdr(blockhdr_t *hdr, unsigned int *unc_cksum, unsigned int *cmp_
 }
 
 char *lzo_help = "The lzo plugin for dd_rescue de/compresses data on the fly.\n"
-	//	" It supports unaligned blocks (arbitrary offsets) and sparse writing.\n"
-		" Parameters: compress/decompress\n";
+		" It does not support sparse writing.\n"
+		" Parameters: compress/decompress/benchmarki/algo=lzo1?_?\n"
+		"  Use algo=help for a list of (de)compression algorithms.\n";
+
+
+void chose_alg(char* anm, lzo_state *state)
+{
+	comp_alg *ca;
+	if (!strcmp(anm, "help")) {
+		ddr_plug.fplog(stderr, INFO, "lzo: Algorithm (mem, meth, lev)\n");
+		for (ca = calgos; ca < calgos+sizeof(calgos)/sizeof(comp_alg); ++ca)
+			ddr_plug.fplog(stderr, INFO, "lzo: %s (%i, %i, %i)\n",
+					ca->name, ca->workmem, ca->meth, ca->lev);
+		exit(1);
+	}
+	for (ca = calgos; ca < calgos+sizeof(calgos)/sizeof(comp_alg); ++ca) {
+		if (!strcmp(ca->name, anm)) {
+			state->algo = ca;
+			return;
+		}
+	}
+	ddr_plug.fplog(stderr, FATAL, "lzo: Algorithm %s not found, try algo=help\n", anm);
+	exit(13);
+}
+
 
 int lzo_plug_init(void **stat, char* param, int seq)
 {
@@ -227,16 +321,22 @@ int lzo_plug_init(void **stat, char* param, int seq)
 	state->dbuflen = 0;
 	state->seq = seq;
 	state->hdr_seen = 0;
+	state->do_bench = 0;
+	state->algo = calgos;
 	while (param) {
 		char* next = strchr(param, ':');
 		if (next)
 			*next++ = 0;
 		if (!strcmp(param, "help"))
-			ddr_plug.fplog(stderr, INFO, "%s", lzo_help);
+			ddr_plug.fplog(stderr, INFO, "lzo: %s", lzo_help);
 		else if (!strcmp(param, "compress"))
 			state->mode = COMPRESS;
 		else if (!strcmp(param, "decompress"))
 			state->mode = DECOMPRESS;
+		else if (!strcmp(param, "benchmark"))
+			state->do_bench = 1;
+		else if (!memcmp(param, "algo=", 5))
+			chose_alg(param+5, state);
 		else {
 			ddr_plug.fplog(stderr, FATAL, "lzo: plugin doesn't understand param %s\n",
 				param);
@@ -319,18 +419,20 @@ int lzo_open(int ifd, const char* inm, loff_t ioff,
 		}
 	}
 	if (state->mode == COMPRESS) {
-		state->workspace = malloc(LZO1X_1_MEM_COMPRESS);
+		state->workspace = malloc(state->algo->workmem);
 		if (!state->workspace) {
-			ddr_plug.fplog(stderr, FATAL, "lzo: can't allocate workspace of size %i for compression!\n", LZO1X_1_MEM_COMPRESS);
+			ddr_plug.fplog(stderr, FATAL, "lzo: can't allocate workspace of size %i for compression!\n", state->algo->workmem);
 			return -1;
 		}
 		state->dbuflen = bsz + (bsz>>4) + 72 + sizeof(lzop_hdr) + sizeof(header_t);
 	} else {
-		state->dbuflen = 4*bsz;
+		state->dbuflen = 4*bsz+16;
 	}
 	state->slackpost = totslack_post;
 	state->slackpre  = totslack_pre ;
 	state->dbuf = slackalloc(state->dbuflen, state);
+	if (state->do_bench) 
+		state->cpu = 0;
 	return 0;
 	/* This breaks MD5 in chain before us
 	return consumed;
@@ -340,7 +442,7 @@ int lzo_open(int ifd, const char* inm, loff_t ioff,
 unsigned char* lzo_compress(unsigned char *bf, int *towr,
 			    int eof, loff_t ooff, lzo_state *state)
 {
-	lzo_uint dst_len;
+	lzo_uint dst_len = state->dbuflen-3-sizeof(lzop_hdr)-sizeof(header_t);
 	void *hdrp = state->dbuf+3+sizeof(lzop_hdr);
 	void *bhdp = hdrp+sizeof(header_t);
 	void* wrbf = bhdp;
@@ -350,7 +452,8 @@ unsigned char* lzo_compress(unsigned char *bf, int *towr,
 		 * when doing it for compressed (I would preder only the latter and I would
 		 * also prefer crc32,but that's slow in liblzo ...) */
 		uint32_t unc_adl = lzo_adler32(ADLER32_INIT_VALUE, bf, *towr);
-		lzo1x_1_compress(bf, *towr, cdata, &dst_len, state->workspace);
+		int err = state->algo->compress(bf, *towr, cdata, &dst_len, state->workspace);
+		assert(err == 0);
 		/* We NEED to do the same optimization as lzop if dst_len >= *towr, if we
 		 * want to be compatible, as the * lzop ddecompression code otherwise bails
 		 * out, sigh.
@@ -519,7 +622,7 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 			if (cmp_len > unc_len)
 				ddr_plug.fplog(stderr, WARN, "lzo: compressed %i > uncompressed %i breaks lzop\n",
 					cmp_len, unc_len);
-			err = lzo1x_decompress_safe(effbf+addoff, cmp_len, state->dbuf+d_off, &dst_len, NULL);
+			err = state->algo->decompr(effbf+addoff, cmp_len, state->dbuf+d_off, &dst_len, NULL);
 			LZO_DEBUG(ddr_plug.fplog(stderr, INFO, "lzo: decompressed %i@%p -> %i\n",
 				cmp_len, effbf+addoff, dst_len));
 			if (dst_len != unc_len)
@@ -589,11 +692,17 @@ unsigned char* lzo_block(unsigned char* bf, int *towr,
 			 int eof, loff_t ooff, void **stat)
 {
 	lzo_state *state = (lzo_state*)*stat;
-	/* Bulk buffer process */
+	unsigned char* ptr;
+	clock_t t1 = 0;
+	if (state->do_bench) 
+		t1 = clock();
 	if (state->mode == COMPRESS) 
-		return lzo_compress(bf, towr, eof, ooff, state);
+		ptr = lzo_compress(bf, towr, eof, ooff, state);
 	else
-		return lzo_decompress(bf, towr, eof, ooff, state);
+		ptr = lzo_decompress(bf, towr, eof, ooff, state);
+	if (state->do_bench)
+		state->cpu += clock() - t1;
+	return ptr;
 }
 
 int lzo_close(loff_t ooff, void **stat)
@@ -605,15 +714,22 @@ int lzo_close(loff_t ooff, void **stat)
 	if (state->workspace)
 		free(state->workspace);
 	if (state->mode == COMPRESS)
-		ddr_plug.fplog(stderr, INFO, "lzo: compr %.1fkiB <- %.1fkiB (%.1f%)\n",
+		ddr_plug.fplog(stderr, INFO, "lzo: %s_compress %.1fkiB <- %.1fkiB (%.1f%)\n",
+			state->algo->name,
 			state->cmp_ln/1024.0, state->unc_ln/1024.0,
 			100.0*((double)state->cmp_ln/state->unc_ln - 1.0));
 	else
-		ddr_plug.fplog(stderr, INFO, "lzo: compr %.1fkiB -> %.1fkiB (%.1f%), %i reallocs (%ikiB), %i moves\n",
+		ddr_plug.fplog(stderr, INFO, "lzo: %s_decompr %.1fkiB -> %.1fkiB (%.1f%)\n\t%i reallocs (%ikiB), %i moves\n",
+			state->algo->name,
 			state->cmp_ln/1024.0, state->unc_ln/1024.0,
 			100.0*((double)state->cmp_ln/state->unc_ln - 1.0),
 			state->nr_realloc, state->dbuflen/1024, 
 			state->nr_memmove);
+	/* Only output if it took us more than 0.05s, otherwise it's completely meaningless */
+	if (state->do_bench && state->cpu/(CLOCKS_PER_SEC/20) > 0)
+		ddr_plug.fplog(stderr, INFO, "lzo: %.2fs CPU time, %.1fMiB/s\n",
+				(double)state->cpu/CLOCKS_PER_SEC, 
+				state->unc_ln/1024 / (state->cpu/(CLOCKS_PER_SEC/1024.0)));
 	free(*stat);
 	return 0;
 }
