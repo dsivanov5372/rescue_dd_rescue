@@ -169,28 +169,28 @@ typedef struct _lzo_state {
 void lzo_hdr(header_t* hdr, lzo_state *state)
 {
 	memset(hdr, 0, sizeof(header_t));
-	hdr->version = ntohs(0x1080);
-	hdr->lib_version = ntohs(LZO_VERSION);
+	hdr->version = htons(0x1080);
+	hdr->lib_version = htons(LZO_VERSION);
 	if (state->algo->meth <= 3)
-		hdr->version_needed_to_extract = ntohs(0x0940);
+		hdr->version_needed_to_extract = htons(0x0940);
 	else
-		hdr->version_needed_to_extract = ntohs(0x1500);
+		hdr->version_needed_to_extract = htons(0x1500);
 	hdr->method = state->algo->meth;
 	hdr->level = state->algo->lev;
 	/* Notes: We want checksums on compressed content; lzop forces us to do both then 
 	 * CRC32C has better error protection quality than adler32 -- but the implementation
 	 * in liblzo is rather slow, so stick with adler32 for now ... */
 	state->flags = 0x03000003UL;	/* UNIX | ADLER32_C | ADLER32_D */
-	hdr->flags = ntohl(state->flags);
+	hdr->flags = htonl(state->flags);
 	hdr->nmlen = NAMELEN;
 	if (state->iname) {
 		memcpy(hdr->name, state->iname, MIN(NAMELEN,strlen(state->iname)));
 		struct stat stbf;
 		if (0 == stat(state->iname, &stbf)) {
-			hdr->mode = ntohl(stbf.st_mode);
-			hdr->mtime_low = ntohl(stbf.st_mtime & 0xffffffff);
+			hdr->mode = htonl(stbf.st_mode);
+			hdr->mtime_low = htonl(stbf.st_mtime & 0xffffffff);
 #if __WORDSIZE != 32
-			hdr->mtime_high = ntohl(stbf.st_mtime >> 32);
+			hdr->mtime_high = htonl(stbf.st_mtime >> 32);
 #endif
 		}
 	}
