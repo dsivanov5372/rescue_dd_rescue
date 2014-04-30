@@ -142,7 +142,7 @@ typedef struct _lzo_state {
 	loff_t first_ooff;
 	const char *iname, *oname;
 	void *workspace;
-	void *dbuf;
+	void *dbuf, *orig_dbuf;
 	size_t dbuflen;
        	int hdroff;
 	unsigned char *obuf;
@@ -165,6 +165,8 @@ typedef struct _lzo_state {
 
 #define FPLOG(lvl, fmt, args...) \
 	ddr_plug.fplog(stderr, lvl, "lzo(%i): " fmt, state->seq, ##args)
+
+static unsigned int pagesize = 4096;
 
 void lzo_hdr(header_t* hdr, lzo_state *state)
 {
@@ -357,30 +359,34 @@ int lzo_plug_init(void **stat, char* param, int seq)
 	}
 	state->nr_memmove = 0; state->nr_realloc = 0;
 	state->cmp_ln = 0; state->unc_ln = 0;
+#ifdef _SC_PAGESIZE
+	pagesize = sysconf(_SC_PAGESIZE);
+#endif
 	return err;
 }
 
 void* slackalloc(size_t ln, lzo_state *state)
 {
-	/* TODO: pagesize alignment ... */
-	void* ptr = malloc(ln+state->slackpre+state->slackpost);
+	void* ptr = malloc(ln+state->slackpre+state->slackpost+pagesize);
 	if (!ptr) {
 		FPLOG(FATAL, "allocation of %i bytes failed: %s\n",
 			ln+state->slackpre+state->slackpost, strerror(errno));
 		exit(13);
 	}
-	return ptr+state->slackpre;
+	state->orig_dbuf = ptr;
+	ptr += state->slackpre + pagesize-1;
+	ptr -= (unsigned long)ptr%pagesize;
+	return ptr;
 }
 
 void* slackrealloc(void* base, size_t newln, lzo_state *state)
 {
-	void* ptr;
+	void *ptr, *optr;
 	++state->nr_realloc;
 	/* Note: We could use free and malloc IF we have no data decompressed yet 
 	 * (d_off == 0) and no slack space from plugins behind us is needed.
 	 * Probably not worth the effort ... */
-	/* This does not preserve pagesize alignment */
-	ptr = realloc(base-state->slackpre, newln+state->slackpre+state->slackpost);
+	ptr = malloc(newln+state->slackpre+state->slackpost+pagesize);
 	/* Note: We can be somewhat graceful if realloc fails by returning the original
 	 * pointer and buffer size and raise(SIGQUIT) -- this would result in 
 	 * writing out data that has been processed already.
@@ -391,12 +397,19 @@ void* slackrealloc(void* base, size_t newln, lzo_state *state)
 		raise(SIGQUIT);
 		return NULL;
 	}
-	return ptr+state->slackpre;
+	optr = ptr;
+	ptr += state->slackpre + pagesize-1;
+	ptr -= (unsigned long)ptr%pagesize;
+	memcpy(ptr-state->slackpre, base-state->slackpre, state->dbuflen+state->slackpre+state->slackpost);
+	free(state->orig_dbuf);
+	state->orig_dbuf = optr;
+	return ptr;
 }
 
 void slackfree(void* base, lzo_state *state)
 {
-	free(base-state->slackpre);
+	//free(base-state->slackpre);
+	free(state->orig_dbuf);
 }
 
 int lzo_open(int ifd, const char* inm, loff_t ioff, 
