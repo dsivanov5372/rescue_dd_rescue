@@ -448,6 +448,12 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 			addoff = parse_block_hdr(hdr, &unc_cksum, &cmp_cksum, state);
 		else
 			addoff = parse_block_hdr(hdr, NULL, NULL, state);
+
+		/* No second checksum .... */
+		if (cmp_len == unc_len && addoff > 12) {
+			addoff -= 4;
+			cmp_cksum = unc_cksum;
+		}
 		LZO_DEBUG(ddr_plug.fplog(stderr, INFO, "lzo: dec blk @ %p (hdroff %i, cln %i, uln %i, have %i)\n",
 				effbf, c_off+state->hdroff, cmp_len, unc_len, have_len));
 		/* Block incomplete? */
@@ -521,8 +527,6 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 				ddr_plug.fplog(stderr, WARN, "lzo: inconsistent uncompressed size @%i: %i <-> %i\n",
 					ooff+d_off, unc_len, dst_len);
 		} else {
-			/* No second checksum .... */
-			addoff -= 4;
 			memcpy(state->dbuf+d_off, effbf+addoff, unc_len);
 			dst_len = unc_len;
 		}
