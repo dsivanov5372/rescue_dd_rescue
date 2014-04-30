@@ -1,7 +1,7 @@
 README file for dd_rescue
 =========================
 (c) garloff@suse.de, 10/99, GNU GPL 
-(c) kurt@garloff.de  2011-2012, GNU GPL v2 or v3
+(c) kurt@garloff.de  2011-2014, GNU GPL v2 or v3
 
 
 Description of dd_rescue
@@ -181,7 +181,8 @@ dd_rescue has a few nifty features:
   to analyze or transform blocks prior to being written. 1.42 shipped with
   an MD5 plugin.
 * Version 1.43 brought the lzo plugin, allowing data compression/
-  decompression using the fast lzo algorithm.
+  decompression using the fast lzo algorithm. It required the plugin interface
+  to be reworked -- further changes will likely come.
 
 
 Copyright
@@ -193,7 +194,7 @@ v2 or v3 - at your option.
 To summarize:
 * You are free to use this program for anything you like. (You are still
   bound by the law of course, but the license does not put any additional
-  restrictions.) 
+  restrictions.)
 * You are allowed to distribute this program and e.g. put it on a CD or 
   other media and charge a fee for copying and distributing it. You have 
   to provide the source code (or a written offer to provide it) and the 
