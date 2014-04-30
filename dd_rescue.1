@@ -565,6 +565,11 @@ saved with this plugin as only backup for valuable data. Also
 expect some changes to the plugin in the near future. (This will
 not break the file format, as we're following lzop ....)
 
+While care has been applied to check the result of memory allocations ...,
+the decompressor code has not been audited to not be vulnerable to
+malicious data -- be careful when you process data from untrusted
+sources.
+
 .SH EXIT STATUS
 On successful completion, 
 .B dd_rescue

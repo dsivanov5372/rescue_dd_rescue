@@ -262,19 +262,22 @@ void* slackalloc(size_t ln, lzo_state *state)
 void* slackrealloc(void* base, size_t newln, lzo_state *state)
 {
 	void* ptr;
+	++state->nr_realloc;
+	/* Note: We could use free and malloc IF we have no data decompressed yet 
+	 * (d_off == 0) and no slack space from plugins behind us is needed.
+	 * Probably not worth the effort ... */
 	/* This does not preserve pagesize alignment */
-	if (1 || state->slackpre + state->slackpost)
-		ptr = realloc(base-state->slackpre, newln+state->slackpre+state->slackpost);
-	else {	/* We might have stored data ourselves! */
-		free(base-state->slackpre);
-		ptr = malloc(newln+state->slackpre+state->slackpost);
-	}
+	ptr = realloc(base-state->slackpre, newln+state->slackpre+state->slackpost);
+	/* Note: We can be somewhat graceful if realloc fails by returning the original
+	 * pointer and buffer size and raise(SIGQUIT) -- this would result in 
+	 * writing out data that has been processed already.
+	 */
 	if (!ptr) {
 		ddr_plug.fplog(stderr, FATAL, "lzo: reallocation of %i bytes failed: %s\n",
 			newln+state->slackpre+state->slackpost, strerror(errno));
-		exit(13);
+		raise(SIGQUIT);
+		return NULL;
 	}
-	++state->nr_realloc;
 	return ptr+state->slackpre;
 }
 
@@ -472,13 +475,20 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 		}
 		dst_len = state->dbuflen-d_off;
 		if (dst_len < unc_len) {
-			state->dbuflen = unc_len+d_off;
 			/* If memalloc fails, we'll abort in a second, so warn ... */
 			if (unc_len > 16*1024*1024)
 				ddr_plug.fplog(stderr, WARN, "lzo: large uncompressed block sz %i @%i\n",
 						unc_len, ooff+d_off);
-			state->dbuf = slackrealloc(state->dbuf, state->dbuflen, state);
-			dst_len = state->dbuflen-d_off; /* unc_len */
+			size_t newlen = unc_len+d_off+255;
+			newlen -= newlen%256;
+			void *newbuf = slackrealloc(state->dbuf, newlen, state);
+			/* if realloc failed, exit loop, write out existing data and exit;
+			 * slackrealloc has done raise(SIGQUIT) already ... */
+			if (!newbuf)
+				break;
+			state->dbuf = newbuf;
+			state->dbuflen = newlen;
+			dst_len = newlen-d_off;
 		}
 		int err = lzo1x_decompress_safe(effbf+addoff, cmp_len, state->dbuf+d_off, &dst_len, NULL);
 		LZO_DEBUG(ddr_plug.fplog(stderr, INFO, "lzo: decompressed %i@%p -> %i\n",
