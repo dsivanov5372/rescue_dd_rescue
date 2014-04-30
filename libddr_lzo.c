@@ -163,7 +163,8 @@ typedef struct _lzo_state {
 	int do_bench;
 } lzo_state;
 
-
+#define FPLOG(lvl, fmt, args...) \
+	ddr_plug.fplog(stderr, lvl, "lzo(%i): " fmt, state->seq, ##args)
 
 void lzo_hdr(header_t* hdr, lzo_state *state)
 {
@@ -200,7 +201,7 @@ int lzo_parse_hdr(unsigned char* bf, lzo_state *state)
 {
 	header_t *hdr = (header_t*)bf;
 	if (ntohs(hdr->version_needed_to_extract) > 0x1500) {
-		ddr_plug.fplog(stderr, FATAL, "lzo: requires version %02x.%02x to extract\n",
+		FPLOG(FATAL, "requires version %02x.%02x to extract\n",
 			ntohs(hdr->version_needed_to_extract) >> 8,
 			ntohs(hdr->version_needed_to_extract) & 0xff);
 		return -2;
@@ -217,8 +218,7 @@ int lzo_parse_hdr(unsigned char* bf, lzo_state *state)
 		}
 	}
 	if (!ca2) {
-		ddr_plug.fplog(stderr, FATAL, "lzo: unsupported method %i level %i\n",
-			hdr->method, hdr->level);
+		FPLOG(FATAL, "unsupported method %i level %i\n", hdr->method, hdr->level);
 		return -3;
 	}
 	if (!state->algo)
@@ -226,22 +226,33 @@ int lzo_parse_hdr(unsigned char* bf, lzo_state *state)
 
 	state->flags = ntohl(hdr->flags);
 	if (state->flags & F_MULTIPART) {
-		ddr_plug.fplog(stderr, FATAL, "lzo: unsupported multipart archive\n");
+		FPLOG(FATAL, "unsupported multipart archive\n");
 		return -4;
 	}
+	if ((state->flags & (F_CRC32_C | F_ADLER32_C)) == (F_CRC32_C | F_ADLER32_C)) {
+		FPLOG(FATAL, "Can't have both CRC32_C and ADLER32_C\n");
+		return -5;
+	}
+	if ((state->flags & (F_CRC32_D | F_ADLER32_D)) == (F_CRC32_D | F_ADLER32_D)) {
+		FPLOG(FATAL, "Can't have both CRC32_D and ADLER32_D\n");
+		return -5;
+	}
+
 	uint32_t cksum = ntohl(*(uint32_t*)((char*)hdr+offsetof(header_t,name)+hdr->nmlen));
 	uint32_t comp = (state->flags & F_H_CRC32 ? lzo_crc32(  CRC32_INIT_VALUE, (void*)hdr, sizeof(header_t)-NAMELEN+hdr->nmlen-4)
 						: lzo_adler32(ADLER32_INIT_VALUE, (void*)hdr, sizeof(header_t)-NAMELEN+hdr->nmlen-4));
 	if (cksum != comp) {
-		ddr_plug.fplog(stderr, FATAL, "lzo: header fails checksum %08x != %08x\n",
+		FPLOG(FATAL, "header fails checksum %08x != %08x\n",
 			cksum, comp);
-		return -5;
+		return -6;
 	}
 	int off = sizeof(header_t) + hdr->nmlen-NAMELEN;
 	if (state->flags & F_H_EXTRA_FIELD) {
 		off += 8 + ntohl(*(uint32_t*)(bf+off));
-		if (off > 4096)
-			abort();
+		if (off > 4000) {
+			FPLOG(FATAL, "excessive extra field size %i\n", off);
+			return -7;
+		}
 	}
 	state->hdr_seen = 1;
 	return off;
@@ -289,9 +300,9 @@ void chose_alg(char* anm, lzo_state *state)
 {
 	comp_alg *ca;
 	if (!strcmp(anm, "help")) {
-		ddr_plug.fplog(stderr, INFO, "lzo: Algorithm (mem, meth, lev)\n");
+		FPLOG(INFO, "Algorithm (mem, meth, lev)\n");
 		for (ca = calgos; ca < calgos+sizeof(calgos)/sizeof(comp_alg); ++ca)
-			ddr_plug.fplog(stderr, INFO, "lzo: %s (%i, %i, %i)\n",
+			FPLOG(INFO, "%s (%i, %i, %i)\n",
 					ca->name, ca->workmem, ca->meth, ca->lev);
 		exit(1);
 	}
@@ -301,7 +312,7 @@ void chose_alg(char* anm, lzo_state *state)
 			return;
 		}
 	}
-	ddr_plug.fplog(stderr, FATAL, "lzo: Algorithm %s not found, try algo=help\n", anm);
+	FPLOG(FATAL, "Algorithm %s not found, try algo=help\n", anm);
 	exit(13);
 }
 
@@ -311,7 +322,7 @@ int lzo_plug_init(void **stat, char* param, int seq)
 	int err = 0;
 	lzo_state *state = (lzo_state*)malloc(sizeof(lzo_state));
 	if (!state) {
-		ddr_plug.fplog(stderr, FATAL, "lzo: can't allocate %i bytes\n", sizeof(lzo_state));
+		FPLOG(FATAL, "can't allocate %i bytes\n", sizeof(lzo_state));
 		return -1;
 	}
 	*stat = (void*)state;
@@ -328,7 +339,7 @@ int lzo_plug_init(void **stat, char* param, int seq)
 		if (next)
 			*next++ = 0;
 		if (!strcmp(param, "help"))
-			ddr_plug.fplog(stderr, INFO, "lzo: %s", lzo_help);
+			FPLOG(INFO, "%s", lzo_help);
 		else if (!strcmp(param, "compress"))
 			state->mode = COMPRESS;
 		else if (!strcmp(param, "decompress"))
@@ -338,7 +349,7 @@ int lzo_plug_init(void **stat, char* param, int seq)
 		else if (!memcmp(param, "algo=", 5))
 			chose_alg(param+5, state);
 		else {
-			ddr_plug.fplog(stderr, FATAL, "lzo: plugin doesn't understand param %s\n",
+			FPLOG(FATAL, "plugin doesn't understand param %s\n",
 				param);
 			++err;
 		}
@@ -354,7 +365,7 @@ void* slackalloc(size_t ln, lzo_state *state)
 	/* TODO: pagesize alignment ... */
 	void* ptr = malloc(ln+state->slackpre+state->slackpost);
 	if (!ptr) {
-		ddr_plug.fplog(stderr, FATAL, "lzo: allocation of %i bytes failed: %s\n",
+		FPLOG(FATAL, "allocation of %i bytes failed: %s\n",
 			ln+state->slackpre+state->slackpost, strerror(errno));
 		exit(13);
 	}
@@ -375,7 +386,7 @@ void* slackrealloc(void* base, size_t newln, lzo_state *state)
 	 * writing out data that has been processed already.
 	 */
 	if (!ptr) {
-		ddr_plug.fplog(stderr, FATAL, "lzo: reallocation of %i bytes failed: %s\n",
+		FPLOG(FATAL, "reallocation of %i bytes failed: %s\n",
 			newln+state->slackpre+state->slackpost, strerror(errno));
 		raise(SIGQUIT);
 		return NULL;
@@ -405,7 +416,7 @@ int lzo_open(int ifd, const char* inm, loff_t ioff,
 	state->softbs = bsz;
 	state->hdroff = 0;
 	if (lzo_init() != LZO_E_OK) {
-		ddr_plug.fplog(stderr, FATAL, "lzo: failed to initialize lzo library!");
+		FPLOG(FATAL, "failed to initialize lzo library!");
 		return -1;
 	}
 	if (state->mode == AUTO) {
@@ -414,14 +425,14 @@ int lzo_open(int ifd, const char* inm, loff_t ioff,
 		else if (!strcmp(onm+strlen(onm)-2, "zo"))
 			state->mode = COMPRESS;
 		else {
-			ddr_plug.fplog(stderr, FATAL, "lzo: can't determine compression/decompression from filenames (and not set)!\n");
+			FPLOG(FATAL, "can't determine compression/decompression from filenames (and not set)!\n");
 			return -1;
 		}
 	}
 	if (state->mode == COMPRESS) {
 		state->workspace = malloc(state->algo->workmem);
 		if (!state->workspace) {
-			ddr_plug.fplog(stderr, FATAL, "lzo: can't allocate workspace of size %i for compression!\n", state->algo->workmem);
+			FPLOG(FATAL, "can't allocate workspace of size %i for compression!\n", state->algo->workmem);
 			return -1;
 		}
 		state->dbuflen = bsz + (bsz>>4) + 72 + sizeof(lzop_hdr) + sizeof(header_t);
@@ -501,7 +512,7 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 	if (!state->hdr_seen) {
 		assert(ooff - state->first_ooff == 0);
 		if (memcmp(bf, lzop_hdr, sizeof(lzop_hdr))) {
-			ddr_plug.fplog(stderr, FATAL, "lzo: lzop magic broken\n");
+			FPLOG(FATAL, "lzop magic broken\n");
 			abort();
 		}
 		c_off += sizeof(lzop_hdr);
@@ -516,7 +527,7 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 		lzo_uint dst_len;
 		const size_t totbufln = state->softbs - ddr_plug.slack_post*((state->softbs+15)/16);
 		unsigned char* effbf = bf+c_off+state->hdroff;
-		LZO_DEBUG(ddr_plug.fplog(stderr, INFO, "lzo: dec blk @ %p (offs %i, stoffs %i, bln %zi, tbw %i)\n",
+		LZO_DEBUG(FPLOG(INFO, "dec blk @ %p (offs %i, stoffs %i, bln %zi, tbw %i)\n",
 				effbf, effbf-state->obuf, state->hdroff, totbufln, *towr));
 		blockhdr_t *hdr = (blockhdr_t*)effbf;
 		const size_t have_len = *towr-state->hdroff-c_off;
@@ -532,7 +543,7 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 			if (!unc_len) {	
 				/* EOF */
 				if (have_len != 4)
-					ddr_plug.fplog(stderr, WARN, "lzo: %i+ bytes after EOF ignored\n", have_len-4);
+					FPLOG(WARN, "%i+ bytes after EOF ignored\n", have_len-4);
 				break;
 			}
 		}
@@ -560,7 +571,7 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 			addoff -= 4;
 			cmp_cksum = unc_cksum;
 		}
-		LZO_DEBUG(ddr_plug.fplog(stderr, INFO, "lzo: dec blk @ %p (hdroff %i, cln %i, uln %i, have %i)\n",
+		LZO_DEBUG(FPLOG(INFO, "dec blk @ %p (hdroff %i, cln %i, uln %i, have %i)\n",
 				effbf, c_off+state->hdroff, cmp_len, unc_len, have_len));
 		/* Block incomplete? */
 		if (addoff+cmp_len > have_len) {
@@ -571,12 +582,12 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 				 * Block will fit and so will next read ... */
 				state->hdroff -= *towr-c_off;
 				*state->bufp += *towr;
-				LZO_DEBUG(ddr_plug.fplog(stderr, INFO, "lzo: append  @ %p\n", *state->bufp));
+				LZO_DEBUG(FPLOG(INFO, "append  @ %p\n", *state->bufp));
 				/* Simplify to addoff+cmp_len+state->softbs < totbufln ? */
 			} else if (addoff+cmp_len < totbufln &&
 					have_len+state->softbs < totbufln) {
 				/* We need to move block to beg of buffer */
-				LZO_DEBUG(ddr_plug.fplog(stderr, INFO, "lzo: move %i bytes to buffer head\n", have_len));
+				LZO_DEBUG(FPLOG(INFO, "move %i bytes to buffer head\n", have_len));
 				if (effbf != state->obuf) {
 					memmove(state->obuf, effbf, have_len);
 					++state->nr_memmove;
@@ -586,7 +597,7 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 				//c_off = 0;
 			} else {
 				/* Our buffer is too small */
-				ddr_plug.fplog(stderr, FATAL, "Can't assemble block of size %i, increase softblocksize to at least %i\n", 
+				FPLOG(FATAL, "Can't assemble block of size %i, increase softblocksize to at least %i\n", 
 						cmp_len, cmp_len/2);
 				raise(SIGQUIT);
 			}
@@ -597,7 +608,7 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 				lzo_adler32(ADLER32_INIT_VALUE, effbf+addoff, cmp_len) :
 				lzo_crc32  (  CRC32_INIT_VALUE, effbf+addoff, cmp_len);
 			if (cksum != cmp_cksum) {
-				ddr_plug.fplog(stderr, FATAL, "lzo: compr checksum mismatch @ %i\n",
+				FPLOG(FATAL, "compr checksum mismatch @ %i\n",
 						ooff+d_off);
 				raise(SIGQUIT);
 				break;
@@ -607,7 +618,7 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 		if (dst_len < unc_len) {
 			/* If memalloc fails, we'll abort in a second, so warn ... */
 			if (unc_len > 16*1024*1024)
-				ddr_plug.fplog(stderr, WARN, "lzo: large uncompressed block sz %i @%i\n",
+				FPLOG(WARN, "large uncompressed block sz %i @%i\n",
 						unc_len, ooff+d_off);
 			size_t newlen = unc_len+d_off+255;
 			newlen -= newlen%256;
@@ -624,13 +635,13 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 		/* lzop: cmp_len == unc_len means that we just have a copy of the original */
 		if (cmp_len != unc_len) {
 			if (cmp_len > unc_len)
-				ddr_plug.fplog(stderr, WARN, "lzo: compressed %i > uncompressed %i breaks lzop\n",
+				FPLOG(WARN, "compressed %i > uncompressed %i breaks lzop\n",
 					cmp_len, unc_len);
 			err = state->algo->decompr(effbf+addoff, cmp_len, state->dbuf+d_off, &dst_len, NULL);
-			LZO_DEBUG(ddr_plug.fplog(stderr, INFO, "lzo: decompressed %i@%p -> %i\n",
+			LZO_DEBUG(FPLOG(INFO, "decompressed %i@%p -> %i\n",
 				cmp_len, effbf+addoff, dst_len));
 			if (dst_len != unc_len)
-				ddr_plug.fplog(stderr, WARN, "lzo: inconsistent uncompressed size @%i: %i <-> %i\n",
+				FPLOG(WARN, "inconsistent uncompressed size @%i: %i <-> %i\n",
 					ooff+d_off, unc_len, dst_len);
 		} else {
 			memcpy(state->dbuf+d_off, effbf+addoff, unc_len);
@@ -639,29 +650,29 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 		switch (err) {
 		case LZO_E_INPUT_OVERRUN:
 			/* TODO: Partial block, handle! */
-			ddr_plug.fplog(stderr, FATAL, "lzo: input overrun %i %i %i; try larger block sizes\n", *towr, state->dbuflen, dst_len);
+			FPLOG(FATAL, "input overrun %i %i %i; try larger block sizes\n", *towr, state->dbuflen, dst_len);
 			raise(SIGQUIT);
 			break;
 		case LZO_E_EOF_NOT_FOUND:
 			/* TODO: Partial block, handle! */
-			ddr_plug.fplog(stderr, FATAL, "lzo: EOF not found %i %i %i; try larger block sizes\n", *towr, state->dbuflen, dst_len);
+			FPLOG(FATAL, "EOF not found %i %i %i; try larger block sizes\n", *towr, state->dbuflen, dst_len);
 			raise(SIGQUIT);
 			break;
 		case LZO_E_OUTPUT_OVERRUN:
-			ddr_plug.fplog(stderr, FATAL, "lzo: output overrun %i %i %i; try larger block sizes\n", *towr, state->dbuflen, dst_len);
+			FPLOG(FATAL, "output overrun %i %i %i; try larger block sizes\n", *towr, state->dbuflen, dst_len);
 			raise(SIGQUIT);
 			break;
 		case LZO_E_LOOKBEHIND_OVERRUN:
-			ddr_plug.fplog(stderr, FATAL, "lzo: lookbehind overrun %i %i %i; data corrupt?\n", *towr, state->dbuflen, dst_len);
+			FPLOG(FATAL, "lookbehind overrun %i %i %i; data corrupt?\n", *towr, state->dbuflen, dst_len);
 			raise(SIGQUIT);
 			break;
 		case LZO_E_ERROR:
-			ddr_plug.fplog(stderr, FATAL, "lzo: unspecified error %i %i %i; data corrupt?\n", *towr, state->dbuflen, dst_len);
+			FPLOG(FATAL, "unspecified error %i %i %i; data corrupt?\n", *towr, state->dbuflen, dst_len);
 			raise(SIGQUIT);
 			break;
 		case LZO_E_INPUT_NOT_CONSUMED:
 			/* TODO: Leftover bytes, store */
-			ddr_plug.fplog(stderr, INFO, "lzo: input not fully consumed %i %i %i\n", *towr, state->dbuflen, dst_len);
+			FPLOG(INFO, "input not fully consumed %i %i %i\n", *towr, state->dbuflen, dst_len);
 			break;
 		}
 		if (state->flags & ( F_ADLER32_D | F_CRC32_D)) {
@@ -675,7 +686,7 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 					lzo_adler32(ADLER32_INIT_VALUE, state->dbuf+d_off, dst_len) :
 					lzo_crc32  (  CRC32_INIT_VALUE, state->dbuf+d_off, dst_len);
 			if (cksum != unc_cksum) {
-				ddr_plug.fplog(stderr, FATAL, "lzo: decompr checksum mismatch @ %i\n",
+				FPLOG(FATAL, "decompr checksum mismatch @ %i\n",
 						ooff+d_off);
 				raise(SIGQUIT);
 				break;
@@ -718,25 +729,25 @@ int lzo_close(loff_t ooff, void **stat)
 	if (state->workspace)
 		free(state->workspace);
 	if (state->mode == COMPRESS)
-		ddr_plug.fplog(stderr, INFO, "lzo: %s_compress %.1fkiB (%1.f%%) <- %.1fkiB\n",
+		FPLOG(INFO, "%s_compress %.1fkiB (%1.f%%) <- %.1fkiB\n",
 			state->algo->name,
 			state->cmp_ln/1024.0, 
 			100.0*((double)state->cmp_ln/state->unc_ln),
 			state->unc_ln/1024.0);
 	else {
-		ddr_plug.fplog(stderr, INFO, "lzo: %s_decompr %.1fkiB (%.1f%%) -> %.1fkiB\n",
+		FPLOG(INFO, "%s_decompr %.1fkiB (%.1f%%) -> %.1fkiB\n",
 			state->algo->name,
 			state->cmp_ln/1024.0, 
 			100.0*((double)state->cmp_ln/state->unc_ln),
 			state->unc_ln/1024.0);
 		if (state->do_bench)
-			ddr_plug.fplog(stderr, INFO, "lzo: %i reallocs (%ikiB), %i moves\n",
+			FPLOG(INFO, "%i reallocs (%ikiB), %i moves\n",
 				state->nr_realloc, state->dbuflen/1024,
 				state->nr_memmove);
 	}
 	/* Only output if it took us more than 0.05s, otherwise it's completely meaningless */
 	if (state->do_bench && state->cpu/(CLOCKS_PER_SEC/20) > 0)
-		ddr_plug.fplog(stderr, INFO, "lzo: %.2fs CPU time, %.1fMiB/s\n",
+		FPLOG(INFO, "%.2fs CPU time, %.1fMiB/s\n",
 				(double)state->cpu/CLOCKS_PER_SEC, 
 				state->unc_ln/1024 / (state->cpu/(CLOCKS_PER_SEC/1024.0)));
 	free(*stat);
