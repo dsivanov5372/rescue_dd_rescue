@@ -168,7 +168,8 @@ dd_rescue has a few nifty features:
   and non-bold type.
 * Since 1.35 we use optimized code to detect zero-filled blocks in -A
   mode; with 1.36 optimized ARM asm was added, with 1.41 an even
-  faster AVX2 routine. The runtime detection has been fixed in 1.40.
+  faster AVX2 routine and with 1.43 an ARMv8 (64bit) optimized routine.
+  The runtime detection has been fixed in 1.40.
 * Version 1.40 added copying of extended attributes (xattrs) with -p.
 * Version 1.41 brought option -u, removing the output file and 
   discarding (TRIMming) the filesystem. 1.41 also added support for 
