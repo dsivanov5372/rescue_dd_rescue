@@ -181,10 +181,9 @@ void block_hdr(blockhdr_t* hdr, uint32_t uncompr, uint32_t compr, uint32_t unc_a
 	hdr->uncmpr_len = htonl(uncompr);
 	hdr->cmpr_len = htonl(compr);
 	hdr->uncmpr_chksum = htonl(unc_adl);
-	/* Don't compute a second time if we've just done a copy */
-	hdr->cmpr_chksum = (uncompr == compr ?
-			hdr->uncmpr_chksum :
-			htonl(lzo_adler32(ADLER32_INIT_VALUE, cdata, compr)));
+	/* Don't overwrite copied data */
+	if (uncompr != compr)
+	       	hdr->cmpr_chksum = htonl(lzo_adler32(ADLER32_INIT_VALUE, cdata, compr));
 }
 
 /* Returns compressed len */
@@ -363,7 +362,7 @@ unsigned char* lzo_compress(unsigned char *bf, int *towr,
 			 * and save a copy -- don't bother for now ...
 			 * as the added header makes this somewhat complex.
 			 */
-			memcpy(cdata, bf, *towr);
+			memcpy(cdata-4, bf, *towr);
 			dst_len = *towr;
 		}
 		state->cmp_ln += dst_len; state->unc_ln += *towr;
