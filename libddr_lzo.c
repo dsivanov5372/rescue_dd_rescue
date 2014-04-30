@@ -718,17 +718,21 @@ int lzo_close(loff_t ooff, void **stat)
 	if (state->workspace)
 		free(state->workspace);
 	if (state->mode == COMPRESS)
-		ddr_plug.fplog(stderr, INFO, "lzo: %s_compress %.1fkiB <- %.1fkiB (%.1f%)\n",
+		ddr_plug.fplog(stderr, INFO, "lzo: %s_compress %.1fkiB (%1.f%%) <- %.1fkiB\n",
 			state->algo->name,
-			state->cmp_ln/1024.0, state->unc_ln/1024.0,
-			100.0*((double)state->cmp_ln/state->unc_ln - 1.0));
-	else
-		ddr_plug.fplog(stderr, INFO, "lzo: %s_decompr %.1fkiB -> %.1fkiB (%.1f%)\n\t%i reallocs (%ikiB), %i moves\n",
+			state->cmp_ln/1024.0, 
+			100.0*((double)state->cmp_ln/state->unc_ln),
+			state->unc_ln/1024.0);
+	else {
+		ddr_plug.fplog(stderr, INFO, "lzo: %s_decompr %.1fkiB (%.1f%%) -> %.1fkiB\n",
 			state->algo->name,
-			state->cmp_ln/1024.0, state->unc_ln/1024.0,
-			100.0*((double)state->cmp_ln/state->unc_ln - 1.0),
-			state->nr_realloc, state->dbuflen/1024, 
+			state->cmp_ln/1024.0, 
+			100.0*((double)state->cmp_ln/state->unc_ln),
+			state->unc_ln/1024.0);
+		ddr_plug.fplog(stderr, INFO, "lzo: %i reallocs (%ikiB), %i moves\n",
+			state->nr_realloc, state->dbuflen/1024,
 			state->nr_memmove);
+	}
 	/* Only output if it took us more than 0.05s, otherwise it's completely meaningless */
 	if (state->do_bench && state->cpu/(CLOCKS_PER_SEC/20) > 0)
 		ddr_plug.fplog(stderr, INFO, "lzo: %.2fs CPU time, %.1fMiB/s\n",
