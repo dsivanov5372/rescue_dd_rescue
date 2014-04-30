@@ -529,8 +529,12 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 		/* EOF marker */
 		if (have_len >= 4) {
 			unc_len = ntohl(hdr->uncmpr_len);
-			if (!unc_len)	/* EOF */
+			if (!unc_len) {	
+				/* EOF */
+				if (have_len != 4)
+					ddr_plug.fplog(stderr, WARN, "lzo: %i+ bytes after EOF ignored\n", have_len-4);
 				break;
+			}
 		}
 		/* Not enough data to read header; move to beginning of buffer */
 		if (have_len < 8) {
