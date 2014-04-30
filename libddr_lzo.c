@@ -729,9 +729,10 @@ int lzo_close(loff_t ooff, void **stat)
 			state->cmp_ln/1024.0, 
 			100.0*((double)state->cmp_ln/state->unc_ln),
 			state->unc_ln/1024.0);
-		ddr_plug.fplog(stderr, INFO, "lzo: %i reallocs (%ikiB), %i moves\n",
-			state->nr_realloc, state->dbuflen/1024,
-			state->nr_memmove);
+		if (state->do_bench)
+			ddr_plug.fplog(stderr, INFO, "lzo: %i reallocs (%ikiB), %i moves\n",
+				state->nr_realloc, state->dbuflen/1024,
+				state->nr_memmove);
 	}
 	/* Only output if it took us more than 0.05s, otherwise it's completely meaningless */
 	if (state->do_bench && state->cpu/(CLOCKS_PER_SEC/20) > 0)
