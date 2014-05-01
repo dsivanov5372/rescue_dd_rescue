@@ -102,6 +102,7 @@ typedef int (_decm_method)(const lzo_bytep src, lzo_uint  sln,
 			   	 lzo_bytep dst, lzo_uintp dln,
 				 lzo_voidp wrkmem);
 
+/* All algs need zero workmem to decompress, so no need to put in table */
 typedef struct {
 	char* name;
 	_cmpr_method *compress;
@@ -111,7 +112,9 @@ typedef struct {
 } comp_alg;
 
 comp_alg calgos[] = { {"lzo1x_1", lzo1x_1_compress, lzo1x_decompress_safe, LZO1X_1_MEM_COMPRESS, 1, 5},
-		      {"lzo1x_1_15", lzo1x_1_15_compress, lzo1x_decompress_safe, LZO1X_1_15_MEM_COMPRESS, 2, 1},
+		      {"lzo1x_1_11", lzo1x_1_11_compress, lzo1x_decompress_safe, LZO1X_1_11_MEM_COMPRESS, 2, 1},
+		      {"lzo1x_1_12", lzo1x_1_12_compress, lzo1x_decompress_safe, LZO1X_1_12_MEM_COMPRESS, 2, 2},
+		      {"lzo1x_1_15", lzo1x_1_15_compress, lzo1x_decompress_safe, LZO1X_1_15_MEM_COMPRESS, 2, 5},
       		      {"lzo1x_999", lzo1x_999_compress, lzo1x_decompress_safe, LZO1X_999_MEM_COMPRESS, 3, 9},
 		      /* We DON'T use a different method indicator for the variants unlike lzop */
 		      {"lzo1y_1", lzo1y_1_compress, lzo1y_decompress_safe, LZO1Y_MEM_COMPRESS, 64, 1},
@@ -223,6 +226,10 @@ int lzo_parse_hdr(unsigned char* bf, lzo_state *state)
 		FPLOG(FATAL, "unsupported method %i level %i\n", hdr->method, hdr->level);
 		return -3;
 	}
+	/* lzop -1 special case: 2/1 means lzo1x_1_15 not _1_11 */
+	if (state->algo == calgos+1 && ntohs(hdr->version) != 0x1080)
+		state->algo += 2;
+	/* If we have not found an exact match, just use the family -- good enough to decode */
 	if (!state->algo)
 		state->algo = ca2;
 
