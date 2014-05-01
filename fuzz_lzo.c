@@ -1,4 +1,5 @@
-/** \file break_lzo.c
+/** \file ifuzz_lzo.c
+ *
  * This program produces broken LZO files to test robustness
  * of the libddr_lzo decompressor against broken files
  * as this is a potential attack vector for malicious folks.
