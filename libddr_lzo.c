@@ -34,6 +34,9 @@
 #endif
 
 /* Some bits from lzop -- we strive for some level of compatibility */
+/* We use version numbers that are not likely to clash with lzop anytime soon;
+ * let's see whether this can be coordinated with Markus Oberhumer */ 
+#define F_VERSION 0x1789	/* BCD 1.789 */
 
 static const unsigned char 
 	lzop_hdr[] = { 0x89, 0x4c, 0x5a, 0x4f, 0x00, 0x0d, 0x0a, 0x1a, 0x0a };
@@ -111,6 +114,7 @@ typedef struct {
 	unsigned char meth, lev;
 } comp_alg;
 
+/* Only 1/5, 2/1 and 3/9 are defined by lzop (and 2/1 is x1_1_15 not _1_11 */
 comp_alg calgos[] = { {"lzo1x_1", lzo1x_1_compress, lzo1x_decompress_safe, LZO1X_1_MEM_COMPRESS, 1, 5},
 		      {"lzo1x_1_11", lzo1x_1_11_compress, lzo1x_decompress_safe, LZO1X_1_11_MEM_COMPRESS, 2, 1},
 		      {"lzo1x_1_12", lzo1x_1_12_compress, lzo1x_decompress_safe, LZO1X_1_12_MEM_COMPRESS, 2, 2},
@@ -174,12 +178,12 @@ static unsigned int pagesize = 4096;
 void lzo_hdr(header_t* hdr, lzo_state *state)
 {
 	memset(hdr, 0, sizeof(header_t));
-	hdr->version = htons(0x1080);
+	hdr->version = htons(F_VERSION);
 	hdr->lib_version = htons(LZO_VERSION);
 	if (state->algo->meth <= 3)
 		hdr->version_needed_to_extract = htons(0x0940);
 	else
-		hdr->version_needed_to_extract = htons(0x1500);
+		hdr->version_needed_to_extract = htons(F_VERSION);
 	hdr->method = state->algo->meth;
 	hdr->level = state->algo->lev;
 	/* Notes: We want checksums on compressed content; lzop forces us to do both then 
@@ -205,10 +209,10 @@ void lzo_hdr(header_t* hdr, lzo_state *state)
 int lzo_parse_hdr(unsigned char* bf, lzo_state *state)
 {
 	header_t *hdr = (header_t*)bf;
-	if (ntohs(hdr->version_needed_to_extract) > 0x1500) {
-		FPLOG(FATAL, "requires version %02x.%02x to extract\n",
-			ntohs(hdr->version_needed_to_extract) >> 8,
-			ntohs(hdr->version_needed_to_extract) & 0xff);
+	if (ntohs(hdr->version_needed_to_extract) > 0x1030 && hdr->version_needed_to_extract != htons(F_VERSION)) {
+		FPLOG(FATAL, "requires version %01x.%03x to extract\n",
+			ntohs(hdr->version_needed_to_extract) >> 12,
+			ntohs(hdr->version_needed_to_extract) & 0xfff);
 		return -2;
 	}
 	comp_alg *ca, *ca2 = NULL;
@@ -227,7 +231,7 @@ int lzo_parse_hdr(unsigned char* bf, lzo_state *state)
 		return -3;
 	}
 	/* lzop -1 special case: 2/1 means lzo1x_1_15 not _1_11 */
-	if (state->algo == calgos+1 && ntohs(hdr->version) != 0x1080)
+	if (state->algo == calgos+1 && ntohs(hdr->version) != F_VERSION)
 		state->algo += 2;
 	/* If we have not found an exact match, just use the family -- good enough to decode */
 	if (!state->algo)
