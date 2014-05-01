@@ -353,14 +353,16 @@ int lzo_plug_init(void **stat, char* param, int seq)
 			*next++ = 0;
 		if (!strcmp(param, "help"))
 			FPLOG(INFO, "%s", lzo_help);
-		else if (!strcmp(param, "compress"))
+		else if (!memcmp(param, "compr", 5))
 			state->mode = COMPRESS;
-		else if (!strcmp(param, "decompress"))
+		else if (!memcmp(param, "decom", 5))
 			state->mode = DECOMPRESS;
-		else if (!strcmp(param, "benchmark"))
+		else if (!memcmp(param, "bench", 5))
 			state->do_bench = 1;
 		else if (!memcmp(param, "algo=", 5))
 			chose_alg(param+5, state);
+		else if (!memcmp(param, "alg=", 4))
+			chose_alg(param+4, state);
 		else {
 			FPLOG(FATAL, "plugin doesn't understand param %s\n",
 				param);
