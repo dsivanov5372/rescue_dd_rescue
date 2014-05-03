@@ -11,6 +11,7 @@
 #include "md5.h"
 
 #include <stdlib.h>
+#include <unistd.h>
 #include <string.h>
 #include <assert.h>
 
@@ -36,13 +37,14 @@ typedef struct _md5_state {
 	const char* name;
 	uint8_t buf[128];
 	int seq;
+	int outfd;
 	unsigned char buflen;
-	unsigned char olnchg, do_out;
+	unsigned char olnchg;
 } md5_state;
 
 char *md5_help = "The MD5 plugin for dd_rescue calculates the md5sum on the fly.\n"
 		" It supports unaligned blocks (arbitrary offsets) and sparse writing.\n"
-		" Parameters: output\n";
+		" Parameters: output/outfd=FNO\n";
 
 int md5_plug_init(void **stat, char* param, int seq)
 {
@@ -58,7 +60,9 @@ int md5_plug_init(void **stat, char* param, int seq)
 		if (!strcmp(param, "help"))
 			FPLOG(INFO, "%s", md5_help);
 		else if (!strcmp(param, "output"))
-			state->do_out = 1;
+			state->outfd = 1;
+		else if (!memcmp(param, "outfd=", 6))
+			state->outfd = atoi(param+6);
 		/* elif .... */
 		else {
 			FPLOG(FATAL, "plugin doesn't understand param %s\n",
@@ -151,7 +155,7 @@ unsigned char* md5_block(unsigned char* bf, int *towr,
 		state->md5_pos += 64;
 	}
 	/* Last sparse block */
-	int left = opos - state->md5_pos;
+	int left = opos - (state->md5_pos+state->buflen);
 	if (!state->olnchg && left > 0 && *towr >= left) {
 		assert(consumed == 0);
 		memcpy(state->buf+64-left, bf, left);
@@ -213,8 +217,12 @@ int md5_close(loff_t ooff, void **stat)
 	loff_t firstpos = (state->seq == 0? state->first_ioff: state->first_ooff);
 	FPLOG(INFO, "%s (%" LL "i-%" LL "i): %s\n",
 		state->name, firstpos, firstpos+state->md5_pos, md5_out(res));
-	if (state->do_out)
-		printf("%s *%s\n", md5_out(res), state->name);
+	if (state->outfd) {
+		char outbuf[256];
+		snprintf(outbuf, 255, "%s *%s\n", md5_out(res), state->name);
+		if (write(state->outfd, outbuf, strlen(outbuf)) <= 0)
+			FPLOG(WARN, "Could not write MD5 result to fd %i\n", state->outfd);
+	}
 	free(*stat);
 	return 0;
 }

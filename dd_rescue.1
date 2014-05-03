@@ -548,7 +548,9 @@ but saves time by not accessing the (possibly large) file a second time.
 The MD5 plugin handles sparse writes and arbitrary offsets fine.
 .br
 The MD5 plugin accepts the parameter output. If given, it will output
-the md5sum to stdout in the same format that md5sum uses.
+the md5sum to stdout in the same format that md5sum uses. You can also
+specify outfd=INT to have the plugin write the md5 hash to a different
+file descriptor.
 .br
 Please note that the MD5 algorithm is NOT recommended any more for
 good protetction against malicious attempts to hide data modification;

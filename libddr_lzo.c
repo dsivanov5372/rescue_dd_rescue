@@ -352,6 +352,8 @@ int lzo_plug_init(void **stat, char* param, int seq)
 			chose_alg(param+5, state);
 		else if (!memcmp(param, "alg=", 4))
 			chose_alg(param+4, state);
+		else if (!memcmp(param, "algorithm=", 10))
+			chose_alg(param+10, state);
 		else {
 			FPLOG(FATAL, "plugin doesn't understand param %s\n",
 				param);
