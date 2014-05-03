@@ -92,20 +92,6 @@ typedef struct {
 
 #define MIN(a,b) ((a)<(b)? (a): (b))
 
-/*
-int lzo1x_1_compress ( const lzo_bytep src, lzo_uint  src_len,
-                             lzo_bytep dst, lzo_uintp dst_len,
-                             lzo_voidp wrkmem );
-*/
-
-/*
-typedef int (_cmpr_method)(const lzo_bytep src, lzo_uint  sln,
-			   	 lzo_bytep dst, lzo_uintp dln,
-			   	 lzo_voidp wrkmem);
-typedef int (_decm_method)(const lzo_bytep src, lzo_uint  sln,
-			   	 lzo_bytep dst, lzo_uintp dln,
-				 lzo_voidp wrkmem);
-*/
 
 /* All algs need zero workmem to decompress, so no need to put in table */
 typedef struct {
