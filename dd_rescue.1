@@ -546,6 +546,15 @@ It's output should be identical to calling md5sum on the target file
 (unless you only write part of the file),
 but saves time by not accessing the (possibly large) file a second time.
 The MD5 plugin handles sparse writes and arbitrary offsets fine.
+.br
+The MD5 plugin accepts the parameter output. If given, it will output
+the md5sum to stdout in the same format that md5sum uses.
+.br
+Please note that the MD5 algorithm is NOT recommended any more for
+good protetction against malicious attempts to hide data modification;
+it's not considered strong enough any more to prevent hash collisions.
+Use SHA-2 in preference. (There is not SHA-2 supporting plugin yet for
+dd_rescue, but this may change in the near future ...)
 .
 .SS lzo
 The lzo plugin allows to compress and decompress data using liblzo2.

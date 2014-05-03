@@ -30,25 +30,26 @@ ddr_plugin_t ddr_plug;
 
 typedef struct _md5_state {
 	md5_ctx md5;
-	loff_t first_ooff;
+	loff_t first_ooff, first_ioff;
 	loff_t md5_pos;
 	unsigned char **bufp;
-	const char* onm;
+	const char* name;
 	uint8_t buf[128];
 	int seq;
 	unsigned char buflen;
-	unsigned char olnchg;
+	unsigned char olnchg, do_out;
 } md5_state;
 
 char *md5_help = "The MD5 plugin for dd_rescue calculates the md5sum on the fly.\n"
 		" It supports unaligned blocks (arbitrary offsets) and sparse writing.\n"
-		" Parameters: None\n";
+		" Parameters: output\n";
 
 int md5_plug_init(void **stat, char* param, int seq)
 {
 	int err = 0;
 	md5_state *state = (md5_state*)malloc(sizeof(md5_state));
 	*stat = (void*)state;
+	memset(state, 0, sizeof(md5_state));
 	state->seq = seq;
 	while (param) {
 		char* next = strchr(param, ':');
@@ -56,6 +57,8 @@ int md5_plug_init(void **stat, char* param, int seq)
 			*next++ = 0;
 		if (!strcmp(param, "help"))
 			FPLOG(INFO, "%s", md5_help);
+		else if (!strcmp(param, "output"))
+			state->do_out = 1;
 		/* elif .... */
 		else {
 			FPLOG(FATAL, "plugin doesn't understand param %s\n",
@@ -77,8 +80,9 @@ int md5_open(int ifd, const char* inm, loff_t ioff,
 	md5_state *state = (md5_state*)*stat;
 	md5_init(&state->md5);
 	state->first_ooff = ooff;
+	state->first_ioff = ioff;
 	state->md5_pos = 0;
-	state->onm = onm;
+	state->name = (state->seq == 0? inm: onm);
 	memset(state->buf, 0, 128);
 	state->buflen = 0;
 	state->olnchg = olnchg;
@@ -94,7 +98,7 @@ void md5_last(md5_state *state, loff_t ooff)
 	assert(state->olnchg || state->buflen == left);
 	/*
 	fprintf(stderr, "MD5_DEBUG: %s: len=%li, md5pos=%li\n", 
-		state->onm, len, state->md5_pos);
+		state->name, len, state->md5_pos);
 	 */
 	MD5_DEBUG(FPLOG(INFO, "Last block with %i bytes\n", state->buflen));
 	md5_calc(state->buf, state->buflen, state->md5_pos+state->buflen, &state->md5);
@@ -206,8 +210,11 @@ int md5_close(loff_t ooff, void **stat)
 	md5_state *state = (md5_state*)*stat;
 	uint8_t res[16];
 	md5_result(&state->md5, res);
+	loff_t firstpos = (state->seq == 0? state->first_ioff: state->first_ooff);
 	FPLOG(INFO, "%s (%" LL "i-%" LL "i): %s\n",
-		state->onm, state->first_ooff, state->first_ooff+state->md5_pos, md5_out(res));
+		state->name, firstpos, firstpos+state->md5_pos, md5_out(res));
+	if (state->do_out)
+		printf("%s *%s\n", md5_out(res), state->name);
 	free(*stat);
 	return 0;
 }
