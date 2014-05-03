@@ -346,7 +346,7 @@ int lzo_plug_init(void **stat, char* param, int seq)
 			state->mode = DECOMPRESS;
 		else if (!memcmp(param, "bench", 5))
 			state->do_bench = 1;
-		else if (!memcmp(param, "bench", 5))
+		else if (!memcmp(param, "opt", 3))
 			state->do_opt = 1;
 		else if (!memcmp(param, "algo=", 5))
 			chose_alg(param+5, state);
