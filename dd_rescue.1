@@ -572,15 +572,19 @@ expect some changes to the plugin in the near future. (This will
 not break the file format, as we're following lzop ....)
 .br
 While care has been applied to check the result of memory allocations ...,
-the decompressor code has not been audited to not be vulnerable to
-malicious data -- be careful when you process data from untrusted
-sources.
+the decompressor code has not been audited or fuzzed (yet) to ensure 
+it's not  vulnerable to malicious data -- be careful when you process
+data from untrusted sources.
 .br
 The plugin also supports the parameter benchmark; if it's specified,
 it will output some information about CPU usage and resulting compression
 or decompression bandwidth. (For small files, the numbers become meaningless
 due to jitter and limited time resolution -- the plugin will skip the output
 if the numbers are very tiny.)
+.br
+The parameter optimize will tell the lzo plugin to do an optimization 
+pass after compression. This might be useful when creating compressed
+data with high compression levels and large block sizes.
 .br
 The lzo plugin supports a number of the (de)compression algorithms from
 liblzo2. You can specify which one you want to use by passing algo=XXX,

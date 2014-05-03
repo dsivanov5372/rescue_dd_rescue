@@ -98,44 +98,47 @@ int lzo1x_1_compress ( const lzo_bytep src, lzo_uint  src_len,
                              lzo_voidp wrkmem );
 */
 
+/*
 typedef int (_cmpr_method)(const lzo_bytep src, lzo_uint  sln,
 			   	 lzo_bytep dst, lzo_uintp dln,
 			   	 lzo_voidp wrkmem);
 typedef int (_decm_method)(const lzo_bytep src, lzo_uint  sln,
 			   	 lzo_bytep dst, lzo_uintp dln,
 				 lzo_voidp wrkmem);
+*/
 
 /* All algs need zero workmem to decompress, so no need to put in table */
 typedef struct {
 	char* name;
-	_cmpr_method *compress;
-	_decm_method *decompr;
+	lzo_compress_t compress;
+	lzo_decompress_t decompr;
+	lzo_optimize_t optimize;
 	unsigned int workmem;
 	unsigned char meth, lev;
 } comp_alg;
 
-/* Only 1/5, 2/1 and 3/9 are defined by lzop (and 2/1 is x1_1_15 not _1_11 */
-comp_alg calgos[] = { {"lzo1x_1", lzo1x_1_compress, lzo1x_decompress_safe, LZO1X_1_MEM_COMPRESS, 1, 5},
-		      {"lzo1x_1_11", lzo1x_1_11_compress, lzo1x_decompress_safe, LZO1X_1_11_MEM_COMPRESS, 2, 1},
-		      {"lzo1x_1_12", lzo1x_1_12_compress, lzo1x_decompress_safe, LZO1X_1_12_MEM_COMPRESS, 2, 2},
-		      {"lzo1x_1_15", lzo1x_1_15_compress, lzo1x_decompress_safe, LZO1X_1_15_MEM_COMPRESS, 2, 5},
-      		      {"lzo1x_999", lzo1x_999_compress, lzo1x_decompress_safe, LZO1X_999_MEM_COMPRESS, 3, 9},
+/* Only 1/5, 2/1 and 3/9 are defined by lzop (and 2/1 is x1_1_15 in lzop not _1_11) */
+comp_alg calgos[] = { {"lzo1x_1",    lzo1x_1_compress,    lzo1x_decompress_safe, lzo1x_optimize, LZO1X_1_MEM_COMPRESS,    1, 5},
+		      {"lzo1x_1_11", lzo1x_1_11_compress, lzo1x_decompress_safe, lzo1x_optimize, LZO1X_1_11_MEM_COMPRESS, 2, 1},
+		      {"lzo1x_1_12", lzo1x_1_12_compress, lzo1x_decompress_safe, lzo1x_optimize, LZO1X_1_12_MEM_COMPRESS, 2, 2},
+		      {"lzo1x_1_15", lzo1x_1_15_compress, lzo1x_decompress_safe, lzo1x_optimize, LZO1X_1_15_MEM_COMPRESS, 2, 5},
+      		      {"lzo1x_999",  lzo1x_999_compress,  lzo1x_decompress_safe, lzo1x_optimize, LZO1X_999_MEM_COMPRESS,  3, 9},
 		      /* We DON'T use a different method indicator for the variants unlike lzop */
-		      {"lzo1y_1", lzo1y_1_compress, lzo1y_decompress_safe, LZO1Y_MEM_COMPRESS, 64, 1},
-		      {"lzo1y_999", lzo1y_999_compress, lzo1y_decompress_safe, LZO1Y_999_MEM_COMPRESS, 65, 9},
-		      {"lzo1f_1", lzo1f_1_compress, lzo1f_decompress_safe, LZO1F_MEM_COMPRESS, 66, 1},
-		      {"lzo1f_999", lzo1f_999_compress, lzo1f_decompress_safe, LZO1F_999_MEM_COMPRESS, 67, 9},
-		      {"lzo1b_1", lzo1b_1_compress, lzo1b_decompress_safe, LZO1B_MEM_COMPRESS, 68, 1},
-		      {"lzo1b_2", lzo1b_2_compress, lzo1b_decompress_safe, LZO1B_MEM_COMPRESS, 68, 2},
-		      {"lzo1b_3", lzo1b_3_compress, lzo1b_decompress_safe, LZO1B_MEM_COMPRESS, 68, 3},
-		      {"lzo1b_4", lzo1b_4_compress, lzo1b_decompress_safe, LZO1B_MEM_COMPRESS, 68, 4},
-		      {"lzo1b_5", lzo1b_5_compress, lzo1b_decompress_safe, LZO1B_MEM_COMPRESS, 68, 5},
-		      {"lzo1b_6", lzo1b_6_compress, lzo1b_decompress_safe, LZO1B_MEM_COMPRESS, 68, 6},
-		      {"lzo1b_7", lzo1b_7_compress, lzo1b_decompress_safe, LZO1B_MEM_COMPRESS, 68, 7},
-		      {"lzo1b_8", lzo1b_8_compress, lzo1b_decompress_safe, LZO1B_MEM_COMPRESS, 68, 8},
-		      {"lzo1b_9", lzo1b_9_compress, lzo1b_decompress_safe, LZO1B_MEM_COMPRESS, 68, 9},
-		      {"lzo1b_99", lzo1b_99_compress, lzo1b_decompress_safe, LZO1B_99_MEM_COMPRESS, 69, 9},
-		      {"lzo1b_999", lzo1b_999_compress, lzo1b_decompress_safe, LZO1B_999_MEM_COMPRESS, 70, 9},
+		      {"lzo1y_1",    lzo1y_1_compress,    lzo1y_decompress_safe, lzo1y_optimize, LZO1Y_MEM_COMPRESS,     64, 1},
+		      {"lzo1y_999",  lzo1y_999_compress,  lzo1y_decompress_safe, lzo1y_optimize, LZO1Y_999_MEM_COMPRESS, 65, 9},
+		      {"lzo1f_1",    lzo1f_1_compress,    lzo1f_decompress_safe, NULL,           LZO1F_MEM_COMPRESS,     66, 1},
+		      {"lzo1f_999",  lzo1f_999_compress,  lzo1f_decompress_safe, NULL,           LZO1F_999_MEM_COMPRESS, 67, 9},
+		      {"lzo1b_1",    lzo1b_1_compress,    lzo1b_decompress_safe, NULL,           LZO1B_MEM_COMPRESS,     68, 1},
+		      {"lzo1b_2",    lzo1b_2_compress,    lzo1b_decompress_safe, NULL,           LZO1B_MEM_COMPRESS,     68, 2},
+		      {"lzo1b_3",    lzo1b_3_compress,    lzo1b_decompress_safe, NULL,           LZO1B_MEM_COMPRESS,     68, 3},
+		      {"lzo1b_4",    lzo1b_4_compress,    lzo1b_decompress_safe, NULL,           LZO1B_MEM_COMPRESS,     68, 4},
+		      {"lzo1b_5",    lzo1b_5_compress,    lzo1b_decompress_safe, NULL,           LZO1B_MEM_COMPRESS,     68, 5},
+		      {"lzo1b_6",    lzo1b_6_compress,    lzo1b_decompress_safe, NULL,           LZO1B_MEM_COMPRESS,     68, 6},
+		      {"lzo1b_7",    lzo1b_7_compress,    lzo1b_decompress_safe, NULL,           LZO1B_MEM_COMPRESS,     68, 7},
+		      {"lzo1b_8",    lzo1b_8_compress,    lzo1b_decompress_safe, NULL,           LZO1B_MEM_COMPRESS,     68, 8},
+		      {"lzo1b_9",    lzo1b_9_compress,    lzo1b_decompress_safe, NULL,           LZO1B_MEM_COMPRESS,     68, 9},
+		      {"lzo1b_99",   lzo1b_99_compress,   lzo1b_decompress_safe, NULL,           LZO1B_99_MEM_COMPRESS,  69, 9},
+		      {"lzo1b_999",  lzo1b_999_compress,  lzo1b_decompress_safe, NULL,           LZO1B_999_MEM_COMPRESS, 70, 9},
 
 		    };	      
 
@@ -159,7 +162,7 @@ typedef struct _lzo_state {
 	uint32_t flags;
 	int ofd;
 	int seq;
-	int hdr_seen, eof_seen;
+	char hdr_seen, eof_seen, do_bench, do_opt;
 	enum compmode mode;
 	comp_alg *algo;
 	/* Statistics */
@@ -168,7 +171,6 @@ typedef struct _lzo_state {
 	size_t cmp_ln, unc_ln;
 	/* Bench */
 	clock_t cpu;
-	int do_bench;
 } lzo_state;
 
 #define FPLOG(lvl, fmt, args...) \
@@ -307,7 +309,7 @@ int parse_block_hdr(blockhdr_t *hdr, unsigned int *unc_cksum, unsigned int *cmp_
 
 char *lzo_help = "The lzo plugin for dd_rescue de/compresses data on the fly.\n"
 		" It does not support sparse writing.\n"
-		" Parameters: compress/decompress/benchmarki/algo=lzo1?_?\n"
+		" Parameters: compress/decompress/benchmark/algo=lzo1?_?/optimize\n"
 		"  Use algo=help for a list of (de)compression algorithms.\n";
 
 
@@ -358,6 +360,8 @@ int lzo_plug_init(void **stat, char* param, int seq)
 			state->mode = DECOMPRESS;
 		else if (!memcmp(param, "bench", 5))
 			state->do_bench = 1;
+		else if (!memcmp(param, "bench", 5))
+			state->do_opt = 1;
 		else if (!memcmp(param, "algo=", 5))
 			chose_alg(param+5, state);
 		else if (!memcmp(param, "alg=", 4))
@@ -488,6 +492,8 @@ unsigned char* lzo_compress(unsigned char *bf, int *towr,
 		uint32_t unc_adl = lzo_adler32(ADLER32_INIT_VALUE, bf, *towr);
 		int err = state->algo->compress(bf, *towr, cdata, &dst_len, state->workspace);
 		assert(err == 0);
+		if (state->do_opt && dst_len < *towr && state->algo->optimize)
+			state->algo->optimize(bf, *towr, cdata, &dst_len, state->workspace);
 		/* We NEED to do the same optimization as lzop if dst_len >= *towr, if we
 		 * want to be compatible, as the * lzop ddecompression code otherwise bails
 		 * out, sigh.
