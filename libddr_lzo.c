@@ -478,8 +478,12 @@ unsigned char* lzo_compress(unsigned char *bf, int *towr,
 		uint32_t unc_adl = lzo_adler32(ADLER32_INIT_VALUE, bf, *towr);
 		int err = state->algo->compress(bf, *towr, cdata, &dst_len, state->workspace);
 		assert(err == 0);
-		if (state->do_opt && dst_len < *towr && state->algo->optimize)
-			state->algo->optimize(bf, *towr, cdata, &dst_len, state->workspace);
+		if (state->do_opt && dst_len < *towr && state->algo->optimize) {
+			/* Note that this memcpy should be better avoided.
+			 * But we don't optimize for optimize ... it's not useful enough */
+			memcpy(bf, cdata, dst_len);
+			state->algo->optimize(bf, dst_len, cdata, &dst_len, state->workspace);
+		}
 		/* We NEED to do the same optimization as lzop if dst_len >= *towr, if we
 		 * want to be compatible, as the * lzop ddecompression code otherwise bails
 		 * out, sigh.
