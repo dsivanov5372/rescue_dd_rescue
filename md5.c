@@ -187,7 +187,7 @@ int main(int argc, char **argv)
     }
     size_t len = stbf.st_size;
 
-    uint8_t *obf = malloc(BUFSIZE+128);
+    uint8_t *obf = (uint8_t*)malloc(BUFSIZE+128);
     uint8_t *bf = obf;
 #if defined(HAVE___BUILTIN_PREFETCH) && !defined(NO_ALIGN)
     bf += 63;

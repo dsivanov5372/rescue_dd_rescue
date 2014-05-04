@@ -42,7 +42,7 @@ typedef struct _md5_state {
 	unsigned char olnchg;
 } md5_state;
 
-char *md5_help = "The MD5 plugin for dd_rescue calculates the md5sum on the fly.\n"
+const char *md5_help = "The MD5 plugin for dd_rescue calculates the md5sum on the fly.\n"
 		" It supports unaligned blocks (arbitrary offsets) and sparse writing.\n"
 		" Parameters: output/outfd=FNO\n";
 

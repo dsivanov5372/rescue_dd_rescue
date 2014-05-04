@@ -343,7 +343,7 @@ int max_neg_slack_pre = 0;
 unsigned int max_slack_post = 0;
 int max_neg_slack_post = 0;
 int last_lnchg = -1;
-int max_align = 0;
+unsigned int max_align = 0;
 char not_sparse = 0;
 char plugin_help = 0;
 char have_block_cb = 0;
@@ -425,7 +425,7 @@ LISTTYPE(VOIDP) *ddr_plug_handles;
 ddr_plugin_t* insert_plugin(void* hdl, const char* nm, char* param)
 {
 	LISTAPPEND(ddr_plug_handles, hdl, VOIDP);
-	ddr_plugin_t *plug = dlsym(hdl, "ddr_plug");
+	ddr_plugin_t *plug = (ddr_plugin_t*)dlsym(hdl, "ddr_plug");
 	if (!plug) {
 		fplog(stderr, WARN, "plugin %s loaded, but ddr_plug not found!\n", nm);
 		return NULL;

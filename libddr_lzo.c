@@ -95,7 +95,7 @@ typedef struct {
 
 /* All algs need zero workmem to decompress, so no need to put in table */
 typedef struct {
-	char* name;
+	const char* name;
 	lzo_compress_t compress;
 	lzo_decompress_t decompr;
 	lzo_optimize_t optimize;
@@ -138,7 +138,7 @@ typedef struct _lzo_state {
 	loff_t first_ooff;
 	const char *iname, *oname;
 	void *workspace;
-	void *dbuf, *orig_dbuf;
+	unsigned char *dbuf, *orig_dbuf;
 	size_t dbuflen;
        	int hdroff;
 	unsigned char *obuf;
@@ -192,7 +192,7 @@ void lzo_hdr(header_t* hdr, lzo_state *state)
 #endif
 		}
 	}
-	hdr->hdr_checksum = htonl(lzo_adler32(ADLER32_INIT_VALUE, (void*)hdr, offsetof(header_t, hdr_checksum)));
+	hdr->hdr_checksum = htonl(lzo_adler32(ADLER32_INIT_VALUE, (const lzo_bytep)hdr, offsetof(header_t, hdr_checksum)));
 }
 
 int lzo_parse_hdr(unsigned char* bf, lzo_state *state)
@@ -241,8 +241,8 @@ int lzo_parse_hdr(unsigned char* bf, lzo_state *state)
 	}
 
 	uint32_t cksum = ntohl(*(uint32_t*)((char*)hdr+offsetof(header_t,name)+hdr->nmlen));
-	uint32_t comp = (state->flags & F_H_CRC32 ? lzo_crc32(  CRC32_INIT_VALUE, (void*)hdr, sizeof(header_t)-NAMELEN+hdr->nmlen-4)
-						: lzo_adler32(ADLER32_INIT_VALUE, (void*)hdr, sizeof(header_t)-NAMELEN+hdr->nmlen-4));
+	uint32_t comp = (state->flags & F_H_CRC32 ? lzo_crc32(  CRC32_INIT_VALUE, (const lzo_bytep)hdr, sizeof(header_t)-NAMELEN+hdr->nmlen-4)
+						: lzo_adler32(ADLER32_INIT_VALUE, (const lzo_bytep)hdr, sizeof(header_t)-NAMELEN+hdr->nmlen-4));
 	if (cksum != comp) {
 		FPLOG(FATAL, "header fails checksum %08x != %08x\n",
 			cksum, comp);
@@ -268,7 +268,7 @@ void block_hdr(blockhdr_t* hdr, uint32_t uncompr, uint32_t compr, uint32_t unc_a
 	hdr->uncmpr_chksum = htonl(unc_adl);
 	/* Don't overwrite copied data */
 	if (uncompr != compr)
-	       	hdr->cmpr_chksum = htonl(lzo_adler32(ADLER32_INIT_VALUE, cdata, compr));
+	       	hdr->cmpr_chksum = htonl(lzo_adler32(ADLER32_INIT_VALUE, (const lzo_bytep)cdata, compr));
 }
 
 /* Returns compressed len */
@@ -293,7 +293,7 @@ int parse_block_hdr(blockhdr_t *hdr, unsigned int *unc_cksum, unsigned int *cmp_
 	return off;
 }
 
-char *lzo_help = "The lzo plugin for dd_rescue de/compresses data on the fly.\n"
+const char *lzo_help = "The lzo plugin for dd_rescue de/compresses data on the fly.\n"
 		" It does not support sparse writing.\n"
 		" Parameters: compress/decompress/benchmark/algo=lzo1?_?/optimize\n"
 		"  Use algo=help for a list of (de)compression algorithms.\n";
@@ -369,7 +369,7 @@ int lzo_plug_init(void **stat, char* param, int seq)
 
 void* slackalloc(size_t ln, lzo_state *state)
 {
-	void* ptr = malloc(ln+state->slackpre+state->slackpost+pagesize);
+	unsigned char *ptr = (unsigned char*)malloc(ln+state->slackpre+state->slackpost+pagesize);
 	if (!ptr) {
 		FPLOG(FATAL, "allocation of %i bytes failed: %s\n",
 			ln+state->slackpre+state->slackpost, strerror(errno));
@@ -383,12 +383,12 @@ void* slackalloc(size_t ln, lzo_state *state)
 
 void* slackrealloc(void* base, size_t newln, lzo_state *state)
 {
-	void *ptr, *optr;
+	unsigned char *ptr, *optr;
 	++state->nr_realloc;
 	/* Note: We could use free and malloc IF we have no data decompressed yet 
 	 * (d_off == 0) and no slack space from plugins behind us is needed.
 	 * Probably not worth the effort ... */
-	ptr = malloc(newln+state->slackpre+state->slackpost+pagesize);
+	ptr = (unsigned char*)malloc(newln+state->slackpre+state->slackpost+pagesize);
 	/* Note: We can be somewhat graceful if realloc fails by returning the original
 	 * pointer and buffer size and raise(SIGQUIT) -- this would result in 
 	 * writing out data that has been processed already.
@@ -402,7 +402,7 @@ void* slackrealloc(void* base, size_t newln, lzo_state *state)
 	optr = ptr;
 	ptr += state->slackpre + pagesize-1;
 	ptr -= (unsigned long)ptr%pagesize;
-	memcpy(ptr-state->slackpre, base-state->slackpre, state->dbuflen+state->slackpre+state->slackpost);
+	memcpy(ptr-state->slackpre, (char*)base-state->slackpre, state->dbuflen+state->slackpre+state->slackpost);
 	free(state->orig_dbuf);
 	state->orig_dbuf = optr;
 	return ptr;
@@ -456,7 +456,7 @@ int lzo_open(int ifd, const char* inm, loff_t ioff,
 	}
 	state->slackpost = totslack_post;
 	state->slackpre  = totslack_pre ;
-	state->dbuf = slackalloc(state->dbuflen, state);
+	state->dbuf = (unsigned char*)slackalloc(state->dbuflen, state);
 	if (state->do_bench) 
 		state->cpu = 0;
 	return 0;
@@ -469,18 +469,18 @@ unsigned char* lzo_compress(unsigned char *bf, int *towr,
 			    int eof, loff_t ooff, lzo_state *state)
 {
 	lzo_uint dst_len = state->dbuflen-3-sizeof(lzop_hdr)-sizeof(header_t);
-	void *hdrp = state->dbuf+3+sizeof(lzop_hdr);
-	void *bhdp = hdrp+sizeof(header_t);
-	void* wrbf = bhdp;
+	unsigned char *hdrp = state->dbuf+3+sizeof(lzop_hdr);
+	unsigned char *bhdp = hdrp+sizeof(header_t);
+	unsigned char *wrbf = bhdp;
 	if (*towr) {
-		void *cdata = bhdp+sizeof(blockhdr_t);
+		unsigned char *cdata = bhdp+sizeof(blockhdr_t);
 		/* Compat with lzop forces us to compute adler32 also on uncompressed data
 		 * when doing it for compressed (I would preder only the latter and I would
 		 * also prefer crc32,but that's slow in liblzo ...) */
 		uint32_t unc_adl = lzo_adler32(ADLER32_INIT_VALUE, bf, *towr);
 		int err = state->algo->compress(bf, *towr, cdata, &dst_len, state->workspace);
 		assert(err == 0);
-		if (state->do_opt && dst_len < *towr && state->algo->optimize) {
+		if (state->do_opt && dst_len < (unsigned int)*towr && state->algo->optimize) {
 			/* Note that this memcpy should be better avoided.
 			 * But we don't optimize for optimize ... it's not useful enough */
 			memcpy(bf, cdata, dst_len);
@@ -493,7 +493,7 @@ unsigned char* lzo_compress(unsigned char *bf, int *towr,
 		 * this by cmp_len == unc_len ....
 		 */
 		state->cmp_hdr += sizeof(blockhdr_t);
-		if (dst_len >= *towr) {
+		if (dst_len >= (unsigned int)*towr) {
 			/* TODO: We could return original buffer instead
 			 * and save a copy -- don't bother for now ...
 			 * as the added header makes this somewhat complex.
@@ -505,7 +505,7 @@ unsigned char* lzo_compress(unsigned char *bf, int *towr,
 		state->cmp_ln += dst_len; state->unc_ln += *towr;
 		block_hdr((blockhdr_t*)bhdp, *towr, dst_len, unc_adl, cdata);
 		/* Crazy: lzop does not write second checksum IF it's just a mem copy */
-		*towr = dst_len + (dst_len == *towr ?
+		*towr = dst_len + (dst_len == (unsigned int)*towr ?
 				   sizeof(blockhdr_t)-4 :
 				   sizeof(blockhdr_t));
 	}
@@ -652,7 +652,7 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 						unc_len, state->cmp_ln+state->cmp_hdr);
 			size_t newlen = unc_len+d_off+255;
 			newlen -= newlen%256;
-			void *newbuf = slackrealloc(state->dbuf, newlen, state);
+			unsigned char *newbuf = (unsigned char*)slackrealloc(state->dbuf, newlen, state);
 			/* if realloc failed, exit loop, write out existing data and exit;
 			 * slackrealloc has done raise(SIGQUIT) already ... */
 			if (!newbuf)
@@ -667,7 +667,7 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 			if (cmp_len > unc_len)
 				FPLOG(WARN, "compressed %i > uncompressed %i breaks lzop\n",
 					cmp_len, unc_len);
-			err = state->algo->decompr(effbf+addoff, cmp_len, state->dbuf+d_off, &dst_len, NULL);
+			err = state->algo->decompr(effbf+addoff, cmp_len, (unsigned char*)state->dbuf+d_off, &dst_len, NULL);
 			LZO_DEBUG(FPLOG(INFO, "decompressed %i@%p -> %i\n",
 				cmp_len, effbf+addoff, dst_len));
 			if (dst_len != unc_len)
