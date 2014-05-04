@@ -130,7 +130,7 @@ comp_alg calgos[] = { {"lzo1x_1",    lzo1x_1_compress,    lzo1x_decompress_safe,
 
 
 /* fwd decl */
-ddr_plugin_t ddr_plug;
+extern ddr_plugin_t ddr_plug;
 
 enum compmode {AUTO, COMPRESS, DECOMPRESS};
 

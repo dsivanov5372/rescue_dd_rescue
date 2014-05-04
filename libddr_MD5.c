@@ -27,7 +27,7 @@
 	ddr_plug.fplog(stderr, lvl, "MD5(%i): " fmt, state->seq, ##args)
 
 /* fwd decl */
-ddr_plugin_t ddr_plug;
+extern ddr_plugin_t ddr_plug;
 
 typedef struct _md5_state {
 	md5_ctx md5;
