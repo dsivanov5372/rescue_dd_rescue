@@ -594,8 +594,9 @@ due to jitter and limited time resolution -- the plugin will skip the output
 if the numbers are very tiny.)
 .br
 The parameter optimize will tell the lzo plugin to do an optimization 
-pass after compression. This might be useful when creating compressed
-data with high compression levels and large block sizes.
+pass after compression. This might speed up decompression by a few percent 
+when creating compressed data with high compression levels and large block 
+sizes.
 .br
 The lzo plugin supports a number of the (de)compression algorithms from
 liblzo2. You can specify which one you want to use by passing algo=XXX,
@@ -604,7 +605,8 @@ lzo1y_1, lzo1y_999, lzo1f_1, lzo1f_999, lzo1b_1 ... lzo1b_9,
 lzo1b_99, lzo1b_999.
 Pass algo=help to get a list of available algorithms. Consult the liblzo
 documentation for more information on the algorithms. Note that only the
-first three are supported by lzop (it can decompress the first five though).
+first three are supported by lzop (it can decompress the first five though,
+as they're all handled by the same decompression routine).
 .
 .SH EXIT STATUS
 On successful completion, 
@@ -763,8 +765,8 @@ Multiple output files -Y have been added in 1.32.
 .br
 Long options and man page came with 1.33.
 .br
-Optimized sparse detection (SSE2, arm asm, AVX2) has been
-present since 1.35 and been enhanced until 1.41.
+Optimized sparse detection (SSE2, armv6, armv8 asm, AVX2) has 
+been present since 1.35 and been enhanced until 1.43.
 .br
 We support copying extended attributes since 1.40 using
 libxattr.

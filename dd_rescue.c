@@ -2338,7 +2338,7 @@ int main(int argc, char* argv[])
 		exit(13);
 	}
 	if (not_sparse && !nosparse) {
-		fplog(stderr, WARN, "some plugins don't handle sparse, enable -A/--nosparse!\n");
+		fplog(stderr, WARN, "some plugins don't handle sparse, enabled -A/--nosparse!\n");
 		nosparse = 1;
 	}
 	if (have_block_cb && reverse) {
