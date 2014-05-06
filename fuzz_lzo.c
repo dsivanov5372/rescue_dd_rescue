@@ -16,7 +16,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <sys/mman.h>
+#include <fcntl.h>
+//#include <sys/mman.h>
 #include "list.h"
 
 void usage()
@@ -93,6 +94,19 @@ void dist_append(char dst, const char* arg, char fix)
 	LISTAPPEND(blk_dists, dist, blk_dist_t);
 }
 
+int write_header(int ofd, const char* nm, 
+		 unsigned short hvers, unsigned short evers, 
+		 unsigned char meth, unsigned char levl,
+		 unsigned int flags, char hdr_fixup)
+{
+	return 0;
+}
+
+int compress(int ifd, int ofd, unsigned int blksz)
+{
+	return 0;
+}
+
 int main(int argc, char* argv[])
 {
 	char fixup = 1;
@@ -163,6 +177,16 @@ int main(int argc, char* argv[])
 		}
 
 	}
+	if (argc-optind != 2) {
+		fprintf(stderr, "ERROR: Need exactly two non option arguments!\n");
+		usage();
+	}
+
+	char *iname = argv[optind++];
+	char *oname = argv[optind++];
+	if (!hname)
+		hname = iname;
+
 	if (debug) {
 		printf("Header: %1x.%3x %1x.%3x %i/%i %s %08x %c\n",
 			hversion >> 12, hversion & 0xfff,
@@ -185,6 +209,26 @@ int main(int argc, char* argv[])
 					LISTDATA(dist).fixup? ' ': '!');
 		}
 	}
+
+	int ifd = open(iname, O_RDONLY);
+	if (ifd <= 0) {
+		fprintf(stderr, "ERROR: Can't open %s for reading\n", iname);
+		exit(2);
+	}
+	int ofd = open(oname, O_WRONLY | O_CREAT, 0644);
+	if (ofd <= 0) {
+		fprintf(stderr, "ERROR: Can't open %s for iwriting\n", oname);
+		exit(3);
+	}
+
+	write_header(ofd, hname, hversion, extrvers, meth, levl, flags, hdr_fixup);
+	compress(ifd, ofd, blksize);
+
+	close(ofd);
+	close(ifd);
+
+	LISTTREEDEL(blk_dists, blk_dist_t);
+
 	return 0;
 }		
 
