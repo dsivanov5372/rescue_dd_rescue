@@ -539,6 +539,8 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 	/* header parsing has happened in _open callback ... */
 	if (!state->hdr_seen) {
 		assert(ooff - state->first_ooff == 0);
+		// TODO: If first_ooff != 0, we should look for a header
+		//  at offset zero ... and see whether this works ...
 		if (memcmp(bf, lzop_hdr, sizeof(lzop_hdr))) {
 			FPLOG(FATAL, "lzop magic broken\n");
 			abort();
