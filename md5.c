@@ -86,10 +86,10 @@ void md5_64(uint8_t *ptr, md5_ctx* ctx)
 	__builtin_prefetch(ptr, 0, 3);
 	//__builtin_prefetch(ptr+32, 0, 3);
 #endif
-#else
+#else	/* BIG ENDIAN */
 	uint32_t w[16];
         // break chunk into sixteen 32-bit words w[j], 0 ≤ j ≤ 15
-        for (i = 0; i < 16; i++)
+        for (i = 0; i < 16; ++i)
             w[i] = to_int32(ptr + i*4);
 #endif
  
@@ -97,7 +97,7 @@ void md5_64(uint8_t *ptr, md5_ctx* ctx)
         _a = ctx->h0; _b = ctx->h1; _c = ctx->h2; _d = ctx->h3;
 
         // Main loop:
-        for(i = 0; i<64; i++) {
+        for(i = 0; i<64; ++i) {
 	    uint32_t temp, f, g;
             if (i < 16) {
                 f = (_b & _c) | ((~_b) & _d);
