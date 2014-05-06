@@ -24,6 +24,7 @@
 #include <lzo/lzo1y.h>
 #include <lzo/lzo1f.h>
 #include <lzo/lzo1b.h>
+#include <lzo/lzo2a.h>
 #include <time.h>
 
 // TODO: pass at runtime rather than compile time
@@ -125,6 +126,7 @@ comp_alg calgos[] = { {"lzo1x_1",    lzo1x_1_compress,    lzo1x_decompress_safe,
 		      {"lzo1b_9",    lzo1b_9_compress,    lzo1b_decompress_safe, NULL,           LZO1B_MEM_COMPRESS,     68, 9},
 		      {"lzo1b_99",   lzo1b_99_compress,   lzo1b_decompress_safe, NULL,           LZO1B_99_MEM_COMPRESS,  69, 9},
 		      {"lzo1b_999",  lzo1b_999_compress,  lzo1b_decompress_safe, NULL,           LZO1B_999_MEM_COMPRESS, 70, 9},
+		      {"lzo2a_999",  lzo2a_999_compress,  lzo2a_decompress_safe, NULL,           LZO2A_999_MEM_COMPRESS, 80, 9},
 
 		    };	      
 
