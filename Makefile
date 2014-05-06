@@ -36,6 +36,7 @@ OUT = -o dd_rescue
 
 ifeq ($(shell grep 'HAVE_LZO_LZO1X_H 1' config.h >/dev/null 2>&1 && echo 1), 1)
   LIBTARGETS += libddr_lzo.so
+  OTHTARGETS += fuzz_lzo
   HAVE_LZO=1
 endif
 
@@ -162,6 +163,9 @@ dd_rescue: dd_rescue.c $(HEADERS) $(OBJECTS) $(OBJECTS2)
 
 md5: md5.c md5.h config.h
 	$(CC) $(CFLAGS_OPT) -DMD5_MAIN -o $@ $<
+
+fuzz_lzo: fuzz_lzo.o
+	$(CC) -o $@ $^ -llzo2
 
 libfalloc-dl: dd_rescue
 
