@@ -31,8 +31,7 @@ void mydirnm(char* nm)
 #include <unistd.h>
 #include <errno.h>
 
-extern char quiet;
-loff_t fstrim(const char* onm)
+loff_t fstrim(const char* onm, char quiet)
 {
 	char* dirnm = strdup(onm);
 	mydirnm(dirnm);

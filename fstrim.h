@@ -23,7 +23,7 @@ struct fstrim_range {
 #endif
 
 #ifdef FITRIM
-loff_t fstrim(const char* nm);
+loff_t fstrim(const char* nm, char quiet);
 #endif
 
 #endif	/* HAVE_LINUX_FS_H */

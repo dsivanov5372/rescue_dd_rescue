@@ -39,7 +39,7 @@ typedef int (_open_callback)(int ifd, const char* inm, loff_t ioff,
  *  Return value: buffer to be really written.
  */
 typedef unsigned char* (_block_callback)(unsigned char* bf, int *towr, 
-				         int eof, loff_t ooff, void **stat);
+				         int eof, loff_t *ooff, void **stat);
 /** close_callback parameters: final output position and handle.
  * Return value: 0 = OK, -x = ERROR
  * close_callback is called before files are fsynced and closed

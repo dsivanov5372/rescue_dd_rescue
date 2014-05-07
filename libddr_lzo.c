@@ -472,8 +472,9 @@ int lzo_open(int ifd, const char* inm, loff_t ioff,
  * - Implement working append
  */
 unsigned char* lzo_compress(unsigned char *bf, int *towr,
-			    int eof, loff_t ooff, lzo_state *state)
+			    int eof, loff_t *ooffp, lzo_state *state)
 {
+	const loff_t ooff = *ooffp;
 	lzo_uint dst_len = state->dbuflen-3-sizeof(lzop_hdr)-sizeof(header_t);
 	unsigned char *hdrp = state->dbuf+3+sizeof(lzop_hdr);
 	unsigned char *bhdp = hdrp+sizeof(header_t);
@@ -538,8 +539,9 @@ unsigned char* lzo_compress(unsigned char *bf, int *towr,
  * - Debug: Output block boundaries
  */
 unsigned char* lzo_decompress(unsigned char* bf, int *towr,
-			      int eof, loff_t ooff, lzo_state *state)
+			      int eof, loff_t *ooffp, lzo_state *state)
 {
+	const loff_t ooff = *ooffp;
 	/* Decompression is tricky */
 	int c_off = 0;
 	int d_off = 0;
@@ -755,7 +757,7 @@ unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 
 
 unsigned char* lzo_block(unsigned char* bf, int *towr, 
-			 int eof, loff_t ooff, void **stat)
+			 int eof, loff_t *ooff, void **stat)
 {
 	lzo_state *state = (lzo_state*)*stat;
 	unsigned char* ptr;
