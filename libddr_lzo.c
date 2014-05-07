@@ -467,6 +467,10 @@ int lzo_open(int ifd, const char* inm, loff_t ioff,
 	*/
 }
 
+/* TODO: 
+ * - Detect sparseness and encode 
+ * - Implement working append
+ */
 unsigned char* lzo_compress(unsigned char *bf, int *towr,
 			    int eof, loff_t ooff, lzo_state *state)
 {
@@ -528,6 +532,11 @@ unsigned char* lzo_compress(unsigned char *bf, int *towr,
 	return wrbf;
 }
 
+/* TODO:
+ * - Output sparseness
+ * - Start at offset (read header @ 0)
+ * - Debug: Output block boundaries
+ */
 unsigned char* lzo_decompress(unsigned char* bf, int *towr,
 			      int eof, loff_t ooff, lzo_state *state)
 {
