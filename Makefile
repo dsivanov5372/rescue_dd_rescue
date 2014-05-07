@@ -274,7 +274,7 @@ check_lzo: $(TARGETS)
 	cmp dd_rescue dd_rescue.ddr
 	@rm -f dd_rescue.ddr dd_rescue.ddr.lzo dd_rescue.lzo
 	lzop dd_rescue
-	./dd_rescue -b1M -L ./libddr_lzo.so dd_rescue.lzo dd_rescue.cmp
+	./dd_rescue -b1M -TL ./libddr_lzo.so dd_rescue.lzo dd_rescue.cmp
 	cmp dd_rescue dd_rescue.cmp
 	@rm -f dd_rescue.cmp dd_rescue.lzo
 	./dd_rescue -b16k -L ./libddr_MD5.so,./libddr_lzo.so,./libddr_MD5.so dd_rescue dd_rescue.lzo
