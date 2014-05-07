@@ -30,20 +30,17 @@ typedef int (_init_callback)(void **stat, char* param, int seq, const opt_t *opt
  *	ptr to buffer ptr, opaque handle.
  * 	Return value: 0 = OK, -x = ERROR, +x = Bytes consumed from input file.
  */
-typedef int (_open_callback)(int ifd, const char* inm, loff_t ioff, 
-			     int ofd, const char* onm, loff_t ooff, 
-			     unsigned int bsz, unsigned int hsz,
-			     loff_t exfer, int olnchange, 
+typedef int (_open_callback)(const opt_t *opt, int olnchange, 
 			     unsigned int totslack_pre, unsigned int totslack_post,
-			     unsigned char **bufp, void **stat);
+			     void **stat);
 /** block_callback parameters: buffer to be written (can be modified),
  *  	number of bytes to be written (can be modified), eof flag,
  *  	output stream offset, handle.
  *  Will be called with eof=1 once at the end.
  *  Return value: buffer to be really written.
  */
-typedef unsigned char* (_block_callback)(unsigned char* bf, int *towr, 
-				         int eof, loff_t *ooff, void **stat);
+typedef unsigned char* (_block_callback)(fstate_t *fst, unsigned char* bf, 
+					 int *towr, int eof, void **stat);
 /** close_callback parameters: final output position and handle.
  * Return value: 0 = OK, -x = ERROR
  * close_callback is called before files are fsynced and closed
@@ -51,7 +48,7 @@ typedef unsigned char* (_block_callback)(unsigned char* bf, int *towr,
 typedef int (_close_callback)(loff_t ooff, void **stat);
 
 enum ddrlog_t { NOHDR=0, INFO, WARN, FATAL };
-typedef int (_fplog_upcall)(FILE* const f, char col, enum ddrlog_t logpre, 
+typedef int (_fplog_upcall)(FILE* const f, enum ddrlog_t logpre, 
 			    const char* const fmt, ...);
 
 typedef struct _ddr_plugin {

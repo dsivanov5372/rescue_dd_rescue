@@ -26,6 +26,7 @@ typedef struct _opt_t {
 	char noextend, avoidwrite, avoidnull;
 	char extend, rmvtrim, i_repeat;
 } opt_t;
+extern char nocol;
 
 /* Data protection */
 typedef struct _dpopt_t {

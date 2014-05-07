@@ -164,7 +164,7 @@ typedef struct _lzo_state {
 } lzo_state;
 
 #define FPLOG(lvl, fmt, args...) \
-	ddr_plug.fplog(stderr, (state->opts? !state->opts->nocol: 0), lvl, "lzo(%i): " fmt, state->seq, ##args)
+	ddr_plug.fplog(stderr, lvl, "lzo(%i): " fmt, state->seq, ##args)
 
 static unsigned int pagesize = 4096;
 
