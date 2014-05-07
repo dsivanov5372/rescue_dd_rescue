@@ -285,7 +285,7 @@ check_lzo: $(TARGETS)
 
 	
 check_lzo_algos: $(TARGETS)
-	for alg in lzo1x_1 lzo1x_1_15 lzo1x_999 lzo1y_1 lzo1y_999 lzo1f_1 lzo1f_999 lzo1b_1 lzo1b_2 lzo1b_3 lzo1b_4 lzo1b_5 lzo1b_6 lzo1b_7 lzo1b_8 lzo1b_9 lzo1b_99 lzo1b_999; do dd_rescue -qATL lzo=algo=$$alg:benchmark dd_rescue dd_rescue.lzo; lzop -lt dd_rescue.lzo; dd_rescue -qATL lzo=benchmark dd_rescue.lzo dd_rescue.cmp; cmp dd_rescue dd_rescue.cmp || exit 1; done
+	for alg in lzo1x_1 lzo1x_1_15 lzo1x_999 lzo1y_1 lzo1y_999 lzo1f_1 lzo1f_999 lzo1b_1 lzo1b_2 lzo1b_3 lzo1b_4 lzo1b_5 lzo1b_6 lzo1b_7 lzo1b_8 lzo1b_9 lzo1b_99 lzo1b_999 lzo2a_999; do ./dd_rescue -qATL ./libddr_lzo.so=algo=$$alg:benchmark dd_rescue dd_rescue.lzo; lzop -lt dd_rescue.lzo; ./dd_rescue -qATL ./libddr_lzo.so=benchmark dd_rescue.lzo dd_rescue.cmp; cmp dd_rescue dd_rescue.cmp || exit 1; done
 
 check_lzo_test: $(TARGETS)
 	find . -type f | xargs ./test_lzo.sh

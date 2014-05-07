@@ -564,10 +564,8 @@ static inline void fadvise(char after)
 	if (!opts->reverse) {
 		if (after) 
 			posix_fadvise64(fstate->ides, opts->init_ipos, progress->xfer, POSIX_FADV_NOREUSE);
-		else {
-			posix_fadvise64(fstate->ides, fstate->ipos, progress->estxfer, POSIX_FADV_SEQUENTIAL);
-			opts->init_ipos = fstate->ipos;
-		}
+		else 
+			posix_fadvise64(fstate->ides, opts->init_ipos, progress->estxfer, POSIX_FADV_SEQUENTIAL);
 	}
 }
 #else
@@ -637,16 +635,16 @@ inline int gpos(loff_t off)
 /** Prepare graph */
 static void preparegraph()
 {
-	if (!fstate->ilen || fstate->ipos > fstate->ilen)
+	if (!fstate->ilen || opts->init_ipos > fstate->ilen)
 		return;
 	graph = strdup(":.........................................:");
 	if (opts->reverse) {
-		graph[gpos(fstate->ipos)+1] = '<';
-		graph[gpos(fstate->ipos-progress->estxfer)-1] = '>';
+		graph[gpos(opts->init_ipos)+1] = '<';
+		graph[gpos(opts->init_ipos-progress->estxfer)-1] = '>';
 
 	} else {
-		graph[gpos(fstate->ipos)-1] = '>';
-		graph[gpos(fstate->ipos+progress->estxfer)+1] = '<';
+		graph[gpos(opts->init_ipos)-1] = '>';
+		graph[gpos(opts->init_ipos+progress->estxfer)+1] = '<';
 	}
 }
 
@@ -674,12 +672,12 @@ void input_length()
 	struct STAT64 stbuf;
 	progress->estxfer = opts->maxxfer;
 	if (opts->reverse) {
-		if (fstate->ipos)
-			fstate->ilen = fstate->ipos;
+		if (opts->init_ipos)
+			fstate->ilen = opts->init_ipos;
 		else
 			fstate->ilen = opts->maxxfer;
 	} else
-		fstate->ilen = fstate->ipos + opts->maxxfer;
+		fstate->ilen = opts->init_ipos + opts->maxxfer;
 	if (progress->estxfer)
 		preparegraph();
 	if (fstate->i_chr)
@@ -706,14 +704,14 @@ void input_length()
 			return;
 		diff = fstate->ilen - stbuf.st_blocks*512;
 		if (diff >= 4096 && (float)diff/fstate->ilen > 0.05 && !opts->quiet)
-		       fplog(stderr, INFO, "%s is opts->sparse (%i%%) %s\n", opts->iname, (int)(100.0*diff/fstate->ilen), (opts->sparse? "": ", consider -a"));
+		       fplog(stderr, INFO, "%s is sparse (%i%%) %s\n", opts->iname, (int)(100.0*diff/fstate->ilen), (opts->sparse? "": ", consider -a"));
 	}
 	if (!fstate->ilen)
 		return;
 	if (!opts->reverse)
-		progress->estxfer = fstate->ilen - fstate->ipos;
+		progress->estxfer = fstate->ilen - opts->init_ipos;
 	else
-		progress->estxfer = fstate->ipos;
+		progress->estxfer = opts->init_ipos;
 	if (opts->maxxfer && progress->estxfer > opts->maxxfer)
 		progress->estxfer = opts->maxxfer;
 	if (progress->estxfer < 0)
@@ -756,12 +754,12 @@ int output_length()
 			return -1;
 		diff = fstate->olen - stbuf.st_blocks*512;
 		if (diff >= 4096 && (float)diff/fstate->ilen > 0.05 && !opts->quiet)
-		       fplog(stderr, INFO, "%s is opts->sparse (%i%%) %s\n", opts->oname, (int)(100.0*diff/fstate->olen), (opts->sparse? "": ", consider -a"));
+		       fplog(stderr, INFO, "%s is sparse (%i%%) %s\n", opts->oname, (int)(100.0*diff/fstate->olen), (opts->sparse? "": ", consider -a"));
 	}
 	if (!fstate->olen)
 		return -1;
 	if (!opts->reverse) {
-		loff_t newmax = fstate->olen - fstate->opos;
+		loff_t newmax = fstate->olen - opts->init_opos;
 		if (newmax < 0) {
 			fplog(stderr, FATAL, "output position is beyond end of file but -M specified!\n");
 			cleanup();
@@ -770,13 +768,13 @@ int output_length()
 		if (!opts->maxxfer || opts->maxxfer > newmax) {
 			opts->maxxfer = newmax;
 			if (!opts->quiet)
-				fplog(stderr, INFO, "limit max progress->xfer to %skiB\n",
+				fplog(stderr, INFO, "limit max xfer to %skiB\n",
 					fmt_kiB(opts->maxxfer));
 		}
-	} else if (fstate->opos > fstate->olen) {
+	} else if (opts->init_opos > fstate->olen) {
 		fplog(stderr, WARN, "change output position %skiB to endpos %skiB due to -M\n",
-			fmt_kiB(fstate->opos), fmt_kiB(fstate->olen));
-		fstate->opos = fstate->olen;
+			fmt_kiB(opts->init_opos), fmt_kiB(fstate->olen));
+		opts->init_opos = fstate->olen;
 	}
 	return 0;
 }
@@ -799,9 +797,9 @@ static void sparse_output_warn()
 			fplog(stderr, WARN, "%s is a block device; -a not recommended; -A recommended\n", opts->oname);
 		return;
 	}
-	eff_opos = (fstate->opos == (loff_t)-INT_MAX? fstate->ipos: fstate->opos);
+	eff_opos = (opts->init_opos == (loff_t)-INT_MAX? opts->init_ipos: opts->init_opos);
 	if (opts->sparse && (eff_opos < stbuf.st_size))
-		fplog(stderr, WARN, "write into %s (@%sk/%sk): opts->sparse not recommended\n", 
+		fplog(stderr, WARN, "write into %s (@%sk/%sk): sparse not recommended\n", 
 				opts->oname, fmt_kiB(eff_opos), fmt_kiB(stbuf.st_size));
 }
 
@@ -830,7 +828,7 @@ static void do_fallocate(int fd, const char* onm)
 		return;
 	if (!S_ISREG(stbuf.st_mode))
 		return;
-	alloced = stbuf.st_blocks*512 - fstate->opos;
+	alloced = stbuf.st_blocks*512 - opts->init_opos;
 	to_falloc = progress->estxfer - (alloced < 0 ? 0 : alloced);
 	if (to_falloc <= 0)
 		return;
@@ -840,20 +838,20 @@ static void do_fallocate(int fd, const char* onm)
 	_l_f_t _linux_fallocate64 = (_l_f_t)load_libfallocate();
 	if (_linux_fallocate64)
 		rc = _linux_fallocate64(fd, FALLOC_FL_KEEP_SIZE,
-				fstate->opos, to_falloc);
+				opts->init_opos, to_falloc);
 #ifdef HAVE_FALLOCATE64
 	else
-		rc = fallocate64(fd, 1, fstate->opos, to_falloc);
+		rc = fallocate64(fd, 1, opts->init_opos, to_falloc);
 #endif
 #elif defined(HAVE_LIBFALLOCATE)
 	rc = linux_fallocate64(fd, FALLOC_FL_KEEP_SIZE, 
-			      fstate->opos, to_falloc);
+			      opts->init_opos, to_falloc);
 #else /* HAVE_FALLOCATE64 */
-	rc = opts->fallocate64(fd, 1, fstate->opos, to_falloc);
+	rc = opts->fallocate64(fd, 1, opts->init_opos, to_falloc);
 #endif
 	if (rc)
 	       fplog(stderr, WARN, "fallocate %s (%sk, %sk) failed: %s\n",
-			       onm, fmt_kiB(fstate->opos), fmt_kiB(to_falloc), strerror(errno));
+			       onm, fmt_kiB(opts->init_opos), fmt_kiB(to_falloc), strerror(errno));
 }
 #endif
 
@@ -875,11 +873,11 @@ void doprint(FILE* const file, const unsigned int bs, const clock_t cl,
 	if (opts->nocol || (file != stderr && file != stdout)) {
 		bold = ""; norm = "";
 	}
-	fprintf(file, DDR_INFO "fstate->ipos:%sk, fstate->opos:%sk, progress->xferd:%sk\n",
+	fprintf(file, DDR_INFO "ipos:%sk, opos:%sk, xferd:%sk\n",
 		fmt_int(10, 1, 1024, fstate->ipos, bold, norm, 1),
 		fmt_int(10, 1, 1024, fstate->opos, bold, norm, 1),
 		fmt_int(10, 1, 1024, progress->xfer, bold, norm, 1));
-	fprintf(file, "             %s  %s  errs:%7i, errprogress->xfer:%sk, succprogress->xfer:%sk\n",
+	fprintf(file, "             %s  %s  errs:%7i, errxfer:%sk, succxfer:%sk\n",
 		(opts->reverse? "-": " "), (bs==opts->hardbs? "*": " "), fstate->nrerr, 
 		fmt_int(10, 1, 1024, progress->fxfer, bold, norm, 1),
 		fmt_int(10, 1, 1024, progress->sxfer, bold, norm, 1));
@@ -1027,7 +1025,7 @@ int copyxattr(const char* inm, const char* onm)
 		return 0;
 	attrs = (char*)malloc(aln);
 	if (!attrs) {
-		fplog(stderr, WARN, "Can't allocate fstate->buffer of len %z for attr names\n", aln);
+		fplog(stderr, WARN, "Can't allocate buffer of len %z for attr names\n", aln);
 		return -1;
 	}
 	aln = listxattr(inm, attrs, aln);
@@ -1623,7 +1621,7 @@ int copyfile_hardbs(const loff_t max)
 			}
 			/* exit if too many errs */
 			if (opts->maxerr && fstate->nrerr >= opts->maxerr) {
-				fplog(stderr, FATAL, "opts->maxerr reached!\n");
+				fplog(stderr, FATAL, "maxerr reached!\n");
 				exit_report(32);
 			}
 		} else {
@@ -1658,7 +1656,7 @@ int copyfile_softbs(const loff_t max)
 	if (!fstate->o_chr && !opts->avoidwrite) {
 		rc = pwrite(fstate->odes, fstate->buf, 0, fstate->opos);
 		if (rc)
-			fplog(stderr, WARN, "opts->extending file %s to %skiB failed\n",
+			fplog(stderr, WARN, "extending file %s to %skiB failed\n",
 			      opts->oname, fmt_kiB(fstate->opos));
 	}
 	while ((toread = blockxfer(max, opts->softbs)) > 0 && !interrupted) {
@@ -1689,10 +1687,10 @@ int copyfile_softbs(const loff_t max)
 			/* Error with large blocks: Try small ones ... */
 			if (opts->verbose & eno) {
 				/*
-				fprintf(stderr, DDR_INFO "problems at fstate->ipos %.1fk: %s \n                 fall back to smaller blocksize \n%s%s%s%s",
+				fprintf(stderr, DDR_INFO "problems at ipos %.1fk: %s \n                 fall back to smaller blocksize \n%s%s%s%s",
 				        (double)fstate->ipos/1024, strerror(eno), down, down, down, down);
 				 */
-				fprintf(stderr, DDR_INFO "problems at fstate->ipos %skiB: %s \n               fall back to smaller blocksize \n",
+				fprintf(stderr, DDR_INFO "problems at ipos %skiB: %s \n               fall back to smaller blocksize \n",
 				        fmt_kiB(fstate->ipos), strerror(eno));
 				scrollup = 0;
 				printstatus(stderr, logfd, opts->hardbs, 1);
@@ -1727,7 +1725,7 @@ int copyfile_softbs(const loff_t max)
 			if (!err && progress->xfer == old_xfer)
 				return errs;
 			if (opts->verbose) {
-				fprintf(stderr, DDR_INFO "fstate->ipos %skiB promote to large bs again! \n",
+				fprintf(stderr, DDR_INFO "ipos %skiB promote to large bs again! \n",
 					fmt_kiB(fstate->ipos));
 				scrollup = 0;
 			}
@@ -1998,9 +1996,9 @@ void printversion()
 struct option longopts[] = { 	{"help", 0, NULL, 'h'}, {"verbose", 0, NULL, 'v'},
 				{"quiet", 0, NULL, 'q'}, {"version", 0, NULL, 'V'},
 				{"color", 1, NULL, 'c'},
-				{"fstate->ipos", 1, NULL, 's'}, {"fstate->opos", 1, NULL, 'S'},
+				{"ipos", 1, NULL, 's'}, {"opos", 1, NULL, 'S'},
 				{"softbs", 1, NULL, 'b'}, {"hardbs", 1, NULL, 'B'},
-				{"maxerr", 1, NULL, 'e'}, {"maxprogress->xfer", 1, NULL, 'm'},
+				{"maxerr", 1, NULL, 'e'}, {"maxxfer", 1, NULL, 'm'},
 				{"noextend", 0, NULL, 'M'}, {"extend", 0, NULL, 'x'},
 				{"append", 0, NULL, 'x'},
 				{"syncfreq", 1, NULL, 'y'}, {"logfile", 1, NULL, 'l'},
@@ -2034,14 +2032,14 @@ void printlonghelp()
 	printversion();
 	fprintf(stderr, "dd_rescue copies data from one file (or block device) to others.\n");
 	fprintf(stderr, "USAGE: dd_rescue [options] infile outfile\n");
-	fprintf(stderr, "Options: -s fstate->ipos    start position in  input file (default=0),\n");
-	fprintf(stderr, "         -S fstate->opos    start position in output file (def=fstate->ipos),\n");
+	fprintf(stderr, "Options: -s ipos    start position in  input file (default=0),\n");
+	fprintf(stderr, "         -S opos    start position in output file (def=ipos),\n");
 	fprintf(stderr, "         -b softbs  block size for copy operation (def=%i, %i for -d),\n", BUF_SOFTBLOCKSIZE, DIO_SOFTBLOCKSIZE);
 	fprintf(stderr, "         -B hardbs  fallback block size in case of errs (def=%i, %i for -d),\n", BUF_HARDBLOCKSIZE, DIO_HARDBLOCKSIZE);
 	fprintf(stderr, "         -e maxerr  exit after maxerr errors (def=0=infinite),\n");
-	fprintf(stderr, "         -m maxprogress->xfer maximum amount of data to be transfered (def=0=inf),\n");
+	fprintf(stderr, "         -m maxxfer maximum amount of data to be transfered (def=0=inf),\n");
 	fprintf(stderr,	"         -M         avoid extending outfile,\n");
-	fprintf(stderr,	"         -x         count fstate->opos from the end of outfile (eXtend),\n");
+	fprintf(stderr,	"         -x         count opos from the end of outfile (eXtend),\n");
 	fprintf(stderr, "         -y syncsz  frequency of fsync calls in bytes (def=512*softbs),\n");
 	fprintf(stderr, "         -l logfile name of a file to log errors and summary to (def=\"\"),\n");
 	fprintf(stderr, "         -o bbfile  name of a file to log bad blocks numbers (def=\"\"),\n");
@@ -2104,10 +2102,10 @@ void printinfo(FILE* const file)
 	      fmt_kiB(opts->maxxfer), opts->iname, opts->oname);
 	fplog(file, INFO, "blocksizes: soft %i, hard %i\n", opts->softbs, opts->hardbs);
 	fplog(file, INFO, "starting positions: in %skiB, out %SkiB\n",
-	      fmt_kiB(fstate->ipos), fmt_kiB(fstate->opos));
+	      fmt_kiB(opts->init_ipos), fmt_kiB(opts->init_opos));
 	fplog(file, INFO, "Logfile: %s, Maxerr: %li\n",
 	      (opts->lname? opts->lname: "(none)"), opts->maxerr);
-	fplog(file, INFO, "Reverse: %s, Trunc: %s, opts->interactive: %s\n",
+	fplog(file, INFO, "Reverse: %s, Trunc: %s, interactive: %s\n",
 	      YESNO(opts->reverse), (opts->dotrunc? "yes": (opts->trunclast? "last": "no")), YESNO(opts->interact));
 	fplog(file, INFO, "abort on Write errs: %s, spArse write: %s\n",
 	      YESNO(opts->abwrerr), (opts->sparse? "yes": (opts->nosparse? "never": "if err")));
@@ -2153,10 +2151,10 @@ unsigned char* zalloc_aligned_buf(unsigned int bs, unsigned char**obuf)
 		*obuf = ptr;
 	if (!ptr) {
 		if (0 == max_slack_pre%fstate->pagesize)
-			fplog(stderr, WARN, "allocation of aligned fstate->buffer failed -- use malloc\n");
+			fplog(stderr, WARN, "allocation of aligned buffer failed -- use malloc\n");
 		ptr = (unsigned char*)malloc(bs + fstate->pagesize + max_slack_pre + max_slack_post);
 		if (!ptr) {
-			fplog(stderr, FATAL, "allocation of fstate->buffer of size %li failed!\n", 
+			fplog(stderr, FATAL, "allocation of buffer of size %li failed!\n", 
 				bs+fstate->pagesize+max_slack_pre+max_slack_post);
 			cleanup(); exit(18);
 		}
@@ -2263,7 +2261,9 @@ int main(int argc, char* argv[])
 	memset(fstate, 0, sizeof(fstate_t));
 	memset(progress, 0, sizeof(progress_t));
 	memset(repeat, 0, sizeof(repeat_t));
-	fstate->ipos = (loff_t)-INT_MAX; fstate->opos = (loff_t)-INT_MAX; 
+	opts->init_ipos = (loff_t)-INT_MAX; 
+	opts->init_opos = (loff_t)-INT_MAX; 
+
 	fstate->ides = -1; fstate->odes = -1;
 
       	ofiles = NULL;
@@ -2322,8 +2322,8 @@ int main(int argc, char* argv[])
 			case 'M': opts->noextend = 1; break;
 			case 'e': opts->maxerr = (int)readint(optarg); break;
 			case 'y': syncsz = readint(optarg); break;
-			case 's': fstate->ipos = readint(optarg); break;
-			case 'S': fstate->opos = readint(optarg); break;
+			case 's': opts->init_ipos = readint(optarg); break;
+			case 'S': opts->init_opos = readint(optarg); break;
 			case 'l': opts->lname = optarg; break;
 			case 'L': plugins = optarg; break;
 			case 'o': opts->bbname = optarg; break;
@@ -2346,8 +2346,6 @@ int main(int argc, char* argv[])
 		}
 	}
   
-	opts->init_opos = fstate->opos;
-	
 	if (dpopts->prng_libc)
 		opts->iname = "PRNG_libc";
 	else if (dpopts->prng_frnd)
@@ -2367,15 +2365,15 @@ int main(int argc, char* argv[])
 	if (plugins)
 		load_plugins(plugins);
 	if (not_sparse && opts->sparse) {
-		fplog(stderr, FATAL, "not all plugins handle -a/--opts->sparse!\n");
+		fplog(stderr, FATAL, "not all plugins handle -a/--sparse!\n");
 		exit(13);
 	}
 	if (not_sparse && !opts->nosparse) {
-		fplog(stderr, WARN, "some plugins don't handle opts->sparse, enabled -A/--opts->nosparse!\n");
+		fplog(stderr, WARN, "some plugins don't handle sparse, enabled -A/--nosparse!\n");
 		opts->nosparse = 1;
 	}
 	if (have_block_cb && opts->reverse) {
-		fplog(stderr, FATAL, "Plugins currently don't handle opts->reverse\n");
+		fplog(stderr, FATAL, "Plugins currently don't handle reverse\n");
 		exit(13);
 	}
 	if (have_block_cb && opts->dosplice) {
@@ -2409,14 +2407,14 @@ int main(int argc, char* argv[])
 			opts->hardbs = BUF_HARDBLOCKSIZE;
 	}
 	if (!opts->quiet)
-		fplog(stderr, INFO, "Using opts->softbs=%skiB, opts->hardbs=%skiB\n", 
+		fplog(stderr, INFO, "Using softbs=%skiB, hardbs=%skiB\n", 
 			fmt_kiB(opts->softbs), fmt_kiB(opts->hardbs));
 
 	/* sanity checks */
 #ifdef O_DIRECT
 	if ((opts->o_dir_in || opts->o_dir_out) && opts->hardbs < 512) {
 		opts->hardbs = 512;
-		fplog(stderr, WARN, "O_DIRECT requires opts->hardbs of at least %i!\n",
+		fplog(stderr, WARN, "O_DIRECT requires hardbs of at least %i!\n",
 		      opts->hardbs);
 	}
 
@@ -2426,7 +2424,7 @@ int main(int argc, char* argv[])
 #endif
 
 	if (opts->softbs < opts->hardbs) {
-		fplog(stderr, WARN, "setting opts->hardbs from %i to opts->softbs %i!\n",
+		fplog(stderr, WARN, "setting hardbs from %i to softbs %i!\n",
 		      opts->hardbs, opts->softbs);
 		opts->hardbs = opts->softbs;
 	}
@@ -2442,8 +2440,8 @@ int main(int argc, char* argv[])
 		opts->syncfreq = (syncsz + opts->softbs - 1) / opts->softbs;
 
 	/* Have those been set by cmdline params? */
-	if (fstate->ipos == (loff_t)-INT_MAX) 
-		fstate->ipos = 0;
+	if (opts->init_ipos == (loff_t)-INT_MAX)
+		opts->init_ipos = 0;
 
 	if (opts->dosplice && opts->avoidwrite) {
 		fplog(stderr, WARN, "disable write avoidance (-W) for splice copy\n");
@@ -2458,8 +2456,8 @@ int main(int argc, char* argv[])
 		if (!opts->i_repeat && opts->verbose)
 			fplog(stderr, INFO, "turning on repeat (-R) for /dev/zero\n");
 		opts->i_repeat = 1;
-		if (opts->reverse && !fstate->ipos && opts->maxxfer)
-			fstate->ipos = opts->maxxfer > fstate->opos? fstate->opos: opts->maxxfer;
+		if (opts->reverse && !opts->init_ipos && opts->maxxfer)
+			opts->init_ipos = opts->maxxfer > opts->init_opos? opts->init_opos: opts->maxxfer;
 	}
 
 	/* Properly append input basename if output name is dir */
@@ -2565,7 +2563,7 @@ int main(int argc, char* argv[])
 		sparse_output_warn();
 	if (fstate->o_chr) {
 		if (!opts->nosparse)
-			fplog(stderr, WARN, "Not using opts->sparse writes for non-seekable output\n");
+			fplog(stderr, WARN, "Not using sparse writes for non-seekable output\n");
 		opts->nosparse = 1; opts->sparse = 0; opts->dosplice = 0;
 		if (opts->avoidwrite) {
 			if (!strcmp(opts->oname, "/dev/null")) {
@@ -2579,61 +2577,61 @@ int main(int argc, char* argv[])
 		}
 	}
 
-	/* special case: opts->reverse with fstate->ipos == 0 means fstate->ipos = end_of_file */
-	if (opts->reverse && fstate->ipos == 0) {
-		fstate->ipos = lseek64(fstate->ides, fstate->ipos, SEEK_END);
-		if (fstate->ipos == -1) {
+	/* special case: opts->reverse with opts->init_ipos == 0 means opts->init_ipos = EOF */
+	if (opts->reverse && opts->init_ipos == 0) {
+		opts->init_ipos = lseek64(fstate->ides, 0, SEEK_END);
+		if (opts->init_ipos == -1) {
 			fplog(stderr, FATAL, "could not seek to end of file %s!\n", opts->iname);
 			perror("dd_rescue"); cleanup(); exit(19);
 		}
 		if (opts->verbose) 
-			fprintf(stderr, DDR_INFO "fstate->ipos set to the end: %skiB\n", 
-			        fmt_kiB(fstate->ipos));
-		/* if fstate->opos not set, assume same position */
-		if (fstate->opos == (loff_t)-INT_MAX) 
-			fstate->opos = fstate->ipos;
+			fprintf(stderr, DDR_INFO "ipos set to the end: %skiB\n", 
+			        fmt_kiB(opts->init_ipos));
+		/* if opts->init_opos not set, assume same position */
+		if (opts->init_opos == (loff_t)-INT_MAX) 
+			opts->init_opos = opts->init_ipos;
 		/* if explicitly set to zero, assume end of _existing_ file */
-		if (fstate->opos == 0) {
-			fstate->opos = lseek64(fstate->odes, fstate->opos, SEEK_END);
-			if (fstate->opos == (loff_t)-1) {
+		if (opts->init_opos == 0) {
+			opts->init_opos = lseek64(fstate->odes, 0, SEEK_END);
+			if (opts->init_opos == (loff_t)-1) {
 				fplog(stderr, FATAL, "could not seek to end of file %s!\n", opts->oname);
 				perror("dd_rescue"); cleanup(); exit(19);
 			}
 			/* if existing empty, assume same position */
-			if (fstate->opos == 0) 
-				fstate->opos = fstate->ipos;
+			if (opts->init_opos == 0)
+				opts->init_opos = opts->init_ipos;
 			if (opts->verbose) 
 				fprintf(stderr, DDR_INFO "opos set to: %skiB\n",
-					fmt_kiB(fstate->opos));
+					fmt_kiB(opts->init_opos));
     		}
 	}
 
-	/* if fstate->opos not set, assume same position */
-	if (fstate->opos == (loff_t)-INT_MAX)
-		fstate->opos = fstate->ipos;
+	/* if opts->init_opos not set, assume same position */
+	if (opts->init_opos == (loff_t)-INT_MAX)
+		opts->init_opos = opts->init_ipos;
 
 	if (fstate->identical) {
 		fplog(stderr, WARN, "infile and outfile are identical!\n");
-		if (fstate->opos > fstate->ipos && !opts->reverse && !opts->force) {
+		if (opts->init_opos > opts->init_ipos && !opts->reverse && !opts->force) {
 			fplog(stderr, WARN, "turned on reverse, as ipos < opos!\n");
 			opts->reverse = 1;
     		}
-		if (fstate->opos < fstate->ipos && opts->reverse && !opts->force) {
+		if (opts->init_opos < opts->init_ipos && opts->reverse && !opts->force) {
 			fplog(stderr, WARN, "turned off reverse, as opos < ipos!\n");
 			opts->reverse = 0;
 		}
   	}
 
-	if (fstate->o_chr && fstate->opos != 0) {
+	if (fstate->o_chr && opts->init_opos != 0) {
 		if (opts->force)
-			fplog(stderr, WARN, "ignore non-seekable output with fstate->opos != 0 due to --opts->force\n");
+			fplog(stderr, WARN, "ignore non-seekable output with opos != 0 due to --force\n");
 		else {
-			fplog(stderr, FATAL, "outfile not seekable, but fstate->opos !=0 requested!\n");
+			fplog(stderr, FATAL, "outfile not seekable, but opos !=0 requested!\n");
 			cleanup(); exit(19);
 		}
 	}
-	if (fstate->i_chr && fstate->ipos != 0) {
-		fplog(stderr, FATAL, "infile not seekable, but fstate->ipos !=0 requested!\n");
+	if (fstate->i_chr && opts->init_ipos != 0) {
+		fplog(stderr, FATAL, "infile not seekable, but ipos !=0 requested!\n");
 		cleanup(); exit(19);
 	}
 		
@@ -2649,13 +2647,13 @@ int main(int argc, char* argv[])
 			cleanup(); exit(19);
 		}
 		if (opts->extend)
-			fstate->opos += fstate->olen;
+			opts->init_opos += fstate->olen;
 	}
 	input_length();
 
-	if (fstate->ipos < 0 || fstate->opos < 0) {
+	if (opts->init_ipos < 0 || opts->init_opos < 0) {
 		fplog(stderr, FATAL, "negative position requested (%skiB)\n", 
-			fmt_kiB(fstate->ipos));
+			fmt_kiB(opts->init_ipos));
 		cleanup(); exit(25);
 	}
 
@@ -2680,9 +2678,9 @@ int main(int argc, char* argv[])
 		fplog(stderr, WARN, "triple overwrite with non-seekable output!\n");
 	}
 	if (opts->reverse && opts->trunclast)
-		if (ftruncate(fstate->odes, fstate->opos))
+		if (ftruncate(fstate->odes, opts->init_opos))
 			fplog(stderr, WARN, "Could not truncate %s to %skiB: %s!\n",
-				opts->oname, fmt_kiB(fstate->opos), strerror(errno));
+				opts->oname, fmt_kiB(opts->init_opos), strerror(errno));
 
 	LISTTYPE(ofile_t) *of;
 	LISTFOREACH(ofiles, of) {
@@ -2701,9 +2699,9 @@ int main(int argc, char* argv[])
 			do_fallocate(oft->fd, oft->name);
 #endif
 		if (opts->reverse && opts->trunclast)
-			if (ftruncate(oft->fd, fstate->opos))
+			if (ftruncate(oft->fd, opts->init_opos))
 				fplog(stderr, WARN, "Could not truncate %s to %skiB: %s!\n",
-					oft->name, fmt_kiB(fstate->opos), strerror(errno));
+					oft->name, fmt_kiB(opts->init_opos), strerror(errno));
 	}
 
 	/* Install signal handler */
@@ -2714,6 +2712,9 @@ int main(int argc, char* argv[])
 	signal(SIGQUIT, breakhandler);
 
 	/* Save time and start to work */
+	fstate->ipos = opts->init_ipos;
+	fstate->opos = opts->init_opos;
+
 	startclock = clock();
 	gettimeofday(&starttime, NULL);
 	memcpy(&lasttime, &starttime, sizeof(lasttime));
