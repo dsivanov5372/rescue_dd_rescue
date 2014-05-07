@@ -10,6 +10,7 @@
 #define _FILE_OFFSET_BITS 64
 
 #include "ddr_plugin.h"
+#include "ddr_ctrl.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -153,6 +154,7 @@ typedef struct _lzo_state {
 	char hdr_seen, eof_seen, do_bench, do_opt;
 	enum compmode mode;
 	comp_alg *algo;
+	const opt_t *opts;
 	/* Statistics */
 	unsigned int nr_memmove, nr_realloc;
 	unsigned int cmp_hdr;
@@ -162,7 +164,7 @@ typedef struct _lzo_state {
 } lzo_state;
 
 #define FPLOG(lvl, fmt, args...) \
-	ddr_plug.fplog(stderr, lvl, "lzo(%i): " fmt, state->seq, ##args)
+	ddr_plug.fplog(stderr, (state->opts? !state->opts->nocol: 0), lvl, "lzo(%i): " fmt, state->seq, ##args)
 
 static unsigned int pagesize = 4096;
 
@@ -322,7 +324,7 @@ void chose_alg(char* anm, lzo_state *state)
 }
 
 
-int lzo_plug_init(void **stat, char* param, int seq)
+int lzo_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 {
 	int err = 0;
 	lzo_state *state = (lzo_state*)malloc(sizeof(lzo_state));
@@ -336,6 +338,7 @@ int lzo_plug_init(void **stat, char* param, int seq)
 	state->workspace = NULL;
 	state->seq = seq;
 	state->algo = calgos;
+	state->opts = opt;
 	while (param) {
 		char* next = strchr(param, ':');
 		if (next)

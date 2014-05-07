@@ -298,9 +298,9 @@ static char* strsignal(int sig)
 }
 #endif
 
-inline char* fmt_kiB(loff_t no)
+inline char* fmt_kiB(loff_t no, char col)
 {
-	return fmt_int(0, 1, 1024, no, (opts->nocol? "": BOLD), (opts->nocol? "": NORM), 1);
+	return fmt_int(0, 1, 1024, no, (col? BOLD: ""), (col? NORM: ""), 1);
 }
 
 inline float difftimetv(const struct timeval* const t2, 
@@ -312,14 +312,14 @@ inline float difftimetv(const struct timeval* const t2,
 
 
 /** Write to file and simultaneously log to logfdile, if existing */
-int fplog(FILE* const file, enum ddrlog_t logpre, const char * const fmt, ...)
+int fplog(FILE* const file, char col, enum ddrlog_t logpre, const char * const fmt, ...)
 {
 	int ret = 0;
 	va_list vl; 
 	va_start(vl, fmt);
 	if (file) {
 		if (logpre) {
-			if ((file == stdout || file == stderr) && !opts->nocol)
+			if ((file == stdout || file == stderr) && col)
 				fprintf(file, "%s", ddrlogpre_c[logpre]);
 			else
 				fprintf(file, "%s", ddrlogpre[logpre]);
@@ -338,6 +338,7 @@ int fplog(FILE* const file, enum ddrlog_t logpre, const char * const fmt, ...)
 	return ret;
 }
 
+
 /** Plugin infrastructure */
 unsigned int max_slack_pre = 0;
 int max_neg_slack_pre = 0;
@@ -354,7 +355,7 @@ char plugins_opened = 0;
 LISTDECL(ddr_plugin_t);
 LISTTYPE(ddr_plugin_t) *ddr_plugins;
 
-void call_plugins_open()
+void call_plugins_open(opt_t *op, fstate_t *fst)
 {
 	unsigned int slk_pre = 0, slk_post = 0;
 	/* Do iterate over list */
@@ -363,25 +364,25 @@ void call_plugins_open()
 		if (LISTDATA(plug).open_callback) {
 			int spre  = LISTDATA(plug).slack_pre ;
 			int spost = LISTDATA(plug).slack_post;
-			slk_pre  += spre  >= 0? spre : -spre *((opts->softbs+15)/16);
-			slk_post += spost >= 0? spost: -spost*((opts->softbs+15)/16);
+			slk_pre  += spre  >= 0? spre : -spre *((op->softbs+15)/16);
+			slk_post += spost >= 0? spost: -spost*((op->softbs+15)/16);
 			/*
-			fplog(stderr, INFO, "Pre %i Post %i TPre %i TPost %i\n",
+			fplog(stderr, !op->nocol, INFO, "Pre %i Post %i TPre %i TPost %i\n",
 				spre, spost, slk_pre, slk_post);
 			 */
-			int err = LISTDATA(plug).open_callback(fstate->ides, opts->iname, fstate->ipos,
-						fstate->odes, opts->oname, fstate->opos,
-						opts->softbs, opts->hardbs, progress->estxfer, 
+			int err = LISTDATA(plug).open_callback(fst->ides, op->iname, fst->ipos,
+						fst->odes, op->oname, fst->opos,
+						op->softbs, op->hardbs, fst->estxfer, 
 						(plugins_opened < last_lnchg ? 1: 0),
 						max_slack_pre-slk_pre, max_slack_post-slk_post,
-					       	&fstate->buf, &LISTDATA(plug).state);
+					       	&fst->buf, &LISTDATA(plug).state);
 			if (err < 0) {
-				fplog(stderr, WARN, "Error initializing plugin %s: %s!\n",
+				fplog(stderr, !op->nocol, WARN, "Error initializing plugin %s: %s!\n",
 					LISTDATA(plug).name, strerror(err));
 				exit(13);
 			} else if (err>0) {
-				fstate->ipos += err;
-				fplog(stderr, WARN, "Plugin %s skipping %i bytes might break other plugins!\n",
+				fst->ipos += err;
+				fplog(stderr, !op->nocol, WARN, "Plugin %s skipping %i bytes might break other plugins!\n",
 					LISTDATA(plug).name, err);
 			}
 		}
@@ -391,16 +392,16 @@ void call_plugins_open()
 	assert(slk_post == max_slack_post);
 }
 
-void call_plugins_close()
+void call_plugins_close(opt_t *op, fstate_t *fst)
 {
 	if (!plugins_opened)
 		return;
 	LISTTYPE(ddr_plugin_t) *plug;
 	LISTFOREACH(ddr_plugins, plug) {
 		if (LISTDATA(plug).close_callback) {
-			int err = LISTDATA(plug).close_callback(fstate->opos, &LISTDATA(plug).state);
+			int err = LISTDATA(plug).close_callback(fst->opos, &LISTDATA(plug).state);
 			if (err)
-				fplog(stderr, WARN, "Error closing plugin %s: %s!\n",
+				fplog(stderr, !op->nocol, WARN, "Error closing plugin %s: %s!\n",
 					LISTDATA(plug).name, strerror(err));
 		}
 		--plugins_opened;
@@ -423,12 +424,12 @@ typedef void* VOIDP;
 LISTDECL(VOIDP);
 LISTTYPE(VOIDP) *ddr_plug_handles;
 
-ddr_plugin_t* insert_plugin(void* hdl, const char* nm, char* param)
+ddr_plugin_t* insert_plugin(void* hdl, const char* nm, char* param, opt_t *op)
 {
 	LISTAPPEND(ddr_plug_handles, hdl, VOIDP);
 	ddr_plugin_t *plug = (ddr_plugin_t*)dlsym(hdl, "ddr_plug");
 	if (!plug) {
-		fplog(stderr, WARN, "plugin %s loaded, but ddr_plug not found!\n", nm);
+		fplog(stderr, !op->nocol, WARN, "plugin %s loaded, but ddr_plug not found!\n", nm);
 		return NULL;
 	}
 	if (!plug->name)
@@ -449,12 +450,12 @@ ddr_plugin_t* insert_plugin(void* hdl, const char* nm, char* param)
 	if (!plug->handles_sparse)
 		not_sparse = 1;
 	if (param && !plug->init_callback) {
-		fplog(stderr, FATAL, "Plugin %s has no init callback to consume passed param %s\n",
+		fplog(stderr, !op->nocol, FATAL, "Plugin %s has no init callback to consume passed param %s\n",
 			nm, param);
 		exit(13);
 	}
 	if (plug->init_callback)
-		if (plug->init_callback(&plug->state, param, plugins_loaded))
+		if (plug->init_callback(&plug->state, param, plugins_loaded, op))
 			exit(13);
 	plugins_loaded++;
 	LISTAPPEND(ddr_plugins, *plug, ddr_plugin_t);
@@ -466,7 +467,7 @@ ddr_plugin_t* insert_plugin(void* hdl, const char* nm, char* param)
 }
 
 
-void load_plugins(char* plugs)
+void load_plugins(char* plugs, opt_t *op)
 {
 	char* next;
 	char path[256];
@@ -486,10 +487,10 @@ void load_plugins(char* plugs)
 		if (!hdl) 
 			hdl = dlopen(plugs, RTLD_NOW);
 		if (!hdl) {
-			fplog(stderr, FATAL, "Could not load plugin %s\n", plugs);
+			fplog(stderr, !op->nocol, FATAL, "Could not load plugin %s\n", plugs);
 			++errs;
 		} else {
-			ddr_plugin_t *plug = insert_plugin(hdl, plugs, param);
+			ddr_plugin_t *plug = insert_plugin(hdl, plugs, param, op);
 			if (!plug) {
 				++errs;
 				continue;
@@ -507,7 +508,7 @@ void load_plugins(char* plugs)
 void unload_plugins()
 {
 	LISTTYPE(VOIDP) *plug_hdl;
-	/* FIXME: Freeing in opts->reverse order would be better ... */
+	/* FIXME: Freeing in reverse order would be better ... */
 	LISTFOREACH(ddr_plug_handles, plug_hdl)
 		dlclose(LISTDATA(plug_hdl));
 	LISTTREEDEL(ddr_plug_handles, VOIDP);
@@ -519,17 +520,17 @@ void unload_plugins()
 #define posix_fadvise64 posix_fadvise
 #endif
 #ifdef HAVE_POSIX_FADVISE
-static inline void fadvise(char after)
+static inline void fadvise(char after, opt_t *op, fstate_t *fst, progress_t *prg)
 {
 	if (!opts->reverse) {
 		if (after) 
-			posix_fadvise64(fstate->ides, opts->init_ipos, progress->xfer, POSIX_FADV_NOREUSE);
+			posix_fadvise64(fst->ides, op->init_ipos, prg->xfer, POSIX_FADV_NOREUSE);
 		else 
-			posix_fadvise64(fstate->ides, opts->init_ipos, progress->estxfer, POSIX_FADV_SEQUENTIAL);
+			posix_fadvise64(fst->ides, op->init_ipos, fst->estxfer, POSIX_FADV_SEQUENTIAL);
 	}
 }
 #else
-static inline void fadvise(char after)
+static inline void fadvise(char after, opt_t *op, fstate_t *fst, progress_t *prg)
 {}
 #endif
 
@@ -564,7 +565,7 @@ static int openfile(const char* const fname, const int flags)
 	} else
 		fdes = open64(fname, flags, 0640);
 	if (fdes == -1) {
-		fplog(stderr, FATAL, "open \"%s\" failed: %s\n",
+		fplog(stderr, !opts->nocol, FATAL, "open \"%s\" failed: %s\n",
 			fname, strerror(errno));
 		cleanup(); exit(17);
 	}
@@ -577,8 +578,8 @@ static void check_seekable(const int fd, char *ischr, const char* msg)
 	errno = 0;
 	if (!*ischr && lseek64(fd, (loff_t)0, SEEK_SET) != 0) {
 		if (msg) {
-			fplog(stderr, WARN, "file %s is not seekable!\n", msg);
-			fplog(stderr, WARN, "%s\n", strerror(errno));
+			fplog(stderr, !opts->nocol, WARN, "file %s is not seekable!\n", msg);
+			fplog(stderr, !opts->nocol, WARN, "%s\n", strerror(errno));
 		}
 		*ischr = 1;
 	}
@@ -586,34 +587,34 @@ static void check_seekable(const int fd, char *ischr, const char* msg)
 }
 
 /** Calc position in graph */
-inline int gpos(loff_t off)
+inline int gpos(loff_t off, loff_t len)
 {
 	static const int glen = 40; //strlen(graph) - 2;
-	return 1+(glen*off/fstate->ilen);
+	return 1+(glen*off/len);
 }
 
 /** Prepare graph */
-static void preparegraph()
+static void preparegraph(opt_t *op, fstate_t *fst)
 {
-	if (!fstate->ilen || opts->init_ipos > fstate->ilen)
+	if (!fst->ilen || op->init_ipos > fst->ilen)
 		return;
 	graph = strdup(":.........................................:");
 	if (opts->reverse) {
-		graph[gpos(opts->init_ipos)+1] = '<';
-		graph[gpos(opts->init_ipos-progress->estxfer)-1] = '>';
+		graph[gpos(op->init_ipos, fst->ilen)+1] = '<';
+		graph[gpos(op->init_ipos-fst->estxfer, fst->ilen)-1] = '>';
 
 	} else {
-		graph[gpos(opts->init_ipos)-1] = '>';
-		graph[gpos(opts->init_ipos+progress->estxfer)+1] = '<';
+		graph[gpos(op->init_ipos, fst->ilen)-1] = '>';
+		graph[gpos(op->init_ipos+fst->estxfer, fst->ilen)+1] = '<';
 	}
 }
 
-void updgraph(int err)
+void updgraph(int err, fstate_t *fst)
 {
 	int off;
-	if (!fstate->ilen || fstate->ipos > fstate->ilen)
+	if (!fst->ilen || fst->ipos > fst->ilen)
 		return;
-	off = gpos(fstate->ipos);
+	off = gpos(fst->ipos, fst->ilen);
 	if (graph[off] == 'x')
 		return;
 	if (err)
@@ -627,140 +628,140 @@ void updgraph(int err)
 }
 
 /** Tries to determine size of input file */
-void input_length()
+void input_length(opt_t *op, fstate_t *fst)
 {
 	struct STAT64 stbuf;
-	progress->estxfer = opts->maxxfer;
-	if (opts->reverse) {
-		if (opts->init_ipos)
-			fstate->ilen = opts->init_ipos;
+	fst->estxfer = op->maxxfer;
+	if (op->reverse) {
+		if (op->init_ipos)
+			fst->ilen = op->init_ipos;
 		else
-			fstate->ilen = opts->maxxfer;
+			fst->ilen = op->maxxfer;
 	} else
-		fstate->ilen = opts->init_ipos + opts->maxxfer;
-	if (progress->estxfer)
-		preparegraph();
-	if (fstate->i_chr)
+		fst->ilen = op->init_ipos + op->maxxfer;
+	if (fst->estxfer)
+		preparegraph(op, fst);
+	if (fst->i_chr)
 		return;
-	if (FSTAT64(fstate->ides, &stbuf))
+	if (FSTAT64(fst->ides, &stbuf))
 		return;
 	if (S_ISLNK(stbuf.st_mode))
 		return;
 	if (S_ISCHR(stbuf.st_mode)) {
-		fstate->i_chr = 1;
+		fst->i_chr = 1;
 		return;
 	}
 	if (S_ISBLK(stbuf.st_mode)) {
 		/* Do magic to figure size of block dev */
-		loff_t p = lseek64(fstate->ides, 0, SEEK_CUR);
+		loff_t p = lseek64(fst->ides, 0, SEEK_CUR);
 		if (p == -1)
 			return;
-		fstate->ilen = lseek64(fstate->ides, 0, SEEK_END) /* + 1 */;
-		lseek64(fstate->ides, p, SEEK_SET);
+		fst->ilen = lseek64(fst->ides, 0, SEEK_END) /* + 1 */;
+		lseek64(fst->ides, p, SEEK_SET);
 	} else {
 		loff_t diff;
-		fstate->ilen = stbuf.st_size;
-		if (!fstate->ilen)
+		fst->ilen = stbuf.st_size;
+		if (!fst->ilen)
 			return;
-		diff = fstate->ilen - stbuf.st_blocks*512;
-		if (diff >= 4096 && (float)diff/fstate->ilen > 0.05 && !opts->quiet)
-		       fplog(stderr, INFO, "%s is sparse (%i%%) %s\n", opts->iname, (int)(100.0*diff/fstate->ilen), (opts->sparse? "": ", consider -a"));
+		diff = fst->ilen - stbuf.st_blocks*512;
+		if (diff >= 4096 && (float)diff/fst->ilen > 0.05 && !op->quiet)
+		       fplog(stderr, !op->nocol, INFO, "%s is sparse (%i%%) %s\n", op->iname, (int)(100.0*diff/fst->ilen), (op->sparse? "": ", consider -a"));
 	}
-	if (!fstate->ilen)
+	if (!fst->ilen)
 		return;
-	if (!opts->reverse)
-		progress->estxfer = fstate->ilen - opts->init_ipos;
+	if (!op->reverse)
+		fst->estxfer = fst->ilen - op->init_ipos;
 	else
-		progress->estxfer = opts->init_ipos;
-	if (opts->maxxfer && progress->estxfer > opts->maxxfer)
-		progress->estxfer = opts->maxxfer;
-	if (progress->estxfer < 0)
-		progress->estxfer = 0;
-	if (!opts->quiet)
-		fplog(stderr, INFO, "expect to copy %skiB from %s\n",
-			fmt_kiB(progress->estxfer), opts->iname);
+		fst->estxfer = op->init_ipos;
+	if (op->maxxfer && fst->estxfer > op->maxxfer)
+		fst->estxfer = op->maxxfer;
+	if (fst->estxfer < 0)
+		fst->estxfer = 0;
+	if (!op->quiet)
+		fplog(stderr, !op->nocol, INFO, "expect to copy %skiB from %s\n",
+			fmt_kiB(fst->estxfer, !op->nocol), op->iname);
 	if (!graph)
-		preparegraph();
+		preparegraph(op, fst);
 }
 
-int output_length()
+int output_length(opt_t *op, fstate_t *fst)
 {
 	struct STAT64 stbuf;
-	if (fstate->o_chr)
+	if (fst->o_chr)
 		return -1;
-	if (FSTAT64(fstate->odes, &stbuf))
+	if (FSTAT64(fst->odes, &stbuf))
 		return -1;
 	if (S_ISLNK(stbuf.st_mode)) {
 		// TODO: Use readlink and follow?
-		fstate->o_lnk = 1;
+		fst->o_lnk = 1;
 		return -1;
 	}
 	if (S_ISCHR(stbuf.st_mode)) {
-		fstate->o_chr = 1;
+		fst->o_chr = 1;
 		return -1;
 	}
 	if (S_ISBLK(stbuf.st_mode)) {
 		/* Do magic to figure size of block dev */
-		loff_t p = lseek64(fstate->odes, 0, SEEK_CUR);
-		fstate->o_blk = 1;
+		loff_t p = lseek64(fst->odes, 0, SEEK_CUR);
+		fst->o_blk = 1;
 		if (p == -1)
 			return -1;
-		fstate->olen = lseek64(fstate->odes, 0, SEEK_END) + 1;
-		lseek64(fstate->odes, p, SEEK_SET);
+		fst->olen = lseek64(fst->odes, 0, SEEK_END) + 1;
+		lseek64(fst->odes, p, SEEK_SET);
 	} else {
 		loff_t diff;
-		fstate->olen = stbuf.st_size;
-		if (!fstate->olen)
+		fst->olen = stbuf.st_size;
+		if (!fst->olen)
 			return -1;
-		diff = fstate->olen - stbuf.st_blocks*512;
-		if (diff >= 4096 && (float)diff/fstate->ilen > 0.05 && !opts->quiet)
-		       fplog(stderr, INFO, "%s is sparse (%i%%) %s\n", opts->oname, (int)(100.0*diff/fstate->olen), (opts->sparse? "": ", consider -a"));
+		diff = fst->olen - stbuf.st_blocks*512;
+		if (diff >= 4096 && (float)diff/fst->ilen > 0.05 && !op->quiet)
+		       fplog(stderr, !op->nocol, INFO, "%s is sparse (%i%%) %s\n", op->oname, (int)(100.0*diff/fst->olen), (op->sparse? "": ", consider -a"));
 	}
-	if (!fstate->olen)
+	if (!fst->olen)
 		return -1;
-	if (!opts->reverse) {
-		loff_t newmax = fstate->olen - opts->init_opos;
+	if (!op->reverse) {
+		loff_t newmax = fst->olen - op->init_opos;
 		if (newmax < 0) {
-			fplog(stderr, FATAL, "output position is beyond end of file but -M specified!\n");
+			fplog(stderr, !op->nocol, FATAL, "output position is beyond end of file but -M specified!\n");
 			cleanup();
 			exit(19);
 		}			
-		if (!opts->maxxfer || opts->maxxfer > newmax) {
-			opts->maxxfer = newmax;
-			if (!opts->quiet)
-				fplog(stderr, INFO, "limit max xfer to %skiB\n",
-					fmt_kiB(opts->maxxfer));
+		if (!op->maxxfer || op->maxxfer > newmax) {
+			op->maxxfer = newmax;
+			if (!op->quiet)
+				fplog(stderr, !op->nocol, INFO, "limit max xfer to %skiB\n",
+					fmt_kiB(op->maxxfer, !op->nocol));
 		}
-	} else if (opts->init_opos > fstate->olen) {
-		fplog(stderr, WARN, "change output position %skiB to endpos %skiB due to -M\n",
-			fmt_kiB(opts->init_opos), fmt_kiB(fstate->olen));
-		opts->init_opos = fstate->olen;
+	} else if (op->init_opos > fst->olen) {
+		fplog(stderr, !op->nocol, WARN, "change output position %skiB to endpos %skiB due to -M\n",
+			fmt_kiB(op->init_opos, !op->nocol), fmt_kiB(fst->olen, !op->nocol));
+		op->init_opos = fst->olen;
 	}
 	return 0;
 }
 
 
-static void sparse_output_warn()
+static void sparse_output_warn(opt_t *op, fstate_t *fst)
 {
 	struct STAT64 stbuf;
 	loff_t eff_opos;
-	if (fstate->o_chr)
+	if (fst->o_chr)
 		return;
-	if (FSTAT64(fstate->odes, &stbuf))
+	if (FSTAT64(fst->odes, &stbuf))
 		return;
 	if (S_ISCHR(stbuf.st_mode)) {
-		fstate->o_chr = 1;
+		fst->o_chr = 1;
 		return;
 	}
 	if (S_ISBLK(stbuf.st_mode)) {
-		if (opts->sparse || !opts->nosparse)
-			fplog(stderr, WARN, "%s is a block device; -a not recommended; -A recommended\n", opts->oname);
+		if (op->sparse || !op->nosparse)
+			fplog(stderr, !op->nocol, WARN, "%s is a block device; -a not recommended; -A recommended\n", op->oname);
 		return;
 	}
-	eff_opos = (opts->init_opos == (loff_t)-INT_MAX? opts->init_ipos: opts->init_opos);
-	if (opts->sparse && (eff_opos < stbuf.st_size))
-		fplog(stderr, WARN, "write into %s (@%sk/%sk): sparse not recommended\n", 
-				opts->oname, fmt_kiB(eff_opos), fmt_kiB(stbuf.st_size));
+	eff_opos = (op->init_opos == (loff_t)-INT_MAX? op->init_ipos: op->init_opos);
+	if (op->sparse && (eff_opos < stbuf.st_size))
+		fplog(stderr, !op->nocol, WARN, "write into %s (@%sk/%sk): sparse not recommended\n", 
+				op->oname, fmt_kiB(eff_opos, !op->nocol), fmt_kiB(stbuf.st_size, !op->nocol));
 }
 
 #if defined(HAVE_FALLOCATE64) || defined(HAVE_LIBFALLOCATE)
@@ -777,19 +778,19 @@ static void* load_libfallocate()
 }
 #endif
 
-static void do_fallocate(int fd, const char* onm)
+static void do_fallocate(int fd, const char* onm, opt_t *op, fstate_t *fst)
 {
 	struct STAT64 stbuf;
 	loff_t to_falloc, alloced;
 	int rc = 0;
-	if (!progress->estxfer)
+	if (!fst->estxfer)
 		return;
 	if (FSTAT64(fd, &stbuf))
 		return;
 	if (!S_ISREG(stbuf.st_mode))
 		return;
-	alloced = stbuf.st_blocks*512 - opts->init_opos;
-	to_falloc = progress->estxfer - (alloced < 0 ? 0 : alloced);
+	alloced = stbuf.st_blocks*512 - op->init_opos;
+	to_falloc = fst->estxfer - (alloced < 0 ? 0 : alloced);
 	if (to_falloc <= 0)
 		return;
 #ifdef USE_LIBDL
@@ -798,30 +799,31 @@ static void do_fallocate(int fd, const char* onm)
 	_l_f_t _linux_fallocate64 = (_l_f_t)load_libfallocate();
 	if (_linux_fallocate64)
 		rc = _linux_fallocate64(fd, FALLOC_FL_KEEP_SIZE,
-				opts->init_opos, to_falloc);
+				op->init_opos, to_falloc);
 #ifdef HAVE_FALLOCATE64
 	else
-		rc = fallocate64(fd, 1, opts->init_opos, to_falloc);
+		rc = fallocate64(fd, 1, op->init_opos, to_falloc);
 #endif
 #elif defined(HAVE_LIBFALLOCATE)
 	rc = linux_fallocate64(fd, FALLOC_FL_KEEP_SIZE, 
-			      opts->init_opos, to_falloc);
+			      op->init_opos, to_falloc);
 #else /* HAVE_FALLOCATE64 */
-	rc = opts->fallocate64(fd, 1, opts->init_opos, to_falloc);
+	rc = fallocate64(fd, 1, op->init_opos, to_falloc);
 #endif
 	if (rc)
-	       fplog(stderr, WARN, "fallocate %s (%sk, %sk) failed: %s\n",
-			       onm, fmt_kiB(opts->init_opos), fmt_kiB(to_falloc), strerror(errno));
+	       fplog(stderr, !op->nocol, WARN, "fallocate %s (%sk, %sk) failed: %s\n",
+		      onm, fmt_kiB(op->init_opos, !op->nocol), fmt_kiB(to_falloc, !op->nocol), strerror(errno));
 }
 #endif
 
 float floatrate4  = 0.0;
 float floatrate32 = 0.0;
 void doprint(FILE* const file, const unsigned int bs, const clock_t cl, 
-	     const float t1, const float t2, const int sync)
+	     const float t1, const float t2, const int sync,
+	     opt_t *op, fstate_t *fst, progress_t *prg)
 {
-	float avgrate = (float)progress->xfer/t1;
-	float currate = (float)(progress->xfer-progress->lxfer)/t2;
+	float avgrate = (float)prg->xfer/t1;
+	float currate = (float)(prg->xfer-prg->lxfer)/t2;
 	const char *bold = BOLD, *norm = NORM;
 	if (!floatrate4) {
 		floatrate4  = currate;
@@ -834,13 +836,13 @@ void doprint(FILE* const file, const unsigned int bs, const clock_t cl,
 		bold = ""; norm = "";
 	}
 	fprintf(file, DDR_INFO "ipos:%sk, opos:%sk, xferd:%sk\n",
-		fmt_int(10, 1, 1024, fstate->ipos, bold, norm, 1),
-		fmt_int(10, 1, 1024, fstate->opos, bold, norm, 1),
-		fmt_int(10, 1, 1024, progress->xfer, bold, norm, 1));
+		fmt_int(10, 1, 1024, fst->ipos, bold, norm, 1),
+		fmt_int(10, 1, 1024, fst->opos, bold, norm, 1),
+		fmt_int(10, 1, 1024, prg->xfer, bold, norm, 1));
 	fprintf(file, "             %s  %s  errs:%7i, errxfer:%sk, succxfer:%sk\n",
-		(opts->reverse? "-": " "), (bs==opts->hardbs? "*": " "), fstate->nrerr, 
-		fmt_int(10, 1, 1024, progress->fxfer, bold, norm, 1),
-		fmt_int(10, 1, 1024, progress->sxfer, bold, norm, 1));
+		(op->reverse? "-": " "), (bs==op->hardbs? "*": " "), fst->nrerr, 
+		fmt_int(10, 1, 1024, prg->fxfer, bold, norm, 1),
+		fmt_int(10, 1, 1024, prg->sxfer, bold, norm, 1));
 	if (sync || (file != stdin && file != stdout) )
 		fprintf(file, "             +curr.rate:%skB/s, avg.rate:%skB/s, avg.load:%s%%\n",
 			fmt_int(9, 0, 1024, floatrate4, bold, norm, 1),
@@ -851,18 +853,18 @@ void doprint(FILE* const file, const unsigned int bs, const clock_t cl,
 			nineright, 
 			fmt_int(9, 0, 1024, avgrate, bold, norm, 1),
 			fmt_int(3, 1, 10, (cl-startclock)/(t1*(CLOCKS_PER_SEC/1000)), bold, norm, 1));
-	if (progress->estxfer && avgrate > 0) {
+	if (fst->estxfer && avgrate > 0) {
 		int sec;
 		if (in_report)
 			sec = 0.5 + t1;
 		else
-			sec = 0.5 + 2*(progress->estxfer-progress->xfer)/(avgrate+floatrate32);
+			sec = 0.5 + 2*(fst->estxfer-prg->xfer)/(avgrate+floatrate32);
 		int hour = sec / 3600;
 		int min = (sec % 3600) / 60;
 		sec = sec % 60;
-		updgraph(0);
+		updgraph(0, fst);
 		fprintf(file, "             %s %3i%%  %s: %2i:%02i:%02i \n",
-			graph, (int)(100*progress->xfer/progress->estxfer), (in_report? "TOT": "ETA"), 
+			graph, (int)(100*prg->xfer/fst->estxfer), (in_report? "TOT": "ETA"), 
 			hour, min, sec);
 		scrollup = fourup;
 	} else
@@ -870,17 +872,18 @@ void doprint(FILE* const file, const unsigned int bs, const clock_t cl,
 }
 
 void printstatus(FILE* const file1, FILE* const file2,
-		 const int bs, const int sync)
+		 const int bs, const int sync,
+		 opt_t *op, fstate_t *fst, progress_t *prg)
 {
 	float t1, t2; 
 	clock_t cl;
 	static int einvalwarn = 0;
 
 	if (sync) {
-		int err = fsync(fstate->odes);
-		if (err && (errno != EINVAL || !einvalwarn) &&!fstate->o_chr) {
-			fplog(stderr, WARN, "sync %s (%sskiB): %s!  \n",
-			      opts->oname, fmt_kiB(fstate->ipos), strerror(errno));
+		int err = fsync(fst->odes);
+		if (err && (errno != EINVAL || !einvalwarn) &&!fst->o_chr) {
+			fplog(stderr, !op->nocol, WARN, "sync %s (%sskiB): %s!  \n",
+			      op->oname, fmt_kiB(fst->ipos, !op->nocol), strerror(errno));
 			++einvalwarn;
 		}
 		errno = 0;
@@ -893,8 +896,8 @@ void printstatus(FILE* const file1, FILE* const file2,
 
 	/* Idea: Could save last not printed status and print on err */
 	if (t2 < printint && !sync && !in_report) {
-		if (progress->estxfer)
-			updgraph(0);
+		if (fst->estxfer)
+			updgraph(0, fst);
 		return;
 	}
 
@@ -906,53 +909,58 @@ void printstatus(FILE* const file1, FILE* const file2,
 	}
 
 	if (file1) 
-		doprint(file1, bs, cl, t1, t2, sync);
+		doprint(file1, bs, cl, t1, t2, sync, op, fst, prg);
 	if (file2)
-		doprint(file2, bs, cl, t1, t2, sync);
+		doprint(file2, bs, cl, t1, t2, sync, op, fst, prg);
 	if (1 || sync) {
 		memcpy(&lasttime, &currenttime, sizeof(lasttime));
-		progress->lxfer = progress->xfer;
+		prg->lxfer = prg->xfer;
 	}
 }
 
-static void savebb(loff_t block)
+static void savebb(loff_t block, opt_t *op)
 {
 	FILE *bbfile;
-	fplog(stderr, WARN, "Bad block reading %s: %s \n", 
-			opts->iname, fmt_int(0, 0, 1, block, (opts->nocol? "": BOLD), (opts->nocol? "": NORM), 1));
-	if (opts->bbname == NULL)
+	fplog(stderr, !op->nocol, WARN, "Bad block reading %s: %s \n", 
+			op->iname, fmt_int(0, 0, 1, block, (op->nocol? "": BOLD), (op->nocol? "": NORM), 1));
+	if (op->bbname == NULL)
 		return;
-	bbfile = fopen(opts->bbname, "a");
+	bbfile = fopen(op->bbname, "a");
 	fprintf(bbfile, "%s\n", fmt_int(0, 0, 1, block, "", "", 0));
 	fclose(bbfile);
 }
 
-void printreport()
+void printreport(opt_t *op, fstate_t *fst, progress_t *prg)
 {
 	/* report */
-	FILE *report = (!opts->quiet || fstate->nrerr)? stderr: 0;
+	FILE *report = (!op->quiet || fst->nrerr)? stderr: 0;
 	in_report = 1;
 	if (report) {
-		fplog(report, INFO, "Summary for %s -> %s", opts->iname, opts->oname);
+		fplog(report, !op->nocol, INFO, "Summary for %s -> %s", op->iname, op->oname);
 		LISTTYPE(ofile_t) *of;
 		LISTFOREACH(ofiles, of)
-			fplog(report, NOHDR, "; %s", LISTDATA(of).name);
+			fplog(report, !op->nocol, NOHDR, "; %s", LISTDATA(of).name);
 		if (logfd > 0)
 			fprintf(logfd, ":\n");
 		fprintf(report, "\n");
-		printstatus(report, logfd, 0, 1);
-		if (opts->avoidwrite) 
-			fplog(report, INFO, "Avoided %skiB of writes (performed %skiB)\n", 
-				fmt_kiB(progress->axfer), fmt_kiB(progress->sxfer-progress->axfer));
+		printstatus(report, logfd, 0, 1, op, fst, prg);
+		if (op->avoidwrite) 
+			fplog(report, !op->nocol, INFO, "Avoided %skiB of writes (performed %skiB)\n", 
+				fmt_kiB(prg->axfer, !op->nocol), fmt_kiB(prg->sxfer-prg->axfer, !op->nocol));
 	}
 }
 
-void exit_report(int rc)
+void _printreport()
+{
+	printreport(opts, fstate, progress);
+}
+
+void exit_report(int rc, opt_t *op, fstate_t *fst, progress_t *prg)
 {
 	gettimeofday(&currenttime, NULL);
-	printreport();
+	printreport(op, fst, prg);
 	cleanup();
-	fplog(stderr, FATAL, "Not completed fully successfully! \n");
+	fplog(stderr, !op->nocol, FATAL, "Not completed fully successfully! \n");
 	exit(rc);
 }
 
@@ -985,12 +993,12 @@ int copyxattr(const char* inm, const char* onm)
 		return 0;
 	attrs = (char*)malloc(aln);
 	if (!attrs) {
-		fplog(stderr, WARN, "Can't allocate buffer of len %z for attr names\n", aln);
+		fplog(stderr, !opts->nocol, WARN, "Can't allocate buffer of len %z for attr names\n", aln);
 		return -1;
 	}
 	aln = listxattr(inm, attrs, aln);
 	if (aln <= 0) {
-		fplog(stderr, WARN, "Could not read attr list: %s\n", strerror(errno));
+		fplog(stderr, !opts->nocol, WARN, "Could not read attr list: %s\n", strerror(errno));
 		free(attrs);
 		return -1;
 	}
@@ -1008,13 +1016,13 @@ int copyxattr(const char* inm, const char* onm)
 		}
 		itln = getxattr(inm, attrs+offs, extrabuf, itln);
 		if (itln <= 0) {
-			fplog(stderr, WARN, "Could not read attr %s: %s\n", attrs+offs, strerror(errno));
+			fplog(stderr, !opts->nocol, WARN, "Could not read attr %s: %s\n", attrs+offs, strerror(errno));
 			continue;
 		}
 		if (setxattr(onm, attrs+offs, extrabuf, itln, 0))
-			fplog(stderr, WARN, "Could not write attr %s: %s\n", attrs+offs, strerror(errno));
+			fplog(stderr, !opts->nocol, WARN, "Could not write attr %s: %s\n", attrs+offs, strerror(errno));
 		if (opts->verbose)
-			fplog(stderr, INFO, "Copied attr %s (%i bytes)\n", attrs+offs, itln);
+			fplog(stderr, !opts->nocol, INFO, "Copied attr %s (%i bytes)\n", attrs+offs, itln);
 		++copied;
 	}
 	if (ebufall)
@@ -1043,71 +1051,71 @@ int copytimes(const char* inm, const char* onm)
 	return err;
 }
 
-static int mayexpandfile(const char* onm)
+static int mayexpandfile(const char* onm, opt_t *op, fstate_t *fst)
 {
 	struct STAT64 st;
-	loff_t maxopos = fstate->opos;
-	if (opts->init_opos > fstate->opos)
-		maxopos = opts->init_opos;
+	loff_t maxopos = fst->opos;
+	if (op->init_opos > fst->opos)
+		maxopos = op->init_opos;
 	STAT64(onm, &st);
 	if (!S_ISREG(st.st_mode))
 		return 0;
-	if (st.st_size < maxopos || opts->trunclast)
+	if (st.st_size < maxopos || op->trunclast)
 		return truncate(onm, maxopos);
 	else 
-		return 0;		
+		return 0;
 }
 
 
-void remove_and_trim(const char* onm)
+void remove_and_trim(const char* onm, opt_t *op)
 {
 	int err = unlink(onm);
 	if (err)
-		fplog(stderr, WARN, "remove(%s) failed: %s\n",
+		fplog(stderr, !op->nocol, WARN, "remove(%s) failed: %s\n",
 			onm, strerror(errno));
 #ifdef FITRIM
-	loff_t trimmed = fstrim(onm, opts->quiet);
+	loff_t trimmed = fstrim(onm, op->quiet);
 	if (trimmed < 0) 
-		fplog(stderr, WARN, "fstrim %s failed: %s%s\n", 
+		fplog(stderr, !op->nocol, WARN, "fstrim %s failed: %s%s\n", 
 			onm, strerror(-trimmed), (-trimmed == EPERM? " (have root?)": ""));
 	else
-		fplog(stderr, INFO, "Trimmed %skiB \n", 
-				fmt_int(0, 0, 1024, trimmed, (opts->nocol? "": BOLD), (opts->nocol? "": NORM), 1));
+		fplog(stderr, !op->nocol, INFO, "Trimmed %skiB \n", 
+				fmt_int(0, 0, 1024, trimmed, (op->nocol? "": BOLD), (op->nocol? "": NORM), 1));
 #endif
 }
 
-int sync_close(int fd, const char* nm, char chr)
+int sync_close(int fd, const char* nm, char chr, opt_t *op, fstate_t *fst)
 {
 	int rc, err = 0;
 	if (fd != -1) {
 		/* Make sure, the output file is expanded to the last (first) position
 	 	 * FIXME: 0 byte writes do NOT expand file -- mayexpandfile() will
 		 * take care of that. */
-		if (!opts->avoidwrite) 
-			rc = pwrite(fd, fstate->buf, 0, fstate->opos);
+		if (!op->avoidwrite) 
+			rc = pwrite(fd, fst->buf, 0, fst->opos);
 		rc = fsync(fd);
 		if (rc && !chr) {
-			fplog(stderr, WARN, "fsync %s (%skiB): %s!\n",
-			      nm, fmt_kiB(fstate->opos), strerror(errno));
+			fplog(stderr, !op->nocol, WARN, "fsync %s (%skiB): %s!\n",
+			      nm, fmt_kiB(fstate->opos, !op->nocol), strerror(errno));
 			++err;
 			errno = 0;
 		}
 		rc = close(fd); 
 		if (rc) {
-			fplog(stderr, WARN, "close %s (%skiB): %s!\n",
-			      nm, fmt_kiB(fstate->opos), strerror(errno));
+			fplog(stderr, !op->nocol, WARN, "close %s (%skiB): %s!\n",
+			      nm, fmt_kiB(fst->opos, !op->nocol), strerror(errno));
 			++err;
 		}
 		if (opts->sparse) {
-			rc = mayexpandfile(nm);
+			rc = mayexpandfile(nm, op, fst);
 			if (rc)
-				fplog(stderr, WARN, "seek %s (%skiB): %s!\n",
-				      nm, fmt_kiB(fstate->opos), strerror(errno));
-		} else if (opts->trunclast && !opts->reverse) {
-			rc = truncate(nm, fstate->opos);
+				fplog(stderr, !op->nocol, WARN, "seek %s (%skiB): %s!\n",
+				      nm, fmt_kiB(fst->opos, !op->nocol), strerror(errno));
+		} else if (op->trunclast && !op->reverse) {
+			rc = truncate(nm, fst->opos);
 			if (rc)
-				fplog(stderr, WARN, "could not truncate %s to %skiB: %s!\n",
-					nm, fmt_kiB(fstate->opos), strerror(errno));
+				fplog(stderr, !op->nocol, WARN, "could not truncate %s to %skiB: %s!\n",
+					nm, fmt_kiB(fst->opos, !op->nocol), strerror(errno));
 		}
 
 	}
@@ -1122,28 +1130,31 @@ int sync_close(int fd, const char* nm, char chr)
 	} while(0)
 
 
-ssize_t writeblock(int towrite);
-static void advancepos(const ssize_t rd, const ssize_t wr, const ssize_t rwr);
+ssize_t writeblock(int towrite,
+		   opt_t *op, fstate_t *fst, progress_t *prg);
+static void advancepos(const ssize_t rd, const ssize_t wr, const ssize_t rwr,
+		       opt_t *op, fstate_t *fst, progress_t *prg);
 
-int cleanup()
+int real_cleanup(opt_t *op, fstate_t *fst, progress_t *prg, 
+	 	 dpopt_t *dop, dpstate_t *dst)
 {
 	int rc, errs = 0;
-	if (!opts->dosplice && !dpopts->bsim715) {
+	if (!op->dosplice && !dop->bsim715) {
 		/* EOF notifiction */
-		int fbytes = writeblock(0);
+		int fbytes = writeblock(0, op, fst, prg);
 		if (fbytes >= 0)
-			advancepos(0, fbytes, fbytes);
+			advancepos(0, fbytes, fbytes, op, fst, prg);
 		else
 			errs++;
 		/* And finalize */
-		call_plugins_close();
+		call_plugins_close(op, fst);
 	}
-	errs += sync_close(fstate->odes, opts->oname, fstate->o_chr);
+	errs += sync_close(fst->odes, op->oname, fst->o_chr, op, fst);
 	if (fstate->ides != -1) {
-		rc = close(fstate->ides);
+		rc = close(fst->ides);
 		if (rc) {
-			fplog(stderr, WARN, "close %s (%skiB): %s!\n",
-			      opts->iname, fmt_kiB(fstate->ipos), strerror(errno));
+			fplog(stderr, !op->nocol, WARN, "close %s (%skiB): %s!\n",
+			      op->iname, fmt_kiB(fst->ipos, !op->nocol), strerror(errno));
 			++errs;
 		}
 	}
@@ -1152,32 +1163,32 @@ int cleanup()
 	LISTTYPE(ofile_t) *of;
 	LISTFOREACH(ofiles, of) {
 		ofile_t *oft = &(LISTDATA(of));
-		rc = sync_close(oft->fd, oft->name, oft->cdev);
+		rc = sync_close(oft->fd, oft->name, oft->cdev, op, fst);
 	}
 	ZFREE(fstate->origbuf2);
 	ZFREE(graph);
 	if (opts->preserve) {
-		copyxattr(opts->iname, opts->oname);
-		copytimes(opts->iname, opts->oname);
+		copyxattr(op->iname, op->oname);
+		copytimes(op->iname, op->oname);
 	}
 	if (opts->rmvtrim)
-		remove_and_trim(opts->oname);
+		remove_and_trim(op->oname, op);
 	LISTFOREACH(ofiles, of) {
-		if (opts->preserve) {
-			copyxattr(opts->iname, LISTDATA(of).name);
-			copytimes(opts->iname, LISTDATA(of).name);
+		if (op->preserve) {
+			copyxattr(op->iname, LISTDATA(of).name);
+			copytimes(op->iname, LISTDATA(of).name);
 		}
-		if (opts->rmvtrim)
-			remove_and_trim(LISTDATA(of).name);
+		if (op->rmvtrim)
+			remove_and_trim(LISTDATA(of).name, op);
 	}
-	ZFREE(fstate->origbuf);
-	if (dpstate->prng_state2) {
-		frandom_release(dpstate->prng_state2);
-		dpstate->prng_state2 = 0;
+	ZFREE(fst->origbuf);
+	if (dst->prng_state2) {
+		frandom_release(dst->prng_state2);
+		dst->prng_state2 = 0;
 	}
-	if (dpstate->prng_state) {
-		frandom_release(dpstate->prng_state);
-		dpstate->prng_state = 0;
+	if (dst->prng_state) {
+		frandom_release(dst->prng_state);
+		dst->prng_state = 0;
 	}
 	LISTTREEDEL(ofiles, ofile_t);
 	LISTTYPE(charp) *onl;
@@ -1195,6 +1206,11 @@ int cleanup()
 	return errs;
 }
 
+int cleanup()
+{
+	return real_cleanup(opts, fstate, progress, dpopts, dpstate);
+}
+
 ssize_t fill_rand(void *bf, size_t ln)
 {
 	unsigned int i;
@@ -1205,57 +1221,60 @@ ssize_t fill_rand(void *bf, size_t ln)
 }
 
 /** is the block zero ? */
-static ssize_t blockiszero(const unsigned char* blk, const size_t ln)
+static ssize_t blockiszero(const unsigned char* blk, const size_t ln,
+			   opt_t *op, repeat_t *rep)
 {
-	if (opts->i_repeat && repeat->i_rep_zero)
-		return repeat->i_rep_zero;
+	if (op->i_repeat && rep->i_rep_zero)
+		return rep->i_rep_zero;
 	if (!ln || *blk) 
-		repeat->i_rep_zero = 0;
+		rep->i_rep_zero = 0;
 	else
-		repeat->i_rep_zero = FIND_NONZERO_OPT(blk, ln);
-	return repeat->i_rep_zero;
+		rep->i_rep_zero = FIND_NONZERO_OPT(blk, ln);
+	return rep->i_rep_zero;
 }
 
-static inline ssize_t mypread(int fd, void* bf, size_t sz, loff_t off)
+static inline ssize_t mypread(int fd, void* bf, size_t sz, loff_t off,
+			      opt_t *op, repeat_t *rep, dpopt_t *dop, dpstate_t *dst)
 {
-	if (opts->i_repeat) {
-		if (repeat->i_rep_init)
+	if (op->i_repeat) {
+		if (rep->i_rep_init)
 			return sz;
 		else
-			repeat->i_rep_init = 1;
+			rep->i_rep_init = 1;
 	}
-	if (dpopts->prng_libc)
+	if (dop->prng_libc)
 		return fill_rand(bf, sz);
-	if (dpopts->prng_frnd) {
-		if (!dpopts->bsim715_2ndpass)
-			return frandom_bytes(dpstate->prng_state, (unsigned char*) bf, sz);
+	if (dop->prng_frnd) {
+		if (!dop->bsim715_2ndpass)
+			return frandom_bytes(dst->prng_state, (unsigned char*) bf, sz);
 		else
-			return frandom_bytes_inv(dpstate->prng_state, (unsigned char*) bf, sz);
+			return frandom_bytes_inv(dst->prng_state, (unsigned char*) bf, sz);
 	}
-	if (fstate->i_chr) 
+	if (fstate->i_chr)
 		return read(fd, bf, sz);
 	else
 		return pread64(fd, bf, sz, off);
 }
 
-static inline ssize_t mypwrite(int fd, void* bf, size_t sz, loff_t off)
+static inline ssize_t mypwrite(int fd, void* bf, size_t sz, loff_t off,
+			       opt_t *op, fstate_t *fst, progress_t *prg)
 {
 	if (fstate->o_chr) {
 		if (!opts->avoidnull)
 			return write(fd, bf, sz);
 		else {
-			progress->axfer += sz;
+			prg->axfer += sz;
 			return sz;
 		}
 	} else {
-		if (opts->avoidwrite) {
-			ssize_t ln = pread64(fd, fstate->buf2, sz, off);
+		if (op->avoidwrite) {
+			ssize_t ln = pread64(fd, fst->buf2, sz, off);
 			if (ln < (ssize_t)sz)
 				return pwrite64(fd, bf, sz, off);
-			if (memcmp(bf, fstate->buf2, ln))
+			if (memcmp(bf, fst->buf2, ln))
 				return pwrite64(fd, bf, sz, off);
 			else {
-				progress->axfer += ln;
+				prg->axfer += ln;
 				return ln;
 			}
 		} else
@@ -1264,31 +1283,34 @@ static inline ssize_t mypwrite(int fd, void* bf, size_t sz, loff_t off)
 }
 
 
-ssize_t readblock(const int toread)
+ssize_t readblock(const int toread,
+		  opt_t *op, fstate_t *fst, repeat_t *rep,
+		  dpopt_t *dop, dpstate_t *dst)
 {
 	ssize_t err, rd = 0;
 	//errno = 0; /* should not be necessary */
 	do {
-		rd += (err = mypread(fstate->ides, fstate->buf+rd, toread-rd, fstate->ipos+rd-opts->reverse*toread));
+		rd += (err = mypread(fst->ides, fst->buf+rd, toread-rd, fst->ipos+rd-op->reverse*toread, op, rep, dop, dst));
 		if (err == -1) 
 			rd++;
 	} while ((err == -1 && (errno == EINTR || errno == EAGAIN))
 		  || (rd < toread && err > 0 && errno == 0));
-	//if (rd < toread) memset (fstate->buf+rd, 0, toread-rd);
+	//if (rd < toread) memset (fst->buf+rd, 0, toread-rd);
 	return (/*err == -1? err:*/ rd);
 }
 
-ssize_t writeblock(int towrite)
+ssize_t writeblock(int towrite,
+		   opt_t *op, fstate_t *fst, progress_t *prg)
 {
 	ssize_t err, wr = 0;
 	int lasterr = 0;
 	int eof = towrite? 0: 1;
-	unsigned char* wbuf = call_plugins_block(fstate->buf, &towrite, eof, &fstate->opos);
+	unsigned char* wbuf = call_plugins_block(fst->buf, &towrite, eof, &fst->opos);
 	if (!wbuf || !towrite)
 		return towrite;
 	//errno = 0; /* should not be necessary */
 	do {
-		wr += (err = mypwrite(fstate->odes, wbuf+wr, towrite-wr, fstate->opos+wr-opts->reverse*towrite));
+		wr += (err = mypwrite(fst->odes, wbuf+wr, towrite-wr, fst->opos+wr-opts->reverse*towrite, op, fst, prg));
 		if (err == -1) 
 			wr++;
 	} while ((err == -1 && (errno == EINTR || errno == EAGAIN))
@@ -1296,214 +1318,221 @@ ssize_t writeblock(int towrite)
 	if (wr < towrite && err != 0) {
 		/* Write error: handle ? .. */
 		lasterr = errno;
-		fplog(stderr, (opts->abwrerr? FATAL: WARN),
+		fplog(stderr, !op->nocol, (op->abwrerr? FATAL: WARN),
 				"write %s (%skiB): %s\n",
-	      			opts->oname, fmt_kiB(fstate->opos), strerror(errno));
-		if (opts->abwrerr) 
-			exit_report(21);
+	      			op->oname, fmt_kiB(fst->opos, !op->nocol), strerror(errno));
+		if (op->abwrerr) 
+			exit_report(21, op, fst, prg);
 		fstate->nrerr++;
 	}
 	int oldeno = errno;
-	char oldochr = fstate->o_chr;
+	char oldochr = fst->o_chr;
 	LISTTYPE(ofile_t) *of;
 	LISTFOREACH(ofiles, of) {
 		ssize_t e2, w2 = 0;
 		ofile_t *oft = &(LISTDATA(of));
-		fstate->o_chr = oft->cdev;
+		fst->o_chr = oft->cdev;
 		do {
-			w2 += (e2 = mypwrite(oft->fd, wbuf+w2, towrite-w2, fstate->opos+w2-opts->reverse*towrite));
+			w2 += (e2 = mypwrite(oft->fd, wbuf+w2, towrite-w2, fstate->opos+w2-opts->reverse*towrite, op, fst, prg));
 			if (e2 == -1) 
 				w2++;
 		} while ((e2 == -1 && (errno == EINTR || errno == EAGAIN))
 			  || (w2 < towrite && e2 > 0 && errno == 0));
 		if (w2 < towrite && e2 != 0) 
-			fplog(stderr, WARN, "2ndary write %s (%skiB): %s\n",
-			      oft->name, fmt_kiB(fstate->opos), strerror(errno));
+			fplog(stderr, !op->nocol, WARN, "2ndary write %s (%skiB): %s\n",
+			      oft->name, fmt_kiB(fst->opos, !op->nocol), strerror(errno));
 	}
-	fstate->o_chr = oldochr;
+	fst->o_chr = oldochr;
 	errno = oldeno;	
 	return (lasterr? -lasterr: wr);
 }
 
-int blockxfer(const loff_t max, const int bs)
+int blockxfer(const loff_t max, const int bs,
+	      opt_t *op, fstate_t *fst, progress_t *prg)
 {
 	int block = bs;
 	/* Don't progress->xfer more bytes than our limit */
-	if (max && max-progress->xfer < bs)
-		block = max-progress->xfer;
-	if (opts->reverse) {
+	if (max && max-prg->xfer < bs)
+		block = max-prg->xfer;
+	if (op->reverse) {
 		/* Can't go beyond the beginning of the file */
-		if (block > fstate->ipos)
-			block = fstate->ipos;
-		if (block > fstate->opos)
-			block = fstate->opos;
+		if (block > fst->ipos)
+			block = fst->ipos;
+		if (block > fst->opos)
+			block = fst->opos;
 	}
 	/* If we write the first block and it's a full block, do alignment ... */
-	if (block == bs && !progress->xfer && ((fstate->opos % bs && !fstate->o_chr) || (fstate->ipos % bs && !fstate->i_chr))) {
+	if (block == bs && !prg->xfer && ((fst->opos % bs && !fst->o_chr) || (fst->ipos % bs && !fst->i_chr))) {
 		/* Write alignment is more important except if fstate->o_chr == 1 */
-		int off = fstate->o_chr? fstate->ipos % bs: fstate->opos % bs;
-		int aligned = opts->reverse? off: bs-off;
+		int off = fst->o_chr? fst->ipos % bs: fst->opos % bs;
+		int aligned = op->reverse? off: bs-off;
 		if (!max_align || !(aligned % max_align))
 			block = aligned;
 	}
 	return block;
 }
 
-void exitfatalerr(const int eno)
+void exitfatalerr(const int eno, opt_t *op, fstate_t *fst, progress_t *prg)
 {
 	if (eno == ESPIPE || eno == EPERM || eno == ENXIO || eno == ENODEV) {
-		fplog(stderr, FATAL, "%s (%skiB): %s! \n", 
-		      opts->iname, fmt_kiB(fstate->ipos), strerror(eno));
-		fplog(stderr, NOHDR, "dd_rescue: Last error fatal! Exiting ... \n");
-		exit_report(20);
+		fplog(stderr, !op->nocol, FATAL, "%s (%skiB): %s! \n", 
+		      opts->iname, fmt_kiB(fst->ipos, !op->nocol), strerror(eno));
+		fplog(stderr, !op->nocol, NOHDR, "dd_rescue: Last error fatal! Exiting ... \n");
+		exit_report(20, op, fst, prg);
 	}
 }
 
 /* Update positions after successful copy, rd = progress, wr = really written */
-static void advancepos(const ssize_t rd, const ssize_t wr, const ssize_t rwr)
+static void advancepos(const ssize_t rd, const ssize_t wr, const ssize_t rwr,
+		       opt_t *op, fstate_t *fst, progress_t *prg)
 {
-	progress->sxfer += rwr; progress->xfer += rd;
-	if (opts->reverse) { 
-		fstate->ipos -= rd; fstate->opos -= wr; 
+	prg->sxfer += rwr; prg->xfer += rd;
+	if (op->reverse) { 
+		fst->ipos -= rd; fst->opos -= wr; 
 	} else { 
-		fstate->ipos += rd; fstate->opos += wr; 
+		fst->ipos += rd; fst->opos += wr; 
 	}
 }
 
-static int is_writeerr_fatal(int err)
+static int is_writeerr_fatal(int err, opt_t *op)
 {
 	return (err == ENOSPC || err == EROFS
 #ifdef EDQUOT
                || err == EDQUOT
 #endif
-               || (err == EFBIG && !opts->reverse));
+               || (err == EFBIG && !op->reverse));
 }
 
 int weno;
 
 /* Do write, update positions ... 
  * Returns number of successfully written bytes. */
-ssize_t dowrite(const ssize_t rd)
+ssize_t dowrite(const ssize_t rd, opt_t *op, fstate_t *fst, progress_t *prg)
 {
 	int err = 0;
 	int fatal = 0;
 	ssize_t wr = 0;
 	weno = 0;
 	errno = 0;
-	err = ((wr = writeblock(rd)) < 0 ? -wr: 0);
+	err = ((wr = writeblock(rd, op, fst, prg)) < 0 ? -wr: 0);
 	weno = errno;
 
-	if (err && is_writeerr_fatal(weno))
+	if (err && is_writeerr_fatal(weno, op))
 		++fatal;
 	if (err) {
-		fplog(stderr, WARN, "assumption rd(%i) == wr(%i) failed! \n", rd, wr);
-		fplog(stderr, (fatal? FATAL: WARN),
+		fplog(stderr, !op->nocol, WARN, "assumption rd(%i) == wr(%i) failed! \n", rd, wr);
+		fplog(stderr, !op->nocol, (fatal? FATAL: WARN),
 			"write %s (%skiB): %s!\n", 
-			opts->oname, fmt_kiB(fstate->opos+wr), strerror(weno));
+			op->oname, fmt_kiB(fst->opos+wr, !op->nocol), strerror(weno));
 		errno = 0;
 		/* FIXME: This breaks for opts->reverse direction */
-		if (!opts->reverse)
-			advancepos(wr, wr, wr);
+		if (!op->reverse)
+			advancepos(wr, wr, wr, op, fst, prg);
 		else
 			return 0;
 	} else
-		advancepos(rd, wr, wr);
+		advancepos(rd, wr, wr, op, fst, prg);
 	return wr;
 }
 
 /* Write rd-sized block at fstate->buf; if opts->sparse is set, check if at least half of the
  * block is empty and if so, move over the opts->sparse pieces ... */
-ssize_t dowrite_sparse(const ssize_t rd)
+ssize_t dowrite_sparse(const ssize_t rd, opt_t *op, fstate_t *fst, 
+		       progress_t *prg, repeat_t *rep)
 {
 	/* Simple case: opts->sparse not set => just write */
 	if (!opts->sparse)
-		return dowrite(rd);
-	ssize_t zln = blockiszero(fstate->buf, rd);
+		return dowrite(rd, op, fst, prg);
+	ssize_t zln = blockiszero(fstate->buf, rd, op, rep);
 	/* Also simple: Whole block is empty, so just move on */
 	if (zln >= rd) {
-		advancepos(rd, rd, 0);
+		advancepos(rd, rd, 0, op, fst, prg);
 		weno = 0;
 		return 0;
 	}
 	/* Block is smaller than 2*opts->hardbs and not completely zero, so don't bother optimizing ... */
 	if (rd < 2*(ssize_t)opts->hardbs)
-		return dowrite(rd);
+		return dowrite(rd, op, fst, prg);
 	/* Check both halves -- aligned to opts->hardbs boundaries */
 	int mid = rd/2;
-	mid -= mid%opts->hardbs;
-	zln -= zln%opts->hardbs;
+	mid -= mid%op->hardbs;
+	zln -= zln%op->hardbs;
 	/* First half is empty */
 	if (zln >= mid) {
-		unsigned char* oldbuf = fstate->buf;
-		advancepos(zln, zln, 0);
-		fstate->buf += zln;
-		ssize_t wr = dowrite(rd-zln);
-		fstate->buf = oldbuf;
+		unsigned char* oldbuf = fst->buf;
+		advancepos(zln, zln, 0, op, fst, prg);
+		fst->buf += zln;
+		ssize_t wr = dowrite(rd-zln, op, fst, prg);
+		fst->buf = oldbuf;
 		return wr;
 	}
 	/* Check second half */
-	ssize_t zln2 = blockiszero(fstate->buf+mid, rd-mid);
+	ssize_t zln2 = blockiszero(fst->buf+mid, rd-mid, op, rep);
 	if (zln2 < rd-mid)
-		return dowrite(rd);
+		return dowrite(rd, op, fst, prg);
 	else {
-		ssize_t wr = dowrite(mid);
+		ssize_t wr = dowrite(mid, op, fst, prg);
 		//advancepos(mid, wr);
 		if (wr != mid) 
 			return wr;
-		advancepos(rd-mid, wr, 0);
+		advancepos(rd-mid, wr, 0, op, fst, prg);
 		return wr;
 	}
 }
 
 /* Do write with retry if rd > opts->hardbs, update positions ... 
  * Returns 0 on success, -1 on fatal error, 1 on normal error. */
-int dowrite_retry(const ssize_t rd)
+int dowrite_retry(const ssize_t rd, opt_t *op, fstate_t *fst,
+		  progress_t *prg, repeat_t *rep)
 {
 	int errs = 0;
-	ssize_t wr = dowrite_sparse(rd);
+	ssize_t wr = dowrite_sparse(rd, op, fst, prg, rep);
 	if (wr == rd || weno == 0)
 		return 0;
-	if ((rd <= (ssize_t)opts->hardbs) || (weno != ENOSPC && weno != EFBIG)) {
+	if ((rd <= (ssize_t)op->hardbs) || (weno != ENOSPC && weno != EFBIG)) {
 		/* No retry, move on */
-		advancepos(rd-wr, rd-wr, 0);
-		return is_writeerr_fatal(weno)? -1: 1;
+		advancepos(rd-wr, rd-wr, 0, op, fst, prg);
+		return is_writeerr_fatal(weno, op)? -1: 1;
 	} else {
 		ssize_t rwr = wr;
-		unsigned char* oldbuf = fstate->buf; 
+		unsigned char* oldbuf = fst->buf; 
 		int adv = 1;
-		fstate->buf += wr;
-		fplog(stderr, INFO, "retrying writes with smaller blocks \n");
-		if (opts->reverse) {
-			fstate->buf = oldbuf+rd-opts->hardbs;
+		fst->buf += wr;
+		fplog(stderr, !op->nocol, INFO, "retrying writes with smaller blocks \n");
+		if (op->reverse) {
+			fst->buf = oldbuf+rd-op->hardbs;
 			adv = -1;
 		}
 		while (rwr < rd) {
-			ssize_t towr = ((ssize_t)opts->hardbs > rd-rwr)? rd-rwr: opts->hardbs;
-			ssize_t wr2 = dowrite(towr);
-			if (is_writeerr_fatal(weno)) {
-				fstate->buf = oldbuf;
+			ssize_t towr = ((ssize_t)op->hardbs > rd-rwr)? rd-rwr: op->hardbs;
+			ssize_t wr2 = dowrite(towr, op, fst, prg);
+			if (is_writeerr_fatal(weno, op)) {
+				fst->buf = oldbuf;
 				return -1;
 			}
 			if (wr2 < towr) {
-				advancepos(towr-wr2, towr-wr2, 0);
+				advancepos(towr-wr2, towr-wr2, 0, op, fst, prg);
 				++errs;
 			}
-			rwr += towr; fstate->buf += towr*adv;
+			rwr += towr; fst->buf += towr*adv;
 		}
-		fstate->buf = oldbuf;
+		fst->buf = oldbuf;
 	}
 	return errs;
 }
 
-static int partialwrite(const ssize_t rd)
+static int partialwrite(const ssize_t rd, opt_t *op, fstate_t *fst,
+			progress_t *prg, repeat_t *rep)
 {
 	/* But first: write available data and advance (optimization) */
-	if (rd > 0 && !opts->reverse) 
-		return dowrite_retry(rd);
-	return 0;	
+	if (rd > 0 && !op->reverse) 
+		return dowrite_retry(rd, op, fst, prg, rep);
+	return 0;
 }
 
-int copyfile_hardbs(const loff_t max)
+int copyfile_hardbs(const loff_t max, opt_t *op, fstate_t *fst,
+		    progress_t *prg, repeat_t *rep, 
+		    dpopt_t *dop, dpstate_t *dst)
 {
 	ssize_t toread;
 	int errs = 0; errno = 0;
@@ -1513,16 +1542,16 @@ int copyfile_hardbs(const loff_t max)
 		(double)fstate->ipos/1024, (double)progress->xfer/1024, (double)max/1024, opts->hardbs,
 		down, down, down, down);
 #endif
-	while ((toread = blockxfer(max, opts->hardbs)) > 0 && !interrupted) { 
+	while ((toread = blockxfer(max, op->hardbs, op, fst, prg)) > 0 && !interrupted) { 
 		int eno;
-		ssize_t rd = readblock(toread);
+		ssize_t rd = readblock(toread, op, fst, rep, dop, dst);
 		eno = errno;
 
 		/* EOF */
 		if (rd == 0 && !eno) {
-			if (!opts->quiet)
-				fplog(stderr, INFO, "read %s (%skiB): EOF\n", 
-				      opts->iname, fmt_kiB(fstate->ipos));
+			if (!op->quiet)
+				fplog(stderr, !op->nocol, INFO, "read %s (%skiB): EOF\n", 
+				      op->iname, fmt_kiB(fst->ipos, !op->nocol));
 			return errs;
 		}
 		/* READ ERROR */
@@ -1530,16 +1559,16 @@ int copyfile_hardbs(const loff_t max)
 			if (eno) {
 				++errs;
 				/* Read error occurred: Print warning */
-				printstatus(stderr, logfd, opts->hardbs, 1);
+				printstatus(stderr, logfd, op->hardbs, 1, op, fst, prg);
 			}
 			/* Some errnos are fatal */
-			exitfatalerr(eno);
+			exitfatalerr(eno, op, fst, prg);
 			/* Non fatal error */
 			/* This is the case, where we were not called from copyfile_softbs and thus have to assume harmless EOF */
-			if (/*opts->softbs <= opts->hardbs &&*/ eno == 0) {
+			if (/*op->softbs <= op->hardbs &&*/ eno == 0) {
 				int ret;
 				/* But first: write available data and advance (optimization) */
-				if ((ret = partialwrite(rd)) < 0)
+				if ((ret = partialwrite(rd, op, fst, prg, rep)) < 0)
 					return ret;
 				else
 					errs += ret;
@@ -1548,59 +1577,61 @@ int copyfile_hardbs(const loff_t max)
 				continue;
 			}					
 			/* Real error on small blocks: Don't retry */
-			fstate->nrerr++; 
-			fplog(stderr, WARN, "read %s (%skiB): %s!\n", 
-			      opts->iname, fmt_kiB(fstate->ipos), strerror(eno));
+			fst->nrerr++; 
+			fplog(stderr, !op->nocol, WARN, "read %s (%skiB): %s!\n", 
+			      op->iname, fmt_kiB(fst->ipos, !op->nocol), strerror(eno));
 		
 			errno = 0;
-			if (opts->nosparse || 
-			    (rd > 0 && (!opts->sparse || blockiszero(fstate->buf, rd) < rd))) {
+			if (op->nosparse || 
+			    (rd > 0 && (!op->sparse || blockiszero(fst->buf, rd, op, rep) < rd))) {
 				ssize_t wr = 0;
-				memset(fstate->buf+rd, 0, toread-rd);
-				errs += ((wr = writeblock(toread)) < 0? -wr: 0);
+				memset(fst->buf+rd, 0, toread-rd);
+				errs += ((wr = writeblock(toread, op, fst, prg)) < 0? -wr: 0);
 				eno = errno;
 				if (wr <= 0 && (eno == ENOSPC 
-					   || (eno == EFBIG && !opts->reverse))) 
+					   || (eno == EFBIG && !op->reverse))) 
 					return errs;
 				if (toread != wr) {
-					fplog(stderr, WARN, "assumption toread(%i) == wr(%i) failed! \n", toread, wr);	
+					fplog(stderr, !op->nocol, WARN, "assumption toread(%i) == wr(%i) failed! \n", toread, wr);	
 					/*
-					fplog(stderr, WARN, "%s (%skiB): %s!\n", 
-					      opts->oname, fmt_kiB(fstate->opos), strerror(eno));
+					fplog(stderr, !op->nocol, WARN, "%s (%skiB): %s!\n", 
+					      op->oname, fmt_kiB(fst->opos, !op->nocol), strerror(eno));
 					fprintf(stderr, "%s%s%s%s", down, down, down, down);
 				 	*/
 				}
 			}
-			savebb(fstate->ipos/opts->hardbs);
-			updgraph(1);
-			progress->fxfer += toread; progress->xfer += toread;
-			if (opts->reverse) { 
-				fstate->ipos -= toread; fstate->opos -= toread; 
+			savebb(fst->ipos/op->hardbs, op);
+			updgraph(1, fst);
+			prg->fxfer += toread; prg->xfer += toread;
+			if (op->reverse) { 
+				fst->ipos -= toread; fst->opos -= toread; 
 			} else { 
-				fstate->ipos += toread; fstate->opos += toread; 
+				fst->ipos += toread; fst->opos += toread; 
 			}
 			/* exit if too many errs */
-			if (opts->maxerr && fstate->nrerr >= opts->maxerr) {
-				fplog(stderr, FATAL, "maxerr reached!\n");
-				exit_report(32);
+			if (op->maxerr && fst->nrerr >= op->maxerr) {
+				fplog(stderr, !op->nocol, FATAL, "maxerr reached!\n");
+				exit_report(32, op, fst, prg);
 			}
 		} else {
-	      		int err = dowrite_retry(rd);
+	      		int err = dowrite_retry(rd, op, fst, prg, rep);
 			if (err < 0)
 				return -err;
 			else
 				errs += err;
 		}
 
-		if (opts->syncfreq && !(progress->xfer % (opts->syncfreq*opts->softbs)))
-			printstatus((opts->quiet? 0: stderr), 0, opts->hardbs, 1);
-		else if (!opts->quiet && !(progress->xfer % (8*opts->softbs)))
-			printstatus(stderr, 0, opts->hardbs, 0);
+		if (op->syncfreq && !(prg->xfer % (op->syncfreq*op->softbs)))
+			printstatus((op->quiet? 0: stderr), 0, op->hardbs, 1, op, fst, prg);
+		else if (!op->quiet && !(prg->xfer % (8*op->softbs)))
+			printstatus(stderr, 0, opts->hardbs, 0, op, fst, prg);
 	} /* remain */
 	return errs;
 }
 
-int copyfile_softbs(const loff_t max)
+int copyfile_softbs(const loff_t max, opt_t *op, fstate_t *fst,
+		    progress_t *prg, repeat_t *rep, 
+		    dpopt_t *dop, dpstate_t *dst)
 {
 	ssize_t toread;
 	int errs = 0, rc; int eno;
@@ -1613,22 +1644,22 @@ int copyfile_softbs(const loff_t max)
 #endif
 	/* expand file to AT LEAST the right length 
 	 * FIXME: 0 byte writes do NOT expand file */
-	if (!fstate->o_chr && !opts->avoidwrite) {
-		rc = pwrite(fstate->odes, fstate->buf, 0, fstate->opos);
+	if (!fst->o_chr && !op->avoidwrite) {
+		rc = pwrite(fst->odes, fst->buf, 0, fst->opos);
 		if (rc)
-			fplog(stderr, WARN, "extending file %s to %skiB failed\n",
-			      opts->oname, fmt_kiB(fstate->opos));
+			fplog(stderr, !op->nocol, WARN, "extending file %s to %skiB failed\n",
+			      op->oname, fmt_kiB(fst->opos, !op->nocol));
 	}
-	while ((toread = blockxfer(max, opts->softbs)) > 0 && !interrupted) {
+	while ((toread = blockxfer(max, op->softbs, op, fst, prg)) > 0 && !interrupted) {
 		int err;
-		ssize_t rd = readblock(toread);
+		ssize_t rd = readblock(toread, op, fst, rep, dop, dst);
 		eno = errno;
 
 		/* EOF */
 		if (rd == 0 && !eno) {
-			if (!opts->quiet)
-				fplog(stderr, INFO, "read %s (%skiB): EOF\n", 
-				      opts->iname, fmt_kiB(fstate->ipos));
+			if (!op->quiet)
+				fplog(stderr, !op->nocol, INFO, "read %s (%skiB): EOF\n", 
+				      op->iname, fmt_kiB(fst->ipos, !op->nocol));
 			return errs;
 		}
 		/* READ ERROR or short read */
@@ -1638,32 +1669,32 @@ int copyfile_softbs(const loff_t max)
 			if (eno) {
 				++errs;
 				/* Read error occurred: Print warning */
-				printstatus(stderr, logfd, opts->softbs, 1);
+				printstatus(stderr, logfd, op->softbs, 1, op, fst, prg);
 			}
 			/* Some errnos are fatal */
-			exitfatalerr(eno);
+			exitfatalerr(eno, op, fst, prg);
 			/* Non fatal error */
-			new_max = progress->xfer + toread;
+			new_max = prg->xfer + toread;
 			/* Error with large blocks: Try small ones ... */
-			if (opts->verbose & eno) {
+			if (op->verbose & eno) {
 				/*
 				fprintf(stderr, DDR_INFO "problems at ipos %.1fk: %s \n                 fall back to smaller blocksize \n%s%s%s%s",
 				        (double)fstate->ipos/1024, strerror(eno), down, down, down, down);
 				 */
 				fprintf(stderr, DDR_INFO "problems at ipos %skiB: %s \n               fall back to smaller blocksize \n",
-				        fmt_kiB(fstate->ipos), strerror(eno));
+				        fmt_kiB(fst->ipos, !op->nocol), strerror(eno));
 				scrollup = 0;
-				printstatus(stderr, logfd, opts->hardbs, 1);
+				printstatus(stderr, logfd, op->hardbs, 1, op, fst, prg);
 			}
 			/* But first: write available data and advance (optimization) */
-			if ((ret = partialwrite(rd)) < 0)
+			if ((ret = partialwrite(rd, op, fst, prg, rep)) < 0)
 				return ret;
 			else
 				errs += ret;
-			old_xfer = progress->xfer;
-			errs += (err = copyfile_hardbs(new_max));
+			old_xfer = prg->xfer;
+			errs += (err = copyfile_hardbs(new_max, op, fst, prg, rep, dop, dst));
 			/* EOF */
-			if (!err && old_xfer == progress->xfer)
+			if (!err && old_xfer == prg->xfer)
 				return errs;
 			/*
 			if (opts->reverse && rd) {
@@ -1674,174 +1705,180 @@ int copyfile_softbs(const loff_t max)
 			/* Stay with small blocks, until we could read two whole 
 			   large ones without errors */
 			new_max = progress->xfer;
-			while (err && (!max || (max-progress->xfer > 0)) && ((!opts->reverse) || (fstate->ipos > 0 && fstate->opos > 0))) {
-				new_max += 2*opts->softbs; old_xfer = progress->xfer;
+			while (err && (!max || (max-prg->xfer > 0)) && ((!op->reverse) || (fst->ipos > 0 && fst->opos > 0))) {
+				new_max += 2*op->softbs; old_xfer = prg->xfer;
 				if (max && new_max > max) 
 					new_max = max;
-				errs += (err = copyfile_hardbs(new_max));
+				errs += (err = copyfile_hardbs(new_max,  op, fst, prg, rep, dop, dst));
 			}
 			errno = 0;
 			/* EOF ? */      
-			if (!err && progress->xfer == old_xfer)
+			if (!err && prg->xfer == old_xfer)
 				return errs;
-			if (opts->verbose) {
+			if (op->verbose) {
 				fprintf(stderr, DDR_INFO "ipos %skiB promote to large bs again! \n",
-					fmt_kiB(fstate->ipos));
+					fmt_kiB(fst->ipos, !op->nocol));
 				scrollup = 0;
 			}
 		} else {
-	      		err = dowrite_retry(rd);
+	      		err = dowrite_retry(rd, op, fst, prg, rep);
 			if (err < 0)
 				return -err;
 			else
 				errs += err;
 		} /* errno */
 
-		if (opts->syncfreq && !(progress->xfer % (opts->syncfreq*opts->softbs)))
-			printstatus((opts->quiet? 0: stderr), 0, opts->softbs, 1);
-		else if (!opts->quiet && !(progress->xfer % (16*opts->softbs)))
-			printstatus(stderr, 0, opts->softbs, 0);
+		if (op->syncfreq && !(prg->xfer % (op->syncfreq*op->softbs)))
+			printstatus((op->quiet? 0: stderr), 0, op->softbs, 1, op, fst, prg);
+		else if (!op->quiet && !(prg->xfer % (16*op->softbs)))
+			printstatus(stderr, 0, op->softbs, 0, op, fst, prg);
 	} /* remain */
 	return errs;
 }
 
 #ifdef HAVE_SPLICE
-int copyfile_splice(const loff_t max)
+int copyfile_splice(const loff_t max, opt_t *op, fstate_t *fst,
+		    progress_t *prg, repeat_t *rep, 
+		    dpopt_t *dop, dpstate_t *dst)
+
 {
 	ssize_t toread;
 	int fd_pipe[2];
 	LISTTYPE(ofile_t) *oft;
 	if (pipe(fd_pipe) < 0)
-		return copyfile_softbs(max);
-	while ((toread	= blockxfer(max, opts->softbs) && !interrupted) > 0) {
-		loff_t old_ipos = fstate->ipos, old_opos = fstate->opos;
-		ssize_t rd = splice(fstate->ides, &fstate->ipos, fd_pipe[1], NULL, toread,
+		return copyfile_softbs(max, op, fst, prg, rep, dop, dst);
+	while ((toread	= blockxfer(max, op->softbs, op, fst, prg) && !interrupted) > 0) {
+		loff_t old_ipos = fst->ipos, old_opos = fst->opos;
+		ssize_t rd = splice(fst->ides, &fst->ipos, fd_pipe[1], NULL, toread,
 					SPLICE_F_MOVE | SPLICE_F_MORE);
 		if (rd < 0) {
-			if (!opts->quiet)
-				fplog(stderr, INFO, "%s (%skiB): fall back to userspace copy\n",
-				      opts->iname, fmt_kiB(fstate->ipos));
+			if (!op->quiet)
+				fplog(stderr, !op->nocol, INFO, "%s (%skiB): fall back to userspace copy\n",
+				      op->iname, fmt_kiB(fst->ipos, !op->nocol));
 			close(fd_pipe[0]); close(fd_pipe[1]);
-			return copyfile_softbs(max);
+			return copyfile_softbs(max, op, fst, prg, rep, dop, dst);
 		}
 		if (rd == 0) {
-			if (!opts->quiet)
-				fplog(stderr, INFO, "read %s (%skiB): EOF (splice)\n",
-				      opts->iname, fmt_kiB(fstate->ipos));
+			if (!op->quiet)
+				fplog(stderr, !op->nocol, INFO, "read %s (%skiB): EOF (splice)\n",
+				      op->iname, fmt_kiB(fst->ipos, !op->nocol));
 			break;
 		}
 		while (rd) {
-			ssize_t wr = splice(fd_pipe[0], NULL, fstate->odes, &fstate->opos, rd,
+			ssize_t wr = splice(fd_pipe[0], NULL, fst->odes, &fst->opos, rd,
 					SPLICE_F_MOVE | SPLICE_F_MORE);
 			if (wr < 0) {
-				fplog(stderr, FATAL, "write %s (%skiB): %s (splice)\n",
-					opts->oname, fmt_kiB(fstate->opos), strerror(errno));
+				fplog(stderr, !op->nocol, FATAL, "write %s (%skiB): %s (splice)\n",
+					op->oname, fmt_kiB(fst->opos, !op->nocol), strerror(errno));
 
 				close(fd_pipe[0]); close(fd_pipe[1]);
-				exit_report(23);
+				exit_report(23, op, fst, prg);
 			}
-			rd -= wr; progress->xfer += wr; progress->sxfer += wr;
+			rd -= wr; prg->xfer += wr; prg->sxfer += wr;
 		}
-		loff_t new_ipos = fstate->ipos, new_opos = fstate->opos;
+		loff_t new_ipos = fst->ipos, new_opos = fst->opos;
 		LISTFOREACH(ofiles, oft) {
-			fstate->ipos = old_ipos; fstate->opos = old_opos;
-			rd = splice(fstate->ides, &fstate->ipos, fd_pipe[1], NULL, toread,
+			fst->ipos = old_ipos; fst->opos = old_opos;
+			rd = splice(fst->ides, &fst->ipos, fd_pipe[1], NULL, toread,
 					SPLICE_F_MOVE | SPLICE_F_MORE);
 			/* Simplify error handling, it worked before ... */
 			if (rd <= 0) {
-				fplog(stderr, WARN, "Confused: splice() read failed unexpectedly: %s\n",
+				fplog(stderr, !op->nocol, WARN, "Confused: splice() read failed unexpectedly: %s\n",
 					strerror(errno));
 				/* We should abort here .... */
-				fstate->ipos = new_ipos; fstate->opos = new_opos;
+				fst->ipos = new_ipos; fst->opos = new_opos;
 				continue;
 			}
 			while (rd) {
-				ssize_t wr = splice(fd_pipe[0], NULL, LISTDATA(oft).fd, &fstate->opos, rd,
+				ssize_t wr = splice(fd_pipe[0], NULL, LISTDATA(oft).fd, &fst->opos, rd,
 						SPLICE_F_MOVE | SPLICE_F_MORE);
 				if (wr < 0) {	
-					fplog(stderr, WARN, "Confused: splice() write failed unexpectedly: %s\n",
+					fplog(stderr, !op->nocol, WARN, "Confused: splice() write failed unexpectedly: %s\n",
 						strerror(errno));
 					/* We should abort here .... */
-					fstate->ipos = new_ipos; fstate->opos = new_opos;
+					fst->ipos = new_ipos; fst->opos = new_opos;
 					continue;
 				}
 			rd -= wr;
 			}
 		}
-		if (fstate->ipos != new_ipos || fstate->opos != new_opos) {
-			fplog(stderr, WARN, "Confused: splice progress inconsistent: %zi %zi %zi %zi\n",
-				fstate->ipos, new_ipos, fstate->opos, new_opos);
-			fstate->ipos = new_ipos; fstate->opos = new_opos;
+		if (fst->ipos != new_ipos || fst->opos != new_opos) {
+			fplog(stderr, !op->nocol, WARN, "Confused: splice progress inconsistent: %zi %zi %zi %zi\n",
+				fst->ipos, new_ipos, fst->opos, new_opos);
+			fst->ipos = new_ipos; fst->opos = new_opos;
 		}	
-		advancepos(0, 0, 0);
-		if (opts->syncfreq && !(progress->xfer % (opts->syncfreq*opts->softbs)))
-			printstatus((opts->quiet? 0: stderr), 0, opts->softbs, 1);
-		else if (!opts->quiet && !(progress->xfer % (16*opts->softbs)))
-			printstatus(stderr, 0, opts->softbs, 0);
+		advancepos(0, 0, 0, op, fst, prg);
+		if (op->syncfreq && !(prg->xfer % (op->syncfreq*op->softbs)))
+			printstatus((op->quiet? 0: stderr), 0, op->softbs, 1, op, fst, prg);
+		else if (!op->quiet && !(prg->xfer % (16*op->softbs)))
+			printstatus(stderr, 0, op->softbs, 0, op, fst, prg);
 	}
 	close(fd_pipe[0]); close(fd_pipe[1]);
 	return 0;
 }
 #endif
 
-int tripleoverwrite(const loff_t max)
+int tripleoverwrite(const loff_t max, opt_t *op, fstate_t *fst,
+		    progress_t *prg, repeat_t *rep, 
+		    dpopt_t *dop, dpstate_t *dst)
+
 {
 	int ret = 0;
-	loff_t orig_opos = fstate->opos;
-	void* prng_state3 = frandom_stdup(dpstate->prng_state);
+	void* prng_state3 = frandom_stdup(dst->prng_state);
 	clock_t orig_startclock = startclock;
 	struct timeval orig_starttime;
 	LISTTYPE(ofile_t) *of;
 	memcpy(&orig_starttime, &starttime, sizeof(starttime));
 	fprintf(stderr, "%s%s%s%s" DDR_INFO "Triple overwrite (BSI M7.15): first pass ... (frandom)      \n\n\n\n\n", up, up, up, up);
-	ret += copyfile_softbs(max);
+	ret += copyfile_softbs(max, op, fst, prg, rep, dop, dst);
 	fprintf(stderr, "syncing ... \n%s", up);
 	ret += fsync(fstate->odes);
 	LISTFOREACH(ofiles, of)
 		fsync(LISTDATA(of).fd);
 	/* TODO: better error handling */
-	frandom_release(dpstate->prng_state);
-	dpstate->prng_state = prng_state3; prng_state3 = 0;
-	dpopts->bsim715_2ndpass = 1;
-	if (!dpopts->bsim715_2) {
-		fstate->opos = orig_opos; progress->xfer = 0; fstate->ipos = 0;
+	frandom_release(dst->prng_state);
+	dst->prng_state = prng_state3; prng_state3 = 0;
+	dop->bsim715_2ndpass = 1;
+	if (!dop->bsim715_2) {
+		fst->opos = op->init_opos; prg->xfer = 0; fst->ipos = 0;
 		startclock = clock(); gettimeofday(&starttime, NULL);
 		fprintf(stderr, DDR_INFO "Triple overwrite (BSI M7.15): second pass ... (frandom_inv)\n\n\n\n\n");
-		ret += copyfile_softbs(max);
+		ret += copyfile_softbs(max, op, fst, prg, rep, dop, dst);
 		fprintf(stderr, "syncing ... \n%s", up);
-		ret += fsync(fstate->odes);
+		ret += fsync(fst->odes);
 		LISTFOREACH(ofiles, of)
 			fsync(LISTDATA(of).fd);
 		/* TODO: better error handling */
-		dpopts->bsim715_2ndpass = 0;
-		if (dpopts->bsim715_4) {
-			frandom_bytes(dpstate->prng_state, fstate->buf, 16);
+		dop->bsim715_2ndpass = 0;
+		if (dop->bsim715_4) {
+			frandom_bytes(dst->prng_state, fst->buf, 16);
 			fprintf(stderr, DDR_INFO "Triple overwrite (BSI M7.15): third pass ... (frandom) \n\n\n\n\n");
-			fstate->opos = orig_opos; progress->xfer = 0; fstate->ipos = 0;
+			fst->opos = op->init_opos; prg->xfer = 0; fst->ipos = 0;
 			startclock = clock(); gettimeofday(&starttime, NULL);
-			ret += copyfile_softbs(max);
+			ret += copyfile_softbs(max, op, fst, prg, rep, dop, dst);
 			fprintf(stderr, "syncing ... \n%s", up);
-			ret += fsync(fstate->odes);
+			ret += fsync(fst->odes);
 			LISTFOREACH(ofiles, of)
 				fsync(LISTDATA(of).fd);
-			dpopts->bsim715_2ndpass = 1;
-			opts->iname = "FRND+invFRND+FRND2+ZERO";
+			dop->bsim715_2ndpass = 1;
+			op->iname = "FRND+invFRND+FRND2+ZERO";
 		} else
-			opts->iname = "FRND+invFRND+ZERO";
+			op->iname = "FRND+invFRND+ZERO";
 	} else
-		opts->iname = "FRND+ZERO";
+		op->iname = "FRND+ZERO";
 	fprintf(stderr, DDR_INFO "Triple overwrite (BSI M7.15): last pass ... (zeros) \n\n\n\n\n");
-	frandom_release(dpstate->prng_state); dpstate->prng_state = 0;
-	memset(fstate->buf, 0, opts->softbs); 
-	opts->i_repeat = 1; repeat->i_rep_init = 1;
-	fstate->opos = orig_opos; progress->xfer = 0; fstate->ipos = 0;
+	frandom_release(dst->prng_state); dst->prng_state = 0;
+	memset(fst->buf, 0, op->softbs); 
+	op->i_repeat = 1; rep->i_rep_init = 1;
+	fst->opos = op->init_opos; prg->xfer = 0; fst->ipos = 0;
 	startclock = clock(); gettimeofday(&starttime, NULL);
-	ret += copyfile_softbs(max);
+	ret += copyfile_softbs(max, op, fst, prg, rep, dop, dst);
 	startclock = orig_startclock;
 	memcpy(&starttime, &orig_starttime, sizeof(starttime));
-	progress->xfer = progress->sxfer;
+	prg->xfer = prg->sxfer;
 	if (ret)
-		fplog(stderr, WARN, "There were %i errors! %s may not be safely overwritten!\n", ret, opts->oname);
+		fplog(stderr, !op->nocol, WARN, 
+			"There were %i errors! %s may not be safely overwritten!\n", ret, op->oname);
 	//fprintf(stderr, "syncing ... \n%s", up);
 	return ret;
 }
@@ -1859,7 +1896,7 @@ static loff_t readint(const char* const ptr)
 		case ' ':
 		case '\0': break;
 		default:
-			fplog(stderr, WARN, "suffix %c ignored!\n", *es);
+			fplog(stderr, !opts->nocol, WARN, "suffix %c ignored!\n", *es);
 	}
 	return (loff_t)res;
 }
@@ -1876,45 +1913,45 @@ char readbool(const char* arg)
 	return 0;
 }
 
-void init_random()
+void init_random(opt_t *op, dpopt_t *dop, dpstate_t *dst)
 {
-	if (dpopts->prng_sfile) {
+	if (dop->prng_sfile) {
 		int ln, fd = -1;
 		unsigned char sbf[256];
-		if (!strcmp(dpopts->prng_sfile, "-")) {
+		if (!strcmp(dop->prng_sfile, "-")) {
 			fd = 0;
-			if (opts->verbose)
-				fplog(stderr, INFO, "reading random seed from <stdin> ...\n");
+			if (op->verbose)
+				fplog(stderr, !op->nocol, INFO, "reading random seed from <stdin> ...\n");
 		} else
-			fd = open(dpopts->prng_sfile, O_RDONLY);
+			fd = open(dop->prng_sfile, O_RDONLY);
 		if (fd == -1) {
-			fplog(stderr, FATAL, "Could not open \"%s\" for random seed!\n", dpopts->prng_sfile);
+			fplog(stderr, !op->nocol, FATAL, "Could not open \"%s\" for random seed!\n", dop->prng_sfile);
 			/* ERROR */
 			cleanup(); exit(28);
 		}
-		if (dpopts->prng_libc) {
+		if (dop->prng_libc) {
 			unsigned int* sval = (unsigned int*)sbf;
 			ln = read(fd, sbf, 4);
 			if (ln != 4) {
-				fplog(stderr, FATAL, "failed to read 4 bytes from \"%s\"!\n", dpopts->prng_sfile);
+				fplog(stderr, !op->nocol, FATAL, "failed to read 4 bytes from \"%s\"!\n", dop->prng_sfile);
 				cleanup(); exit(29);
 			}
 			srand(*sval); rand();
 		} else {
 			ln = read(fd, sbf, 256);
 			if (ln != 256) {
-				fplog(stderr, FATAL, "failed to read 256 bytes from \"%s\"!\n", dpopts->prng_sfile);
+				fplog(stderr, !op->nocol, FATAL, "failed to read 256 bytes from \"%s\"!\n", dop->prng_sfile);
 				cleanup(); exit(29);
 			}
-			dpstate->prng_state = frandom_init(sbf);
+			dst->prng_state = frandom_init(sbf);
 		}
 	} else {
-		if (!dpopts->prng_seed)
-			dpopts->prng_seed = frandom_getseedval();
-		if (dpopts->prng_libc) {
-			srand(dpopts->prng_seed); rand();
+		if (!dop->prng_seed)
+			dop->prng_seed = frandom_getseedval();
+		if (dop->prng_libc) {
+			srand(dop->prng_seed); rand();
 		} else
-			dpstate->prng_state = frandom_init_lrand(dpopts->prng_seed);
+			dst->prng_state = frandom_init_lrand(dop->prng_seed);
 	}
 }
 
@@ -2048,7 +2085,7 @@ void printlonghelp()
 
 void shortusage()
 {
-	fplog(stderr, INFO, "USAGE: dd_rescue [options] infile outfile\n"
+	fplog(stderr, !opts->nocol, INFO, "USAGE: dd_rescue [options] infile outfile\n"
 		"   or: dd_rescue [options] -z/Z/2/3/4 SEED[FILE] outfile\n"
 		" Use dd_rescue -h or dd_rescue --help for more information\n"
 		"  or consult the manpage dd_rescue(1).\n");
@@ -2056,26 +2093,26 @@ void shortusage()
 
 #define YESNO(flag) (flag? "yes": "no ")
 
-void printinfo(FILE* const file)
+void printinfo(FILE* const file, opt_t *op)
 {
-	fplog(file, INFO, "about to transfer %s kiBytes from %s to %s\n",
-	      fmt_kiB(opts->maxxfer), opts->iname, opts->oname);
-	fplog(file, INFO, "blocksizes: soft %i, hard %i\n", opts->softbs, opts->hardbs);
-	fplog(file, INFO, "starting positions: in %skiB, out %SkiB\n",
-	      fmt_kiB(opts->init_ipos), fmt_kiB(opts->init_opos));
-	fplog(file, INFO, "Logfile: %s, Maxerr: %li\n",
-	      (opts->lname? opts->lname: "(none)"), opts->maxerr);
-	fplog(file, INFO, "Reverse: %s, Trunc: %s, interactive: %s\n",
-	      YESNO(opts->reverse), (opts->dotrunc? "yes": (opts->trunclast? "last": "no")), YESNO(opts->interact));
-	fplog(file, INFO, "abort on Write errs: %s, spArse write: %s\n",
-	      YESNO(opts->abwrerr), (opts->sparse? "yes": (opts->nosparse? "never": "if err")));
-	fplog(file, INFO, "preserve: %s, splice: %s, avoidWrite: %s\n",
-	      YESNO(opts->preserve), YESNO(opts->dosplice), YESNO(opts->avoidwrite));
-	fplog(file, INFO, "fallocate: %s, Repeat: %s, O_DIRECT: %s/%s\n",
-	      YESNO(opts->falloc), YESNO(opts->i_repeat), YESNO(opts->o_dir_in), YESNO(opts->o_dir_out));
+	fplog(file, !opts->nocol, INFO, "about to transfer %s kiBytes from %s to %s\n",
+	      fmt_kiB(op->maxxfer, !op->nocol), op->iname, op->oname);
+	fplog(file, !opts->nocol, INFO, "blocksizes: soft %i, hard %i\n", op->softbs, op->hardbs);
+	fplog(file, !opts->nocol, INFO, "starting positions: in %skiB, out %SkiB\n",
+	      fmt_kiB(op->init_ipos, !op->nocol), fmt_kiB(op->init_opos, !op->nocol));
+	fplog(file, !opts->nocol, INFO, "Logfile: %s, Maxerr: %li\n",
+	      (op->lname? op->lname: "(none)"), op->maxerr);
+	fplog(file, !opts->nocol, INFO, "Reverse: %s, Trunc: %s, interactive: %s\n",
+	      YESNO(op->reverse), (op->dotrunc? "yes": (op->trunclast? "last": "no")), YESNO(op->interact));
+	fplog(file, !opts->nocol, INFO, "abort on Write errs: %s, spArse write: %s\n",
+	      YESNO(op->abwrerr), (op->sparse? "yes": (op->nosparse? "never": "if err")));
+	fplog(file, !opts->nocol, INFO, "preserve: %s, splice: %s, avoidWrite: %s\n",
+	      YESNO(op->preserve), YESNO(op->dosplice), YESNO(op->avoidwrite));
+	fplog(file, !opts->nocol, INFO, "fallocate: %s, Repeat: %s, O_DIRECT: %s/%s\n",
+	      YESNO(op->falloc), YESNO(op->i_repeat), YESNO(op->o_dir_in), YESNO(op->o_dir_out));
 	/*
-	fplog(file, INFO, "opts->verbose: %s, opts->quiet: %s\n", 
-	      YESNO(opts->verbose), YESNO(opts->quiet));
+	fplog(file, !opts->nocol, INFO, "verbose: %s, quiet: %s\n", 
+	      YESNO(op->verbose), YESNO(op->quiet));
 	*/
 }
 
@@ -2083,12 +2120,12 @@ void breakhandler(int sig)
 {
 	int_by = sig;
 	if (!interrupted++) {
-		fplog(stderr, FATAL, "Caught signal %i \"%s\". Flush and exit after current block!\n",
+		fplog(stderr, !opts->nocol, FATAL, "Caught signal %i \"%s\". Flush and exit after current block!\n",
 		      sig, strsignal(sig));
 	} else {
-		fplog(stderr, FATAL, "Caught signal %i \"%s\". Flush and exit immediately!\n",
+		fplog(stderr, !opts->nocol, FATAL, "Caught signal %i \"%s\". Flush and exit immediately!\n",
 		      sig, strsignal(sig));
-		printreport();
+		_printreport();
 		cleanup();
 		signal(sig, SIG_DFL);
 		raise(sig);
@@ -2111,10 +2148,10 @@ unsigned char* zalloc_aligned_buf(unsigned int bs, unsigned char**obuf)
 		*obuf = ptr;
 	if (!ptr) {
 		if (0 == max_slack_pre%fstate->pagesize)
-			fplog(stderr, WARN, "allocation of aligned buffer failed -- use malloc\n");
+			fplog(stderr, !opts->nocol, WARN, "allocation of aligned buffer failed -- use malloc\n");
 		ptr = (unsigned char*)malloc(bs + fstate->pagesize + max_slack_pre + max_slack_post);
 		if (!ptr) {
-			fplog(stderr, FATAL, "allocation of buffer of size %li failed!\n", 
+			fplog(stderr, !opts->nocol, FATAL, "allocation of buffer of size %li failed!\n", 
 				bs+fstate->pagesize+max_slack_pre+max_slack_post);
 			cleanup(); exit(18);
 		}
@@ -2275,13 +2312,13 @@ char* parse_opts(int argc, char* argv[], opt_t *op, dpopt_t *dop)
 			case '2': dop->prng_frnd = 1; if (is_filename(optarg)) dop->prng_sfile = optarg; else dop->prng_seed = readint(optarg); dop->bsim715 = 1; dop->bsim715_2 = 1; break;
 			case '3': dop->prng_frnd = 1; if (is_filename(optarg)) dop->prng_sfile = optarg; else dop->prng_seed = readint(optarg); dop->bsim715 = 1; break;
 			case '4': dop->prng_frnd = 1; if (is_filename(optarg)) dop->prng_sfile = optarg; else dop->prng_seed = readint(optarg); dop->bsim715 = 1; dop->bsim715_4 = 1; break;
-			case ':': fplog(stderr, FATAL, "option %c requires an argument!\n", optopt); 
+			case ':': fplog(stderr, !op->nocol, FATAL, "option %c requires an argument!\n", optopt); 
 				shortusage();
 				exit(11); break;
-			case '?': fplog(stderr, FATAL, "unknown option %c!\n", optopt, argv[0]);
+			case '?': fplog(stderr, !op->nocol, FATAL, "unknown option %c!\n", optopt, argv[0]);
 				shortusage();
 				exit(11); break;
-			default: fplog(stderr, FATAL, "your getopt() is buggy!\n");
+			default: fplog(stderr, !op->nocol, FATAL, "your getopt() is buggy!\n");
 				exit(255);
 		}
 	}
@@ -2296,7 +2333,7 @@ char* parse_opts(int argc, char* argv[], opt_t *op, dpopt_t *dop)
 	if (optind < argc) 
 		op->oname = argv[optind++];
 	if (optind < argc) {
-		fplog(stderr, FATAL, "spurious options: %s ...\n", argv[optind]);
+		fplog(stderr, !op->nocol, FATAL, "spurious options: %s ...\n", argv[optind]);
 		shortusage();
 		exit(12);
 	}
@@ -2314,24 +2351,24 @@ char* parse_opts(int argc, char* argv[], opt_t *op, dpopt_t *dop)
 			op->hardbs = BUF_HARDBLOCKSIZE;
 	}
 	if (!op->quiet)
-		fplog(stderr, INFO, "Using softbs=%skiB, hardbs=%skiB\n", 
-			fmt_kiB(op->softbs), fmt_kiB(op->hardbs));
+		fplog(stderr, !op->nocol, INFO, "Using softbs=%skiB, hardbs=%skiB\n", 
+			fmt_kiB(op->softbs, !op->nocol), fmt_kiB(op->hardbs, !op->nocol));
 
 	/* sanity checks */
 #ifdef O_DIRECT
 	if ((op->o_dir_in || op->o_dir_out) && op->hardbs < 512) {
 		op->hardbs = 512;
-		fplog(stderr, WARN, "O_DIRECT requires hardbs of at least %i!\n",
+		fplog(stderr, !op->nocol, WARN, "O_DIRECT requires hardbs of at least %i!\n",
 		      op->hardbs);
 	}
 
 	if (op->o_dir_in || op->o_dir_out)
-		fplog(stderr, WARN, "We don't handle misalignment of last block w/ O_DIRECT!\n");
+		fplog(stderr, !op->nocol, WARN, "We don't handle misalignment of last block w/ O_DIRECT!\n");
 				
 #endif
 
 	if (op->softbs < op->hardbs) {
-		fplog(stderr, WARN, "setting hardbs from %i to softbs %i!\n",
+		fplog(stderr, !op->nocol, WARN, "setting hardbs from %i to softbs %i!\n",
 		      op->hardbs, op->softbs);
 		op->hardbs = op->softbs;
 	}
@@ -2357,14 +2394,14 @@ char* parse_opts(int argc, char* argv[], opt_t *op, dpopt_t *dop)
  *  truncate output file (opt)
  */
 
-void sanitize_and_prepare(opt_t *op, dpopt_t *dop, fstate_t *fst)
+void sanitize_and_prepare(opt_t *op, dpopt_t *dop, fstate_t *fst, dpstate_t *dst, progress_t *prg)
 {
 	/* Have those been set by cmdline params? */
 	if (op->init_ipos == (loff_t)-INT_MAX)
 		op->init_ipos = 0;
 
 	if (op->dosplice && op->avoidwrite) {
-		fplog(stderr, WARN, "disable write avoidance (-W) for splice copy\n");
+		fplog(stderr, !op->nocol, WARN, "disable write avoidance (-W) for splice copy\n");
 		op->avoidwrite = 0;
 	}
 	max_slack_pre  += -max_neg_slack_pre *((op->softbs+15)/16);
@@ -2374,7 +2411,7 @@ void sanitize_and_prepare(opt_t *op, dpopt_t *dop, fstate_t *fst)
 	/* Optimization: Don't reread from /dev/zero over and over ... */
 	if (!op->dosplice && !strcmp(op->iname, "/dev/zero")) {
 		if (!op->i_repeat && op->verbose)
-			fplog(stderr, INFO, "turning on repeat (-R) for /dev/zero\n");
+			fplog(stderr, !op->nocol, INFO, "turning on repeat (-R) for /dev/zero\n");
 		op->i_repeat = 1;
 		if (op->reverse && !op->init_ipos && op->maxxfer)
 			op->init_ipos = op->maxxfer > op->init_opos? op->init_opos: op->maxxfer;
@@ -2386,19 +2423,19 @@ void sanitize_and_prepare(opt_t *op, dpopt_t *dop, fstate_t *fst)
 	fst->identical = check_identical(op->iname, op->oname);
 
 	if (fst->identical && op->dotrunc && !op->force) {
-		fplog(stderr, FATAL, "infile and outfile are identical and trunc turned on!\n");
+		fplog(stderr, !op->nocol, FATAL, "infile and outfile are identical and trunc turned on!\n");
 		cleanup(); exit(14);
 	}
 
 	/* Open input and output files */
 	if (dop->prng_libc || dop->prng_frnd) {
-		init_random();
+		init_random(op, dop, dst);
 		fst->i_chr = 1; /* fst->ides = 0; */
 		op->dosplice = 0; op->sparse = 0;
 	} else {
 		fst->ides = openfile(op->iname, O_RDONLY | op->o_dir_in);
 		if (fst->ides < 0) {
-			fplog(stderr, FATAL, "could not open %s: %s\n", op->iname, strerror(errno));
+			fplog(stderr, !op->nocol, FATAL, "could not open %s: %s\n", op->iname, strerror(errno));
 			cleanup(); exit(22);
 		}
 	}
@@ -2422,23 +2459,23 @@ void sanitize_and_prepare(opt_t *op, dpopt_t *dop, fstate_t *fst)
 			a = toupper(fgetc(stdin)); //fprintf(stderr, "\n");
 		} while (a != 'Y' && a != 'N');
 		if (a == 'N') {
-			fplog(stderr, FATAL, "exit on user request!\n");
+			fplog(stderr, !op->nocol, FATAL, "exit on user request!\n");
 			cleanup(); exit(23);
 		}
 	}
 	if (fst->o_chr && op->avoidwrite) {
 		if (!strcmp(op->oname, "/dev/null")) {
-			fplog(stderr, INFO, "Avoid writes to /dev/null ...\n");
+			fplog(stderr, !op->nocol, INFO, "Avoid writes to /dev/null ...\n");
 			op->avoidnull = 1;
 		} else {
-			fplog(stderr, WARN, "Disabling -Write avoidance b/c ofile is not seekable\n");
+			fplog(stderr, !op->nocol, WARN, "Disabling -Write avoidance b/c ofile is not seekable\n");
 			op->avoidwrite = 0;
 		}
 	}
 		
 	/* Sanity checks for op->rmvtrim */
 	if ((fst->o_chr || fst->o_lnk || fst->o_blk) && op->rmvtrim) {
-		fplog(stderr, FATAL, "Can't delete output file when it's not a normal file\n");
+		fplog(stderr, !op->nocol, FATAL, "Can't delete output file when it's not a normal file\n");
 		cleanup(); exit(23);
 	}
 
@@ -2450,7 +2487,7 @@ void sanitize_and_prepare(opt_t *op, dpopt_t *dop, fstate_t *fst)
 			a = toupper(fgetc(stdin)); //fprintf(stderr, "\n");
 		} while (a != 'Y' && a != 'N');
 		if (a == 'N') {
-			fplog(stderr, FATAL, "exit on user request!\n");
+			fplog(stderr, !op->nocol, FATAL, "exit on user request!\n");
 			op->rmvtrim = 0;
 			cleanup(); exit(23);
 		}
@@ -2459,7 +2496,7 @@ void sanitize_and_prepare(opt_t *op, dpopt_t *dop, fstate_t *fst)
 	if (fst->odes != 1) {
 		if (op->avoidwrite) {
 			if (op->dotrunc) {
-				fplog(stderr, WARN, "Disable early trunc(-t) as we can't avoid writes otherwise.\n");
+				fplog(stderr, !op->nocol, WARN, "Disable early trunc(-t) as we can't avoid writes otherwise.\n");
 				op->dotrunc = 0;
 			}
 			fst->buf2 = zalloc_aligned_buf(op->softbs, &fst->origbuf2);
@@ -2469,7 +2506,7 @@ void sanitize_and_prepare(opt_t *op, dpopt_t *dop, fstate_t *fst)
 	}
 
 	if (fst->odes < 0) {
-		fplog(stderr, FATAL, "%s: %s\n", op->oname, strerror(errno));
+		fplog(stderr, !op->nocol, FATAL, "%s: %s\n", op->oname, strerror(errno));
 		cleanup(); exit(24);
 	}
 
@@ -2480,17 +2517,17 @@ void sanitize_and_prepare(opt_t *op, dpopt_t *dop, fstate_t *fst)
 	check_seekable(fst->odes, &fst->o_chr, "output");
 	
 	if (!op->extend)
-		sparse_output_warn();
+		sparse_output_warn(op, fst);
 	if (fst->o_chr) {
 		if (!op->nosparse)
-			fplog(stderr, WARN, "Not using sparse writes for non-seekable output\n");
+			fplog(stderr, !op->nocol, WARN, "Not using sparse writes for non-seekable output\n");
 		op->nosparse = 1; op->sparse = 0; op->dosplice = 0;
 		if (op->avoidwrite) {
 			if (!strcmp(op->oname, "/dev/null")) {
-				fplog(stderr, INFO, "Avoid writes to /dev/null ...\n");
+				fplog(stderr, !op->nocol, INFO, "Avoid writes to /dev/null ...\n");
 				op->avoidnull = 1;
 			} else {
-				fplog(stderr, WARN, "Disabling -Write avoidance b/c ofile is not seekable\n");
+				fplog(stderr, !op->nocol, WARN, "Disabling -Write avoidance b/c ofile is not seekable\n");
 				ZFREE(fst->origbuf2);
 				op->avoidwrite = 0;
 			}
@@ -2501,12 +2538,12 @@ void sanitize_and_prepare(opt_t *op, dpopt_t *dop, fstate_t *fst)
 	if (op->reverse && op->init_ipos == 0) {
 		op->init_ipos = lseek64(fst->ides, 0, SEEK_END);
 		if (op->init_ipos == -1) {
-			fplog(stderr, FATAL, "could not seek to end of file %s!\n", op->iname);
+			fplog(stderr, !op->nocol, FATAL, "could not seek to end of file %s!\n", op->iname);
 			perror("dd_rescue"); cleanup(); exit(19);
 		}
 		if (op->verbose) 
 			fprintf(stderr, DDR_INFO "ipos set to the end: %skiB\n", 
-			        fmt_kiB(op->init_ipos));
+			        fmt_kiB(op->init_ipos, !op->nocol));
 		/* if op->init_opos not set, assume same position */
 		if (op->init_opos == (loff_t)-INT_MAX) 
 			op->init_opos = op->init_ipos;
@@ -2514,7 +2551,7 @@ void sanitize_and_prepare(opt_t *op, dpopt_t *dop, fstate_t *fst)
 		if (op->init_opos == 0) {
 			op->init_opos = lseek64(fst->odes, 0, SEEK_END);
 			if (op->init_opos == (loff_t)-1) {
-				fplog(stderr, FATAL, "could not seek to end of file %s!\n", op->oname);
+				fplog(stderr, !op->nocol, FATAL, "could not seek to end of file %s!\n", op->oname);
 				perror("dd_rescue"); cleanup(); exit(19);
 			}
 			/* if existing empty, assume same position */
@@ -2522,7 +2559,7 @@ void sanitize_and_prepare(opt_t *op, dpopt_t *dop, fstate_t *fst)
 				op->init_opos = op->init_ipos;
 			if (op->verbose) 
 				fprintf(stderr, DDR_INFO "opos set to: %skiB\n",
-					fmt_kiB(op->init_opos));
+					fmt_kiB(op->init_opos, !op->nocol));
     		}
 	}
 
@@ -2531,75 +2568,75 @@ void sanitize_and_prepare(opt_t *op, dpopt_t *dop, fstate_t *fst)
 		op->init_opos = op->init_ipos;
 
 	if (fst->identical) {
-		fplog(stderr, WARN, "infile and outfile are identical!\n");
+		fplog(stderr, !op->nocol, WARN, "infile and outfile are identical!\n");
 		if (op->init_opos > op->init_ipos && !op->reverse && !op->force) {
-			fplog(stderr, WARN, "turned on reverse, as ipos < opos!\n");
+			fplog(stderr, !op->nocol, WARN, "turned on reverse, as ipos < opos!\n");
 			op->reverse = 1;
     		}
 		if (op->init_opos < op->init_ipos && op->reverse && !op->force) {
-			fplog(stderr, WARN, "turned off reverse, as opos < ipos!\n");
+			fplog(stderr, !op->nocol, WARN, "turned off reverse, as opos < ipos!\n");
 			op->reverse = 0;
 		}
   	}
 
 	if (fst->o_chr && op->init_opos != 0) {
 		if (op->force)
-			fplog(stderr, WARN, "ignore non-seekable output with opos != 0 due to --force\n");
+			fplog(stderr, !op->nocol, WARN, "ignore non-seekable output with opos != 0 due to --force\n");
 		else {
-			fplog(stderr, FATAL, "outfile not seekable, but opos !=0 requested!\n");
+			fplog(stderr, !op->nocol, FATAL, "outfile not seekable, but opos !=0 requested!\n");
 			cleanup(); exit(19);
 		}
 	}
 	if (fst->i_chr && op->init_ipos != 0) {
-		fplog(stderr, FATAL, "infile not seekable, but ipos !=0 requested!\n");
+		fplog(stderr, !op->nocol, FATAL, "infile not seekable, but ipos !=0 requested!\n");
 		cleanup(); exit(19);
 	}
 		
 	if (op->dosplice) {
 		if (!op->quiet)
-			fplog(stderr, INFO, "splice copy, ignoring -a, -r, -y, -R, -W\n");
+			fplog(stderr, !op->nocol, INFO, "splice copy, ignoring -a, -r, -y, -R, -W\n");
 		op->reverse = 0;
 	}
 
 	if (op->noextend || op->extend) {
-		if (output_length() == -1) {
-			fplog(stderr, FATAL, "asked to (not) extend output file but can't determine size\n");
+		if (output_length(op, fst) == -1) {
+			fplog(stderr, !op->nocol, FATAL, "asked to (not) extend output file but can't determine size\n");
 			cleanup(); exit(19);
 		}
 		if (op->extend)
 			op->init_opos += fst->olen;
 	}
-	input_length();
+	input_length(op, fst);
 
 	if (op->init_ipos < 0 || op->init_opos < 0) {
-		fplog(stderr, FATAL, "negative position requested (%skiB)\n", 
-			fmt_kiB(op->init_ipos));
+		fplog(stderr, !op->nocol, FATAL, "negative position requested (%skiB)\n", 
+			fmt_kiB(op->init_ipos, !op->nocol));
 		cleanup(); exit(25);
 	}
 
 #if defined(HAVE_FALLOCATE64) || defined(HAVE_LIBFALLOCATE)
 	if (op->falloc && !fst->o_chr)
-		do_fallocate(fst->odes, op->oname);
+		do_fallocate(fst->odes, op->oname, op, fst);
 #endif
 
 	if (op->verbose) {
-		printinfo(stderr);
+		printinfo(stderr, op);
 		if (logfd)
-			printinfo(logfd);
+			printinfo(logfd, op);
 	}
 
 	if (dop->bsim715 && op->avoidwrite) {
-		fplog(stderr, WARN, "won't avoid writes for -3\n");
+		fplog(stderr, !op->nocol, WARN, "won't avoid writes for -3\n");
 		op->avoidwrite = 0;
 		ZFREE(fst->buf2);
 	}
 	if (dop->bsim715 && fst->o_chr) {
-		fplog(stderr, WARN, "triple overwrite with non-seekable output!\n");
+		fplog(stderr, !op->nocol, WARN, "triple overwrite with non-seekable output!\n");
 	}
 	if (op->reverse && op->trunclast)
 		if (ftruncate(fst->odes, op->init_opos))
-			fplog(stderr, WARN, "Could not truncate %s to %skiB: %s!\n",
-				op->oname, fmt_kiB(op->init_opos), strerror(errno));
+			fplog(stderr, !op->nocol, WARN, "Could not truncate %s to %skiB: %s!\n",
+				op->oname, fmt_kiB(op->init_opos, !op->nocol), strerror(errno));
 
 }
 
@@ -2629,27 +2666,27 @@ int main(int argc, char* argv[])
 
 #ifdef USE_LIBDL
 	if (plugins)
-		load_plugins(plugins);
+		load_plugins(plugins, opts);
 	if (not_sparse && opts->sparse) {
-		fplog(stderr, FATAL, "not all plugins handle -a/--sparse!\n");
+		fplog(stderr, !opts->nocol, FATAL, "not all plugins handle -a/--sparse!\n");
 		exit(13);
 	}
 	if (not_sparse && !opts->nosparse) {
-		fplog(stderr, WARN, "some plugins don't handle sparse, enabled -A/--nosparse!\n");
+		fplog(stderr, !opts->nocol, WARN, "some plugins don't handle sparse, enabled -A/--nosparse!\n");
 		opts->nosparse = 1;
 	}
 	if (have_block_cb && opts->reverse) {
-		fplog(stderr, FATAL, "Plugins currently don't handle reverse\n");
+		fplog(stderr, !opts->nocol, FATAL, "Plugins currently don't handle reverse\n");
 		exit(13);
 	}
 	if (have_block_cb && opts->dosplice) {
-		fplog(stderr, FATAL, "Plugins can't handle splice\n");
+		fplog(stderr, !opts->nocol, FATAL, "Plugins can't handle splice\n");
 		exit(13);
 	}
 #endif
 
 	if (!opts->iname || !opts->oname) {
-		fplog(stderr, FATAL, "both input and output files have to be specified!\n");
+		fplog(stderr, !opts->nocol, FATAL, "both input and output files have to be specified!\n");
 		shortusage();
 		exit(12);
 	}
@@ -2659,7 +2696,7 @@ int main(int argc, char* argv[])
 		logfd = fdopen(fd, "a");
 	}
 
-	sanitize_and_prepare(opts, dpopts, fstate);
+	sanitize_and_prepare(opts, dpopts, fstate, dpstate, progress);
 
 	LISTTYPE(ofile_t) *of;
 	LISTFOREACH(ofiles, of) {
@@ -2668,19 +2705,19 @@ int main(int argc, char* argv[])
 		oft->name = dirappfile(oft->name);
 		id = check_identical(opts->iname, oft->name);
 		if (id)
-			fplog(stderr, WARN, "Input file and secondary output file %s are identical!\n", oft->name);
+			fplog(stderr, !opts->nocol, WARN, "Input file and secondary output file %s are identical!\n", oft->name);
 		oft->fd = openfile(oft->name, (opts->avoidwrite? O_RDWR: O_WRONLY) | O_CREAT | opts->o_dir_out | opts->dotrunc);
 		check_seekable(oft->fd, &(oft->cdev), NULL);
 		if (opts->preserve)
 			copyperm(fstate->ides, oft->fd);
 #if defined(HAVE_FALLOCATE64) || defined(HAVE_LIBFALLOCATE)
 		if (opts->falloc && !oft->cdev)
-			do_fallocate(oft->fd, oft->name);
+			do_fallocate(oft->fd, oft->name, opts, fstate);
 #endif
 		if (opts->reverse && opts->trunclast)
 			if (ftruncate(oft->fd, opts->init_opos))
-				fplog(stderr, WARN, "Could not truncate %s to %skiB: %s!\n",
-					oft->name, fmt_kiB(opts->init_opos), strerror(errno));
+				fplog(stderr, !opts->nocol, WARN, "Could not truncate %s to %skiB: %s!\n",
+					oft->name, fmt_kiB(opts->init_opos, !opts->nocol), strerror(errno));
 	}
 
 	/* Install signal handler */
@@ -2701,35 +2738,35 @@ int main(int argc, char* argv[])
 
 	if (!opts->quiet) {
 		scrollup = 0;
-		printstatus(stderr, 0, opts->softbs, 0);
+		printstatus(stderr, 0, opts->softbs, 0, opts, fstate, progress);
 	}
 
 	if (dpopts->bsim715) {
-		err = tripleoverwrite(opts->maxxfer);
+		err = tripleoverwrite(opts->maxxfer, opts, fstate, progress, repeat, dpopts, dpstate);
 	} else {
-		fadvise(0);
+		fadvise(0, opts, fstate, progress);
 #ifdef HAVE_SPLICE
 		if (opts->dosplice)
-			err = copyfile_splice(opts->maxxfer);
+			err = copyfile_splice(opts->maxxfer, opts, fstate, progress, repeat, dpopts, dpstate);
 		else 
 #endif
 		{
-			call_plugins_open();
+			call_plugins_open(opts, fstate);
 			if (opts->softbs > opts->hardbs)
-				err = copyfile_softbs(opts->maxxfer);
+				err = copyfile_softbs(opts->maxxfer, opts, fstate, progress, repeat, dpopts, dpstate);
 			else
-				err = copyfile_hardbs(opts->maxxfer);
+				err = copyfile_hardbs(opts->maxxfer, opts, fstate, progress, repeat, dpopts, dpstate);
 		}
 	}
 
 	gettimeofday(&currenttime, NULL);
-	printreport();
-	fadvise(1);
+	printreport(opts, fstate, progress);
+	fadvise(1, opts, fstate, progress);
 	err += cleanup();
 	if (int_by == SIGQUIT)
 		++err;
 	if (err && opts->verbose)
-		fplog(stderr, WARN, "There were %i errors! \n", err);
+		fplog(stderr, !opts->nocol, WARN, "There were %i errors! \n", err);
 	if (interrupted && int_by != SIGQUIT)
 		return 128+int_by;
 	else

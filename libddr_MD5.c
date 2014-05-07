@@ -8,6 +8,7 @@
  */
 
 #include "ddr_plugin.h"
+#include "ddr_ctrl.h"
 #include "md5.h"
 
 #include <stdlib.h>
@@ -24,7 +25,7 @@
 #endif
 
 #define FPLOG(lvl, fmt, args...) \
-	ddr_plug.fplog(stderr, lvl, "MD5(%i): " fmt, state->seq, ##args)
+	ddr_plug.fplog(stderr, (state->opts? !state->opts->nocol: 0), lvl, "MD5(%i): " fmt, state->seq, ##args)
 
 /* fwd decl */
 extern ddr_plugin_t ddr_plug;
@@ -40,19 +41,21 @@ typedef struct _md5_state {
 	int outfd;
 	unsigned char buflen;
 	unsigned char olnchg;
+	const opt_t *opts;
 } md5_state;
 
 const char *md5_help = "The MD5 plugin for dd_rescue calculates the md5sum on the fly.\n"
 		" It supports unaligned blocks (arbitrary offsets) and sparse writing.\n"
 		" Parameters: output/outfd=FNO\n";
 
-int md5_plug_init(void **stat, char* param, int seq)
+int md5_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 {
 	int err = 0;
 	md5_state *state = (md5_state*)malloc(sizeof(md5_state));
 	*stat = (void*)state;
 	memset(state, 0, sizeof(md5_state));
 	state->seq = seq;
+	state->opts = opt;
 	while (param) {
 		char* next = strchr(param, ':');
 		if (next)

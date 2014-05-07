@@ -14,14 +14,14 @@
 #include <stdio.h>
 
 //#include "ddr_ctrl.h"
-typedef struct _opts_t opts_t;
+typedef struct _opt_t opt_t;
 typedef struct _fstate_t fstate_t;
 typedef struct _progress_t progress_t;
 
 /** init callback parameters:
  * opaque handle, parameters from commandline, sequece in filter chain
  */
-typedef int (_init_callback)(void **stat, char* param, int seq);
+typedef int (_init_callback)(void **stat, char* param, int seq, const opt_t *opt);
 /** open_callback parameters: input file descriptor, input file name,
  * 	initial offset input file, same 3 params for output file,
  * 	soft (large) block size, hard (fallback) block size,
@@ -51,8 +51,8 @@ typedef unsigned char* (_block_callback)(unsigned char* bf, int *towr,
 typedef int (_close_callback)(loff_t ooff, void **stat);
 
 enum ddrlog_t { NOHDR=0, INFO, WARN, FATAL };
-typedef int (_fplog_callback)(FILE* const f, enum ddrlog_t logpre, 
-				const char* const fmt, ...);
+typedef int (_fplog_upcall)(FILE* const f, char col, enum ddrlog_t logpre, 
+			    const char* const fmt, ...);
 
 typedef struct _ddr_plugin {
 	/* Name of the plugin -- will be filled by loader if left empty */
@@ -79,7 +79,7 @@ typedef struct _ddr_plugin {
 	/* Will be called before fsyncing and closing the output file */
 	_close_callback *close_callback;
 	/* Callback filled by the loader: Logging */
-	_fplog_callback *fplog;
+	_fplog_upcall *fplog;
 	/* Filled by loader: Parameters */
 	char* param;
 } ddr_plugin_t;

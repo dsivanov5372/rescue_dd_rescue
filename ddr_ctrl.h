@@ -44,7 +44,7 @@ typedef struct _fstate_t {
 	loff_t ipos, opos;
 	int ides, odes;
 	unsigned char *buf, *buf2, *origbuf, *origbuf2;
-	loff_t ilen, olen;
+	loff_t ilen, olen, estxfer;
 	char i_chr, o_chr, o_blk, o_lnk;
 	int nrerr;
 	unsigned int pagesize;
@@ -53,7 +53,7 @@ typedef struct _fstate_t {
 
 /* Progress */
 typedef struct _progress_t {
-	loff_t xfer, lxfer, sxfer, fxfer, axfer, estxfer;
+	loff_t xfer, lxfer, sxfer, fxfer, axfer;
 } progress_t;
 
 /* Repeat zero optimization */
