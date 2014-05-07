@@ -2215,16 +2215,11 @@ char* parse_opts(int argc, char* argv[], opt_t *op, dpopt_t *dop)
 	loff_t syncsz = -1;
 	
   	/* defaults */
-	memset(opts, 0, sizeof(opt_t));
-	memset(dpopts, 0, sizeof(dpopt_t));
-	memset(dpstate, 0, sizeof(dpstate_t));
-	memset(fstate, 0, sizeof(fstate_t));
-	memset(progress, 0, sizeof(progress_t));
-	memset(repeat, 0, sizeof(repeat_t));
+	memset(op, 0, sizeof(opt_t));
+	memset(dop, 0, sizeof(dpopt_t));
+
 	op->init_ipos = (loff_t)-INT_MAX; 
 	op->init_opos = (loff_t)-INT_MAX; 
-
-	fstate->ides = -1; fstate->odes = -1;
 
 	op->nocol = test_nocolor_term();
 
@@ -2354,10 +2349,268 @@ char* parse_opts(int argc, char* argv[], opt_t *op, dpopt_t *dop)
 	return plugins;
 }
 
+/** Check passed options for sanity,
+ *  fill in defaults (positions, names, ...)
+ *  open files
+ *  copy permissions (opt)
+ *  fallocate (opt)
+ *  truncate output file (opt)
+ */
 
+void sanitize_and_prepare(opt_t *op, dpopt_t *dop, fstate_t *fst)
+{
+	/* Have those been set by cmdline params? */
+	if (op->init_ipos == (loff_t)-INT_MAX)
+		op->init_ipos = 0;
+
+	if (op->dosplice && op->avoidwrite) {
+		fplog(stderr, WARN, "disable write avoidance (-W) for splice copy\n");
+		op->avoidwrite = 0;
+	}
+	max_slack_pre  += -max_neg_slack_pre *((op->softbs+15)/16);
+	max_slack_post += -max_neg_slack_post*((op->softbs+15)/16);
+	fst->buf = zalloc_aligned_buf(op->softbs, &fst->origbuf);
+
+	/* Optimization: Don't reread from /dev/zero over and over ... */
+	if (!op->dosplice && !strcmp(op->iname, "/dev/zero")) {
+		if (!op->i_repeat && op->verbose)
+			fplog(stderr, INFO, "turning on repeat (-R) for /dev/zero\n");
+		op->i_repeat = 1;
+		if (op->reverse && !op->init_ipos && op->maxxfer)
+			op->init_ipos = op->maxxfer > op->init_opos? op->init_opos: op->maxxfer;
+	}
+
+	/* Properly append input basename if output name is dir */
+	op->oname = dirappfile(op->oname);
+
+	fst->identical = check_identical(op->iname, op->oname);
+
+	if (fst->identical && op->dotrunc && !op->force) {
+		fplog(stderr, FATAL, "infile and outfile are identical and trunc turned on!\n");
+		cleanup(); exit(14);
+	}
+
+	/* Open input and output files */
+	if (dop->prng_libc || dop->prng_frnd) {
+		init_random();
+		fst->i_chr = 1; /* fst->ides = 0; */
+		op->dosplice = 0; op->sparse = 0;
+	} else {
+		fst->ides = openfile(op->iname, O_RDONLY | op->o_dir_in);
+		if (fst->ides < 0) {
+			fplog(stderr, FATAL, "could not open %s: %s\n", op->iname, strerror(errno));
+			cleanup(); exit(22);
+		}
+	}
+	/* Overwrite? */
+	/* Special case '-': stdout */
+	if (strcmp(op->oname, "-"))
+		fst->odes = open64(op->oname, O_WRONLY | op->o_dir_out, 0640);
+	else {
+		fst->odes = 1;
+		fst->o_chr = 1;
+	}
+
+	if (fst->odes > 1) 
+		close(fst->odes);
+
+	if (fst->odes > 1 && op->interact) {
+		int a;
+		do {
+			fprintf(stderr, "dd_rescue: (question): %s existing %s [y/n]? ", 
+				(op->dotrunc? "Overwrite": "Write into"), op->oname);
+			a = toupper(fgetc(stdin)); //fprintf(stderr, "\n");
+		} while (a != 'Y' && a != 'N');
+		if (a == 'N') {
+			fplog(stderr, FATAL, "exit on user request!\n");
+			cleanup(); exit(23);
+		}
+	}
+	if (fst->o_chr && op->avoidwrite) {
+		if (!strcmp(op->oname, "/dev/null")) {
+			fplog(stderr, INFO, "Avoid writes to /dev/null ...\n");
+			op->avoidnull = 1;
+		} else {
+			fplog(stderr, WARN, "Disabling -Write avoidance b/c ofile is not seekable\n");
+			op->avoidwrite = 0;
+		}
+	}
+		
+	/* Sanity checks for op->rmvtrim */
+	if ((fst->o_chr || fst->o_lnk || fst->o_blk) && op->rmvtrim) {
+		fplog(stderr, FATAL, "Can't delete output file when it's not a normal file\n");
+		cleanup(); exit(23);
+	}
+
+	if (op->rmvtrim && !(op->i_repeat || dop->prng_libc || dop->prng_frnd || op->force)) {
+		int a;
+		do {
+			fprintf(stderr, "dd_rescue: (question): really remove %s at the end [y/n]? ",
+				op->oname);
+			a = toupper(fgetc(stdin)); //fprintf(stderr, "\n");
+		} while (a != 'Y' && a != 'N');
+		if (a == 'N') {
+			fplog(stderr, FATAL, "exit on user request!\n");
+			op->rmvtrim = 0;
+			cleanup(); exit(23);
+		}
+	}
+
+	if (fst->odes != 1) {
+		if (op->avoidwrite) {
+			if (op->dotrunc) {
+				fplog(stderr, WARN, "Disable early trunc(-t) as we can't avoid writes otherwise.\n");
+				op->dotrunc = 0;
+			}
+			fst->buf2 = zalloc_aligned_buf(op->softbs, &fst->origbuf2);
+			fst->odes = openfile(op->oname, O_RDWR | O_CREAT | op->o_dir_out /*| O_EXCL*/);
+		} else
+			fst->odes = openfile(op->oname, O_WRONLY | O_CREAT | op->o_dir_out /*| O_EXCL*/ | op->dotrunc);
+	}
+
+	if (fst->odes < 0) {
+		fplog(stderr, FATAL, "%s: %s\n", op->oname, strerror(errno));
+		cleanup(); exit(24);
+	}
+
+	if (op->preserve)
+		copyperm(fst->ides, fst->odes);
+			
+	check_seekable(fst->ides, &fst->i_chr, "input");
+	check_seekable(fst->odes, &fst->o_chr, "output");
+	
+	if (!op->extend)
+		sparse_output_warn();
+	if (fst->o_chr) {
+		if (!op->nosparse)
+			fplog(stderr, WARN, "Not using sparse writes for non-seekable output\n");
+		op->nosparse = 1; op->sparse = 0; op->dosplice = 0;
+		if (op->avoidwrite) {
+			if (!strcmp(op->oname, "/dev/null")) {
+				fplog(stderr, INFO, "Avoid writes to /dev/null ...\n");
+				op->avoidnull = 1;
+			} else {
+				fplog(stderr, WARN, "Disabling -Write avoidance b/c ofile is not seekable\n");
+				ZFREE(fst->origbuf2);
+				op->avoidwrite = 0;
+			}
+		}
+	}
+
+	/* special case: op->reverse with op->init_ipos == 0 means op->init_ipos = EOF */
+	if (op->reverse && op->init_ipos == 0) {
+		op->init_ipos = lseek64(fst->ides, 0, SEEK_END);
+		if (op->init_ipos == -1) {
+			fplog(stderr, FATAL, "could not seek to end of file %s!\n", op->iname);
+			perror("dd_rescue"); cleanup(); exit(19);
+		}
+		if (op->verbose) 
+			fprintf(stderr, DDR_INFO "ipos set to the end: %skiB\n", 
+			        fmt_kiB(op->init_ipos));
+		/* if op->init_opos not set, assume same position */
+		if (op->init_opos == (loff_t)-INT_MAX) 
+			op->init_opos = op->init_ipos;
+		/* if explicitly set to zero, assume end of _existing_ file */
+		if (op->init_opos == 0) {
+			op->init_opos = lseek64(fst->odes, 0, SEEK_END);
+			if (op->init_opos == (loff_t)-1) {
+				fplog(stderr, FATAL, "could not seek to end of file %s!\n", op->oname);
+				perror("dd_rescue"); cleanup(); exit(19);
+			}
+			/* if existing empty, assume same position */
+			if (op->init_opos == 0)
+				op->init_opos = op->init_ipos;
+			if (op->verbose) 
+				fprintf(stderr, DDR_INFO "opos set to: %skiB\n",
+					fmt_kiB(op->init_opos));
+    		}
+	}
+
+	/* if op->init_opos not set, assume same position */
+	if (op->init_opos == (loff_t)-INT_MAX)
+		op->init_opos = op->init_ipos;
+
+	if (fst->identical) {
+		fplog(stderr, WARN, "infile and outfile are identical!\n");
+		if (op->init_opos > op->init_ipos && !op->reverse && !op->force) {
+			fplog(stderr, WARN, "turned on reverse, as ipos < opos!\n");
+			op->reverse = 1;
+    		}
+		if (op->init_opos < op->init_ipos && op->reverse && !op->force) {
+			fplog(stderr, WARN, "turned off reverse, as opos < ipos!\n");
+			op->reverse = 0;
+		}
+  	}
+
+	if (fst->o_chr && op->init_opos != 0) {
+		if (op->force)
+			fplog(stderr, WARN, "ignore non-seekable output with opos != 0 due to --force\n");
+		else {
+			fplog(stderr, FATAL, "outfile not seekable, but opos !=0 requested!\n");
+			cleanup(); exit(19);
+		}
+	}
+	if (fst->i_chr && op->init_ipos != 0) {
+		fplog(stderr, FATAL, "infile not seekable, but ipos !=0 requested!\n");
+		cleanup(); exit(19);
+	}
+		
+	if (op->dosplice) {
+		if (!op->quiet)
+			fplog(stderr, INFO, "splice copy, ignoring -a, -r, -y, -R, -W\n");
+		op->reverse = 0;
+	}
+
+	if (op->noextend || op->extend) {
+		if (output_length() == -1) {
+			fplog(stderr, FATAL, "asked to (not) extend output file but can't determine size\n");
+			cleanup(); exit(19);
+		}
+		if (op->extend)
+			op->init_opos += fst->olen;
+	}
+	input_length();
+
+	if (op->init_ipos < 0 || op->init_opos < 0) {
+		fplog(stderr, FATAL, "negative position requested (%skiB)\n", 
+			fmt_kiB(op->init_ipos));
+		cleanup(); exit(25);
+	}
+
+#if defined(HAVE_FALLOCATE64) || defined(HAVE_LIBFALLOCATE)
+	if (op->falloc && !fst->o_chr)
+		do_fallocate(fst->odes, op->oname);
+#endif
+
+	if (op->verbose) {
+		printinfo(stderr);
+		if (logfd)
+			printinfo(logfd);
+	}
+
+	if (dop->bsim715 && op->avoidwrite) {
+		fplog(stderr, WARN, "won't avoid writes for -3\n");
+		op->avoidwrite = 0;
+		ZFREE(fst->buf2);
+	}
+	if (dop->bsim715 && fst->o_chr) {
+		fplog(stderr, WARN, "triple overwrite with non-seekable output!\n");
+	}
+	if (op->reverse && op->trunclast)
+		if (ftruncate(fst->odes, op->init_opos))
+			fplog(stderr, WARN, "Could not truncate %s to %skiB: %s!\n",
+				op->oname, fmt_kiB(op->init_opos), strerror(errno));
+
+}
 
 int main(int argc, char* argv[])
 {
+	memset(dpstate, 0, sizeof(dpstate_t));
+	memset(fstate, 0, sizeof(fstate_t));
+	memset(progress, 0, sizeof(progress_t));
+	memset(repeat, 0, sizeof(repeat_t));
+	
+	fstate->ides = -1; fstate->odes = -1;
 
 	detect_cpu_cap();
 #ifdef _SC_PAGESIZE
@@ -2406,248 +2659,7 @@ int main(int argc, char* argv[])
 		logfd = fdopen(fd, "a");
 	}
 
-	/* Have those been set by cmdline params? */
-	if (opts->init_ipos == (loff_t)-INT_MAX)
-		opts->init_ipos = 0;
-
-	if (opts->dosplice && opts->avoidwrite) {
-		fplog(stderr, WARN, "disable write avoidance (-W) for splice copy\n");
-		opts->avoidwrite = 0;
-	}
-	max_slack_pre  += -max_neg_slack_pre *((opts->softbs+15)/16);
-	max_slack_post += -max_neg_slack_post*((opts->softbs+15)/16);
-	fstate->buf = zalloc_aligned_buf(opts->softbs, &fstate->origbuf);
-
-	/* Optimization: Don't reread from /dev/zero over and over ... */
-	if (!opts->dosplice && !strcmp(opts->iname, "/dev/zero")) {
-		if (!opts->i_repeat && opts->verbose)
-			fplog(stderr, INFO, "turning on repeat (-R) for /dev/zero\n");
-		opts->i_repeat = 1;
-		if (opts->reverse && !opts->init_ipos && opts->maxxfer)
-			opts->init_ipos = opts->maxxfer > opts->init_opos? opts->init_opos: opts->maxxfer;
-	}
-
-	/* Properly append input basename if output name is dir */
-	opts->oname = dirappfile(opts->oname);
-
-	fstate->identical = check_identical(opts->iname, opts->oname);
-
-	if (fstate->identical && opts->dotrunc && !opts->force) {
-		fplog(stderr, FATAL, "infile and outfile are identical and trunc turned on!\n");
-		cleanup(); exit(14);
-	}
-
-	/* Open input and output files */
-	if (dpopts->prng_libc || dpopts->prng_frnd) {
-		init_random();
-		fstate->i_chr = 1; /* fstate->ides = 0; */
-		opts->dosplice = 0; opts->sparse = 0;
-	} else {
-		fstate->ides = openfile(opts->iname, O_RDONLY | opts->o_dir_in);
-		if (fstate->ides < 0) {
-			fplog(stderr, FATAL, "could not open %s: %s\n", opts->iname, strerror(errno));
-			cleanup(); exit(22);
-		}
-	}
-	/* Overwrite? */
-	/* Special case '-': stdout */
-	if (strcmp(opts->oname, "-"))
-		fstate->odes = open64(opts->oname, O_WRONLY | opts->o_dir_out, 0640);
-	else {
-		fstate->odes = 1;
-		fstate->o_chr = 1;
-	}
-
-	if (fstate->odes > 1) 
-		close(fstate->odes);
-
-	if (fstate->odes > 1 && opts->interact) {
-		int a;
-		do {
-			fprintf(stderr, "dd_rescue: (question): %s existing %s [y/n]? ", 
-				(opts->dotrunc? "Overwrite": "Write into"), opts->oname);
-			a = toupper(fgetc(stdin)); //fprintf(stderr, "\n");
-		} while (a != 'Y' && a != 'N');
-		if (a == 'N') {
-			fplog(stderr, FATAL, "exit on user request!\n");
-			cleanup(); exit(23);
-		}
-	}
-	if (fstate->o_chr && opts->avoidwrite) {
-		if (!strcmp(opts->oname, "/dev/null")) {
-			fplog(stderr, INFO, "Avoid writes to /dev/null ...\n");
-			opts->avoidnull = 1;
-		} else {
-			fplog(stderr, WARN, "Disabling -Write avoidance b/c ofile is not seekable\n");
-			opts->avoidwrite = 0;
-		}
-	}
-		
-	/* Sanity checks for opts->rmvtrim */
-	if ((fstate->o_chr || fstate->o_lnk || fstate->o_blk) && opts->rmvtrim) {
-		fplog(stderr, FATAL, "Can't delete output file when it's not a normal file\n");
-		cleanup(); exit(23);
-	}
-
-	if (opts->rmvtrim && !(opts->i_repeat || dpopts->prng_libc || dpopts->prng_frnd || opts->force)) {
-		int a;
-		do {
-			fprintf(stderr, "dd_rescue: (question): really remove %s at the end [y/n]? ",
-				opts->oname);
-			a = toupper(fgetc(stdin)); //fprintf(stderr, "\n");
-		} while (a != 'Y' && a != 'N');
-		if (a == 'N') {
-			fplog(stderr, FATAL, "exit on user request!\n");
-			opts->rmvtrim = 0;
-			cleanup(); exit(23);
-		}
-	}
-
-	if (fstate->odes != 1) {
-		if (opts->avoidwrite) {
-			if (opts->dotrunc) {
-				fplog(stderr, WARN, "Disable early trunc(-t) as we can't avoid writes otherwise.\n");
-				opts->dotrunc = 0;
-			}
-			fstate->buf2 = zalloc_aligned_buf(opts->softbs, &fstate->origbuf2);
-			fstate->odes = openfile(opts->oname, O_RDWR | O_CREAT | opts->o_dir_out /*| O_EXCL*/);
-		} else
-			fstate->odes = openfile(opts->oname, O_WRONLY | O_CREAT | opts->o_dir_out /*| O_EXCL*/ | opts->dotrunc);
-	}
-
-	if (fstate->odes < 0) {
-		fplog(stderr, FATAL, "%s: %s\n", opts->oname, strerror(errno));
-		cleanup(); exit(24);
-	}
-
-	if (opts->preserve)
-		copyperm(fstate->ides, fstate->odes);
-			
-	check_seekable(fstate->ides, &fstate->i_chr, "input");
-	check_seekable(fstate->odes, &fstate->o_chr, "output");
-	
-	if (!opts->extend)
-		sparse_output_warn();
-	if (fstate->o_chr) {
-		if (!opts->nosparse)
-			fplog(stderr, WARN, "Not using sparse writes for non-seekable output\n");
-		opts->nosparse = 1; opts->sparse = 0; opts->dosplice = 0;
-		if (opts->avoidwrite) {
-			if (!strcmp(opts->oname, "/dev/null")) {
-				fplog(stderr, INFO, "Avoid writes to /dev/null ...\n");
-				opts->avoidnull = 1;
-			} else {
-				fplog(stderr, WARN, "Disabling -Write avoidance b/c ofile is not seekable\n");
-				ZFREE(fstate->origbuf2);
-				opts->avoidwrite = 0;
-			}
-		}
-	}
-
-	/* special case: opts->reverse with opts->init_ipos == 0 means opts->init_ipos = EOF */
-	if (opts->reverse && opts->init_ipos == 0) {
-		opts->init_ipos = lseek64(fstate->ides, 0, SEEK_END);
-		if (opts->init_ipos == -1) {
-			fplog(stderr, FATAL, "could not seek to end of file %s!\n", opts->iname);
-			perror("dd_rescue"); cleanup(); exit(19);
-		}
-		if (opts->verbose) 
-			fprintf(stderr, DDR_INFO "ipos set to the end: %skiB\n", 
-			        fmt_kiB(opts->init_ipos));
-		/* if opts->init_opos not set, assume same position */
-		if (opts->init_opos == (loff_t)-INT_MAX) 
-			opts->init_opos = opts->init_ipos;
-		/* if explicitly set to zero, assume end of _existing_ file */
-		if (opts->init_opos == 0) {
-			opts->init_opos = lseek64(fstate->odes, 0, SEEK_END);
-			if (opts->init_opos == (loff_t)-1) {
-				fplog(stderr, FATAL, "could not seek to end of file %s!\n", opts->oname);
-				perror("dd_rescue"); cleanup(); exit(19);
-			}
-			/* if existing empty, assume same position */
-			if (opts->init_opos == 0)
-				opts->init_opos = opts->init_ipos;
-			if (opts->verbose) 
-				fprintf(stderr, DDR_INFO "opos set to: %skiB\n",
-					fmt_kiB(opts->init_opos));
-    		}
-	}
-
-	/* if opts->init_opos not set, assume same position */
-	if (opts->init_opos == (loff_t)-INT_MAX)
-		opts->init_opos = opts->init_ipos;
-
-	if (fstate->identical) {
-		fplog(stderr, WARN, "infile and outfile are identical!\n");
-		if (opts->init_opos > opts->init_ipos && !opts->reverse && !opts->force) {
-			fplog(stderr, WARN, "turned on reverse, as ipos < opos!\n");
-			opts->reverse = 1;
-    		}
-		if (opts->init_opos < opts->init_ipos && opts->reverse && !opts->force) {
-			fplog(stderr, WARN, "turned off reverse, as opos < ipos!\n");
-			opts->reverse = 0;
-		}
-  	}
-
-	if (fstate->o_chr && opts->init_opos != 0) {
-		if (opts->force)
-			fplog(stderr, WARN, "ignore non-seekable output with opos != 0 due to --force\n");
-		else {
-			fplog(stderr, FATAL, "outfile not seekable, but opos !=0 requested!\n");
-			cleanup(); exit(19);
-		}
-	}
-	if (fstate->i_chr && opts->init_ipos != 0) {
-		fplog(stderr, FATAL, "infile not seekable, but ipos !=0 requested!\n");
-		cleanup(); exit(19);
-	}
-		
-	if (opts->dosplice) {
-		if (!opts->quiet)
-			fplog(stderr, INFO, "splice copy, ignoring -a, -r, -y, -R, -W\n");
-		opts->reverse = 0;
-	}
-
-	if (opts->noextend || opts->extend) {
-		if (output_length() == -1) {
-			fplog(stderr, FATAL, "asked to (not) extend output file but can't determine size\n");
-			cleanup(); exit(19);
-		}
-		if (opts->extend)
-			opts->init_opos += fstate->olen;
-	}
-	input_length();
-
-	if (opts->init_ipos < 0 || opts->init_opos < 0) {
-		fplog(stderr, FATAL, "negative position requested (%skiB)\n", 
-			fmt_kiB(opts->init_ipos));
-		cleanup(); exit(25);
-	}
-
-
-#if defined(HAVE_FALLOCATE64) || defined(HAVE_LIBFALLOCATE)
-	if (opts->falloc && !fstate->o_chr)
-		do_fallocate(fstate->odes, opts->oname);
-#endif
-
-	if (opts->verbose) {
-		printinfo(stderr);
-		if (logfd)
-			printinfo(logfd);
-	}
-
-	if (dpopts->bsim715 && opts->avoidwrite) {
-		fplog(stderr, WARN, "won't avoid writes for -3\n");
-		opts->avoidwrite = 0;
-		ZFREE(fstate->buf2);
-	}
-	if (dpopts->bsim715 && fstate->o_chr) {
-		fplog(stderr, WARN, "triple overwrite with non-seekable output!\n");
-	}
-	if (opts->reverse && opts->trunclast)
-		if (ftruncate(fstate->odes, opts->init_opos))
-			fplog(stderr, WARN, "Could not truncate %s to %skiB: %s!\n",
-				opts->oname, fmt_kiB(opts->init_opos), strerror(errno));
+	sanitize_and_prepare(opts, dpopts, fstate);
 
 	LISTTYPE(ofile_t) *of;
 	LISTFOREACH(ofiles, of) {
