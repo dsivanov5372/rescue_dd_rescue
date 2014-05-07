@@ -113,16 +113,16 @@ configure: configure.in
 config.h.in: configure.in
 	autoheader
 
-frandom.o: frandom.c frandom.h config.h
+frandom.o: frandom.c frandom.h config.h ddr_ctrl.h
 	$(CC) $(CFLAGS_OPT) -c $<
 
-fmt_no.o: fmt_no.c fmt_no.h config.h
+fmt_no.o: fmt_no.c fmt_no.h config.h ddr_ctrl.h
 	$(CC) $(CFLAGS_OPT) -c $<
 
-%.o: %.c %.h config.h
+%.o: %.c %.h config.h ddr_ctrl.h
 	$(CC) $(CFLAGS) -c $<
 
-%.po: %.c ddr_plugin.h config.h
+%.po: %.c ddr_plugin.h config.h ddr_ctrl.h
 	$(CC) $(CFLAGS) -fPIC -o $@ -c $<
 
 md5.po: md5.c md5.h config.h

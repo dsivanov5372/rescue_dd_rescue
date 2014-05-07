@@ -121,6 +121,7 @@
 #include "fstrim.h"
 
 #include "ddr_plugin.h"
+#include "ddr_ctrl.h"
 
 #ifdef HAVE_GETOPT_LONG
 #include <getopt.h>
@@ -191,66 +192,25 @@ void* libfalloc = (void*)0;
 int cleanup();
 
 /* Options */
-typedef struct {
-	const char *iname, *oname, *lname, *bbname;
-	loff_t init_ipos, init_opos;
-	loff_t maxxfer;
-	unsigned int softbs, hardbs, syncfreq;
-	/* Flags */
-	int o_dir_in, o_dir_out;
-	int dotrunc;
-	int maxerr;
-	char trunclast, reverse, abwrerr, sparse, nosparse;
-	char verbose, quiet, interact, force, nocol;
-	char preserve, falloc, dosplice;
-	char noextend, avoidwrite, avoidnull;
-	char extend, rmvtrim, i_repeat;
-} opt_t;
 static opt_t _opts;
 opt_t *opts = &_opts;
 
 /* Data protection */
-typedef struct {
-	char* prng_sfile;
-	int  prng_seed;
-	char prng_libc, prng_frnd;
-	char bsim715, bsim715_4, bsim715_2, bsim715_2ndpass;
-} dpopt_t;
 static dpopt_t _dpopts;
 dpopt_t *dpopts = &_dpopts;
 
-typedef struct {
-	void *prng_state, *prng_state2;
-} dpstate_t;
 static dpstate_t _dpstate;
 dpstate_t *dpstate = &_dpstate;
 
 /* State */
-typedef struct {
-	loff_t ipos, opos;
-	int ides, odes;
-	unsigned char *buf, *buf2, *origbuf, *origbuf2;
-	loff_t ilen, olen;
-	char i_chr, o_chr, o_blk, o_lnk;
-	int nrerr;
-	unsigned int pagesize;
-	char identical;
-} fstate_t;
 static fstate_t _fstate;
 fstate_t *fstate = &_fstate;
 
 /* Progress */
-typedef struct {
-	loff_t xfer, lxfer, sxfer, fxfer, axfer, estxfer;
-} progress_t;
 static progress_t _progress;
 progress_t *progress = &_progress;
 
 /* Repeat zero optimization */
-typedef struct {
-	size_t i_rep_zero;
-	char i_rep_init;
-} repeat_t;
 static repeat_t _repeat;
 repeat_t *repeat = &_repeat;
 

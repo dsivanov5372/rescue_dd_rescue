@@ -13,6 +13,10 @@
 #include <sys/types.h>
 #include <stdio.h>
 
+//#include "ddr_ctrl.h"
+typedef struct _opts_t opts_t;
+typedef struct _fstate_t fstate_t;
+typedef struct _progress_t progress_t;
 
 /** init callback parameters:
  * opaque handle, parameters from commandline, sequece in filter chain
