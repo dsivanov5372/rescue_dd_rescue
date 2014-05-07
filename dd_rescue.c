@@ -2208,12 +2208,12 @@ char test_nocolor_term()
 	return 0;
 }
 
-int main(int argc, char* argv[])
+char* parse_opts(int argc, char* argv[], opt_t *op, dpopt_t *dop)
 {
 	int c;
 	char* plugins = NULL;
 	loff_t syncsz = -1;
-
+	
   	/* defaults */
 	memset(opts, 0, sizeof(opt_t));
 	memset(dpopts, 0, sizeof(dpopt_t));
@@ -2221,17 +2221,145 @@ int main(int argc, char* argv[])
 	memset(fstate, 0, sizeof(fstate_t));
 	memset(progress, 0, sizeof(progress_t));
 	memset(repeat, 0, sizeof(repeat_t));
-	opts->init_ipos = (loff_t)-INT_MAX; 
-	opts->init_opos = (loff_t)-INT_MAX; 
+	op->init_ipos = (loff_t)-INT_MAX; 
+	op->init_opos = (loff_t)-INT_MAX; 
 
 	fstate->ides = -1; fstate->odes = -1;
 
+	op->nocol = test_nocolor_term();
+
       	ofiles = NULL;
 
-	opts->nocol = test_nocolor_term();
+#ifdef LACK_GETOPT_LONG
+	while ((c = getopt(argc, argv, ":rtTfihqvVwWaAdDkMRpPuc:b:B:m:e:s:S:l:L:o:y:z:Z:2:3:4:xY:")) != -1) 
+#else
+	while ((c = getopt_long(argc, argv, ":rtTfihqvVwWaAdDkMRpPuc:b:B:m:e:s:S:l:L:o:y:z:Z:2:3:4:xY:", longopts, NULL)) != -1) 
+#endif
+	{
+		switch (c) {
+			case 'r': op->reverse = 1; break;
+			case 'R': op->i_repeat = 1; break;
+			case 't': op->dotrunc = O_TRUNC; break;
+			case 'T': op->trunclast = 1; break;
+			case 'i': op->interact = 1; op->force = 0; break;
+			case 'f': op->interact = 0; op->force = 1; break;
+#ifdef O_DIRECT
+			case 'd': op->o_dir_in  = O_DIRECT; break;
+			case 'D': op->o_dir_out = O_DIRECT; break;
+#endif
+#ifdef HAVE_SPLICE
+			case 'k': op->dosplice = 1; break;
+#endif				  
+			case 'p': op->preserve = 1; break;
+			case 'P': op->falloc = 1; break;
+			case 'a': op->sparse = 1; op->nosparse = 0; break;
+			case 'A': op->nosparse = 1; op->sparse = 0; break;
+			case 'w': op->abwrerr = 1; break;
+			case 'W': op->avoidwrite = 1; break;
+			case 'h': printlonghelp(); exit(0); break;
+			case 'V': printversion(); exit(0); break;
+			case 'v': op->quiet = 0; op->verbose = 1; break;
+			case 'q': op->verbose = 0; op->quiet = 1; break;
+			case 'c': op->nocol = !readbool(optarg); break;
+			case 'b': op->softbs = (int)readint(optarg); break;
+			case 'B': op->hardbs = (int)readint(optarg); break;
+			case 'm': op->maxxfer = readint(optarg); break;
+			case 'M': op->noextend = 1; break;
+			case 'e': op->maxerr = (int)readint(optarg); break;
+			case 'y': syncsz = readint(optarg); break;
+			case 's': op->init_ipos = readint(optarg); break;
+			case 'S': op->init_opos = readint(optarg); break;
+			case 'l': op->lname = optarg; break;
+			case 'L': plugins = optarg; break;
+			case 'o': op->bbname = optarg; break;
+			case 'x': op->extend = 1; break;
+			case 'u': op->rmvtrim = 1; break;
+			case 'Y': do { ofile_t of; of.name = optarg; of.fd = -1; of.cdev = 0; LISTAPPEND(ofiles, of, ofile_t); } while (0); break;
+			case 'z': dop->prng_libc = 1; if (is_filename(optarg)) dop->prng_sfile = optarg; else dop->prng_seed = readint(optarg); break;
+			case 'Z': dop->prng_frnd = 1; if (is_filename(optarg)) dop->prng_sfile = optarg; else dop->prng_seed = readint(optarg); break;
+			case '2': dop->prng_frnd = 1; if (is_filename(optarg)) dop->prng_sfile = optarg; else dop->prng_seed = readint(optarg); dop->bsim715 = 1; dop->bsim715_2 = 1; break;
+			case '3': dop->prng_frnd = 1; if (is_filename(optarg)) dop->prng_sfile = optarg; else dop->prng_seed = readint(optarg); dop->bsim715 = 1; break;
+			case '4': dop->prng_frnd = 1; if (is_filename(optarg)) dop->prng_sfile = optarg; else dop->prng_seed = readint(optarg); dop->bsim715 = 1; dop->bsim715_4 = 1; break;
+			case ':': fplog(stderr, FATAL, "option %c requires an argument!\n", optopt); 
+				shortusage();
+				exit(11); break;
+			case '?': fplog(stderr, FATAL, "unknown option %c!\n", optopt, argv[0]);
+				shortusage();
+				exit(11); break;
+			default: fplog(stderr, FATAL, "your getopt() is buggy!\n");
+				exit(255);
+		}
+	}
+  
+	if (dop->prng_libc)
+		op->iname = "PRNG_libc";
+	else if (dop->prng_frnd)
+		op->iname = "PRNG_frnd";
+	else if (optind < argc)
+		op->iname = argv[optind++];
+
+	if (optind < argc) 
+		op->oname = argv[optind++];
+	if (optind < argc) {
+		fplog(stderr, FATAL, "spurious options: %s ...\n", argv[optind]);
+		shortusage();
+		exit(12);
+	}
+	/* Defaults for blocksizes */
+	if (op->softbs == 0) {
+		if (op->o_dir_in)
+			op->softbs = DIO_SOFTBLOCKSIZE;
+		else
+			op->softbs = BUF_SOFTBLOCKSIZE;
+	}
+	if (op->hardbs == 0) {
+		if (op->o_dir_in)
+			op->hardbs = DIO_HARDBLOCKSIZE;
+		else
+			op->hardbs = BUF_HARDBLOCKSIZE;
+	}
+	if (!op->quiet)
+		fplog(stderr, INFO, "Using softbs=%skiB, hardbs=%skiB\n", 
+			fmt_kiB(op->softbs), fmt_kiB(op->hardbs));
+
+	/* sanity checks */
+#ifdef O_DIRECT
+	if ((op->o_dir_in || op->o_dir_out) && op->hardbs < 512) {
+		op->hardbs = 512;
+		fplog(stderr, WARN, "O_DIRECT requires hardbs of at least %i!\n",
+		      op->hardbs);
+	}
+
+	if (op->o_dir_in || op->o_dir_out)
+		fplog(stderr, WARN, "We don't handle misalignment of last block w/ O_DIRECT!\n");
+				
+#endif
+
+	if (op->softbs < op->hardbs) {
+		fplog(stderr, WARN, "setting hardbs from %i to softbs %i!\n",
+		      op->hardbs, op->softbs);
+		op->hardbs = op->softbs;
+	}
+
+	/* Set sync frequency */
+	/*
+	if (syncsz == -1)
+		op->syncfreq = 512;
+	else */ 
+	if (syncsz <= 0)
+		op->syncfreq = 0;
+	else
+		op->syncfreq = (syncsz + op->softbs - 1) / op->softbs;
+
+	return plugins;
+}
+
+
+
+int main(int argc, char* argv[])
+{
 
 	detect_cpu_cap();
-
 #ifdef _SC_PAGESIZE
 	fstate->pagesize = sysconf(_SC_PAGESIZE);
 #else
@@ -2244,82 +2372,7 @@ int main(int argc, char* argv[])
 		fplog(stderr, WARN, "Limited range: off_t %i/%i bits, size_t %i bits%\n", 
 			8*sizeof(off_t), 8*sizeof(loff_t), 8*sizeof(size_t));
 #endif
-
-#ifdef LACK_GETOPT_LONG
-	while ((c = getopt(argc, argv, ":rtTfihqvVwWaAdDkMRpPuc:b:B:m:e:s:S:l:L:o:y:z:Z:2:3:4:xY:")) != -1) 
-#else
-	while ((c = getopt_long(argc, argv, ":rtTfihqvVwWaAdDkMRpPuc:b:B:m:e:s:S:l:L:o:y:z:Z:2:3:4:xY:", longopts, NULL)) != -1) 
-#endif
-	{
-		switch (c) {
-			case 'r': opts->reverse = 1; break;
-			case 'R': opts->i_repeat = 1; break;
-			case 't': opts->dotrunc = O_TRUNC; break;
-			case 'T': opts->trunclast = 1; break;
-			case 'i': opts->interact = 1; opts->force = 0; break;
-			case 'f': opts->interact = 0; opts->force = 1; break;
-#ifdef O_DIRECT
-			case 'd': opts->o_dir_in  = O_DIRECT; break;
-			case 'D': opts->o_dir_out = O_DIRECT; break;
-#endif
-#ifdef HAVE_SPLICE
-			case 'k': opts->dosplice = 1; break;
-#endif				  
-			case 'p': opts->preserve = 1; break;
-			case 'P': opts->falloc = 1; break;
-			case 'a': opts->sparse = 1; opts->nosparse = 0; break;
-			case 'A': opts->nosparse = 1; opts->sparse = 0; break;
-			case 'w': opts->abwrerr = 1; break;
-			case 'W': opts->avoidwrite = 1; break;
-			case 'h': printlonghelp(); exit(0); break;
-			case 'V': printversion(); exit(0); break;
-			case 'v': opts->quiet = 0; opts->verbose = 1; break;
-			case 'q': opts->verbose = 0; opts->quiet = 1; break;
-			case 'c': opts->nocol = !readbool(optarg); break;
-			case 'b': opts->softbs = (int)readint(optarg); break;
-			case 'B': opts->hardbs = (int)readint(optarg); break;
-			case 'm': opts->maxxfer = readint(optarg); break;
-			case 'M': opts->noextend = 1; break;
-			case 'e': opts->maxerr = (int)readint(optarg); break;
-			case 'y': syncsz = readint(optarg); break;
-			case 's': opts->init_ipos = readint(optarg); break;
-			case 'S': opts->init_opos = readint(optarg); break;
-			case 'l': opts->lname = optarg; break;
-			case 'L': plugins = optarg; break;
-			case 'o': opts->bbname = optarg; break;
-			case 'x': opts->extend = 1; break;
-			case 'u': opts->rmvtrim = 1; break;
-			case 'Y': do { ofile_t of; of.name = optarg; of.fd = -1; of.cdev = 0; LISTAPPEND(ofiles, of, ofile_t); } while (0); break;
-			case 'z': dpopts->prng_libc = 1; if (is_filename(optarg)) dpopts->prng_sfile = optarg; else dpopts->prng_seed = readint(optarg); break;
-			case 'Z': dpopts->prng_frnd = 1; if (is_filename(optarg)) dpopts->prng_sfile = optarg; else dpopts->prng_seed = readint(optarg); break;
-			case '2': dpopts->prng_frnd = 1; if (is_filename(optarg)) dpopts->prng_sfile = optarg; else dpopts->prng_seed = readint(optarg); dpopts->bsim715 = 1; dpopts->bsim715_2 = 1; break;
-			case '3': dpopts->prng_frnd = 1; if (is_filename(optarg)) dpopts->prng_sfile = optarg; else dpopts->prng_seed = readint(optarg); dpopts->bsim715 = 1; break;
-			case '4': dpopts->prng_frnd = 1; if (is_filename(optarg)) dpopts->prng_sfile = optarg; else dpopts->prng_seed = readint(optarg); dpopts->bsim715 = 1; dpopts->bsim715_4 = 1; break;
-			case ':': fplog(stderr, FATAL, "option %c requires an argument!\n", optopt); 
-				shortusage();
-				exit(11); break;
-			case '?': fplog(stderr, FATAL, "unknown option %c!\n", optopt, argv[0]);
-				shortusage();
-				exit(11); break;
-			default: fplog(stderr, FATAL, "your getopt() is buggy!\n");
-				exit(255);
-		}
-	}
-  
-	if (dpopts->prng_libc)
-		opts->iname = "PRNG_libc";
-	else if (dpopts->prng_frnd)
-		opts->iname = "PRNG_frnd";
-	else if (optind < argc)
-		opts->iname = argv[optind++];
-
-	if (optind < argc) 
-		opts->oname = argv[optind++];
-	if (optind < argc) {
-		fplog(stderr, FATAL, "spurious options: %s ...\n", argv[optind]);
-		shortusage();
-		exit(12);
-	}
+	char* plugins = parse_opts(argc, argv, opts, dpopts);
 
 #ifdef USE_LIBDL
 	if (plugins)
@@ -2349,55 +2402,9 @@ int main(int argc, char* argv[])
 	}
 
 	if (opts->lname) {
-		c = openfile(opts->lname, O_WRONLY | O_CREAT /*| O_EXCL*/);
-		logfd = fdopen(c, "a");
+		int fd = openfile(opts->lname, O_WRONLY | O_CREAT /*| O_EXCL*/);
+		logfd = fdopen(fd, "a");
 	}
-
-	/* Defaults for blocksizes */
-	if (opts->softbs == 0) {
-		if (opts->o_dir_in)
-			opts->softbs = DIO_SOFTBLOCKSIZE;
-		else
-			opts->softbs = BUF_SOFTBLOCKSIZE;
-	}
-	if (opts->hardbs == 0) {
-		if (opts->o_dir_in)
-			opts->hardbs = DIO_HARDBLOCKSIZE;
-		else
-			opts->hardbs = BUF_HARDBLOCKSIZE;
-	}
-	if (!opts->quiet)
-		fplog(stderr, INFO, "Using softbs=%skiB, hardbs=%skiB\n", 
-			fmt_kiB(opts->softbs), fmt_kiB(opts->hardbs));
-
-	/* sanity checks */
-#ifdef O_DIRECT
-	if ((opts->o_dir_in || opts->o_dir_out) && opts->hardbs < 512) {
-		opts->hardbs = 512;
-		fplog(stderr, WARN, "O_DIRECT requires hardbs of at least %i!\n",
-		      opts->hardbs);
-	}
-
-	if (opts->o_dir_in || opts->o_dir_out)
-		fplog(stderr, WARN, "We don't handle misalignment of last block w/ O_DIRECT!\n");
-				
-#endif
-
-	if (opts->softbs < opts->hardbs) {
-		fplog(stderr, WARN, "setting hardbs from %i to softbs %i!\n",
-		      opts->hardbs, opts->softbs);
-		opts->hardbs = opts->softbs;
-	}
-
-	/* Set sync frequency */
-	/*
-	if (syncsz == -1)
-		opts->syncfreq = 512;
-	else */ 
-	if (syncsz <= 0)
-		opts->syncfreq = 0;
-	else
-		opts->syncfreq = (syncsz + opts->softbs - 1) / opts->softbs;
 
 	/* Have those been set by cmdline params? */
 	if (opts->init_ipos == (loff_t)-INT_MAX)
@@ -2674,6 +2681,7 @@ int main(int argc, char* argv[])
 	/* Save time and start to work */
 	fstate->ipos = opts->init_ipos;
 	fstate->opos = opts->init_opos;
+	int err = 0;
 
 	startclock = clock();
 	gettimeofday(&starttime, NULL);
@@ -2685,33 +2693,33 @@ int main(int argc, char* argv[])
 	}
 
 	if (dpopts->bsim715) {
-		c = tripleoverwrite(opts->maxxfer);
+		err = tripleoverwrite(opts->maxxfer);
 	} else {
 		fadvise(0);
 #ifdef HAVE_SPLICE
 		if (opts->dosplice)
-			c = copyfile_splice(opts->maxxfer);
+			err = copyfile_splice(opts->maxxfer);
 		else 
 #endif
 		{
 			call_plugins_open();
 			if (opts->softbs > opts->hardbs)
-				c = copyfile_softbs(opts->maxxfer);
+				err = copyfile_softbs(opts->maxxfer);
 			else
-				c = copyfile_hardbs(opts->maxxfer);
+				err = copyfile_hardbs(opts->maxxfer);
 		}
 	}
 
 	gettimeofday(&currenttime, NULL);
 	printreport();
 	fadvise(1);
-	c += cleanup();
+	err += cleanup();
 	if (int_by == SIGQUIT)
-		++c;
-	if (c && opts->verbose)
-		fplog(stderr, WARN, "There were %i errors! \n", c);
+		++err;
+	if (err && opts->verbose)
+		fplog(stderr, WARN, "There were %i errors! \n", err);
 	if (interrupted && int_by != SIGQUIT)
 		return 128+int_by;
 	else
-		return c;
+		return err;
 }
