@@ -15,8 +15,11 @@
 #include <lzo/lzo1x.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <string.h>
+#include <netinet/in.h>
 //#include <sys/mman.h>
 #include "list.h"
 
@@ -39,12 +42,14 @@ void usage()
 	fprintf(stderr, " -u BLK=VAL\tSet uncompressed len of block BLK to VAL\n");
 	fprintf(stderr, " -c BLK=VAL\tSet   compressed len of block BLK to VAL\n");
 	fprintf(stderr, " -x BLK:OFF=VAL\tSet byte at offset OFF in block BLK to VAL\n");
+	fprintf(stderr, " -U BLK\tBreaks the uncompressed cksum for block BLK\n");
+	fprintf(stderr, " -C BLK\tBreaks the   compressed cksum for block BLK\n");
 	exit(1);
 }
 
 char debug = 0;
 
-enum disttype { NONE = 0, ULEN, CLEN, BYTE };
+enum disttype { NONE = 0, ULEN, CLEN, BYTE, UCKS, CCKS };
 
 typedef struct {
 	unsigned int blkno;
@@ -58,6 +63,16 @@ LISTDECL(blk_dist_t);
 LISTTYPE(blk_dist_t) *blk_dists;
 
 /* parses BLK=VAL */
+void parse_one(blk_dist_t *dist, const char *arg)
+{
+	if (sscanf(arg, "%i", &dist->blkno) != 1) {
+		fprintf(stderr, "Error parsing %s; expect BLK\n", arg);
+		usage();
+	}
+	dist->offset = 0;
+	dist->val = 0xdeadbeef;
+}
+
 void parse_two(blk_dist_t *dist, const char *arg)
 {
 	if (sscanf(arg, "%i=%i", &dist->blkno, &dist->val) != 2) {
@@ -90,21 +105,154 @@ void dist_append(char dst, const char* arg, char fix)
 		case 'x': dist.dist = BYTE;
 			  parse_three(&dist, arg);
 			  break;
+		case 'U': dist.dist = UCKS;
+			  parse_one(&dist, arg);
+			  break;
+		case 'C': dist.dist = CCKS;
+			  parse_one(&dist, arg);
+			  break;
 	}
 	LISTAPPEND(blk_dists, dist, blk_dist_t);
 }
+
+#define F_VERSION 0x1789	/* BCD 1.789 */
+#define ADLER32_INIT_VALUE 1
+#define CRC32_INIT_VALUE 0
+
+static const unsigned char 
+	lzop_hdr[] = { 0x89, 0x4c, 0x5a, 0x4f, 0x00, 0x0d, 0x0a, 0x1a, 0x0a };
+
+int write8(int fd, unsigned char val, uint32_t *adl)
+{
+	*adl = lzo_adler32(*adl, (const unsigned char*)&val, 1);
+	return write(fd, &val, 1);
+}
+
+int write16(int fd, unsigned short val, uint32_t *adl)
+{
+	unsigned short nval = htons(val);
+	*adl = lzo_adler32(*adl, (const unsigned char*)&nval, 2);
+	return write(fd, &nval, 2);
+}
+
+int write32(int fd, unsigned int val, uint32_t *adl)
+{
+	unsigned int nval = htonl(val);
+	int wr = write(fd, &nval, 4);
+	*adl = lzo_adler32(*adl, (const unsigned char*)&nval, 4);
+	return wr;
+}
+
 
 int write_header(int ofd, const char* nm, 
 		 unsigned short hvers, unsigned short evers, 
 		 unsigned char meth, unsigned char levl,
 		 unsigned int flags, char hdr_fixup)
 {
-	return 0;
+	if (write(ofd, lzop_hdr, sizeof(lzop_hdr)) != sizeof(lzop_hdr))
+		abort();
+	uint32_t adl = ADLER32_INIT_VALUE;
+	uint32_t dum = ADLER32_INIT_VALUE;
+	write16(ofd, hvers, &adl);
+	write16(ofd, 0x0205, &adl);
+	write16(ofd, evers, &adl);
+	write8(ofd, meth, &adl);
+	write8(ofd, levl, &adl);
+	write32(ofd, flags, &adl);
+	write32(ofd, 0640, &adl);
+	write32(ofd, 1400000000, &adl);
+	write32(ofd, 0, &adl);
+	write8(ofd, strlen(nm), &adl);
+	if (write(ofd, nm, strlen(nm)) != strlen(nm))
+		abort();
+	adl = lzo_adler32(adl, (const unsigned char*)nm, strlen(nm));
+	write32(ofd, hdr_fixup? adl: 0xdeadbeef, &dum);
+	return lseek(ofd, 0, SEEK_CUR);
 }
 
-int compress(int ifd, int ofd, unsigned int blksz)
+void error(const char* txt)
 {
-	return 0;
+	perror(txt);
+	abort();
+}
+		
+blk_dist_t* find_dist(LISTTYPE(blk_dist_t)* dlist, int blkno, enum disttype type, char fix)
+{
+	LISTTYPE(blk_dist_t) *dist;
+	LISTFOREACH(dlist, dist) {
+		blk_dist_t *dst = &LISTDATA(dist);
+		if (blkno == dst->blkno && type == dst->dist && 
+			(fix == -1 || fix == dst->fixup))
+			return dst;
+	}
+	return NULL;
+}
+
+
+#define CLEN blksz+(blksz>>6)+128
+int compress(int ifd, int ofd, unsigned int blksz, LISTTYPE(blk_dist_t)*dists)
+{	
+	int blk = 0;
+	ssize_t rd, wr = 0;
+	unsigned char *dbuf = malloc(blksz);
+	unsigned char *cbuf = malloc(CLEN); 
+	unsigned char *wmem = malloc(LZO1X_1_MEM_COMPRESS);
+	do {
+		rd = read(ifd, dbuf, blksz);
+		if (!rd)
+			break;
+		if (rd < 0)
+			error("Can't read");
+		uint32_t uadl = lzo_adler32(ADLER32_INIT_VALUE, dbuf, rd);
+		lzo_uint cln = CLEN;
+		int err = lzo1x_1_compress(dbuf, rd, cbuf, &cln, wmem);
+		if (err)
+			abort();
+		if (cln >= rd) {
+			memcpy(cbuf, dbuf, rd);
+			cln = rd;
+		}
+		/* Change bytes with fixing cmpr cksum */
+		blk_dist_t *dist = find_dist(dists, blk, BYTE, 1);
+		if (dist)
+			cbuf[dist->offset] = dist->val;
+		uint32_t cadl = lzo_adler32(ADLER32_INIT_VALUE, cbuf, cln);
+		/* Change bytes without fixing cksum */
+		dist = find_dist(dists, blk, BYTE, 0);
+		if (dist)
+			cbuf[dist->offset] = dist->val;
+		uint32_t ulen = rd;
+		uint32_t clen = cln;
+		/* Change ulen */
+		dist = find_dist(dists, blk, ULEN, -1);
+		if (dist)
+			ulen = dist->val;
+		/* Change clen */
+		dist = find_dist(dists, blk, CLEN, -1);
+		if (dist)
+			clen = dist->val;
+		/* Change ucksum */
+		dist = find_dist(dists, blk, UCKS, -1);
+		if (dist)
+			uadl ^= dist->val;
+		/* Change ccksum */
+		dist = find_dist(dists, blk, CCKS, -1);
+		if (dist)
+			cadl ^= dist->val;
+		uint32_t dum = ADLER32_INIT_VALUE;
+		/* Write blk header */
+		write32(ofd, ulen, &dum);
+		write32(ofd, clen, &dum);
+		write32(ofd, uadl, &dum);
+		if (cln != rd)
+			write32(ofd, cadl, &dum);
+		wr += write(ofd, cbuf, cln); 
+		++blk;
+	} while (rd > 0);
+	free(wmem);
+	free(cbuf);
+	free(dbuf);
+	return wr;
 }
 
 int main(int argc, char* argv[])
@@ -112,14 +260,14 @@ int main(int argc, char* argv[])
 	char fixup = 1;
 	char hdr_fixup = fixup;
 	unsigned int blksize = 16*1024;
-	unsigned short hversion = 0x1789;
+	unsigned short hversion = F_VERSION;
 	unsigned short extrvers = 0x0940;
 	char *hname = NULL;
 	char meth = 0;
 	char levl = 5;
 	unsigned int flags = 0x03000003UL;	/* UNIX | ADLER32_C | ADLER32_D */
 	char c;
-        while ((c = getopt(argc, argv, "hdb:v:V:m:l:n:f:u:c:x:!")) != -1) {
+        while ((c = getopt(argc, argv, "hdb:v:V:m:l:n:f:u:c:x:U:C:!")) != -1) {
 		switch (c) {
 			case 'h':
 				usage();
@@ -160,6 +308,8 @@ int main(int argc, char* argv[])
 			case 'u':
 			case 'c':
 			case 'x':
+			case 'U':
+			case 'C':
 				dist_append(c, optarg, fixup);
 				break;
 			case ':':
@@ -195,18 +345,25 @@ int main(int argc, char* argv[])
 			hdr_fixup? ' ': '!');
 		LISTTYPE(blk_dist_t) *dist;
 		LISTFOREACH(blk_dists, dist) {
-			if (LISTDATA(dist).dist == BYTE)
+			blk_dist_t *dst = &LISTDATA(dist);
+			enum disttype dtp = dst->dist;
+			if (dtp == BYTE)
 				printf("Blk %i: chg byte @ %x to %02x %c\n",
-					LISTDATA(dist).blkno, 
-					LISTDATA(dist).offset,
-					LISTDATA(dist).val,
-					LISTDATA(dist).fixup? ' ': '!');
+					dst->blkno, 
+					dst->offset,
+					dst->val,
+					dst->fixup? ' ': '!');
+			else if (dtp == UCKS || dtp == CCKS)
+				printf("Blk %i: chg %s cksum %c\n",
+					dst->blkno,
+					(dst->dist == UCKS? "uchksum": "cchksum"),
+					dst->fixup? ' ': '!');
 			else
 				printf("Blk %i: chg %s to %08x %c\n",
-					LISTDATA(dist).blkno,
-					(LISTDATA(dist).dist == ULEN? "ulen": "clen"),
-					LISTDATA(dist).val,
-					LISTDATA(dist).fixup? ' ': '!');
+					dst->blkno,
+					(dst->dist == ULEN? "ulen": "clen"),
+					dst->val,
+					dst->fixup? ' ': '!');
 		}
 	}
 
@@ -222,7 +379,7 @@ int main(int argc, char* argv[])
 	}
 
 	write_header(ofd, hname, hversion, extrvers, meth, levl, flags, hdr_fixup);
-	compress(ifd, ofd, blksize);
+	compress(ifd, ofd, blksize, blk_dists);
 
 	close(ofd);
 	close(ifd);
@@ -230,7 +387,5 @@ int main(int argc, char* argv[])
 	LISTTREEDEL(blk_dists, blk_dist_t);
 
 	return 0;
-}		
-
-
+}
 
