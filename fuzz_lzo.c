@@ -154,7 +154,7 @@ int write_header(int ofd, const char* nm,
 	uint32_t adl = ADLER32_INIT_VALUE;
 	uint32_t dum = ADLER32_INIT_VALUE;
 	write16(ofd, hvers, &adl);
-	write16(ofd, 0x0205, &adl);
+	write16(ofd, 0x2060, &adl);
 	write16(ofd, evers, &adl);
 	write8(ofd, meth, &adl);
 	write8(ofd, levl, &adl);
@@ -249,6 +249,9 @@ int compress(int ifd, int ofd, unsigned int blksz, LISTTYPE(blk_dist_t)*dists)
 		wr += write(ofd, cbuf, cln); 
 		++blk;
 	} while (rd > 0);
+	/* EOF */
+	memset(cbuf, 0, 4);
+	wr += write(ofd, cbuf, 4);
 	free(wmem);
 	free(cbuf);
 	free(dbuf);
@@ -263,7 +266,7 @@ int main(int argc, char* argv[])
 	unsigned short hversion = F_VERSION;
 	unsigned short extrvers = 0x0940;
 	char *hname = NULL;
-	char meth = 0;
+	char meth = 1;
 	char levl = 5;
 	unsigned int flags = 0x03000003UL;	/* UNIX | ADLER32_C | ADLER32_D */
 	char c;
@@ -372,7 +375,7 @@ int main(int argc, char* argv[])
 		fprintf(stderr, "ERROR: Can't open %s for reading\n", iname);
 		exit(2);
 	}
-	int ofd = open(oname, O_WRONLY | O_CREAT, 0644);
+	int ofd = open(oname, O_WRONLY | O_CREAT | O_TRUNC, 0644);
 	if (ofd <= 0) {
 		fprintf(stderr, "ERROR: Can't open %s for iwriting\n", oname);
 		exit(3);

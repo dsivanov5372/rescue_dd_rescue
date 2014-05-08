@@ -158,6 +158,8 @@ typedef struct _lzo_state {
 	size_t cmp_ln, unc_ln;
 	/* Bench */
 	clock_t cpu;
+	/* Error recovery */
+	loff_t deferred_recovery_opos, deferred_recovery_ipos;
 } lzo_state;
 
 #define FPLOG(lvl, fmt, args...) \
@@ -562,10 +564,13 @@ int recover_decompr_error(lzo_state *state, fstate_t *fst,
 	if (cmp_len > 16*1024*1024 || unc_len > 16*1024*1024)
 		can_recover = 0;
 	/* For now, we don't handle that we have to write-out data before ... */
-	if (d_off)
-		can_recover = 0;
+	if (d_off) {
+		FPLOG(WARN, "Recovery with buffered output data %i\n", d_off);
+		state->deferred_recovery_opos = fst->opos + unc_len;
+		state->deferred_recovery_ipos = fst->ipos + c_off + state->hdroff + addoff + cmp_len;
+	}
 	enum ddrlog_t prio = can_recover? WARN: FATAL;
-	FPLOG(prio, "decompr error in block @%i/%i (size %i+%i/%i): %s\n",
+	FPLOG(prio, "decompr error in block @%i/%i (size %i+%i/%i):\n\t %s\n",
 			fst->ipos + c_off + state->hdroff,
 			fst->opos + d_off,
 			addoff, cmp_len, unc_len,
@@ -574,7 +579,7 @@ int recover_decompr_error(lzo_state *state, fstate_t *fst,
 				state->opts->init_ipos+state->cmp_ln+state->cmp_hdr-sizeof(lzop_hdr)-state->hdr_seen:
 				state->cmp_ln+state->cmp_hdr;
 	assert(fst->ipos+c_off+state->hdroff == alt_ipos);
-	if (can_recover) {
+	if (can_recover && !state->deferred_recovery_opos) {
 		fst->opos += unc_len;
 	       	fst->ipos = fst->ipos + c_off + state->hdroff + addoff + cmp_len;
 		state->hdroff = 0;
@@ -627,6 +632,20 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 				abort();
 			c_off += err;
 		}
+	}
+	if (state->deferred_recovery_opos) {
+		if (!eof) {
+			fst->opos = state->deferred_recovery_opos;
+			fst->ipos = state->deferred_recovery_ipos;
+			FPLOG(INFO, "Deferred error: Resuming by moving to %i/%i\n", 
+				fst->ipos, fst->opos);
+			state->deferred_recovery_opos = 0;
+			state->hdroff = 0;
+			fst->buf = state->obuf;
+			*towr = 0;
+			return state->dbuf;
+		} else
+			FPLOG(FATAL, "Recovery and EOF not yet handled");
 	}
 	/* Now do processing: Do we have a full block? */
 	do {
@@ -822,7 +841,7 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 					lzo_adler32(ADLER32_INIT_VALUE, state->dbuf+d_off, dst_len) :
 					lzo_crc32  (  CRC32_INIT_VALUE, state->dbuf+d_off, dst_len);
 			if (cksum != unc_cksum) {
-				FPLOG(FATAL, "decompr checksum mismatch @ %i\n",
+				FPLOG(WARN, "decompr checksum mismatch @ %i\n",
 						state->cmp_ln+state->cmp_hdr);
 				if (0 == recover_decompr_error(state, fst, c_off, d_off, addoff, cmp_len, unc_len,
 							       "decompr checksum mismatch"))
