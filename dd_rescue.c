@@ -717,6 +717,13 @@ int output_length(opt_t *op, fstate_t *fst)
 	}
 	if (!fst->olen)
 		return -1;
+	if (op->extend) {
+		if (op->reverse) {
+			fplog(stderr, INFO, "Advance output pos by ilen %i for reverse extend ...\n", fst->ilen);
+			op->init_opos += fst->ilen;
+		}
+		return 0;
+	}
 	if (!op->reverse) {
 		loff_t newmax = fst->olen - op->init_opos;
 		if (newmax < 0) {
@@ -2502,15 +2509,15 @@ void sanitize_and_prepare(opt_t *op, dpopt_t *dop, fstate_t *fst, dpstate_t *dst
 	}
 
 	if (fst->odes != 1) {
+		int o_wr = (op->avoidwrite || (op->extend && plugins_loaded))? O_RDWR: O_WRONLY;
 		if (op->avoidwrite) {
 			if (op->dotrunc) {
 				fplog(stderr, WARN, "Disable early trunc(-t) as we can't avoid writes otherwise.\n");
 				op->dotrunc = 0;
 			}
 			fst->buf2 = zalloc_aligned_buf(op->softbs, &fst->origbuf2);
-			fst->odes = openfile(op->oname, O_RDWR | O_CREAT | op->o_dir_out /*| O_EXCL*/);
-		} else
-			fst->odes = openfile(op->oname, O_WRONLY | O_CREAT | op->o_dir_out /*| O_EXCL*/ | op->dotrunc);
+		}
+		fst->odes = openfile(op->oname, o_wr | O_CREAT | op->o_dir_out /*| O_EXCL*/ | op->dotrunc);
 	}
 
 	if (fst->odes < 0) {

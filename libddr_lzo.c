@@ -481,18 +481,35 @@ unsigned char* lzo_compress(fstate_t *fst, unsigned char *bf,
 	unsigned char *wrbf = bhdp;
 	unsigned int addwr = 0;
 	if (ooff == state->opts->init_opos) {
-		memcpy(state->dbuf+3, lzop_hdr, sizeof(lzop_hdr));
-		lzo_hdr((header_t*)hdrp, state);
-		addwr = sizeof(header_t) + sizeof(lzop_hdr);
-		wrbf = state->dbuf+3;
-		state->hdr_seen = 1;
-		state->cmp_hdr += sizeof(lzop_hdr)+sizeof(header_t);
+		if (state->opts->init_opos > 0 && state->opts->extend) {
+			ssize_t ln = pread(fst->odes, bhdp, 512, 0);
+			if (ln < (int)(sizeof(lzop_hdr)+sizeof(header_t)-NAMELEN)) {
+				FPLOG(FATAL, "Can't extend lzo file with incomplete header of size %i\n", ln);
+				abort();
+			}
+			if (memcmp(bhdp, lzop_hdr, sizeof(lzop_hdr))) {
+				FPLOG(FATAL, "Can only extend lzo files with existing magic\n", ln);
+				abort();
+			};
+			lzo_parse_hdr(bhdp+sizeof(lzop_hdr), state);
+			state->hdr_seen = 1;
+			/* Overwrite EOF */
+			fst->opos -= 4;
+		} else {
+			memcpy(state->dbuf+3, lzop_hdr, sizeof(lzop_hdr));
+			lzo_hdr((header_t*)hdrp, state);
+			addwr = sizeof(header_t) + sizeof(lzop_hdr);
+			wrbf = state->dbuf+3;
+			state->hdr_seen = 1;
+			state->cmp_hdr += sizeof(lzop_hdr)+sizeof(header_t);
+		}
 	}
 	/* NOTE: We always calc checksum of uncompressed data, as we don't get a
 	 * checksum at all otherwise (lzop decompressor does bit allow for checksums
 	 * exclusively on compressed data). */
 	unsigned int hlen = sizeof(blockhdr_t)-4+((state->flags&(F_ADLER32_C|F_CRC32_C))? 4: 0);
 	if (*towr) {
+		/* TODO: Sparse support: Check for jumps and encode in blocks ... */
 		unsigned char *cdata = bhdp+hlen;
 		uint32_t unc_cks = state->flags & F_ADLER32_D? 
 			lzo_adler32(ADLER32_INIT_VALUE, bf, *towr):
