@@ -475,10 +475,19 @@ unsigned char* lzo_compress(fstate_t *fst, unsigned char *bf,
 	unsigned char *hdrp = state->dbuf+3+sizeof(lzop_hdr);
 	unsigned char *bhdp = hdrp+sizeof(header_t);
 	unsigned char *wrbf = bhdp;
+	unsigned int addwr = 0;
+	if (ooff == state->opts->init_opos) {
+		memcpy(state->dbuf+3, lzop_hdr, sizeof(lzop_hdr));
+		lzo_hdr((header_t*)hdrp, state);
+		addwr = sizeof(header_t) + sizeof(lzop_hdr);
+		wrbf = state->dbuf+3;
+		state->hdr_seen = 1;
+		state->cmp_hdr += sizeof(lzop_hdr)+sizeof(header_t);
+	}
 	/* NOTE: We always calc checksum of uncompressed data, as we don't get a
 	 * checksum at all otherwise (lzop decompressor does bit allow for checksums
 	 * exclusively on compressed data). */
-	unsigned int hlen = sizeof(blockhdr_t)-4+(state->flags&(F_ADLER32_C|F_CRC32_C)? 4: 0);
+	unsigned int hlen = sizeof(blockhdr_t)-4+((state->flags&(F_ADLER32_C|F_CRC32_C))? 4: 0);
 	if (*towr) {
 		unsigned char *cdata = bhdp+hlen;
 		uint32_t unc_cks = state->flags & F_ADLER32_D? 
@@ -511,19 +520,10 @@ unsigned char* lzo_compress(fstate_t *fst, unsigned char *bf,
 		state->cmp_hdr += hlen;
 		state->cmp_ln += dst_len; state->unc_ln += *towr;
 		block_hdr((blockhdr_t*)bhdp, *towr, dst_len, unc_cks, cdata, state->flags);
-		*towr = dst_len + hlen;
-	}
-	if (ooff == state->opts->init_opos) {
-		memcpy(state->dbuf+3, lzop_hdr, sizeof(lzop_hdr));
-		lzo_hdr((header_t*)hdrp, state);
-		*towr += sizeof(header_t) + sizeof(lzop_hdr);
-		wrbf = state->dbuf+3;
-		state->hdr_seen = 1;
-		state->cmp_hdr += sizeof(lzop_hdr)+sizeof(header_t);
+		*towr = dst_len + hlen + addwr;
 	}
 	if (eof) {
 		state->cmp_hdr += 4;
-		//memset(cdata+dst_len, 0, 4);
 		memset(wrbf+*towr, 0, 4);
 		*towr += 4;
 	}
