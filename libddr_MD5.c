@@ -25,16 +25,14 @@
 #endif
 
 #define FPLOG(lvl, fmt, args...) \
-	ddr_plug.fplog(stderr, (state->opts? !state->opts->nocol: 0), lvl, "MD5(%i): " fmt, state->seq, ##args)
+	ddr_plug.fplog(stderr, lvl, "MD5(%i): " fmt, state->seq, ##args)
 
 /* fwd decl */
 extern ddr_plugin_t ddr_plug;
 
 typedef struct _md5_state {
 	md5_ctx md5;
-	loff_t first_ooff, first_ioff;
 	loff_t md5_pos;
-	unsigned char **bufp;
 	const char* name;
 	uint8_t buf[128];
 	int seq;
@@ -77,30 +75,30 @@ int md5_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	return err;
 }
 
-int md5_open(int ifd, const char* inm, loff_t ioff, 
+/*int ifd, const char* inm, loff_t ioff, 
 	     int ofd, const char* onm, loff_t ooff, 
 	     unsigned int bsz, unsigned int hsz,
-	     loff_t exfer, int olnchg, 
+	     loff_t exfer 
+	     */
+int md5_open(const opt_t *opt, int olnchg,
 	     unsigned int totslack_pre, unsigned int totslack_post,
-	     unsigned char **bufp, void **stat)
+	     void **stat)
 {
 	md5_state *state = (md5_state*)*stat;
+	state->opts = opt;
 	md5_init(&state->md5);
-	state->first_ooff = ooff;
-	state->first_ioff = ioff;
 	state->md5_pos = 0;
-	state->name = (state->seq == 0? inm: onm);
+	state->name = (state->seq == 0? opt->iname: opt->oname);
 	memset(state->buf, 0, 128);
 	state->buflen = 0;
 	state->olnchg = olnchg;
-	state->bufp = bufp;
 	return 0;
 }
 
 void md5_last(md5_state *state, loff_t ooff)
 {
 	//md5_block(0, 0, ooff, stat);
-	loff_t len = ooff - state->first_ooff;
+	loff_t len = ooff - state->opts->init_opos;
 	int left = len - state->md5_pos;
 	assert(state->olnchg || state->buflen == left);
 	/*
@@ -116,12 +114,12 @@ void md5_last(md5_state *state, loff_t ooff)
 
 /* This is rather complex, as we handle both non-aligned first block size
  * as well as sparse files */
-unsigned char* md5_block(unsigned char* bf, int *towr, 
-			 int eof, loff_t *ooffp, void **stat)
+unsigned char* md5_block(fstate_t *fst, unsigned char* bf, 
+			 int *towr, int eof, void **stat)
 {
 	md5_state *state = (md5_state*)*stat;
-	const loff_t ooff = *ooffp;
-	const loff_t opos = ooff - state->first_ooff;
+	const loff_t ooff = fst->opos;
+	const loff_t opos = ooff - state->opts->init_opos;
 	int consumed = 0;
 	assert(bf);
 	MD5_DEBUG(FPLOG(INFO, "block(%i/%i): towr=%i, eof=%i, ooff=%i, md5_pos=%i, buflen=%i\n",
@@ -218,7 +216,7 @@ int md5_close(loff_t ooff, void **stat)
 	md5_state *state = (md5_state*)*stat;
 	uint8_t res[16];
 	md5_result(&state->md5, res);
-	loff_t firstpos = (state->seq == 0? state->first_ioff: state->first_ooff);
+	loff_t firstpos = (state->seq == 0? state->opts->init_ipos: state->opts->init_opos);
 	FPLOG(INFO, "%s (%" LL "i-%" LL "i): %s\n",
 		state->name, firstpos, firstpos+state->md5_pos, md5_out(res));
 	if (state->outfd) {

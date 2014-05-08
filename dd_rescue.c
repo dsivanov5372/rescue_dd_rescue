@@ -55,7 +55,7 @@
 #endif
 
 #ifndef BUF_HARDBLOCKSIZE
-# define BUF_HARDBLOCKSIZE eptrs.fstate->pagesize
+# define BUF_HARDBLOCKSIZE pagesize
 #endif
 
 #ifndef DIO_SOFTBLOCKSIZE
@@ -212,10 +212,13 @@ void set_eptrs(opt_t *op, fstate_t *fst, progress_t *prg,
 }
 
 
+/* Globals, shadowing opts/fstate info */
+char nocol;
+static unsigned int pagesize;
+
 /* Rate limit for status updates */
 float printint = 0.1;
 char in_report;
-char nocol;
 
 FILE *logfd;
 
@@ -2129,7 +2132,6 @@ void breakhandler(int sig)
 
 unsigned char* zalloc_aligned_buf(unsigned int bs, unsigned char**obuf)
 {
-	const unsigned int pagesize = eptrs.fstate->pagesize;
 	unsigned char *ptr;
 #if defined (__DragonFly__) || defined(__NetBSD__) || defined(__BIONIC__)
 	ptr = max_slack_pre%pagesize? 0: (unsigned char*)valloc(bs + max_slack_pre + max_slack_post);
@@ -2256,6 +2258,14 @@ char* parse_opts(int argc, char* argv[], opt_t *op, dpopt_t *dop)
 
 	op->nocol = test_nocolor_term();
 	nocol = op->nocol;
+
+#ifdef _SC_PAGESIZE
+	op->pagesize = sysconf(_SC_PAGESIZE);
+#else
+#warning Cant determine pagesize, setting to 4kiB
+	op->pagesize = 4096;
+#endif
+	pagesize = op->pagesize;
 
       	ofiles = NULL;
 
@@ -2673,12 +2683,7 @@ int main(int argc, char* argv[])
 	fstate->ides = -1; fstate->odes = -1;
 
 	detect_cpu_cap();
-#ifdef _SC_PAGESIZE
-	fstate->pagesize = sysconf(_SC_PAGESIZE);
-#else
-#warning Cant determine fstate->pagesize, setting to 4kiB
-	fstate->pagesize = 4096;
-#endif
+
 	set_eptrs(opts, fstate, progress, repeat, dpopts, dpstate);
 
 #if 0

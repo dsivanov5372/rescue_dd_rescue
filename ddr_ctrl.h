@@ -16,6 +16,7 @@ typedef struct _opt_t {
 	loff_t init_ipos, init_opos;
 	loff_t maxxfer;
 	unsigned int softbs, hardbs, syncfreq;
+	unsigned int pagesize;
 	/* Flags */
 	int o_dir_in, o_dir_out;
 	int dotrunc;
@@ -48,7 +49,6 @@ typedef struct _fstate_t {
 	loff_t ilen, olen, estxfer;
 	char i_chr, o_chr, o_blk, o_lnk;
 	int nrerr;
-	unsigned int pagesize;
 	char identical;
 } fstate_t;
 
