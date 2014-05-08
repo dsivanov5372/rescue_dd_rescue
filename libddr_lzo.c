@@ -552,11 +552,10 @@ unsigned char* lzo_compress(fstate_t *fst, unsigned char *bf,
 }
 
 /* TODO:
- * - Output sparseness
  * - Start at offset (read header @ 0)
  * - Debug: Output block boundaries
  * - On error, see whether we can be graceful (jump ahead and continue),
- *    otherwise output info on where we left off ...
+ *    otherwise output info on where we left off ... (sparseness)
  */
 unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 			      int eof, lzo_state *state)
@@ -569,19 +568,36 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 		return bf;
 	/* header parsing has happened in _open callback ... */
 	if (!state->hdr_seen) {
+		int err = 0;
 		assert(ooff - state->opts->init_opos == 0);
 		// TODO: If first_ooff != 0, we should look for a header
 		//  at offset zero ... and see whether this works ...
 		if (memcmp(bf, lzop_hdr, sizeof(lzop_hdr))) {
-			FPLOG(FATAL, "lzop magic broken\n");
-			abort();
+			if (state->opts->init_ipos == 0) {
+				FPLOG(FATAL, "lzop magic broken\n");
+				abort();
+			} else {
+				ssize_t ln = pread(fst->ides, state->dbuf, 512, 0);
+				if (ln < (int)(sizeof(lzop_hdr) + sizeof(header_t)-NAMELEN)) {
+					FPLOG(FATAL, "lzop read too short (%i) for header\n", ln);
+					abort();
+				}
+				if (memcmp(state->dbuf, lzop_hdr, sizeof(lzop_hdr))) {
+					FPLOG(FATAL, "lzop magic broken\n");
+					abort();
+				}
+				err = lzo_parse_hdr(state->dbuf+sizeof(lzop_hdr), state);
+				if (err < 0)
+					abort();
+			}
+		} else {	
+			state->cmp_hdr = sizeof(lzop_hdr);
+			c_off += sizeof(lzop_hdr);
+			err = lzo_parse_hdr(bf+c_off, state);
+			if (err < 0)
+				abort();
+			c_off += err;
 		}
-		state->cmp_hdr = sizeof(lzop_hdr);
-		c_off += sizeof(lzop_hdr);
-		int err = lzo_parse_hdr(bf+c_off, state);
-		if (err < 0)
-			abort();
-		c_off += err;
 	}
 	/* Now do processing: Do we have a full block? */
 	do {
