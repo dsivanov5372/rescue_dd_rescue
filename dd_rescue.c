@@ -55,7 +55,7 @@
 #endif
 
 #ifndef BUF_HARDBLOCKSIZE
-# define BUF_HARDBLOCKSIZE fst->pagesize
+# define BUF_HARDBLOCKSIZE eptrs.fstate->pagesize
 #endif
 
 #ifndef DIO_SOFTBLOCKSIZE
@@ -199,6 +199,17 @@ struct emerg_ptrs {
 	dpopt_t *dpopts;
 	dpstate_t *dpstate;
 } eptrs;
+
+void set_eptrs(opt_t *op, fstate_t *fst, progress_t *prg,
+		repeat_t *rep, dpopt_t *dop, dpstate_t *dst)
+{
+	eptrs.opts = op;
+	eptrs.fstate = fst;
+	eptrs.progress = prg;
+	eptrs.repeat = rep;
+	eptrs.dpopts = dop;
+	eptrs.dpstate = dst;
+}
 
 
 /* Rate limit for status updates */
@@ -1112,8 +1123,8 @@ int sync_close(int fd, const char* nm, char chr, opt_t *op, fstate_t *fst)
 	} while(0)
 
 
-ssize_t writeblock(int towrite,
-		   opt_t *op, fstate_t *fst, progress_t *prg);
+ssize_t writeblock(int towrite, opt_t *op, fstate_t *fst, 
+		   progress_t *prg, dpopt_t *dop);
 static void advancepos(const ssize_t rd, const ssize_t wr, const ssize_t rwr,
 		       opt_t *op, fstate_t *fst, progress_t *prg);
 
@@ -1123,7 +1134,7 @@ int real_cleanup(opt_t *op, fstate_t *fst, progress_t *prg,
 	int rc, errs = 0;
 	if (!op->dosplice && !dop->bsim715) {
 		/* EOF notifiction */
-		int fbytes = writeblock(0, op, fst, prg);
+		int fbytes = writeblock(0, op, fst, prg, dop);
 		if (fbytes >= 0)
 			advancepos(0, fbytes, fbytes, op, fst, prg);
 		else
@@ -1316,7 +1327,7 @@ ssize_t writeblock(int towrite,
 		ofile_t *oft = &(LISTDATA(of));
 		fst->o_chr = oft->cdev;
 		do {
-			w2 += (e2 = mypwrite(oft->fd, wbuf+w2, towrite-w2, fstate->opos+w2-op->reverse*towrite, op, fst, prg));
+			w2 += (e2 = mypwrite(oft->fd, wbuf+w2, towrite-w2, fst->opos+w2-op->reverse*towrite, op, fst, prg));
 			if (e2 == -1) 
 				w2++;
 		} while ((e2 == -1 && (errno == EINTR || errno == EAGAIN))
@@ -1390,14 +1401,15 @@ int weno;
 
 /* Do write, update positions ... 
  * Returns number of successfully written bytes. */
-ssize_t dowrite(const ssize_t rd, opt_t *op, fstate_t *fst, progress_t *prg)
+ssize_t dowrite(const ssize_t rd, opt_t *op, fstate_t *fst, 
+		progress_t *prg, dpopt_t *dop)
 {
 	int err = 0;
 	int fatal = 0;
 	ssize_t wr = 0;
 	weno = 0;
 	errno = 0;
-	err = ((wr = writeblock(rd, op, fst, prg)) < 0 ? -wr: 0);
+	err = ((wr = writeblock(rd, op, fst, prg, dop)) < 0 ? -wr: 0);
 	weno = errno;
 
 	if (err && is_writeerr_fatal(weno, op))
@@ -1421,11 +1433,11 @@ ssize_t dowrite(const ssize_t rd, opt_t *op, fstate_t *fst, progress_t *prg)
 /* Write rd-sized block at fstate->buf; if opts->sparse is set, check if at least half of the
  * block is empty and if so, move over the opts->sparse pieces ... */
 ssize_t dowrite_sparse(const ssize_t rd, opt_t *op, fstate_t *fst, 
-		       progress_t *prg, repeat_t *rep)
+		       progress_t *prg, repeat_t *rep, dpopt_t *dop)
 {
 	/* Simple case: opts->sparse not set => just write */
 	if (!op->sparse)
-		return dowrite(rd, op, fst, prg);
+		return dowrite(rd, op, fst, prg, dop);
 	ssize_t zln = blockiszero(fst->buf, rd, op, rep);
 	/* Also simple: Whole block is empty, so just move on */
 	if (zln >= rd) {
@@ -1435,7 +1447,7 @@ ssize_t dowrite_sparse(const ssize_t rd, opt_t *op, fstate_t *fst,
 	}
 	/* Block is smaller than 2*opts->hardbs and not completely zero, so don't bother optimizing ... */
 	if (rd < 2*(ssize_t)op->hardbs)
-		return dowrite(rd, op, fst, prg);
+		return dowrite(rd, op, fst, prg, dop);
 	/* Check both halves -- aligned to opts->hardbs boundaries */
 	int mid = rd/2;
 	mid -= mid%op->hardbs;
@@ -1445,16 +1457,16 @@ ssize_t dowrite_sparse(const ssize_t rd, opt_t *op, fstate_t *fst,
 		unsigned char* oldbuf = fst->buf;
 		advancepos(zln, zln, 0, op, fst, prg);
 		fst->buf += zln;
-		ssize_t wr = dowrite(rd-zln, op, fst, prg);
+		ssize_t wr = dowrite(rd-zln, op, fst, prg, dop);
 		fst->buf = oldbuf;
 		return wr;
 	}
 	/* Check second half */
 	ssize_t zln2 = blockiszero(fst->buf+mid, rd-mid, op, rep);
 	if (zln2 < rd-mid)
-		return dowrite(rd, op, fst, prg);
+		return dowrite(rd, op, fst, prg, dop);
 	else {
-		ssize_t wr = dowrite(mid, op, fst, prg);
+		ssize_t wr = dowrite(mid, op, fst, prg, dop);
 		//advancepos(mid, wr);
 		if (wr != mid) 
 			return wr;
@@ -1466,10 +1478,10 @@ ssize_t dowrite_sparse(const ssize_t rd, opt_t *op, fstate_t *fst,
 /* Do write with retry if rd > opts->hardbs, update positions ... 
  * Returns 0 on success, -1 on fatal error, 1 on normal error. */
 int dowrite_retry(const ssize_t rd, opt_t *op, fstate_t *fst,
-		  progress_t *prg, repeat_t *rep)
+		  progress_t *prg, repeat_t *rep, dpopt_t *dop)
 {
 	int errs = 0;
-	ssize_t wr = dowrite_sparse(rd, op, fst, prg, rep);
+	ssize_t wr = dowrite_sparse(rd, op, fst, prg, rep, dop);
 	if (wr == rd || weno == 0)
 		return 0;
 	if ((rd <= (ssize_t)op->hardbs) || (weno != ENOSPC && weno != EFBIG)) {
@@ -1488,7 +1500,7 @@ int dowrite_retry(const ssize_t rd, opt_t *op, fstate_t *fst,
 		}
 		while (rwr < rd) {
 			ssize_t towr = ((ssize_t)op->hardbs > rd-rwr)? rd-rwr: op->hardbs;
-			ssize_t wr2 = dowrite(towr, op, fst, prg);
+			ssize_t wr2 = dowrite(towr, op, fst, prg, dop);
 			if (is_writeerr_fatal(weno, op)) {
 				fst->buf = oldbuf;
 				return -1;
@@ -1505,11 +1517,11 @@ int dowrite_retry(const ssize_t rd, opt_t *op, fstate_t *fst,
 }
 
 static int partialwrite(const ssize_t rd, opt_t *op, fstate_t *fst,
-			progress_t *prg, repeat_t *rep)
+			progress_t *prg, repeat_t *rep, dpopt_t *dop)
 {
 	/* But first: write available data and advance (optimization) */
 	if (rd > 0 && !op->reverse) 
-		return dowrite_retry(rd, op, fst, prg, rep);
+		return dowrite_retry(rd, op, fst, prg, rep, dop);
 	return 0;
 }
 
@@ -1545,13 +1557,13 @@ int copyfile_hardbs(const loff_t max, opt_t *op, fstate_t *fst,
 				printstatus(stderr, logfd, op->hardbs, 1, op, fst, prg, dop);
 			}
 			/* Some errnos are fatal */
-			exitfatalerr(eno, op, fst, prg);
+			exitfatalerr(eno, op, fst, prg, dop);
 			/* Non fatal error */
 			/* This is the case, where we were not called from copyfile_softbs and thus have to assume harmless EOF */
 			if (/*op->softbs <= op->hardbs &&*/ eno == 0) {
 				int ret;
 				/* But first: write available data and advance (optimization) */
-				if ((ret = partialwrite(rd, op, fst, prg, rep)) < 0)
+				if ((ret = partialwrite(rd, op, fst, prg, rep, dop)) < 0)
 					return ret;
 				else
 					errs += ret;
@@ -1569,7 +1581,7 @@ int copyfile_hardbs(const loff_t max, opt_t *op, fstate_t *fst,
 			    (rd > 0 && (!op->sparse || blockiszero(fst->buf, rd, op, rep) < rd))) {
 				ssize_t wr = 0;
 				memset(fst->buf+rd, 0, toread-rd);
-				errs += ((wr = writeblock(toread, op, fst, prg)) < 0? -wr: 0);
+				errs += ((wr = writeblock(toread, op, fst, prg, dop)) < 0? -wr: 0);
 				eno = errno;
 				if (wr <= 0 && (eno == ENOSPC 
 					   || (eno == EFBIG && !op->reverse))) 
@@ -1597,7 +1609,7 @@ int copyfile_hardbs(const loff_t max, opt_t *op, fstate_t *fst,
 				exit_report(32, op, fst, prg, dop);
 			}
 		} else {
-	      		int err = dowrite_retry(rd, op, fst, prg, rep);
+	      		int err = dowrite_retry(rd, op, fst, prg, rep, dop);
 			if (err < 0)
 				return -err;
 			else
@@ -1655,7 +1667,7 @@ int copyfile_softbs(const loff_t max, opt_t *op, fstate_t *fst,
 				printstatus(stderr, logfd, op->softbs, 1, op, fst, prg, dop);
 			}
 			/* Some errnos are fatal */
-			exitfatalerr(eno, op, fst, prg);
+			exitfatalerr(eno, op, fst, prg, dop);
 			/* Non fatal error */
 			new_max = prg->xfer + toread;
 			/* Error with large blocks: Try small ones ... */
@@ -1670,7 +1682,7 @@ int copyfile_softbs(const loff_t max, opt_t *op, fstate_t *fst,
 				printstatus(stderr, logfd, op->hardbs, 1, op, fst, prg, dop);
 			}
 			/* But first: write available data and advance (optimization) */
-			if ((ret = partialwrite(rd, op, fst, prg, rep)) < 0)
+			if ((ret = partialwrite(rd, op, fst, prg, rep, dop)) < 0)
 				return ret;
 			else
 				errs += ret;
@@ -1704,7 +1716,7 @@ int copyfile_softbs(const loff_t max, opt_t *op, fstate_t *fst,
 				scrollup = 0;
 			}
 		} else {
-	      		err = dowrite_retry(rd, op, fst, prg, rep);
+	      		err = dowrite_retry(rd, op, fst, prg, rep, dop);
 			if (err < 0)
 				return -err;
 			else
@@ -1755,7 +1767,7 @@ int copyfile_splice(const loff_t max, opt_t *op, fstate_t *fst,
 					op->oname, fmt_kiB(fst->opos, !nocol), strerror(errno));
 
 				close(fd_pipe[0]); close(fd_pipe[1]);
-				exit_report(23, op, fst, prg);
+				exit_report(23, op, fst, prg, dop);
 			}
 			rd -= wr; prg->xfer += wr; prg->sxfer += wr;
 		}
@@ -2117,7 +2129,7 @@ void breakhandler(int sig)
 
 unsigned char* zalloc_aligned_buf(unsigned int bs, unsigned char**obuf)
 {
-	const unsigned int pagesize = eptr->fstate->pagesize;
+	const unsigned int pagesize = eptrs.fstate->pagesize;
 	unsigned char *ptr;
 #if defined (__DragonFly__) || defined(__NetBSD__) || defined(__BIONIC__)
 	ptr = max_slack_pre%pagesize? 0: (unsigned char*)valloc(bs + max_slack_pre + max_slack_post);
@@ -2198,7 +2210,7 @@ const char* dirappfile(const char* onm, opt_t *op)
 	if (oln > 0) {
 		char lastchr = onm[oln-1];
 		if (lastchr == '/') 
-			return retstrdupcat3(onm, 0, opt>iname);
+			return retstrdupcat3(onm, 0, op->iname);
 		else if ((lastchr == '.') &&
 			  (oln > 1 && onm[oln-2] == '/'))
 			return retstrdupcat3(onm, -1, op->iname);
@@ -2667,6 +2679,7 @@ int main(int argc, char* argv[])
 #warning Cant determine fstate->pagesize, setting to 4kiB
 	fstate->pagesize = 4096;
 #endif
+	set_eptrs(opts, fstate, progress, repeat, dpopts, dpstate);
 
 #if 0
 	if (sizeof(loff_t) <= 4/* || sizeof(size_t) <= 4*/)
