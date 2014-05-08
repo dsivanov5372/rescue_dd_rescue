@@ -550,9 +550,25 @@ unsigned char* lzo_compress(fstate_t *fst, unsigned char *bf,
 	}
 	return wrbf;
 }
+				
+int recover_decompr_error(lzo_state *state, fstate_t *fst,
+			  int c_off, int d_off, int addoff,
+       			  uint32_t cmp_len, uint32_t unc_len,
+			  const char* msg)
+{
+	int can_recover = 0;
+	/* TODO: Do magic to determine if we can recover ... */
+	enum ddrlog_t prio = can_recover? WARN: FATAL;
+	FPLOG(prio, "decompr error in block @%i/%i (size %i+%i/%i): %s\n",
+			fst->ipos + c_off + state->hdroff,
+			fst->opos + d_off,
+			addoff, cmp_len, unc_len,
+			msg);
+	return can_recover;
+}
+
 
 /* TODO:
- * - Start at offset (read header @ 0)
  * - Debug: Output block boundaries
  * - On error, see whether we can be graceful (jump ahead and continue),
  *    otherwise output info on where we left off ... (sparseness)
@@ -568,10 +584,7 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 		return bf;
 	/* header parsing has happened in _open callback ... */
 	if (!state->hdr_seen) {
-		int err = 0;
 		assert(ooff - state->opts->init_opos == 0);
-		// TODO: If first_ooff != 0, we should look for a header
-		//  at offset zero ... and see whether this works ...
 		if (memcmp(bf, lzop_hdr, sizeof(lzop_hdr))) {
 			if (state->opts->init_ipos == 0) {
 				FPLOG(FATAL, "lzop magic broken\n");
@@ -586,14 +599,13 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 					FPLOG(FATAL, "lzop magic broken\n");
 					abort();
 				}
-				err = lzo_parse_hdr(state->dbuf+sizeof(lzop_hdr), state);
-				if (err < 0)
+				if (lzo_parse_hdr(state->dbuf+sizeof(lzop_hdr), state) < 0)
 					abort();
 			}
 		} else {	
 			state->cmp_hdr = sizeof(lzop_hdr);
 			c_off += sizeof(lzop_hdr);
-			err = lzo_parse_hdr(bf+c_off, state);
+			int err = lzo_parse_hdr(bf+c_off, state);
 			if (err < 0)
 				abort();
 			c_off += err;
@@ -689,9 +701,10 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 				lzo_adler32(ADLER32_INIT_VALUE, effbf+addoff, cmp_len) :
 				lzo_crc32  (  CRC32_INIT_VALUE, effbf+addoff, cmp_len);
 			if (cksum != cmp_cksum) {
-				FPLOG(FATAL, "compr checksum mismatch @ %i\n",
-						state->cmp_ln);
-				raise(SIGQUIT);
+				int rec = recover_decompr_error(state, fst, c_off, d_off, addoff, cmp_len, unc_len,
+					"compr checksum mismatch");
+				if (!rec)
+					raise(SIGQUIT);
 				break;
 			}
 		}
