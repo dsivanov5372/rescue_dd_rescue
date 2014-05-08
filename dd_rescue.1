@@ -607,6 +607,11 @@ Pass algo=help to get a list of available algorithms. Consult the liblzo
 documentation for more information on the algorithms. Note that only the
 first three are supported by lzop (it can decompress the first five though,
 as they're all handled by the same decompression routine).
+.br
+Finally there is also a flags=XXXX parameter. This sets the flags field in
+the header (default ix 0x03000003) and is used for testing only. It is not
+sanity checked and you can easily set values that will break decompression
+or cause the plugin to abort. 
 .
 .SH EXIT STATUS
 On successful completion, 

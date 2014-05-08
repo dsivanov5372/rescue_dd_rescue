@@ -175,11 +175,6 @@ void lzo_hdr(header_t* hdr, lzo_state *state)
 		hdr->version_needed_to_extract = htons(F_VERSION);
 	hdr->method = state->algo->meth;
 	hdr->level = state->algo->lev;
-	/* Notes: We want checksums on compressed content; lzop forces us to do both then 
-	 * CRC32 has better error protection quality than adler32 -- but the implementation
-	 * in liblzo is rather slow, so stick with adler32 for now ..., unfortunately
-	 * file fmt does not allow crc32c, which has HW acceleration on various platforms */
-	state->flags = F_OS_UNIX | F_ADLER32_C | F_ADLER32_D;	/* 0x03000003 */
 	hdr->flags = htonl(state->flags);
 	hdr->nmlen = NAMELEN;
 	if (state->opts->iname) {
@@ -299,7 +294,7 @@ int parse_block_hdr(blockhdr_t *hdr, unsigned int *unc_cksum, unsigned int *cmp_
 
 const char *lzo_help = "The lzo plugin for dd_rescue de/compresses data on the fly.\n"
 		" It does not support sparse writing.\n"
-		" Parameters: compress/decompress/benchmark/algo=lzo1?_?/optimize\n"
+		" Parameters: compress/decompress/benchmark/algo=lzo1?_?/optimize/flags=XXX\n"
 		"  Use algo=help for a list of (de)compression algorithms.\n";
 
 
@@ -338,6 +333,11 @@ int lzo_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	state->seq = seq;
 	state->algo = calgos;
 	state->opts = opt;
+	/* Notes: We want checksums on compressed content; lzop forces us to do both then 
+	 * CRC32 has better error protection quality than adler32 -- but the implementation
+	 * in liblzo is rather slow, so stick with adler32 for now ..., unfortunately
+	 * file fmt does not allow crc32c, which has HW acceleration on various platforms */
+	state->flags = F_OS_UNIX | F_ADLER32_C | F_ADLER32_D;	/* 0x03000003 */
 	while (param) {
 		char* next = strchr(param, ':');
 		if (next)
@@ -358,7 +358,11 @@ int lzo_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			chose_alg(param+4, state);
 		else if (!memcmp(param, "algorithm=", 10))
 			chose_alg(param+10, state);
-		else {
+		else if (!memcmp(param, "flags=", 6)) {
+			state->flags = strtol(param+6, NULL, 0);
+			/* TODO Sanity check for flags ... */
+			//FPLOG(INFO, "Flags: %08x\n", state->flags);
+		} else {
 			FPLOG(FATAL, "plugin doesn't understand param %s\n",
 				param);
 			++err;
