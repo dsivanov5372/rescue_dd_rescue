@@ -469,7 +469,6 @@ int lzo_open(const opt_t *opt, int olnchg,
 
 /* TODO: 
  * - Detect sparseness and encode 
- * - Implement working append
  */
 unsigned char* lzo_compress(fstate_t *fst, unsigned char *bf, 
 			    int *towr, int eof, lzo_state *state)
@@ -493,6 +492,7 @@ unsigned char* lzo_compress(fstate_t *fst, unsigned char *bf,
 			};
 			lzo_parse_hdr(bhdp+sizeof(lzop_hdr), state);
 			state->hdr_seen = 1;
+			/* TODO (optional): Jump block headers to see whether we are at a valid offset */
 			/* Overwrite EOF */
 			fst->opos -= 4;
 		} else {
@@ -555,6 +555,8 @@ unsigned char* lzo_compress(fstate_t *fst, unsigned char *bf,
  * - Output sparseness
  * - Start at offset (read header @ 0)
  * - Debug: Output block boundaries
+ * - On error, see whether we can be graceful (jump ahead and continue),
+ *    otherwise output info on where we left off ...
  */
 unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 			      int eof, lzo_state *state)
