@@ -147,7 +147,8 @@ typedef struct _lzo_state {
 	unsigned int slackpre, slackpost;
 	uint32_t flags;
 	int seq;
-	char hdr_seen, eof_seen, do_bench, do_opt;
+	int hdr_seen;
+	unsigned char eof_seen, do_bench, do_opt;
 	enum compmode mode;
 	comp_alg *algo;
 	const opt_t *opts;
@@ -556,8 +557,13 @@ int recover_decompr_error(lzo_state *state, fstate_t *fst,
        			  uint32_t cmp_len, uint32_t unc_len,
 			  const char* msg)
 {
-	int can_recover = 0;
+	int can_recover = 1;
 	/* TODO: Do magic to determine if we can recover ... */
+	if (cmp_len > 16*1024*1024 || unc_len > 16*1024*1024)
+		can_recover = 0;
+	/* For now, we don't handle that we have to write-out data before ... */
+	if (d_off)
+		can_recover = 0;
 	enum ddrlog_t prio = can_recover? WARN: FATAL;
 	FPLOG(prio, "decompr error in block @%i/%i (size %i+%i/%i): %s\n",
 			fst->ipos + c_off + state->hdroff,
@@ -568,10 +574,17 @@ int recover_decompr_error(lzo_state *state, fstate_t *fst,
 				state->opts->init_ipos+state->cmp_ln+state->cmp_hdr-sizeof(lzop_hdr)-state->hdr_seen:
 				state->cmp_ln+state->cmp_hdr;
 	assert(fst->ipos+c_off+state->hdroff == alt_ipos);
+	if (can_recover) {
+		fst->opos += unc_len;
+	       	fst->ipos = fst->ipos + c_off + state->hdroff + addoff + cmp_len;
+		state->hdroff = 0;
+		fst->buf = state->obuf;
+	}
 	return can_recover;
 }
 
 
+#define BREAK ++do_break; break
 /* TODO:
  * - Debug: Output block boundaries
  * - On error, see whether we can be graceful (jump ahead and continue),
@@ -747,6 +760,7 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 			memcpy(state->dbuf+d_off, effbf+addoff, unc_len);
 			dst_len = unc_len;
 		}
+		char do_break = 0;
 		switch (err) {
 		case LZO_E_INPUT_OVERRUN:
 			/* TODO: Partial block, handle! */
@@ -755,7 +769,7 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 			if (0 == recover_decompr_error(state, fst, c_off, d_off, addoff, cmp_len, unc_len,
 						       "input overrun"))
 				raise(SIGQUIT);
-			break;
+			BREAK;
 		case LZO_E_EOF_NOT_FOUND:
 			/* TODO: Partial block, handle! */
 			FPLOG(FATAL, "EOF not found @ %i: %i %i %i; try larger block sizes\n", 
@@ -763,36 +777,40 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 			if (0 == recover_decompr_error(state, fst, c_off, d_off, addoff, cmp_len, unc_len,
 						       "EOF not found"))
 				raise(SIGQUIT);
-			break;
+			BREAK;
 		case LZO_E_OUTPUT_OVERRUN:
 			FPLOG(FATAL, "output overrun @ %i: %i %i %i; try larger block sizes\n", 
 					state->cmp_ln+state->cmp_hdr, *towr, state->dbuflen, dst_len);
 			if (0 == recover_decompr_error(state, fst, c_off, d_off, addoff, cmp_len, unc_len,
 						       "output overrun"))
 				raise(SIGQUIT);
-			break;
+			BREAK;
 		case LZO_E_LOOKBEHIND_OVERRUN:
 			FPLOG(FATAL, "lookbehind overrun @ %i: %i %i %i; data corrupt?\n", 
 					state->cmp_ln+state->cmp_hdr, *towr, state->dbuflen, dst_len);
 			if (0 == recover_decompr_error(state, fst, c_off, d_off, addoff, cmp_len, unc_len,
 						       "lookbehind overrun"))
 				raise(SIGQUIT);
-			break;
+			BREAK;
 		case LZO_E_ERROR:
 			FPLOG(FATAL, "unspecified error @ %i: %i %i %i; data corrupt?\n", 
 					state->cmp_ln+state->cmp_hdr, *towr, state->dbuflen, dst_len);
 			if (0 == recover_decompr_error(state, fst, c_off, d_off, addoff, cmp_len, unc_len,
 						       "unspecified error"))
 				raise(SIGQUIT);
-			break;
+			BREAK;
 		case LZO_E_INPUT_NOT_CONSUMED:
 			/* TODO: Leftover bytes, store */
 			FPLOG(INFO, "input not fully consumed @ %i: %i %i %i\n", 
 					state->cmp_ln+state->cmp_hdr, *towr, state->dbuflen, dst_len);
+			/*
 			recover_decompr_error(state, fst, c_off, d_off, addoff, cmp_len, unc_len,
 					       "input not consumed");
-			break;
+			*/
+			BREAK;
 		}
+		if (do_break)
+			break;
 		if (state->flags & ( F_ADLER32_D | F_CRC32_D)) {
 			uint32_t cksum;
 			/* If we have just copied and tested the compressed checksum before,
