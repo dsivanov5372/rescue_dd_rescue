@@ -115,7 +115,7 @@ void md5_last(md5_state *state, loff_t ooff)
 /* This is rather complex, as we handle both non-aligned first block size
  * as well as sparse files */
 unsigned char* md5_block(fstate_t *fst, unsigned char* bf, 
-			 int *towr, int eof, void **stat)
+			 int *towr, int eof, int *recall, void **stat)
 {
 	md5_state *state = (md5_state*)*stat;
 	const loff_t ooff = fst->opos;

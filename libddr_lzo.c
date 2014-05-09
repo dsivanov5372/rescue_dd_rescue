@@ -153,13 +153,11 @@ typedef struct _lzo_state {
 	comp_alg *algo;
 	const opt_t *opts;
 	/* Statistics */
-	unsigned int nr_memmove, nr_realloc;
+	unsigned int nr_memmove, nr_realloc, nr_cheapmemmove;
 	unsigned int cmp_hdr;
 	size_t cmp_ln, unc_ln;
 	/* Bench */
 	clock_t cpu;
-	/* Error recovery */
-	loff_t deferred_recovery_opos, deferred_recovery_ipos;
 } lzo_state;
 
 #define FPLOG(lvl, fmt, args...) \
@@ -475,7 +473,7 @@ int lzo_open(const opt_t *opt, int olnchg,
  * - Detect sparseness and encode 
  */
 unsigned char* lzo_compress(fstate_t *fst, unsigned char *bf, 
-			    int *towr, int eof, lzo_state *state)
+			    int *towr, int eof, int *recall, lzo_state *state)
 {
 	const loff_t ooff = fst->opos;
 	lzo_uint dst_len = state->dbuflen-3-sizeof(lzop_hdr)-sizeof(header_t);
@@ -553,50 +551,72 @@ unsigned char* lzo_compress(fstate_t *fst, unsigned char *bf,
 	}
 	return wrbf;
 }
-				
-int recover_decompr_error(lzo_state *state, fstate_t *fst,
-			  int c_off, int d_off, int addoff,
-       			  uint32_t cmp_len, uint32_t unc_len,
-			  const char* msg)
+
+#define MAXBLOCKSZ 16*1024*1024
+void recover_decompr_msg(lzo_state *state, fstate_t *fst,
+			 int *c_off, int d_off, int addoff,
+       			 uint32_t cmp_len, uint32_t unc_len,
+			 const char* msg)
 {
 	int can_recover = 1;
-	/* TODO: Do magic to determine if we can recover ... */
-	if (cmp_len > 16*1024*1024 || unc_len > 16*1024*1024)
+	if (cmp_len > MAXBLOCKSZ || unc_len > MAXBLOCKSZ)
 		can_recover = 0;
-	/* For now, we don't handle that we have to write-out data before ... */
-	if (d_off) {
-		FPLOG(WARN, "Recovery with buffered output data %i\n", d_off);
-		state->deferred_recovery_opos = fst->opos + unc_len;
-		state->deferred_recovery_ipos = fst->ipos + c_off + state->hdroff + addoff + cmp_len;
-	}
+	/* We need to have drained data before coming here */
+	assert(d_off == 0);
 	enum ddrlog_t prio = can_recover? WARN: FATAL;
 	FPLOG(prio, "decompr error in block @%i/%i (size %i+%i/%i):\n\t %s\n",
-			fst->ipos + c_off + state->hdroff,
+			fst->ipos +*c_off + state->hdroff,
 			fst->opos + d_off,
 			addoff, cmp_len, unc_len,
 			msg);
+}
+
+int recover_decompr_error(lzo_state *state, fstate_t *fst,
+			  int *c_off, int d_off, int addoff,
+       			  uint32_t cmp_len, uint32_t unc_len,
+			  const char* msg)
+{
+	/* We need to have drained data before coming here */
+	assert(d_off == 0);
+	recover_decompr_msg(state, fst, c_off, d_off, addoff,
+			    cmp_len, unc_len, msg);
+	int can_recover = 1;
+	if (cmp_len > MAXBLOCKSZ || unc_len > MAXBLOCKSZ)
+		can_recover = 0;
+	/* TODO: Look for next header and check for lenghts ...*/
+	fst->nrerr++;
+#if 0
 	loff_t alt_ipos = state->opts->init_ipos?
 				state->opts->init_ipos+state->cmp_ln+state->cmp_hdr-sizeof(lzop_hdr)-state->hdr_seen:
 				state->cmp_ln+state->cmp_hdr;
 	assert(fst->ipos+c_off+state->hdroff == alt_ipos);
-	if (can_recover && !state->deferred_recovery_opos) {
+#endif
+	if (can_recover) {
+		state->cmp_hdr += addoff;
+		*c_off += cmp_len+addoff;
+		//Don't d_off += dst_len, as we're skipping; instead:
 		fst->opos += unc_len;
-	       	fst->ipos = fst->ipos + c_off + state->hdroff + addoff + cmp_len;
-		state->hdroff = 0;
-		fst->buf = state->obuf;
+		state->cmp_ln += cmp_len;
+		state->unc_ln += unc_len;
 	}
 	return can_recover;
 }
 
 
 #define BREAK ++do_break; break
+#define DRAIN(x) do { ++do_break; *recall=1; 		\
+		   FPLOG(INFO, "Drain %i bytes before %s error handling\n", d_off, x);	\
+		   eof = 0;				\
+       		   break; } while(0); 			\
+		   if (do_break) break
+
 /* TODO:
  * - Debug: Output block boundaries
  * - On error, see whether we can be graceful (jump ahead and continue),
  *    otherwise output info on where we left off ... (sparseness)
  */
 unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
-			      int eof, lzo_state *state)
+			      int eof, int *recall, lzo_state *state)
 {
 	const loff_t ooff = fst->opos;
 	/* Decompression is tricky */
@@ -633,63 +653,39 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 			c_off += err;
 		}
 	}
-	if (state->deferred_recovery_opos) {
-		if (!eof) {
-			fst->opos = state->deferred_recovery_opos;
-			fst->ipos = state->deferred_recovery_ipos;
-			FPLOG(INFO, "Deferred error: Resuming by moving to %i/%i\n", 
-				fst->ipos, fst->opos);
-			state->deferred_recovery_opos = 0;
-			state->hdroff = 0;
-			fst->buf = state->obuf;
-			*towr = 0;
-			return state->dbuf;
-		} else
-			FPLOG(FATAL, "Recovery and EOF not yet handled");
-	}
 	/* Now do processing: Do we have a full block? */
+	const size_t totbufln = state->opts->softbs - ddr_plug.slack_post*((state->opts->softbs+15)/16);
+	const int inlen = *towr;
+	unsigned char* effbf = NULL;
+	size_t have_len = 0;
+	uint32_t cmp_len = 0, unc_len = 0;
+	int addoff = 16;
 	do {
-		uint32_t cmp_len, unc_len = 0;
+		char do_break = 0;
+		effbf = bf+c_off+state->hdroff;
 		lzo_uint dst_len;
-		const size_t totbufln = state->opts->softbs - ddr_plug.slack_post*((state->opts->softbs+15)/16);
-		unsigned char* effbf = bf+c_off+state->hdroff;
 		LZO_DEBUG(FPLOG(INFO, "dec blk @ %p (offs %i, stoffs %i, bln %zi, tbw %i)\n",
-				effbf, effbf-state->obuf, state->hdroff, totbufln, *towr));
+				effbf, effbf-state->obuf, state->hdroff, totbufln, inlen));
 		blockhdr_t *hdr = (blockhdr_t*)effbf;
-		const size_t have_len = *towr-state->hdroff-c_off;
-		/* No more bytes left: This is ideal :-) */
-		if (have_len == 0) {
-			state->hdroff = 0;
-			fst->buf = state->obuf;
+		have_len = inlen-state->hdroff-c_off;
+		/* Not even space for unc_len/EOF */
+		if (have_len < 4)
+			break;
+		unc_len = ntohl(hdr->uncmpr_len);
+		if (!unc_len) {	
+			/* EOF */
+			state->eof_seen = 1;
+			state->cmp_hdr += 4;
+			if (have_len != 4)
+				FPLOG(WARN, "%i+ bytes after EOF @ %i ignored\n", have_len-4, 
+					state->cmp_ln+state->cmp_hdr);
 			break;
 		}
-		/* EOF marker */
-		if (have_len >= 4) {
-			unc_len = ntohl(hdr->uncmpr_len);
-			if (!unc_len) {	
-				/* EOF */
-				state->eof_seen = 1;
-				state->cmp_hdr += 4;
-				if (have_len != 4)
-					FPLOG(WARN, "%i+ bytes after EOF @ %i ignored\n", have_len-4, 
-						state->cmp_ln+state->cmp_hdr);
-				break;
-			}
-		}
-		/* Not enough data to read header; move to beginning of buffer */
-		if (have_len < 8) {
-			if (effbf != state->obuf) {
-				memmove(state->obuf, effbf, have_len);
-				++state->nr_memmove;
-			}
-			state->hdroff = -have_len;
-			fst->buf = state->obuf+have_len;
+		if (have_len < 8)
 			break;
-		}
-		/* Parse rest of header header */
+		
 		cmp_len = ntohl(hdr->cmpr_len);
 		unsigned int unc_cksum, cmp_cksum;
-		int addoff;
 		if (have_len >= 16)
 			addoff = parse_block_hdr(hdr, &unc_cksum, &cmp_cksum, state);
 		else
@@ -702,54 +698,27 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 		}
 		LZO_DEBUG(FPLOG(INFO, "dec blk @ %p (hdroff %i, cln %i, uln %i, have %i)\n",
 				effbf, c_off+state->hdroff, cmp_len, unc_len, have_len));
-		/* Block incomplete? */
-		if (addoff+cmp_len > have_len) {
-			/* incomplete block */
-			if (effbf+addoff+cmp_len <= state->obuf+totbufln 
-				&& fst->buf+*towr+state->opts->softbs <= state->obuf+totbufln) {
-				/* We have enough space to just append: 
-				 * Block will fit and so will next read ... */
-				state->hdroff -= *towr-c_off;
-				fst->buf += *towr;
-				LZO_DEBUG(FPLOG(INFO, "append  @ %p\n", fst->buf));
-				/* Simplify to addoff+cmp_len+state->softbs < totbufln ? */
-			} else if (addoff+cmp_len < totbufln &&
-					have_len+state->opts->softbs < totbufln) {
-				/* We need to move block to beg of buffer */
-				LZO_DEBUG(FPLOG(INFO, "move %i bytes to buffer head\n", have_len));
-				if (effbf != state->obuf) {
-					memmove(state->obuf, effbf, have_len);
-					++state->nr_memmove;
-				}
-				state->hdroff = -have_len;
-				fst->buf = state->obuf+have_len;
-				//c_off = 0;
-			} else {
-				/* Our buffer is too small */
-				recover_decompr_error(state, fst, c_off, d_off, addoff, cmp_len, unc_len,
-						"Read blocks too small");
-				FPLOG(FATAL, "Can't assemble block of size %i, increase softblocksize to at least %i\n", 
-						cmp_len, cmp_len/2);
-				raise(SIGQUIT);
-			}
+		/* Block incomplete? Then we're done for this round ... */
+		if (have_len < addoff+cmp_len)
 			break;
-		}
-		if (state->flags & ( F_ADLER32_C | F_CRC32_C)) {
+			if (state->flags & ( F_ADLER32_C | F_CRC32_C)) {
 			uint32_t cksum = state->flags & F_ADLER32_C ?
 				lzo_adler32(ADLER32_INIT_VALUE, effbf+addoff, cmp_len) :
 				lzo_crc32  (  CRC32_INIT_VALUE, effbf+addoff, cmp_len);
 			if (cksum != cmp_cksum) {
-				int rec = recover_decompr_error(state, fst, c_off, d_off, addoff, cmp_len, unc_len,
-					"compr checksum mismatch");
-				if (!rec)
+				if (d_off) 
+					DRAIN("ccksm");
+				if (!recover_decompr_error(state, fst, &c_off, d_off, addoff, cmp_len, unc_len,
+					"compr checksum mismatch"))
 					raise(SIGQUIT);
 				break;
 			}
 		}
 		dst_len = state->dbuflen-d_off;
 		if (dst_len < unc_len) {
+			/* TODO: Check if drain would help us ... */
 			/* If memalloc fails, we'll abort in a second, so warn ... */
-			if (unc_len > 16*1024*1024)
+			if (unc_len > MAXBLOCKSZ)
 				FPLOG(WARN, "large uncompressed block sz %i @%i\n",
 						unc_len, state->cmp_ln+state->cmp_hdr);
 			size_t newlen = unc_len+d_off+255;
@@ -779,13 +748,15 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 			memcpy(state->dbuf+d_off, effbf+addoff, unc_len);
 			dst_len = unc_len;
 		}
-		char do_break = 0;
+		do_break = 0;
+		if (err != LZO_E_OK && d_off)
+			DRAIN("LZO");
 		switch (err) {
 		case LZO_E_INPUT_OVERRUN:
 			/* TODO: Partial block, handle! */
 			FPLOG(FATAL, "input overrun @ %i: %i %i %i; try larger block sizes\n", 
 					state->cmp_ln+state->cmp_hdr, *towr, state->dbuflen, dst_len);
-			if (0 == recover_decompr_error(state, fst, c_off, d_off, addoff, cmp_len, unc_len,
+			if (0 == recover_decompr_error(state, fst, &c_off, d_off, addoff, cmp_len, unc_len,
 						       "input overrun"))
 				raise(SIGQUIT);
 			BREAK;
@@ -793,39 +764,37 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 			/* TODO: Partial block, handle! */
 			FPLOG(FATAL, "EOF not found @ %i: %i %i %i; try larger block sizes\n", 
 					state->cmp_ln+state->cmp_hdr, *towr, state->dbuflen, dst_len);
-			if (0 == recover_decompr_error(state, fst, c_off, d_off, addoff, cmp_len, unc_len,
+			if (0 == recover_decompr_error(state, fst, &c_off, d_off, addoff, cmp_len, unc_len,
 						       "EOF not found"))
 				raise(SIGQUIT);
 			BREAK;
 		case LZO_E_OUTPUT_OVERRUN:
 			FPLOG(FATAL, "output overrun @ %i: %i %i %i; try larger block sizes\n", 
 					state->cmp_ln+state->cmp_hdr, *towr, state->dbuflen, dst_len);
-			if (0 == recover_decompr_error(state, fst, c_off, d_off, addoff, cmp_len, unc_len,
+			if (0 == recover_decompr_error(state, fst, &c_off, d_off, addoff, cmp_len, unc_len,
 						       "output overrun"))
 				raise(SIGQUIT);
 			BREAK;
 		case LZO_E_LOOKBEHIND_OVERRUN:
 			FPLOG(FATAL, "lookbehind overrun @ %i: %i %i %i; data corrupt?\n", 
 					state->cmp_ln+state->cmp_hdr, *towr, state->dbuflen, dst_len);
-			if (0 == recover_decompr_error(state, fst, c_off, d_off, addoff, cmp_len, unc_len,
+			if (0 == recover_decompr_error(state, fst, &c_off, d_off, addoff, cmp_len, unc_len,
 						       "lookbehind overrun"))
 				raise(SIGQUIT);
 			BREAK;
 		case LZO_E_ERROR:
 			FPLOG(FATAL, "unspecified error @ %i: %i %i %i; data corrupt?\n", 
 					state->cmp_ln+state->cmp_hdr, *towr, state->dbuflen, dst_len);
-			if (0 == recover_decompr_error(state, fst, c_off, d_off, addoff, cmp_len, unc_len,
+			if (0 == recover_decompr_error(state, fst, &c_off, d_off, addoff, cmp_len, unc_len,
 						       "unspecified error"))
 				raise(SIGQUIT);
 			BREAK;
 		case LZO_E_INPUT_NOT_CONSUMED:
 			/* TODO: Leftover bytes, store */
-			FPLOG(INFO, "input not fully consumed @ %i: %i %i %i\n", 
+			FPLOG(WARN, "input not fully consumed @ %i: %i %i %i\n", 
 					state->cmp_ln+state->cmp_hdr, *towr, state->dbuflen, dst_len);
-			/*
-			recover_decompr_error(state, fst, c_off, d_off, addoff, cmp_len, unc_len,
+			recover_decompr_msg(state, fst, &c_off, d_off, addoff, cmp_len, unc_len,
 					       "input not consumed");
-			*/
 			BREAK;
 		}
 		if (do_break)
@@ -841,9 +810,11 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 					lzo_adler32(ADLER32_INIT_VALUE, state->dbuf+d_off, dst_len) :
 					lzo_crc32  (  CRC32_INIT_VALUE, state->dbuf+d_off, dst_len);
 			if (cksum != unc_cksum) {
+				if (d_off)
+					DRAIN("dcksm");
 				FPLOG(WARN, "decompr checksum mismatch @ %i\n",
 						state->cmp_ln+state->cmp_hdr);
-				if (0 == recover_decompr_error(state, fst, c_off, d_off, addoff, cmp_len, unc_len,
+				if (0 == recover_decompr_error(state, fst, &c_off, d_off, addoff, cmp_len, unc_len,
 							       "decompr checksum mismatch"))
 					raise(SIGQUIT);
 				break;
@@ -857,13 +828,70 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 	} while (1);
 	if (eof && !state->eof_seen)
 		FPLOG(WARN, "End of input @ %i but no EOF marker seen\n", state->cmp_ln+state->cmp_hdr);
+
+	/* OK, so now we know what we have ..., let's do some buffer management and ensure that
+	 * (a) We preserve incomplete blocks for further processing
+	 * (b) We keep track of block header position
+	 * (c) We have enough space for another read block (unless we use *recall)
+	 */
+	/* Need drain? */
+	int spcleft = totbufln-(fst->buf+inlen-state->obuf);
+	//if (!*recall && spcleft < state->opts->softbs)
+	//       *recall = 1;
+	int nextrd = *recall? 0: state->opts->softbs;
+	/* Trivial case: No bytes to store */
+	if (have_len == 0) {
+		state->hdroff = 0;
+		fst->buf = state->obuf;
+	} else if (have_len <= state->opts->softbs>>4) { 
+		/* Only a few bytes (softbs/16) -- use opportunity to wrap around cheaply */
+		if (effbf != state->obuf) {
+			memmove(state->obuf, effbf, have_len);
+			++state->nr_cheapmemmove;
+		}
+		state->hdroff = -have_len;
+		fst->buf = state->obuf+have_len;
+	/* Enough space for complete block and enough left for next read? */
+	} else if (effbf+addoff+cmp_len <= state->obuf+totbufln && spcleft >= nextrd) {
+		/* We have enough space to just append */
+		state->hdroff -= inlen-c_off;
+		fst->buf += inlen;
+		LZO_DEBUG(FPLOG(INFO, "append  @ %p\n", fst->buf));
+
+	/* OK, now for the bad cases:
+	 * (a) We can't append, but everything fits if we memmove to start
+	 * (b) We can't fit it in
+	 */
+	/* Simplify to addoff+cmp_len+state->softbs < totbufln ? */
+	} else if (addoff+cmp_len < totbufln &&
+		   have_len+nextrd < totbufln) {
+		/* We need to move block to beg of buffer */
+		LZO_DEBUG(FPLOG(INFO, "move %i bytes to buffer head\n", have_len));
+		if (effbf != state->obuf) {
+			memmove(state->obuf, effbf, have_len);
+			++state->nr_memmove;
+		}
+		state->hdroff = -have_len;
+		fst->buf = state->obuf+have_len;
+		//c_off = 0;
+	} else {
+		/* Our buffer is too small */
+		recover_decompr_msg(state, fst, &c_off, d_off, addoff, cmp_len, unc_len,
+				"Read blocks too small");
+		FPLOG(FATAL, "Can't assemble block of size %i, increase softblocksize to at least %i\n", 
+				cmp_len, cmp_len/2);
+		raise(SIGQUIT);
+	}
+
 	*towr = d_off;
 	return state->dbuf;
+	
 }
-
+#undef BREAK
+#undef DRAIN
 
 unsigned char* lzo_block(fstate_t *fst, unsigned char* bf, 
-			 int *towr, int eof, void **stat)
+			 int *towr, int eof, int *recall, void **stat)
 {
 	lzo_state *state = (lzo_state*)*stat;
 	if (!state->obuf)
@@ -873,9 +901,9 @@ unsigned char* lzo_block(fstate_t *fst, unsigned char* bf,
 	if (state->do_bench) 
 		t1 = clock();
 	if (state->mode == COMPRESS) 
-		ptr = lzo_compress(  fst, bf, towr, eof, state);
+		ptr = lzo_compress(  fst, bf, towr, eof, recall, state);
 	else
-		ptr = lzo_decompress(fst, bf, towr, eof, state);
+		ptr = lzo_decompress(fst, bf, towr, eof, recall, state);
 	if (state->do_bench)
 		state->cpu += clock() - t1;
 	return ptr;
@@ -904,9 +932,9 @@ int lzo_close(loff_t ooff, void **stat)
 			state->cmp_hdr,
 			state->unc_ln/1024.0);
 		if (state->do_bench)
-			FPLOG(INFO, "%i reallocs (%ikiB), %i moves\n",
+			FPLOG(INFO, "%i reallocs (%ikiB), %i(+%i) moves\n",
 				state->nr_realloc, state->dbuflen/1024,
-				state->nr_memmove);
+				state->nr_memmove, state->nr_cheapmemmove);
 	}
 	/* Only output if it took us more than 0.05s, otherwise it's completely meaningless */
 	if (state->do_bench && state->cpu/(CLOCKS_PER_SEC/20) > 0)

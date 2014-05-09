@@ -33,14 +33,16 @@ typedef int (_init_callback)(void **stat, char* param, int seq, const opt_t *opt
 typedef int (_open_callback)(const opt_t *opt, int olnchange, 
 			     unsigned int totslack_pre, unsigned int totslack_post,
 			     void **stat);
-/** block_callback parameters: buffer to be written (can be modified),
- *  	number of bytes to be written (can be modified), eof flag,
- *  	output stream offset, handle.
- *  Will be called with eof=1 once at the end.
+/** block_callback parameters: file state (contains file descriptors, positions,
+ * 	...), buffer to be written (can be modified),
+ *  	number of bytes to be written (can be null and can be modified), 
+ *  	eof flag, recall request(output!), handle.
+ *  Will be called with eof=1 exactly once at the end.
  *  Return value: buffer to be really written.
  */
 typedef unsigned char* (_block_callback)(fstate_t *fst, unsigned char* bf, 
-					 int *towr, int eof, void **stat);
+					 int *towr, int eof, int *recall, 
+					 void **stat);
 /** close_callback parameters: final output position and handle.
  * Return value: 0 = OK, -x = ERROR
  * close_callback is called before files are fsynced and closed

@@ -406,14 +406,30 @@ void call_plugins_close(opt_t *op, fstate_t *fst)
 	}
 }
 
-unsigned char* call_plugins_block(unsigned char *bf, int *towr, int eof, fstate_t *fst)
+/** Call the plugin block processing chain ...
+ *  Each block callback can analyze the buffer, modify it, change the number of bytes to be written
+ *  and request to be called again (without new input). The latter may help with error handling
+ *  or draining buffers if they fill up. eof will be cleared on plugins after a recall has been
+ *  requested.
+ *  We are also passing the fstate struct, allowing a wide range of manipulations (use with care!)
+ */
+unsigned char* call_plugins_block(unsigned char *bf, int *towr, int eof, int *skip, fstate_t *fst)
 {
 	if (!plugins_opened)
 		return bf;
+	int recall = -1;
+	int seq = 0;
 	LISTTYPE(ddr_plugin_t) *plug;
-	LISTFOREACH(ddr_plugins, plug)
-		if (LISTDATA(plug).block_callback)
-			bf = LISTDATA(plug).block_callback(fst, bf, towr, eof, &LISTDATA(plug).state);
+	LISTFOREACH(ddr_plugins, plug) {
+		if (LISTDATA(plug).block_callback && seq >= *skip) {
+			int myrec = 0;
+			bf = LISTDATA(plug).block_callback(fst, bf, towr, recall==-1? eof: 0, &myrec, &LISTDATA(plug).state);
+			if (myrec && recall==-1)
+				recall = seq;
+		}
+		++seq;
+	}
+	*skip = recall;
 	return bf;
 }
 
@@ -1060,7 +1076,8 @@ static int mayexpandfile(const char* onm, opt_t *op, fstate_t *fst)
 	loff_t maxopos = fst->opos;
 	if (op->init_opos > fst->opos)
 		maxopos = op->init_opos;
-	STAT64(onm, &st);
+	if (STAT64(onm, &st))
+		return -1;
 	if (!S_ISREG(st.st_mode))
 		return 0;
 	if (st.st_size < maxopos || op->trunclast)
@@ -1109,18 +1126,10 @@ int sync_close(int fd, const char* nm, char chr, opt_t *op, fstate_t *fst)
 			      nm, fmt_kiB(fst->opos, !nocol), strerror(errno));
 			++err;
 		}
-		if (op->sparse) {
-			rc = mayexpandfile(nm, op, fst);
-			if (rc)
-				fplog(stderr, WARN, "seek %s (%skiB): %s!\n",
-				      nm, fmt_kiB(fst->opos, !nocol), strerror(errno));
-		} else if (op->trunclast && !op->reverse) {
-			rc = truncate(nm, fst->opos);
-			if (rc)
-				fplog(stderr, WARN, "could not truncate %s to %skiB: %s!\n",
-					nm, fmt_kiB(fst->opos, !nocol), strerror(errno));
-		}
-
+		rc = chr? 0: mayexpandfile(nm, op, fst);
+		if (rc && (op->trunclast || op->sparse))
+			fplog(stderr, WARN, "extend/truncate %s (%skiB): %s!\n",
+			      nm, fmt_kiB(fst->opos, !nocol), strerror(errno));
 	}
 	return err;
 }			 
@@ -1309,45 +1318,52 @@ ssize_t writeblock(int towrite,
 	ssize_t err, wr = 0;
 	int lasterr = 0;
 	int eof = towrite? 0: 1;
-	unsigned char* wbuf = call_plugins_block(fst->buf, &towrite, eof, fst);
-	if (!wbuf || !towrite)
-		return towrite;
-	//errno = 0; /* should not be necessary */
+	int redo = -1;
+	unsigned char* wbuf;
 	do {
-		wr += (err = mypwrite(fst->odes, wbuf+wr, towrite-wr, fst->opos+wr-op->reverse*towrite, op, fst, prg));
-		if (err == -1) 
-			wr++;
-	} while ((err == -1 && (errno == EINTR || errno == EAGAIN))
-		  || (wr < towrite && err > 0 && errno == 0));
-	if (wr < towrite && err != 0) {
-		/* Write error: handle ? .. */
-		lasterr = errno;
-		fplog(stderr, (op->abwrerr? FATAL: WARN),
-				"write %s (%skiB): %s\n",
-	      			op->oname, fmt_kiB(fst->opos, !nocol), strerror(errno));
-		if (op->abwrerr) 
-			exit_report(21, op, fst, prg, dop);
-		fst->nrerr++;
-	}
-	int oldeno = errno;
-	char oldochr = fst->o_chr;
-	LISTTYPE(ofile_t) *of;
-	LISTFOREACH(ofiles, of) {
-		ssize_t e2, w2 = 0;
-		ofile_t *oft = &(LISTDATA(of));
-		fst->o_chr = oft->cdev;
+	       	wbuf = call_plugins_block(fst->buf, &towrite, eof, &redo, fst);
+		if (!wbuf || !towrite) {
+			towrite = 0;
+			continue;
+		}
+		//errno = 0; /* should not be necessary */
 		do {
-			w2 += (e2 = mypwrite(oft->fd, wbuf+w2, towrite-w2, fst->opos+w2-op->reverse*towrite, op, fst, prg));
-			if (e2 == -1) 
-				w2++;
-		} while ((e2 == -1 && (errno == EINTR || errno == EAGAIN))
-			  || (w2 < towrite && e2 > 0 && errno == 0));
-		if (w2 < towrite && e2 != 0) 
-			fplog(stderr, WARN, "2ndary write %s (%skiB): %s\n",
-			      oft->name, fmt_kiB(fst->opos, !nocol), strerror(errno));
-	}
-	fst->o_chr = oldochr;
-	errno = oldeno;	
+			wr += (err = mypwrite(fst->odes, wbuf+wr, towrite-wr, fst->opos+wr-op->reverse*towrite, op, fst, prg));
+			if (err == -1) 
+				wr++;
+		} while ((err == -1 && (errno == EINTR || errno == EAGAIN))
+			  || (wr < towrite && err > 0 && errno == 0));
+		if (wr < towrite && err != 0) {
+			/* Write error: handle ? .. */
+			lasterr = errno;
+			fplog(stderr, (op->abwrerr? FATAL: WARN),
+					"write %s (%skiB): %s\n",
+		      			op->oname, fmt_kiB(fst->opos, !nocol), strerror(errno));
+			if (op->abwrerr) 
+				exit_report(21, op, fst, prg, dop);
+			fst->nrerr++;
+		}
+		int oldeno = errno;
+		char oldochr = fst->o_chr;
+		LISTTYPE(ofile_t) *of;
+		LISTFOREACH(ofiles, of) {
+			ssize_t e2, w2 = 0;
+			ofile_t *oft = &(LISTDATA(of));
+			fst->o_chr = oft->cdev;
+			do {
+				w2 += (e2 = mypwrite(oft->fd, wbuf+w2, towrite-w2, fst->opos+w2-op->reverse*towrite, op, fst, prg));
+				if (e2 == -1) 
+					w2++;
+			} while ((e2 == -1 && (errno == EINTR || errno == EAGAIN))
+				  || (w2 < towrite && e2 > 0 && errno == 0));
+			if (w2 < towrite && e2 != 0) 
+				fplog(stderr, WARN, "2ndary write %s (%skiB): %s\n",
+				      oft->name, fmt_kiB(fst->opos, !nocol), strerror(errno));
+		}
+		fst->o_chr = oldochr;
+		errno = oldeno;	
+		towrite = 0;
+		} while (redo != -1);
 	return (lasterr? -lasterr: wr);
 }
 
