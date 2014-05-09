@@ -1315,17 +1315,21 @@ ssize_t readblock(const int toread,
 ssize_t writeblock(int towrite,
 		   opt_t *op, fstate_t *fst, progress_t *prg, dpopt_t *dop)
 {
-	ssize_t err, wr = 0;
+	ssize_t err, totwr = 0;
 	int lasterr = 0;
 	int eof = towrite? 0: 1;
+	int prev_tow;
+	const int orig_tow = towrite;
 	int redo = -1;
 	unsigned char* wbuf;
 	do {
+		prev_tow = towrite;
 	       	wbuf = call_plugins_block(fst->buf, &towrite, eof, &redo, fst);
 		if (!wbuf || !towrite) {
 			towrite = 0;
 			continue;
 		}
+		ssize_t wr = 0;
 		//errno = 0; /* should not be necessary */
 		do {
 			wr += (err = mypwrite(fst->odes, wbuf+wr, towrite-wr, fst->opos+wr-op->reverse*towrite, op, fst, prg));
@@ -1333,6 +1337,7 @@ ssize_t writeblock(int towrite,
 				wr++;
 		} while ((err == -1 && (errno == EINTR || errno == EAGAIN))
 			  || (wr < towrite && err > 0 && errno == 0));
+		totwr += wr;
 		if (wr < towrite && err != 0) {
 			/* Write error: handle ? .. */
 			lasterr = errno;
@@ -1362,9 +1367,14 @@ ssize_t writeblock(int towrite,
 		}
 		fst->o_chr = oldochr;
 		errno = oldeno;	
+		fst->ipos += prev_tow;
+		fst->opos += wr;
 		towrite = 0;
 		} while (redo != -1);
-	return (lasterr? -lasterr: wr);
+	/* Undo opos/ipos changes */
+	fst->ipos -= orig_tow;
+	fst->opos -= totwr;
+	return (lasterr? -lasterr: totwr);
 }
 
 int blockxfer(const loff_t max, const int bs,

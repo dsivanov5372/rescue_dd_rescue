@@ -158,8 +158,6 @@ typedef struct _lzo_state {
 	size_t cmp_ln, unc_ln;
 	/* Bench */
 	clock_t cpu;
-	/* Recov ipos corr */
-	loff_t rec_ipos_corr, rec_opos_corr;
 } lzo_state;
 
 #define FPLOG(lvl, fmt, args...) \
@@ -567,8 +565,8 @@ void recover_decompr_msg(lzo_state *state, fstate_t *fst,
 	assert(d_off == 0);
 	enum ddrlog_t prio = can_recover? WARN: FATAL;
 	FPLOG(prio, "decompr error in block @%i/%i (size %i+%i/%i):\n\t %s\n",
-			fst->ipos +*c_off + state->hdroff + state->rec_ipos_corr,
-			fst->opos + d_off + state->rec_opos_corr,
+			fst->ipos +*c_off + state->hdroff,
+			fst->opos + d_off,
 			addoff, cmp_len, unc_len,
 			msg);
 }
@@ -883,13 +881,6 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 		FPLOG(FATAL, "Can't assemble block of size %i, increase softblocksize to at least %i\n", 
 				cmp_len, cmp_len/2);
 		raise(SIGQUIT);
-	}
-	if (*recall) {
-		state->rec_ipos_corr = inlen;
-		state->rec_opos_corr = d_off;
-	} else {
-	       	state->rec_ipos_corr = 0;
-	       	state->rec_opos_corr = 0;
 	}
 
 	*towr = d_off;
