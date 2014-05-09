@@ -158,6 +158,8 @@ typedef struct _lzo_state {
 	size_t cmp_ln, unc_ln;
 	/* Bench */
 	clock_t cpu;
+	/* Recov ipos corr */
+	loff_t rec_ipos_corr, rec_opos_corr;
 } lzo_state;
 
 #define FPLOG(lvl, fmt, args...) \
@@ -565,8 +567,8 @@ void recover_decompr_msg(lzo_state *state, fstate_t *fst,
 	assert(d_off == 0);
 	enum ddrlog_t prio = can_recover? WARN: FATAL;
 	FPLOG(prio, "decompr error in block @%i/%i (size %i+%i/%i):\n\t %s\n",
-			fst->ipos +*c_off + state->hdroff,
-			fst->opos + d_off,
+			fst->ipos +*c_off + state->hdroff + state->rec_ipos_corr,
+			fst->opos + d_off + state->rec_opos_corr,
 			addoff, cmp_len, unc_len,
 			msg);
 }
@@ -619,11 +621,10 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 			      int eof, int *recall, lzo_state *state)
 {
 	const loff_t ooff = fst->opos;
+	const int inlen = *towr;
 	/* Decompression is tricky */
 	int c_off = 0;
 	int d_off = 0;
-	if (!*towr)
-		return bf;
 	/* header parsing has happened in _open callback ... */
 	if (!state->hdr_seen) {
 		assert(ooff - state->opts->init_opos == 0);
@@ -655,11 +656,12 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 	}
 	/* Now do processing: Do we have a full block? */
 	const size_t totbufln = state->opts->softbs - ddr_plug.slack_post*((state->opts->softbs+15)/16);
-	const int inlen = *towr;
 	unsigned char* effbf = NULL;
 	size_t have_len = 0;
 	uint32_t cmp_len = 0, unc_len = 0;
 	int addoff = 16;
+	if (inlen-state->hdroff <= 0)
+		return bf;
 	do {
 		char do_break = 0;
 		effbf = bf+c_off+state->hdroff;
@@ -881,6 +883,13 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 		FPLOG(FATAL, "Can't assemble block of size %i, increase softblocksize to at least %i\n", 
 				cmp_len, cmp_len/2);
 		raise(SIGQUIT);
+	}
+	if (*recall) {
+		state->rec_ipos_corr = inlen;
+		state->rec_opos_corr = d_off;
+	} else {
+	       	state->rec_ipos_corr = 0;
+	       	state->rec_opos_corr = 0;
 	}
 
 	*towr = d_off;
