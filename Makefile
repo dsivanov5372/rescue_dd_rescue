@@ -256,6 +256,8 @@ check: $(TARGETS) find_nonzero
 	./dd_rescue -x -a -b 16k -m17k /dev/zero TEST
 	MD5=$$(./dd_rescue -c0 -a -b16k -L ./libddr_MD5.so TEST TEST2 2>&1 | grep 'MD5(0)': | tail -n1 | sed 's/^dd_rescue: (info): MD5(0):[^:]*: //'); MD5S=$$(md5sum TEST | sed 's/ .*$$//'); echo $$MD5 $$MD5S; if test "$$MD5" != "$$MD5S"; then false; fi
 	rm -f TEST TEST2
+	# TODO:
+	# Use output option of MD5 and use md5sum -c to verify
 	if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo; fi
 	
 check_lzo: $(TARGETS)
@@ -290,7 +292,7 @@ check_lzo_algos: $(TARGETS)
 check_lzo_test: $(TARGETS)
 	find . -type f | xargs ./test_lzo.sh
 
-check_malicious: $(TARGETS)
+check_malicious: $(TARGETS) fuzz_lzo
 	# TO BE DONE:
 	# Do intelligent fuzzing before feeding to dd_rescue -L lzo=decompress
 	# Intelligent fuzzing means starting from valid .lzo, and adding
