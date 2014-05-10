@@ -553,6 +553,51 @@ unsigned char* lzo_compress(fstate_t *fst, unsigned char *bf,
 }
 
 #define MAXBLOCKSZ 16*1024*1024
+unsigned char* lzo_search_hdr(fstate_t *fst, unsigned char* bf, int *towr,
+			      int eof, int *recall, lzo_state *state)
+{
+	int off;
+	/* Look for a block header ...
+	 * (a) We need two 32bit words (big endian) that could be uncompressed
+	 *  and compressed length. We limit block sizes to <16M, so we can look
+	 *  for two null bytes.
+	 */
+	uint32_t unc_len = 0xffffffff, cmp_len=0xffffffff;
+	/* static */ uint32_t mask = htonl(~(MAXBLOCKSZ-1));
+	for (off = 0; off < *towr-8; ++off) {
+		unc_len = *(uint32_t*)(fst->buf+off);
+		cmp_len = *(uint32_t*)(fst->buf+off+4);
+		if (!(unc_len & mask) && !(cmp_len & mask))
+			break;
+	}
+	/* TODO: Special case: block header straddles a blk boundary */
+	/* Nothing found */
+	if ((unc_len & mask) | (cmp_len & mask)) {
+		*towr = 0;
+		return fst->buf;
+	}
+	unc_len = ntohl(unc_len);
+	cmp_len = ntohl(cmp_len);
+	if (cmp_len > 2*state->opts->softbs) {
+		FPLOG(INFO, "Blk Cand @ %i with large size %i, increase softblocksize\n",
+			fst->ipos+off, cmp_len);
+		/* TODO: Continue search */
+		*towr = 0;
+		return fst->buf;
+	}
+	/* (b) No complete block yet */
+ 	if (cmp_len+sizeof(blockhdr_t) > *towr-off) {
+		if (off != 0) {
+			memmove(fst->buf, fst->buf+off, *towr-off);
+			fst->buf += *towr-off;
+			state->hdroff = -(*towr-off);
+		}
+		*towr = 0;
+		return state->obuf;
+	}
+	/* (c) OK, we have a complete block, test various hypotheses ... */
+}
+
 void recover_decompr_msg(lzo_state *state, fstate_t *fst,
 			 int *c_off, int d_off, int addoff,
        			 uint32_t cmp_len, uint32_t unc_len,
@@ -564,11 +609,13 @@ void recover_decompr_msg(lzo_state *state, fstate_t *fst,
 	/* We need to have drained data before coming here */
 	assert(d_off == 0);
 	enum ddrlog_t prio = can_recover? WARN: FATAL;
-	FPLOG(prio, "decompr error in block @%i/%i (size %i+%i/%i):\n\t %s\n",
+	FPLOG(prio, "decompr err block @%i/%i (size %i+%i/%i):\n",
 			fst->ipos +*c_off + state->hdroff,
 			fst->opos + d_off,
 			addoff, cmp_len, unc_len,
 			msg);
+	if (msg && *msg)
+		FPLOG(prio, "%s\n", msg);
 }
 
 int recover_decompr_error(lzo_state *state, fstate_t *fst,
@@ -583,7 +630,7 @@ int recover_decompr_error(lzo_state *state, fstate_t *fst,
 	int can_recover = 1;
 	if (cmp_len > MAXBLOCKSZ || unc_len > MAXBLOCKSZ)
 		can_recover = 0;
-	/* TODO: Look for next header and check for lenghts ...*/
+	/* TODO: Look for next header and check for lengths ...*/
 	fst->nrerr++;
 #if 0
 	loff_t alt_ipos = state->opts->init_ipos?
@@ -605,7 +652,7 @@ int recover_decompr_error(lzo_state *state, fstate_t *fst,
 
 #define BREAK ++do_break; break
 #define DRAIN(x) do { ++do_break; *recall=1; 		\
-		   FPLOG(INFO, "Drain %i bytes before %s error handling\n", d_off, x);	\
+		   LZO_DEBUG(FPLOG(INFO, "Drain %i bytes before %s error handling\n", d_off, x));	\
 		   eof = 0;				\
        		   break; } while(0); 			\
 		   if (do_break) break
@@ -889,6 +936,7 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 }
 #undef BREAK
 #undef DRAIN
+
 
 unsigned char* lzo_block(fstate_t *fst, unsigned char* bf, 
 			 int *towr, int eof, int *recall, void **stat)
