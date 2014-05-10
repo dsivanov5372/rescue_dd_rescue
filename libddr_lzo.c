@@ -422,10 +422,8 @@ void slackfree(void* base, lzo_state *state)
 	free(state->orig_dbuf);
 }
 
-/* int ifd, const char* inm, loff_t ioff, 
-	     int ofd, const char* onm, loff_t ooff, 
-	     unsigned int bsz, unsigned int hsz,
-	     loff_t exfer, */
+/* TO DO: We could as well adjust to real max (2*softbs) */
+#define MAXBLOCKSZ 16*1024*1024
 int lzo_open(const opt_t *opt, int olnchg, 
 	     unsigned int totslack_pre, unsigned int totslack_post,
 	     void **stat)
@@ -463,6 +461,9 @@ int lzo_open(const opt_t *opt, int olnchg,
 	state->dbuf = (unsigned char*)slackalloc(state->dbuflen, state);
 	if (state->do_bench) 
 		state->cpu = 0;
+	if (opt->softbs > MAXBLOCKSZ)
+		FPLOG(WARN, "Blocks larger than %iMiB not recommended %iMiB specified)\n",
+			MAXBLOCKSZ>>20, opt->softbs);
 	return 0;
 	/* This breaks MD5 in chain before us
 	return consumed;
@@ -552,7 +553,6 @@ unsigned char* lzo_compress(fstate_t *fst, unsigned char *bf,
 	return wrbf;
 }
 
-#define MAXBLOCKSZ 16*1024*1024
 unsigned char* lzo_search_hdr(fstate_t *fst, unsigned char* bf, int *towr,
 			      int eof, int *recall, lzo_state *state)
 {
@@ -562,40 +562,47 @@ unsigned char* lzo_search_hdr(fstate_t *fst, unsigned char* bf, int *towr,
 	 *  and compressed length. We limit block sizes to <16M, so we can look
 	 *  for two null bytes.
 	 */
+	/* static */ uint32_t mask = htonl(~((MAXBLOCKSZ<<1)-1));
 	uint32_t unc_len = 0xffffffff, cmp_len=0xffffffff;
-	/* static */ uint32_t mask = htonl(~(MAXBLOCKSZ-1));
-	for (off = 0; off < *towr-8; ++off) {
+	for (off = state->hdroff; off < *towr-8; ++off) {
 		unc_len = *(uint32_t*)(fst->buf+off);
 		cmp_len = *(uint32_t*)(fst->buf+off+4);
-		if (!(unc_len & mask) && !(cmp_len & mask))
-			break;
-	}
-	/* TODO: Special case: block header straddles a blk boundary */
-	/* Nothing found */
-	if ((unc_len & mask) | (cmp_len & mask)) {
-		*towr = 0;
-		return fst->buf;
-	}
-	unc_len = ntohl(unc_len);
-	cmp_len = ntohl(cmp_len);
-	if (cmp_len > 2*state->opts->softbs) {
-		FPLOG(INFO, "Blk Cand @ %i with large size %i, increase softblocksize\n",
-			fst->ipos+off, cmp_len);
-		/* TODO: Continue search */
-		*towr = 0;
-		return fst->buf;
-	}
-	/* (b) No complete block yet */
- 	if (cmp_len+sizeof(blockhdr_t) > *towr-off) {
-		if (off != 0) {
-			memmove(fst->buf, fst->buf+off, *towr-off);
+		if (unc_len & mask || cmp_len & mask)
+			continue;
+		/* OK, we found a candidate ... */
+		unc_len = ntohl(unc_len);
+		cmp_len = ntohl(cmp_len);
+		/* OK, we passed the quick test, here's the real one ... */
+		if (unc_len > MAXBLOCKSZ || cmp_len > MAXBLOCKSZ)
+			continue;
+		/* Candidate found but we can't decode it with our buffer sizes ... */
+		if (cmp_len > 2*state->opts->softbs) {
+			FPLOG(INFO, "Blk Cand @ %i with large size %i, increase softblocksize\n",
+				fst->ipos+off, cmp_len);
+			continue;
+		}
+		/* Best case: We have a complete block */
+		if (cmp_len+sizeof(blockhdr_t) <= *towr-off) {
+			/* TODO: Do checksum tests etc. */
+			*towr -= off;
+			state->hdroff = off;
+			return fst->buf+off;
+		} else {
+			/* No complete block, prepare to append ...*/
+			memmove(state->obuf, fst->buf+off, *towr-off);
 			fst->buf += *towr-off;
 			state->hdroff = -(*towr-off);
+			*towr = 0;
+			return fst->buf;
 		}
-		*towr = 0;
-		return state->obuf;
 	}
-	/* (c) OK, we have a complete block, test various hypotheses ... */
+	/* Nothing found */
+	/* Special case: block header straddles a blk boundary */
+	memcpy(state->obuf-7, fst->buf+*towr-7, 7);
+	state->hdroff = -7;
+	fst->buf = state->obuf;
+	*towr = 0;
+	return fst->buf;
 }
 
 void recover_decompr_msg(lzo_state *state, fstate_t *fst,
@@ -996,7 +1003,7 @@ int lzo_close(loff_t ooff, void **stat)
 
 ddr_plugin_t ddr_plug = {
 	.name = "lzo",
-	.slack_pre = 0, /* sizeof(lzop_hdr), */
+	.slack_pre = 8, /* For search */
 	.slack_post = -33,
 	.needs_align = 1,
 	.handles_sparse = 0,
