@@ -153,6 +153,7 @@ typedef struct _lzo_state {
 	uint32_t flags;
 	int seq;
 	int hdr_seen;
+	unsigned int blockno;
 	unsigned char eof_seen, do_bench, do_opt;
 	enum compmode mode;
 	comp_alg *algo;
@@ -542,6 +543,7 @@ unsigned char* lzo_compress(fstate_t *fst, unsigned char *bf,
 		state->cmp_hdr += hlen;
 		state->cmp_ln += dst_len; state->unc_ln += *towr;
 		block_hdr((blockhdr_t*)bhdp, *towr, dst_len, unc_cks, cdata, state->flags);
+		state->blockno++;
 		*towr = dst_len + hlen + addwr;
 	}
 	if (eof) {
@@ -615,7 +617,8 @@ void recover_decompr_msg(lzo_state *state, fstate_t *fst,
 	/* We need to have drained data before coming here */
 	assert(d_off == 0);
 	enum ddrlog_t prio = can_recover? WARN: FATAL;
-	FPLOG(prio, "decompr err block @%i/%i (size %i+%i/%i):\n",
+	FPLOG(prio, "decompr err block %i@%i/%i (size %i+%i/%i):\n",
+			state->blockno,
 			fst->ipos +*c_off + state->hdroff,
 			fst->opos + d_off,
 			bhsz, cmp_len, unc_len,
@@ -902,6 +905,7 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 		d_off += dst_len;
 		state->cmp_ln += cmp_len; 
 		state->unc_ln += dst_len;
+		state->blockno++;
 	} while (1);
 	if (eof && !state->eof_seen)
 		FPLOG(WARN, "End of input @ %i but no EOF marker seen\n", state->cmp_ln+state->cmp_hdr);

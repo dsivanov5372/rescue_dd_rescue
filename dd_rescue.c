@@ -1318,14 +1318,16 @@ ssize_t writeblock(int towrite,
 	ssize_t err, totwr = 0;
 	int lasterr = 0;
 	int eof = towrite? 0: 1;
+	int adv_ipos = 0, adv_opos = 0;
 	int prev_tow;
-	const int orig_tow = towrite;
 	int redo = -1;
 	unsigned char* wbuf;
 	do {
 		prev_tow = towrite;
 	       	wbuf = call_plugins_block(fst->buf, &towrite, eof, &redo, fst);
 		if (!wbuf || !towrite) {
+			fst->ipos += prev_tow;
+			adv_ipos += prev_tow;
 			towrite = 0;
 			continue;
 		}
@@ -1369,11 +1371,13 @@ ssize_t writeblock(int towrite,
 		errno = oldeno;	
 		fst->ipos += prev_tow;
 		fst->opos += wr;
+		adv_ipos += prev_tow;
+		adv_opos += wr;
 		towrite = 0;
 		} while (redo != -1);
 	/* Undo opos/ipos changes */
-	fst->ipos -= orig_tow;
-	fst->opos -= totwr;
+	fst->ipos -= adv_ipos;
+	fst->opos -= adv_opos;
 	return (lasterr? -lasterr: totwr);
 }
 
