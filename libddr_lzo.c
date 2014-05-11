@@ -206,7 +206,7 @@ void lzo_hdr(header_t* hdr, lzo_state *state)
 int lzo_parse_hdr(unsigned char* bf, lzo_state *state)
 {
 	header_t *hdr = (header_t*)bf;
-	if (ntohs(hdr->version_needed_to_extract) > 0x1030 && hdr->version_needed_to_extract != htons(F_VERSION)) {
+	if (ntohs(hdr->version_needed_to_extract) > 0x1030 && ntohs(hdr->version_needed_to_extract) != F_VERSION) {
 		FPLOG(FATAL, "requires version %01x.%03x to extract\n",
 			ntohs(hdr->version_needed_to_extract) >> 12,
 			ntohs(hdr->version_needed_to_extract) & 0xfff);
@@ -283,25 +283,14 @@ void block_hdr(blockhdr_t* hdr, uint32_t uncompr, uint32_t compr, uint32_t unc_c
 }
 
 /* Returns compressed len */
-int parse_block_hdr(blockhdr_t *hdr, unsigned int *unc_cksum, unsigned int *cmp_cksum, lzo_state *state)
+void parse_block_hdr(blockhdr_t *hdr, unsigned int *unc_cksum, unsigned int *cmp_cksum, lzo_state *state)
 {
-	int off = sizeof(blockhdr_t);
 	if (state->flags & (F_ADLER32_D | F_CRC32_D)) {
-		if (unc_cksum)
-			*unc_cksum = ntohl(hdr->uncmpr_chksum);
-		if (state->flags & (F_ADLER32_C | F_CRC32_C)) {
-			if (cmp_cksum)
-				*cmp_cksum = ntohl(hdr->cmpr_chksum);
-		} else
-			off -= 4;
-	} else if (state->flags & (F_ADLER32_C | F_CRC32_C)) {
-		if (cmp_cksum)
-			*cmp_cksum = ntohl(hdr->uncmpr_chksum);
-		off -= 4;
-	} else {
-		off -= 8;
-	}
-	return off;
+		*unc_cksum = ntohl(hdr->uncmpr_chksum);
+		if (state->flags & (F_ADLER32_C | F_CRC32_C)) 
+			*cmp_cksum = ntohl(hdr->cmpr_chksum);
+	} else if (state->flags & (F_ADLER32_C | F_CRC32_C)) 
+		*cmp_cksum = ntohl(hdr->uncmpr_chksum);
 }
 
 const char *lzo_help = "The lzo plugin for dd_rescue de/compresses data on the fly.\n"
@@ -616,8 +605,8 @@ unsigned char* lzo_search_hdr(fstate_t *fst, unsigned char* bf, int *towr,
 }
 
 void recover_decompr_msg(lzo_state *state, fstate_t *fst,
-			 int *c_off, int d_off, int addoff,
-       			 uint32_t cmp_len, uint32_t unc_len,
+			 int *c_off, int d_off, int bhsz,
+       			 uint32_t unc_len, uint32_t cmp_len,
 			 const char* msg)
 {
 	int can_recover = 1;
@@ -629,25 +618,37 @@ void recover_decompr_msg(lzo_state *state, fstate_t *fst,
 	FPLOG(prio, "decompr err block @%i/%i (size %i+%i/%i):\n",
 			fst->ipos +*c_off + state->hdroff,
 			fst->opos + d_off,
-			addoff, cmp_len, unc_len,
+			bhsz, cmp_len, unc_len,
 			msg);
 	if (msg && *msg)
 		FPLOG(prio, "%s\n", msg);
 }
 
+int check_blklen_and_next(lzo_state *state, fstate_t *fst,
+			  int bfln, int c_off, int bhsz,
+			  uint32_t uln, uint32_t cln)
+{
+	if (uln > MAXBLOCKSZ || cln > MAXBLOCKSZ)
+		return 0;
+	uint32_t nextulen = bfln >= c_off+state->hdroff+bhsz+cln+4?
+				*(uint32_t*)(fst->buf+state->hdroff+c_off+bhsz+cln): 0;
+	uint32_t nextclen = bfln >= c_off+state->hdroff+bhsz+cln+8?
+				*(uint32_t*)(fst->buf+state->hdroff+c_off+bhsz+cln+4): 0;
+	if (nextulen > MAXBLOCKSZ || nextclen > MAXBLOCKSZ)
+		return 0;
+	return 1;
+}
+
+
 int recover_decompr_error(lzo_state *state, fstate_t *fst,
-			  int *c_off, int d_off, int addoff,
-       			  uint32_t cmp_len, uint32_t unc_len,
+			  int bflen, int *c_off, int d_off, int bhsz,
+       			  uint32_t unc_len, uint32_t cmp_len,
 			  const char* msg)
 {
 	/* We need to have drained data before coming here */
 	assert(d_off == 0);
-	recover_decompr_msg(state, fst, c_off, d_off, addoff,
-			    cmp_len, unc_len, msg);
-	int can_recover = 1;
-	if (cmp_len > MAXBLOCKSZ || unc_len > MAXBLOCKSZ)
-		can_recover = 0;
-	/* TODO: Look for next header and check for lengths ...*/
+	recover_decompr_msg(state, fst, c_off, d_off, bhsz,
+			    unc_len, cmp_len, msg);
 	fst->nrerr++;
 #if 0
 	loff_t alt_ipos = state->opts->init_ipos?
@@ -655,15 +656,28 @@ int recover_decompr_error(lzo_state *state, fstate_t *fst,
 				state->cmp_ln+state->cmp_hdr;
 	assert(fst->ipos+c_off+state->hdroff == alt_ipos);
 #endif
-	if (can_recover) {
-		state->cmp_hdr += addoff;
-		*c_off += cmp_len+addoff;
+	if (check_blklen_and_next(state, fst, bflen,
+				  *c_off, bhsz, unc_len, cmp_len)) {
+		state->cmp_hdr += bhsz;
+		*c_off += cmp_len+bhsz;
 		//Don't d_off += dst_len, as we're skipping; instead:
 		fst->opos += unc_len;
 		state->cmp_ln += cmp_len;
 		state->unc_ln += unc_len;
+		return 1;
 	}
-	return can_recover;
+	return 0;
+}
+
+/* Block header size: 8 -- 16 bytes dep. on checksums ... */
+int bhdr_size(const lzo_state *state, uint32_t uln, uint32_t cln)
+{
+	int sz = 8;
+	if (state->flags & (F_ADLER32_D | F_CRC32_D))
+		sz += 4;
+	if (state->flags & (F_ADLER32_C | F_CRC32_C) && uln != cln)
+		sz += 4;
+	return sz;
 }
 
 
@@ -721,7 +735,7 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 	unsigned char* effbf = NULL;
 	size_t have_len = 0;
 	uint32_t cmp_len = 0, unc_len = 0;
-	int addoff = 16;
+	int bhsz = sizeof(blockhdr_t);
 	if (inlen-state->hdroff <= 0)
 		return bf;
 	do {
@@ -749,31 +763,30 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 			break;
 		
 		cmp_len = ntohl(hdr->cmpr_len);
-		unsigned int unc_cksum, cmp_cksum;
+		bhsz = bhdr_size(state, unc_len, cmp_len);
+		uint32_t unc_cksum = 0, cmp_cksum = 0;
 		if (have_len >= 16)
-			addoff = parse_block_hdr(hdr, &unc_cksum, &cmp_cksum, state);
-		else
-			addoff = parse_block_hdr(hdr, NULL, NULL, state);
+			 parse_block_hdr(hdr, &unc_cksum, &cmp_cksum, state);
 
 		/* No second checksum .... */
-		if (cmp_len == unc_len && addoff > 12) {
-			addoff -= 4;
+		if (cmp_len == unc_len) 
 			cmp_cksum = unc_cksum;
-		}
+		
 		LZO_DEBUG(FPLOG(INFO, "dec blk @ %p (hdroff %i, cln %i, uln %i, have %i)\n",
-				effbf, c_off+state->hdroff, cmp_len, unc_len, have_len));
+				effbf, c_off+state->hdroff, unc_len, cmp_len, have_len));
 		/* Block incomplete? Then we're done for this round ... */
-		if (have_len < addoff+cmp_len)
+		if (have_len < bhsz+cmp_len)
 			break;
-			if (state->flags & ( F_ADLER32_C | F_CRC32_C)) {
+		if (state->flags & ( F_ADLER32_C | F_CRC32_C)) {
 			uint32_t cksum = state->flags & F_ADLER32_C ?
-				lzo_adler32(ADLER32_INIT_VALUE, effbf+addoff, cmp_len) :
-				lzo_crc32  (  CRC32_INIT_VALUE, effbf+addoff, cmp_len);
+				lzo_adler32(ADLER32_INIT_VALUE, effbf+bhsz, cmp_len) :
+				lzo_crc32  (  CRC32_INIT_VALUE, effbf+bhsz, cmp_len);
 			if (cksum != cmp_cksum) {
 				if (d_off) 
 					DRAIN("ccksm");
-				if (!recover_decompr_error(state, fst, &c_off, d_off, addoff, cmp_len, unc_len,
-					"compr checksum mismatch"))
+				if (!recover_decompr_error(state, fst, inlen, &c_off, d_off, 
+							   bhsz, unc_len, cmp_len,
+							   "compr checksum mismatch"))
 					raise(SIGQUIT);
 				break;
 			}
@@ -802,14 +815,14 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 			if (cmp_len > unc_len)
 				FPLOG(WARN, "compressed %i > uncompressed %i breaks lzop\n",
 					cmp_len, unc_len);
-			err = state->algo->decompr(effbf+addoff, cmp_len, (unsigned char*)state->dbuf+d_off, &dst_len, NULL);
+			err = state->algo->decompr(effbf+bhsz, cmp_len, (unsigned char*)state->dbuf+d_off, &dst_len, NULL);
 			LZO_DEBUG(FPLOG(INFO, "decompressed %i@%p -> %i\n",
-				cmp_len, effbf+addoff, dst_len));
+				cmp_len, effbf+bhsz, dst_len));
 			if (dst_len != unc_len)
 				FPLOG(WARN, "inconsistent uncompressed size @%i: %i <-> %i\n",
 					state->cmp_ln+state->cmp_hdr, unc_len, dst_len);
 		} else {
-			memcpy(state->dbuf+d_off, effbf+addoff, unc_len);
+			memcpy(state->dbuf+d_off, effbf+bhsz, unc_len);
 			dst_len = unc_len;
 		}
 		do_break = 0;
@@ -820,44 +833,44 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 			/* TODO: Partial block, handle! */
 			FPLOG(FATAL, "input overrun @ %i: %i %i %i; try larger block sizes\n", 
 					state->cmp_ln+state->cmp_hdr, *towr, state->dbuflen, dst_len);
-			if (0 == recover_decompr_error(state, fst, &c_off, d_off, addoff, cmp_len, unc_len,
-						       "input overrun"))
+			if (0 == recover_decompr_error(state, fst, inlen, &c_off, d_off, bhsz, 
+							unc_len, cmp_len, "input overrun"))
 				raise(SIGQUIT);
 			BREAK;
 		case LZO_E_EOF_NOT_FOUND:
 			/* TODO: Partial block, handle! */
 			FPLOG(FATAL, "EOF not found @ %i: %i %i %i; try larger block sizes\n", 
 					state->cmp_ln+state->cmp_hdr, *towr, state->dbuflen, dst_len);
-			if (0 == recover_decompr_error(state, fst, &c_off, d_off, addoff, cmp_len, unc_len,
-						       "EOF not found"))
+			if (0 == recover_decompr_error(state, fst, inlen, &c_off, d_off, bhsz, 
+							unc_len, cmp_len, "EOF not found"))
 				raise(SIGQUIT);
 			BREAK;
 		case LZO_E_OUTPUT_OVERRUN:
 			FPLOG(FATAL, "output overrun @ %i: %i %i %i; try larger block sizes\n", 
 					state->cmp_ln+state->cmp_hdr, *towr, state->dbuflen, dst_len);
-			if (0 == recover_decompr_error(state, fst, &c_off, d_off, addoff, cmp_len, unc_len,
-						       "output overrun"))
+			if (0 == recover_decompr_error(state, fst, inlen, &c_off, d_off, bhsz, 
+							unc_len, cmp_len, "output overrun"))
 				raise(SIGQUIT);
 			BREAK;
 		case LZO_E_LOOKBEHIND_OVERRUN:
 			FPLOG(FATAL, "lookbehind overrun @ %i: %i %i %i; data corrupt?\n", 
 					state->cmp_ln+state->cmp_hdr, *towr, state->dbuflen, dst_len);
-			if (0 == recover_decompr_error(state, fst, &c_off, d_off, addoff, cmp_len, unc_len,
-						       "lookbehind overrun"))
+			if (0 == recover_decompr_error(state, fst, inlen, &c_off, d_off, bhsz, 
+							unc_len, cmp_len, "lookbehind overrun"))
 				raise(SIGQUIT);
 			BREAK;
 		case LZO_E_ERROR:
 			FPLOG(FATAL, "unspecified error @ %i: %i %i %i; data corrupt?\n", 
 					state->cmp_ln+state->cmp_hdr, *towr, state->dbuflen, dst_len);
-			if (0 == recover_decompr_error(state, fst, &c_off, d_off, addoff, cmp_len, unc_len,
-						       "unspecified error"))
+			if (0 == recover_decompr_error(state, fst, inlen, &c_off, d_off, bhsz,
+							unc_len, cmp_len, "unspecified error"))
 				raise(SIGQUIT);
 			BREAK;
 		case LZO_E_INPUT_NOT_CONSUMED:
 			/* TODO: Leftover bytes, store */
 			FPLOG(WARN, "input not fully consumed @ %i: %i %i %i\n", 
 					state->cmp_ln+state->cmp_hdr, *towr, state->dbuflen, dst_len);
-			recover_decompr_msg(state, fst, &c_off, d_off, addoff, cmp_len, unc_len,
+			recover_decompr_msg(state, fst, &c_off, d_off, bhsz, unc_len, cmp_len,
 					       "input not consumed");
 			BREAK;
 		}
@@ -878,14 +891,14 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 					DRAIN("dcksm");
 				FPLOG(WARN, "decompr checksum mismatch @ %i\n",
 						state->cmp_ln+state->cmp_hdr);
-				if (0 == recover_decompr_error(state, fst, &c_off, d_off, addoff, cmp_len, unc_len,
-							       "decompr checksum mismatch"))
+				if (0 == recover_decompr_error(state, fst, inlen, &c_off, d_off, bhsz,
+							unc_len, cmp_len, "decompr checksum mismatch"))
 					raise(SIGQUIT);
 				break;
 			}
 		}
-		state->cmp_hdr += addoff;
-		c_off += cmp_len+addoff;
+		state->cmp_hdr += bhsz;
+		c_off += cmp_len+bhsz;
 		d_off += dst_len;
 		state->cmp_ln += cmp_len; 
 		state->unc_ln += dst_len;
@@ -916,7 +929,7 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 		state->hdroff = -have_len;
 		fst->buf = state->obuf+have_len;
 	/* Enough space for complete block and enough left for next read? */
-	} else if (effbf+addoff+cmp_len <= state->obuf+totbufln && spcleft >= nextrd) {
+	} else if (effbf+bhsz+cmp_len <= state->obuf+totbufln && spcleft >= nextrd) {
 		/* We have enough space to just append */
 		state->hdroff -= inlen-c_off;
 		fst->buf += inlen;
@@ -926,8 +939,8 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 	 * (a) We can't append, but everything fits if we memmove to start
 	 * (b) We can't fit it in
 	 */
-	/* Simplify to addoff+cmp_len+state->softbs < totbufln ? */
-	} else if (addoff+cmp_len < totbufln &&
+	/* Simplify to bhsz+cmp_len+state->softbs < totbufln ? */
+	} else if (bhsz+cmp_len < totbufln &&
 		   have_len+nextrd < totbufln) {
 		/* We need to move block to beg of buffer */
 		LZO_DEBUG(FPLOG(INFO, "move %i bytes to buffer head\n", have_len));
@@ -940,7 +953,7 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 		//c_off = 0;
 	} else {
 		/* Our buffer is too small */
-		recover_decompr_msg(state, fst, &c_off, d_off, addoff, cmp_len, unc_len,
+		recover_decompr_msg(state, fst, &c_off, d_off, bhsz, unc_len, cmp_len,
 				"Read blocks too small");
 		FPLOG(FATAL, "Can't assemble block of size %i, increase softblocksize to at least %i\n", 
 				cmp_len, cmp_len/2);
