@@ -154,7 +154,7 @@ typedef struct _lzo_state {
 	int seq;
 	int hdr_seen;
 	unsigned int blockno;
-	unsigned char eof_seen, do_bench, do_opt;
+	unsigned char eof_seen, do_bench, do_opt, do_search;
 	enum compmode mode;
 	comp_alg *algo;
 	const opt_t *opts;
@@ -352,6 +352,8 @@ int lzo_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			state->mode = DECOMPRESS;
 		else if (!memcmp(param, "bench", 5))
 			state->do_bench = 1;
+		else if (!strcmp(param, "search"))
+			state->do_search = 1;
 		else if (!memcmp(param, "opt", 3))
 			state->do_opt = 1;
 		else if (!memcmp(param, "algo=", 5))
@@ -554,6 +556,21 @@ unsigned char* lzo_compress(fstate_t *fst, unsigned char *bf,
 	return wrbf;
 }
 
+int check_blklen_and_next(lzo_state *state, fstate_t *fst,
+			  int bfln, int c_off, int bhsz,
+			  uint32_t uln, uint32_t cln)
+{
+	if (uln > MAXBLOCKSZ || cln > MAXBLOCKSZ)
+		return 0;
+	uint32_t nextulen = bfln >= c_off+state->hdroff+bhsz+cln+4?
+				*(uint32_t*)(fst->buf+state->hdroff+c_off+bhsz+cln): 0;
+	uint32_t nextclen = bfln >= c_off+state->hdroff+bhsz+cln+8?
+				*(uint32_t*)(fst->buf+state->hdroff+c_off+bhsz+cln+4): 0;
+	if (nextulen > MAXBLOCKSZ || nextclen > MAXBLOCKSZ)
+		return 0;
+	return 1;
+}
+
 unsigned char* lzo_search_hdr(fstate_t *fst, unsigned char* bf, int *towr,
 			      int eof, int *recall, lzo_state *state)
 {
@@ -574,7 +591,10 @@ unsigned char* lzo_search_hdr(fstate_t *fst, unsigned char* bf, int *towr,
 		unc_len = ntohl(unc_len);
 		cmp_len = ntohl(cmp_len);
 		/* OK, we passed the quick test, here's the real one ... */
-		if (unc_len > MAXBLOCKSZ || cmp_len > MAXBLOCKSZ)
+		if (!check_blklen_and_next(state, fst, *towr, off-state->hdroff,
+					   16, unc_len, cmp_len) &&
+		    !check_blklen_and_next(state, fst, *towr, off-state->hdroff,
+			    		   12, unc_len, cmp_len))
 			continue;
 		/* Candidate found but we can't decode it with our buffer sizes ... */
 		if (cmp_len > 2*state->opts->softbs) {
@@ -584,10 +604,49 @@ unsigned char* lzo_search_hdr(fstate_t *fst, unsigned char* bf, int *towr,
 		}
 		/* Best case: We have a complete block */
 		if (cmp_len+sizeof(blockhdr_t) <= *towr-off) {
-			/* TODO: Do checksum tests etc. */
-			*towr -= off;
-			state->hdroff = off;
-			return fst->buf+off;
+			/* Do checksum tests etc. */
+			uint32_t ucks = ntohl(*(uint32_t*)(fst->buf+off+8));
+			uint32_t ccks = ntohl(*(uint32_t*)(fst->buf+off+12));
+			/* If there is a compr chksum at all, we'll have both */
+			uint32_t ca32 = lzo_adler32(ADLER32_INIT_VALUE, fst->buf+off+16, cmp_len);
+			if (ca32 == ccks) {
+				state->flags = F_OS_UNIX | F_ADLER32_C | F_ADLER32_D;
+				*towr -= off;
+				state->hdroff = off;
+				return fst->buf+off;
+			}
+			uint32_t cc32 = lzo_crc32(CRC32_INIT_VALUE, fst->buf+off+16, cmp_len);
+			if (cc32 == ccks) {
+				state->flags = F_OS_UNIX | F_CRC32_C | F_CRC32_D;
+				*towr -= off;
+				state->hdroff = off;
+				return fst->buf+off;
+			}
+			/* No checksum matches: Either we have no valid block or compression
+			 * has been done without compressed checksums -- try decompression ... */
+			lzo_uint dst_len = state->dbuflen;
+			int err = state->algo->decompr(fst->buf+off+12, cmp_len, state->dbuf, &dst_len, NULL);
+			if (err != LZO_E_OK)
+				continue;
+			if (dst_len != unc_len)
+				continue;
+			/* Check decompr checksum */
+			ca32 = lzo_adler32(ADLER32_INIT_VALUE, state->dbuf, dst_len);
+			if (ca32 == ucks) {
+				state->flags = F_OS_UNIX | F_ADLER32_D;
+				*towr -= off;
+				state->hdroff = off;
+				return fst->buf+off;
+			}
+			cc32 = lzo_crc32(CRC32_INIT_VALUE, state->dbuf, dst_len);
+			if (cc32 == ucks) {
+				state->flags = F_OS_UNIX | F_CRC32_D;
+				*towr -= off;
+				state->hdroff = off;
+				return fst->buf+off;
+			}
+			/* No checksum fits :-( */
+			continue;
 		} else {
 			/* No complete block, prepare to append ...*/
 			memmove(state->obuf, fst->buf+off, *towr-off);
@@ -625,21 +684,6 @@ void recover_decompr_msg(lzo_state *state, fstate_t *fst,
 			msg);
 	if (msg && *msg)
 		FPLOG(prio, "%s\n", msg);
-}
-
-int check_blklen_and_next(lzo_state *state, fstate_t *fst,
-			  int bfln, int c_off, int bhsz,
-			  uint32_t uln, uint32_t cln)
-{
-	if (uln > MAXBLOCKSZ || cln > MAXBLOCKSZ)
-		return 0;
-	uint32_t nextulen = bfln >= c_off+state->hdroff+bhsz+cln+4?
-				*(uint32_t*)(fst->buf+state->hdroff+c_off+bhsz+cln): 0;
-	uint32_t nextclen = bfln >= c_off+state->hdroff+bhsz+cln+8?
-				*(uint32_t*)(fst->buf+state->hdroff+c_off+bhsz+cln+4): 0;
-	if (nextulen > MAXBLOCKSZ || nextclen > MAXBLOCKSZ)
-		return 0;
-	return 1;
 }
 
 
