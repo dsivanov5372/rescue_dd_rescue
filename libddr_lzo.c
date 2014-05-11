@@ -16,6 +16,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <unistd.h>
+#include <string.h>
 #include <assert.h>
 #include <errno.h>
 #include <netinet/in.h>
@@ -27,6 +28,10 @@
 #include <lzo/lzo1b.h>
 #include <lzo/lzo2a.h>
 #include <time.h>
+
+#ifdef HAVE_BASENAME
+char* basename(const char*);
+#endif
 
 // TODO: pass at runtime rather than compile time
 #ifdef DEBUG
@@ -179,7 +184,12 @@ void lzo_hdr(header_t* hdr, lzo_state *state)
 	hdr->flags = htonl(state->flags);
 	hdr->nmlen = NAMELEN;
 	if (state->opts->iname) {
-		memcpy(hdr->name, state->opts->iname, MIN(NAMELEN,strlen(state->opts->iname)));
+		const char* nm = state->opts->iname;
+#ifdef HAVE_BASENAME
+		if (strlen(nm) > NAMELEN)
+			nm = basename(nm);
+#endif
+		memcpy(hdr->name, nm, MIN(NAMELEN, strlen(nm)));
 		struct stat stbf;
 		if (0 == stat(state->opts->iname, &stbf)) {
 			hdr->mode = htonl(stbf.st_mode);
