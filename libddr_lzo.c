@@ -559,6 +559,13 @@ unsigned char* lzo_compress(fstate_t *fst, unsigned char *bf,
 				state->blockno, state->next_ipos, fst->opos-hsz,
 				hsz, 0, hlen);
 		blockhdr_t *holehdr = (blockhdr_t*)(bhdp-hlen);
+		/* We just encode a block header with compr_len = 0 and correct checksums ...
+		 * Problem is that this breaks lzop.
+		 * Possible approaches:
+		 * (a) Just swap uncompr and compr lengths -- this would lzop make detect EOF
+		 * (b) Encode holes by using the MULTIPART feature (and encoding hole size
+		 * 	in file name or extension header)
+		 */
 		holehdr->cmpr_len = 0; holehdr->uncmpr_len = htonl(hsz);
 		holehdr->cmpr_chksum = htonl(chksum_null(hsz, state));
 		if (hlen > 12) {
