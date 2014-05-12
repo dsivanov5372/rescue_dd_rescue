@@ -337,7 +337,7 @@ int lzo_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	state->algo = calgos;
 	state->opts = opt;
 	/* Notes: We want checksums on compressed content; lzop forces us to do both then 
-	 * CRC32 has better error protection quality than adler32 -- but the implementation
+	 * CRC32 has slightly better error protection quality than adler32 -- but the implementation
 	 * in liblzo is rather slow, so stick with adler32 for now ..., unfortunately
 	 * file fmt does not allow crc32c, which has HW acceleration on various platforms */
 	state->flags = F_OS_UNIX | F_ADLER32_C | F_ADLER32_D;	/* 0x03000003 */
@@ -856,6 +856,7 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 	/* Main loop: Process blocks */
 	do {
 		char do_break = 0;
+		char is_err = 0;
 		effbf = bf+c_off+state->hdroff;
 		lzo_uint dst_len;
 		LZO_DEBUG(FPLOG(INFO, "dec blk @ %p (offs %i, stoffs %i, bln %zi, tbw %i)\n",
@@ -900,6 +901,7 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 			if (cksum != cmp_cksum) {
 				if (d_off) 
 					DRAIN("ccksm");
+				++is_err;
 				if (!recover_decompr_error(state, fst, inlen, &c_off, d_off, 
 							   bhsz, unc_len, cmp_len,
 							   "compr checksum mismatch"))
@@ -1018,6 +1020,8 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 		}
 		if (do_break)
 			break;
+		else if (err != LZO_E_OK)
+			++is_err;
 		if (state->flags & ( F_ADLER32_D | F_CRC32_D)) {
 			uint32_t cksum;
 			/* If we have just copied and tested the compressed checksum before,
@@ -1031,6 +1035,7 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 			if (cksum != unc_cksum) {
 				if (d_off)
 					DRAIN("dcksm");
+				is_err++;
 				FPLOG(WARN, "decompr checksum mismatch @ %i\n",
 						state->cmp_ln+state->cmp_hdr);
 				if (0 == recover_decompr_error(state, fst, inlen, &c_off, d_off, bhsz,
@@ -1041,9 +1046,10 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 			}
 		}
 		if (state->debug)
-			FPLOG(DEBUG, "block%i@%i/%i (sz %i+%i/%i)\n",
+			FPLOG(DEBUG, "block%i@%i/%i (sz %i+%i/%i)%c\n",
 				state->blockno, fst->ipos+c_off+state->hdroff,
-				fst->opos+d_off, bhsz, cmp_len, dst_len);
+				fst->opos+d_off, bhsz, cmp_len, dst_len,
+				is_err? '!': ' ');
 		state->cmp_hdr += bhsz;
 		c_off += cmp_len+bhsz;
 		d_off += dst_len;
