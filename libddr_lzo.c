@@ -154,7 +154,7 @@ typedef struct _lzo_state {
 	int seq;
 	int hdr_seen;
 	unsigned int blockno;
-	unsigned char eof_seen, do_bench, do_opt, do_search;
+	unsigned char eof_seen, do_bench, do_opt, do_search, debug;
 	enum compmode mode;
 	comp_alg *algo;
 	const opt_t *opts;
@@ -296,7 +296,8 @@ void parse_block_hdr(blockhdr_t *hdr, unsigned int *unc_cksum, unsigned int *cmp
 
 const char *lzo_help = "The lzo plugin for dd_rescue de/compresses data on the fly.\n"
 		" It does not support sparse writing.\n"
-		" Parameters: compress/decompress/benchmark/algo=lzo1?_?/optimize/flags=XXX\n"
+		" Parameters: compress:decompress:benchmark:algo=lzo1?_?:optimize:flags=XXX\n"
+		"\tsearch:debug\n"
 		"  Use algo=help for a list of (de)compression algorithms.\n";
 
 
@@ -354,6 +355,8 @@ int lzo_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			state->do_bench = 1;
 		else if (!strcmp(param, "search"))
 			state->do_search = 1;
+		else if (!strcmp(param, "debug"))
+			state->debug = 1;
 		else if (!memcmp(param, "opt", 3))
 			state->do_opt = 1;
 		else if (!memcmp(param, "algo=", 5))
@@ -449,6 +452,10 @@ int lzo_open(const opt_t *opt, int olnchg,
 		}
 	}
 	if (state->mode == COMPRESS) {
+		if (state->do_search) {
+			FPLOG(FATAL, "compress and search can't be combined!\n");
+			return -1;
+		}
 		state->workspace = malloc(state->algo->workmem);
 		if (!state->workspace) {
 			FPLOG(FATAL, "can't allocate workspace of size %i for compression!\n", state->algo->workmem);
@@ -542,6 +549,10 @@ unsigned char* lzo_compress(fstate_t *fst, unsigned char *bf,
 			memcpy(bf, cdata, dst_len);
 			state->algo->optimize(bf, dst_len, cdata, &dst_len, state->workspace);
 		}
+		if (state->debug)
+			FPLOG(DEBUG, "block%i@%i/%i (sz %i/%i+%i)\n",
+				state->blockno, fst->ipos, fst->opos,
+				*towr, dst_len, hlen+addwr);
 		state->cmp_hdr += hlen;
 		state->cmp_ln += dst_len; state->unc_ln += *towr;
 		block_hdr((blockhdr_t*)bhdp, *towr, dst_len, unc_cks, cdata, state->flags);
@@ -583,6 +594,7 @@ unsigned char* lzo_search_hdr(fstate_t *fst, unsigned char* bf, int *towr,
 	/* static */ uint32_t mask = htonl(~((MAXBLOCKSZ<<1)-1));
 	uint32_t unc_len = 0xffffffff, cmp_len=0xffffffff;
 	for (off = state->hdroff; off < *towr-8; ++off) {
+		/* TODO: Recognize LZOP header */
 		unc_len = *(uint32_t*)(fst->buf+off);
 		cmp_len = *(uint32_t*)(fst->buf+off+4);
 		if (unc_len & mask || cmp_len & mask)
@@ -609,44 +621,42 @@ unsigned char* lzo_search_hdr(fstate_t *fst, unsigned char* bf, int *towr,
 			uint32_t ccks = ntohl(*(uint32_t*)(fst->buf+off+12));
 			/* If there is a compr chksum at all, we'll have both */
 			uint32_t ca32 = lzo_adler32(ADLER32_INIT_VALUE, fst->buf+off+16, cmp_len);
-			if (ca32 == ccks) {
+			if (ca32 == ccks) 
 				state->flags = F_OS_UNIX | F_ADLER32_C | F_ADLER32_D;
-				*towr -= off;
-				state->hdroff = off;
-				return fst->buf+off;
+			else {
+				uint32_t cc32 = lzo_crc32(CRC32_INIT_VALUE, fst->buf+off+16, cmp_len);
+				if (cc32 == ccks)
+					state->flags = F_OS_UNIX | F_CRC32_C | F_CRC32_D;
+				else {
+					/* No checksum matches: Either we have no valid block or compression
+					 * has been done without compressed checksums -- try decompression ... */
+					lzo_uint dst_len = state->dbuflen;
+					/* No guessing of compression algo implemented yet ... */
+					int err = state->algo->decompr(fst->buf+off+12, cmp_len, state->dbuf, &dst_len, NULL);
+					if (err != LZO_E_OK)
+						continue;
+					if (dst_len != unc_len)
+						continue;
+					/* Check decompr checksum */
+					ca32 = lzo_adler32(ADLER32_INIT_VALUE, state->dbuf, dst_len);
+					if (ca32 == ucks)
+						state->flags = F_OS_UNIX | F_ADLER32_D;
+					else {
+						cc32 = lzo_crc32(CRC32_INIT_VALUE, state->dbuf, dst_len);
+						if (cc32 == ucks) 
+							state->flags = F_OS_UNIX | F_CRC32_D;
+						else
+							continue;
+					}
+				}
 			}
-			uint32_t cc32 = lzo_crc32(CRC32_INIT_VALUE, fst->buf+off+16, cmp_len);
-			if (cc32 == ccks) {
-				state->flags = F_OS_UNIX | F_CRC32_C | F_CRC32_D;
-				*towr -= off;
-				state->hdroff = off;
-				return fst->buf+off;
-			}
-			/* No checksum matches: Either we have no valid block or compression
-			 * has been done without compressed checksums -- try decompression ... */
-			lzo_uint dst_len = state->dbuflen;
-			int err = state->algo->decompr(fst->buf+off+12, cmp_len, state->dbuf, &dst_len, NULL);
-			if (err != LZO_E_OK)
-				continue;
-			if (dst_len != unc_len)
-				continue;
-			/* Check decompr checksum */
-			ca32 = lzo_adler32(ADLER32_INIT_VALUE, state->dbuf, dst_len);
-			if (ca32 == ucks) {
-				state->flags = F_OS_UNIX | F_ADLER32_D;
-				*towr -= off;
-				state->hdroff = off;
-				return fst->buf+off;
-			}
-			cc32 = lzo_crc32(CRC32_INIT_VALUE, state->dbuf, dst_len);
-			if (cc32 == ucks) {
-				state->flags = F_OS_UNIX | F_CRC32_D;
-				*towr -= off;
-				state->hdroff = off;
-				return fst->buf+off;
-			}
-			/* No checksum fits :-( */
-			continue;
+			FPLOG(INFO, "Search: Block @ %i (flags %08x)\n",
+				fst->ipos+off, state->flags);
+			//*towr -= off;
+			state->hdroff = off;
+			state->do_search = 0;
+			state->hdr_seen = 1;
+			return fst->buf+off;
 		} else {
 			/* No complete block, prepare to append ...*/
 			memmove(state->obuf, fst->buf+off, *towr-off);
@@ -785,6 +795,7 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 	int bhsz = sizeof(blockhdr_t);
 	if (inlen-state->hdroff <= 0)
 		return bf;
+	/* Main loop: Process blocks */
 	do {
 		char do_break = 0;
 		effbf = bf+c_off+state->hdroff;
@@ -944,6 +955,10 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 				break;
 			}
 		}
+		if (state->debug)
+			FPLOG(DEBUG, "block%i@%i/%i (sz %i+%i/%i)\n",
+				state->blockno, fst->ipos+c_off+state->hdroff,
+				fst->opos+d_off, bhsz, cmp_len, dst_len);
 		state->cmp_hdr += bhsz;
 		c_off += cmp_len+bhsz;
 		d_off += dst_len;
@@ -951,6 +966,7 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 		state->unc_ln += dst_len;
 		state->blockno++;
 	} while (1);
+	/* If there's no more input, we should have seen EOF marker */
 	if (eof && !state->eof_seen)
 		FPLOG(WARN, "End of input @ %i but no EOF marker seen\n", state->cmp_ln+state->cmp_hdr);
 
@@ -1022,14 +1038,18 @@ unsigned char* lzo_block(fstate_t *fst, unsigned char* bf,
 	lzo_state *state = (lzo_state*)*stat;
 	if (!state->obuf)
 		state->obuf = fst->buf;
-	unsigned char* ptr;
+	unsigned char* ptr = 0;	/* Silence gcc */
 	clock_t t1 = 0;
 	if (state->do_bench) 
 		t1 = clock();
 	if (state->mode == COMPRESS) 
 		ptr = lzo_compress(  fst, bf, towr, eof, recall, state);
-	else
-		ptr = lzo_decompress(fst, bf, towr, eof, recall, state);
+	else {
+		if (state->do_search) 
+			ptr = lzo_search_hdr(fst, bf, towr, eof, recall, state);
+		if (!state->do_search)		
+			ptr = lzo_decompress(fst, bf, towr, eof, recall, state);
+	}
 	if (state->do_bench)
 		state->cpu += clock() - t1;
 	return ptr;

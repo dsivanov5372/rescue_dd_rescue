@@ -273,21 +273,24 @@ char *graph;
 # define YELLOW "\x1b[1;33m"
 # define GREEN "\x1b[0;32m"
 # define BOLD "\x1b[0;1m"
+# define ULINE "\x1b[0;4m"
 # define INV "\x1b[0;7m"
 # define NORM "\x1b[0;0m"
 #endif
 #endif
 
 
+#define DDR_DEBUG "dd_rescue: (debug): "
 #define DDR_INFO  "dd_rescue: (info): "
 #define DDR_WARN  "dd_rescue: (warning): "
 #define DDR_FATAL "dd_rescue: (fatal): "
+#define DDR_DEBUG_C ULINE DDR_DEBUG NORM
 #define DDR_INFO_C  BOLD DDR_INFO NORM
 #define DDR_WARN_C  AMBER DDR_WARN NORM
 #define DDR_FATAL_C RED DDR_FATAL NORM
 
-const char* ddrlogpre[] = {"", DDR_INFO, DDR_WARN, DDR_FATAL };
-const char* ddrlogpre_c[] = {"", DDR_INFO_C, DDR_WARN_C, DDR_FATAL_C };
+const char* ddrlogpre[] = {"", DDR_DEBUG, DDR_INFO, DDR_WARN, DDR_FATAL };
+const char* ddrlogpre_c[] = {"", DDR_DEBUG_C, DDR_INFO_C, DDR_WARN_C, DDR_FATAL_C };
 
 
 #ifdef MISS_STRSIGNAL
