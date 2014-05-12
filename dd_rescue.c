@@ -2837,6 +2837,7 @@ int main(int argc, char* argv[])
 		}
 	}
 
+	err += fstate->nrerr;
 	gettimeofday(&currenttime, NULL);
 	printreport(opts, fstate, progress, dpopts);
 	fadvise(1, opts, fstate, progress);

@@ -146,9 +146,9 @@ enum compmode {AUTO=0, COMPRESS, DECOMPRESS};
 typedef struct _lzo_state {
 	void *workspace;
 	unsigned char *dbuf, *orig_dbuf;
+	unsigned char *obuf;
 	size_t dbuflen;
        	int hdroff;
-	unsigned char *obuf;
 	unsigned int slackpre, slackpost;
 	uint32_t flags;
 	int seq;
@@ -158,6 +158,7 @@ typedef struct _lzo_state {
 	enum compmode mode;
 	comp_alg *algo;
 	const opt_t *opts;
+	loff_t next_ipos;
 	/* Statistics */
 	unsigned int nr_memmove, nr_realloc, nr_cheapmemmove;
 	unsigned int cmp_hdr;
@@ -295,7 +296,6 @@ void parse_block_hdr(blockhdr_t *hdr, unsigned int *unc_cksum, unsigned int *cmp
 }
 
 const char *lzo_help = "The lzo plugin for dd_rescue de/compresses data on the fly.\n"
-		" It does not support sparse writing.\n"
 		" Parameters: compress:decompress:benchmark:algo=lzo1?_?:optimize:flags=XXX\n"
 		"\tsearch:debug\n"
 		"  Use algo=help for a list of (de)compression algorithms.\n";
@@ -473,15 +473,49 @@ int lzo_open(const opt_t *opt, int olnchg,
 	if (opt->softbs > MAXBLOCKSZ)
 		FPLOG(WARN, "Blocks larger than %iMiB not recommended %iMiB specified)\n",
 			MAXBLOCKSZ>>20, opt->softbs);
+	state->next_ipos = opt->init_ipos;
 	return 0;
 	/* This breaks MD5 in chain before us
 	return consumed;
 	*/
 }
 
-/* TODO: 
- * - Detect sparseness and encode 
- */
+/* Block header size: 8 -- 16 bytes dep. on checksums ... */
+int bhdr_size(const lzo_state *state, uint32_t uln, uint32_t cln)
+{
+	int sz = 8;
+	if (state->flags & (F_ADLER32_D | F_CRC32_D))
+		sz += 4;
+	if (state->flags & (F_ADLER32_C | F_CRC32_C) && uln != cln)
+		sz += 4;
+	return sz;
+}
+
+uint32_t chksum_null(unsigned int ln, lzo_state *state)
+{
+	unsigned char zero[4096];
+	uint32_t val;
+	static char buf_init = 0;
+	if (!buf_init++)
+		memset(zero, 0, 4096);
+	if (state->flags&(F_ADLER32_C|F_ADLER32_D)) {
+		val = ADLER32_INIT_VALUE;
+		while (ln != 0) {
+			unsigned int bsz = MIN(4096, ln);
+			val = lzo_adler32(val, zero, bsz);
+			ln -= bsz;
+		}
+	} else {
+		val = CRC32_INIT_VALUE;
+		while (ln != 0) {
+			unsigned int bsz = MIN(4096, ln);
+			val = lzo_crc32(val, zero, bsz);
+			ln -= bsz;
+		}
+	}
+	return val;
+}
+
 unsigned char* lzo_compress(fstate_t *fst, unsigned char *bf, 
 			    int *towr, int eof, int *recall, lzo_state *state)
 {
@@ -491,6 +525,7 @@ unsigned char* lzo_compress(fstate_t *fst, unsigned char *bf,
 	unsigned char *bhdp = hdrp+sizeof(header_t);
 	unsigned char *wrbf = bhdp;
 	unsigned int addwr = 0;
+	unsigned int hlen = sizeof(blockhdr_t)-4+((state->flags&(F_ADLER32_C|F_CRC32_C))? 4: 0);
 	if (ooff == state->opts->init_opos) {
 		if (state->opts->init_opos > 0 && state->opts->extend) {
 			ssize_t ln = pread(fst->odes, bhdp, 512, 0);
@@ -505,6 +540,8 @@ unsigned char* lzo_compress(fstate_t *fst, unsigned char *bf,
 			if (lzo_parse_hdr(bhdp+sizeof(lzop_hdr), state) < 0)
 				abort();
 			/* TODO (optional): Jump block headers to see whether we are at a valid offset */
+			/* Due to different flags, blkhdr size could have changed ... */
+			hlen = sizeof(blockhdr_t)-4+((state->flags&(F_ADLER32_C|F_CRC32_C))? 4: 0);
 			/* Overwrite EOF */
 			fst->opos -= 4;
 		} else {
@@ -514,17 +551,35 @@ unsigned char* lzo_compress(fstate_t *fst, unsigned char *bf,
 			wrbf = state->dbuf+3;
 			state->cmp_hdr += sizeof(lzop_hdr)+sizeof(header_t);
 		}
+	} else if (fst->ipos > state->next_ipos) {
+		/* Sparse support */
+		const int unsigned hsz = fst->ipos - state->next_ipos;
+		if (state->debug)
+			FPLOG(DEBUG, "hole %i@%i/%i (sz %i/%i+%i)\n",
+				state->blockno, state->next_ipos, fst->opos-hsz,
+				hsz, 0, hlen);
+		blockhdr_t *holehdr = (blockhdr_t*)(bhdp-hlen);
+		holehdr->cmpr_len = 0; holehdr->uncmpr_len = htonl(hsz);
+		holehdr->cmpr_chksum = htonl(chksum_null(hsz, state));
+		if (hlen > 12) {
+			holehdr->uncmpr_chksum = holehdr->cmpr_chksum;
+			holehdr->cmpr_chksum = htonl(state->flags&F_ADLER32_C? ADLER32_INIT_VALUE: CRC32_INIT_VALUE);
+		}
+		wrbf -= hlen;
+		addwr = hlen;
+		state->next_ipos = fst->ipos;
+		state->blockno++;
+		/* Compensate for dd_rescue moving opos forward ... */
+		fst->opos -= hsz;
 	}
 	/* NOTE: We always calc checksum of uncompressed data, as we don't get a
-	 * checksum at all otherwise (lzop decompressor does bit allow for checksums
+	 * checksum at all otherwise (lzop decompressor does not allow for checksums
 	 * exclusively on compressed data). */
-	unsigned int hlen = sizeof(blockhdr_t)-4+((state->flags&(F_ADLER32_C|F_CRC32_C))? 4: 0);
 	if (*towr) {
-		/* TODO: Sparse support: Check for jumps and encode in blocks ... */
-		unsigned char *cdata = bhdp+hlen;
 		uint32_t unc_cks = state->flags & F_ADLER32_D? 
 			lzo_adler32(ADLER32_INIT_VALUE, bf, *towr):
 			lzo_crc32(CRC32_INIT_VALUE, bf, *towr);
+		unsigned char *cdata = bhdp+hlen;
 		int err = state->algo->compress(bf, *towr, cdata, &dst_len, state->workspace);
 		assert(err == 0);
 		if (dst_len >= (unsigned int)*towr) {
@@ -533,7 +588,7 @@ unsigned char* lzo_compress(fstate_t *fst, unsigned char *bf,
 			 * out, sigh.
 			 * So if this is the case, copy original block; decompression recognizes
 			 * this by cmp_len == unc_len ....
-			 * lzop does not write second checksum IF it's just a mem cop
+			 * lzop does not write second checksum IF it's just a mem copy
 			 *
 			 * TODO: We could return original buffer instead  
 			 * and save a copy -- don't bother for now ...
@@ -551,13 +606,16 @@ unsigned char* lzo_compress(fstate_t *fst, unsigned char *bf,
 		}
 		if (state->debug)
 			FPLOG(DEBUG, "block%i@%i/%i (sz %i/%i+%i)\n",
-				state->blockno, fst->ipos, fst->opos,
-				*towr, dst_len, hlen+addwr);
+				state->blockno, fst->ipos, fst->opos+addwr,
+				*towr, dst_len, hlen);
 		state->cmp_hdr += hlen;
 		state->cmp_ln += dst_len; state->unc_ln += *towr;
 		block_hdr((blockhdr_t*)bhdp, *towr, dst_len, unc_cks, cdata, state->flags);
 		state->blockno++;
+		state->next_ipos = fst->ipos + *towr;
 		*towr = dst_len + hlen + addwr;
+	} else {
+		*towr = addwr;
 	}
 	if (eof) {
 		state->cmp_hdr += 4;
@@ -721,20 +779,10 @@ int recover_decompr_error(lzo_state *state, fstate_t *fst,
 		fst->opos += unc_len;
 		state->cmp_ln += cmp_len;
 		state->unc_ln += unc_len;
+		state->blockno++;
 		return 1;
 	}
 	return 0;
-}
-
-/* Block header size: 8 -- 16 bytes dep. on checksums ... */
-int bhdr_size(const lzo_state *state, uint32_t uln, uint32_t cln)
-{
-	int sz = 8;
-	if (state->flags & (F_ADLER32_D | F_CRC32_D))
-		sz += 4;
-	if (state->flags & (F_ADLER32_C | F_CRC32_C) && uln != cln)
-		sz += 4;
-	return sz;
 }
 
 
@@ -1097,7 +1145,7 @@ ddr_plugin_t ddr_plug = {
 	.slack_pre = 8, /* For search */
 	.slack_post = -33,
 	.needs_align = 1,
-	.handles_sparse = 0,
+	.handles_sparse = 1,
 	.changes_output = 1,
 	.changes_output_len = 1,
 	.init_callback  = lzo_plug_init,
