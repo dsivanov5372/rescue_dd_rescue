@@ -521,14 +521,14 @@ uint32_t chksum_null(unsigned int ln, lzo_state *state)
 unsigned char* lzo_compress(fstate_t *fst, unsigned char *bf, 
 			    int *towr, int eof, int *recall, lzo_state *state)
 {
-	const loff_t ooff = fst->opos;
+	//const loff_t ooff = fst->opos;
 	lzo_uint dst_len = state->dbuflen-3-sizeof(lzop_hdr)-sizeof(header_t);
 	unsigned char *hdrp = state->dbuf+3+sizeof(lzop_hdr);
 	unsigned char *bhdp = hdrp+sizeof(header_t);
 	unsigned char *wrbf = bhdp;
 	unsigned int addwr = 0;
 	unsigned int hlen = sizeof(blockhdr_t)-4+((state->flags&(F_ADLER32_C|F_CRC32_C))? 4: 0);
-	if (ooff == state->opts->init_opos) {
+	if (!state->hdr_seen == 0) { // was: ooff == state->opts->init_opos) {
 		if (state->opts->init_opos > 0 && state->opts->extend) {
 			ssize_t ln = pread(fst->odes, bhdp, 512, 0);
 			if (ln < (int)(sizeof(lzop_hdr)+sizeof(header_t)-NAMELEN)) {
@@ -553,14 +553,15 @@ unsigned char* lzo_compress(fstate_t *fst, unsigned char *bf,
 			wrbf = state->dbuf+3;
 			state->cmp_hdr += sizeof(lzop_hdr)+sizeof(header_t);
 		}
-	} else if (fst->ipos > state->next_ipos) {
+	}
+	if (fst->ipos > state->next_ipos) {
 		/* Sparse support */
 		const int unsigned hsz = fst->ipos - state->next_ipos;
 		if (state->debug)
 			FPLOG(DEBUG, "hole %i@%i/%i (sz %i/%i+%i)\n",
 				state->blockno, state->next_ipos, fst->opos-hsz,
 				hsz, 0, hlen);
-		blockhdr_t *holehdr = (blockhdr_t*)(bhdp-hlen);
+		blockhdr_t *holehdr = addwr?  (blockhdr_t*)bhdp: (blockhdr_t*)(bhdp-hlen);
 		/* We just encode a block header with compr_len = 0 and correct checksums ...
 		 * Problem is that this breaks lzop.
 		 * Possible approaches:
@@ -574,8 +575,12 @@ unsigned char* lzo_compress(fstate_t *fst, unsigned char *bf,
 			holehdr->uncmpr_chksum = holehdr->cmpr_chksum;
 			holehdr->cmpr_chksum = htonl(state->flags&F_ADLER32_C? ADLER32_INIT_VALUE: CRC32_INIT_VALUE);
 		}
-		wrbf -= hlen;
-		addwr = hlen;
+		if (!addwr)
+			wrbf -= hlen;
+		else 
+			bhdp += hlen;
+	
+		addwr += hlen;
 		state->next_ipos = fst->ipos;
 		state->blockno++;
 		/* Compensate for dd_rescue moving opos forward ... */
@@ -1117,7 +1122,6 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 
 	*towr = d_off;
 	return state->dbuf;
-	
 }
 #undef BREAK
 #undef DRAIN
