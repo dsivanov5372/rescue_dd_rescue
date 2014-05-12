@@ -59,7 +59,7 @@ static const unsigned char
 #define F_H_CRC32	0x00001000UL
 #define F_OS_UNIX	0x03000000UL
 
-#define NAMELEN 14
+#define NAMELEN 18
 
 typedef struct
 {
@@ -528,7 +528,7 @@ unsigned char* lzo_compress(fstate_t *fst, unsigned char *bf,
 	unsigned char *wrbf = bhdp;
 	unsigned int addwr = 0;
 	unsigned int hlen = sizeof(blockhdr_t)-4+((state->flags&(F_ADLER32_C|F_CRC32_C))? 4: 0);
-	if (!state->hdr_seen == 0) { // was: ooff == state->opts->init_opos) {
+	if (state->hdr_seen == 0) { // was: ooff == state->opts->init_opos) {
 		if (state->opts->init_opos > 0 && state->opts->extend) {
 			ssize_t ln = pread(fst->odes, bhdp, 512, 0);
 			if (ln < (int)(sizeof(lzop_hdr)+sizeof(header_t)-NAMELEN)) {
