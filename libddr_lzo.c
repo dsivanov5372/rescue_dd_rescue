@@ -916,6 +916,27 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 			dst_len = newlen-d_off;
 		}
 		int err = 0;
+		/* Sparse ... */
+		if (0 == cmp_len) {
+			if (d_off) 
+				DRAIN("hole");
+			if (state->debug)
+				FPLOG(DEBUG, "hole %i@%i/%i (sz %i+%i/%i)\n",
+					state->blockno, fst->ipos+c_off+state->hdroff,
+					fst->opos+d_off, bhsz, cmp_len, unc_len);
+			state->cmp_hdr += bhsz;
+			c_off += cmp_len+bhsz;
+			//Instead of d_off += unc_len;
+			fst->opos += unc_len;
+			state->cmp_ln += cmp_len;
+			//state->unc_ln += unc_len;
+			state->blockno++;
+			continue;
+		}
+		/*
+		if (do_break)
+			break;
+		*/
 		/* lzop: cmp_len == unc_len means that we just have a copy of the original */
 		if (cmp_len != unc_len) {
 			if (cmp_len > unc_len)
