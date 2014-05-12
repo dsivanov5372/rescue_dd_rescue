@@ -344,15 +344,15 @@ int fplog(FILE* const file, enum ddrlog_t logpre, const char * const fmt, ...)
 
 
 /** Plugin infrastructure */
-unsigned int max_slack_pre = 0;
-int max_neg_slack_pre = 0;
-unsigned int max_slack_post = 0;
-int max_neg_slack_post = 0;
-int last_lnchg = -1;
-unsigned int max_align = 0;
-char not_sparse = 0;
+unsigned int plug_max_slack_pre = 0;
+int plug_max_neg_slack_pre = 0;
+unsigned int plug_max_slack_post = 0;
+int plug_max_neg_slack_post = 0;
+int plug_last_lenchg = -1;
+unsigned int plug_max_req_align = 0;
+char plug_not_sparse = 0;
+char plug_output_chg = 0;
 char plugin_help = 0;
-char have_block_cb = 0;
 
 char plugins_loaded = 0;
 char plugins_opened = 0;
@@ -374,8 +374,8 @@ void call_plugins_open(opt_t *op, fstate_t *fst)
 			fplog(stderr, INFO, "Pre %i Post %i TPre %i TPost %i\n",
 				spre, spost, slk_pre, slk_post);
 			 */
-			int err = LISTDATA(plug).open_callback(op, (plugins_opened < last_lnchg ? 1: 0),
-						max_slack_pre-slk_pre, max_slack_post-slk_post,
+			int err = LISTDATA(plug).open_callback(op, (plugins_opened < plug_last_lenchg ? 1: 0),
+						plug_max_slack_pre-slk_pre, plug_max_slack_post-slk_post,
 					        &LISTDATA(plug).state);
 			if (err < 0) {
 				fplog(stderr, WARN, "Error initializing plugin %s: %s!\n",
@@ -389,8 +389,8 @@ void call_plugins_open(opt_t *op, fstate_t *fst)
 		}
 		++plugins_opened;
 	}
-	assert(slk_pre  == max_slack_pre );
-	assert(slk_post == max_slack_post);
+	assert(slk_pre  == plug_max_slack_pre );
+	assert(slk_post == plug_max_slack_post);
 }
 
 void call_plugins_close(opt_t *op, fstate_t *fst)
@@ -454,18 +454,20 @@ ddr_plugin_t* insert_plugin(void* hdl, const char* nm, char* param, opt_t *op)
 	plug->fplog = fplog;
 
 	if (plug->slack_pre > 0)
-		max_slack_pre += plug->slack_pre;
+		plug_max_slack_pre += plug->slack_pre;
 	else if (plug->slack_pre < 0)
-		max_neg_slack_pre += plug->slack_pre;
+		plug_max_neg_slack_pre += plug->slack_pre;
 	if (plug->slack_post > 0)
-		max_slack_post += plug->slack_post;
+		plug_max_slack_post += plug->slack_post;
 	else if (plug->slack_post < 0)
-		max_neg_slack_post += plug->slack_post;
+		plug_max_neg_slack_post += plug->slack_post;
 
-	if (plug->needs_align > max_align)
-		max_align = plug->needs_align;
+	if (plug->needs_align > plug_max_req_align)
+		plug_max_req_align = plug->needs_align;
 	if (!plug->handles_sparse)
-		not_sparse = 1;
+		plug_not_sparse = 1;
+	if (plug->changes_output)
+		plug_output_chg = 1;
 	if (param && !plug->init_callback) {
 		fplog(stderr, FATAL, "Plugin %s has no init callback to consume passed param %s\n",
 			nm, param);
@@ -478,8 +480,6 @@ ddr_plugin_t* insert_plugin(void* hdl, const char* nm, char* param, opt_t *op)
 	LISTAPPEND(ddr_plugins, *plug, ddr_plugin_t);
 	if (param && !memcmp(param, "help", 4))
 		plugin_help++;
-	if (plug->block_callback)
-		have_block_cb++;
 	return plug;
 }
 
@@ -513,7 +513,7 @@ void load_plugins(char* plugs, opt_t *op)
 				continue;
 			}
 			if (plug->changes_output_len)
-				last_lnchg = plugno;
+				plug_last_lenchg = plugno;
 			++plugno;
 		}
 		plugs = next;
@@ -1336,6 +1336,9 @@ ssize_t writeblock(int towrite,
 			towrite = 0;
 			continue;
 		}
+		if (op->sparse && plug_output_chg) {
+			/* TODO: Do sparse detection again ... */
+		}
 		ssize_t wr = 0;
 		//errno = 0; /* should not be necessary */
 		do {
@@ -1407,7 +1410,7 @@ int blockxfer(const loff_t max, const int bs,
 		/* Write alignment is more important except if fstate->o_chr == 1 */
 		int off = fst->o_chr? fst->ipos % bs: fst->opos % bs;
 		int aligned = op->reverse? off: bs-off;
-		if (!max_align || !(aligned % max_align))
+		if (!plug_max_req_align || !(aligned % plug_max_req_align))
 			block = aligned;
 	}
 	return block;
@@ -2178,10 +2181,10 @@ unsigned char* zalloc_aligned_buf(unsigned int bs, unsigned char**obuf)
 {
 	unsigned char *ptr;
 #if defined (__DragonFly__) || defined(__NetBSD__) || defined(__BIONIC__)
-	ptr = max_slack_pre%pagesize? 0: (unsigned char*)valloc(bs + max_slack_pre + max_slack_post);
+	ptr = plug_max_slack_pre%pagesize? 0: (unsigned char*)valloc(bs + plug_max_slack_pre + plug_max_slack_post);
 #else
 	void *mp;
-	if (max_slack_pre%pagesize || posix_memalign(&mp, pagesize, bs + max_slack_pre + max_slack_post))
+	if (plug_max_slack_pre%pagesize || posix_memalign(&mp, pagesize, bs + plug_max_slack_pre + plug_max_slack_post))
 		ptr = 0;
 	else
 		ptr = (unsigned char*)mp;
@@ -2189,21 +2192,21 @@ unsigned char* zalloc_aligned_buf(unsigned int bs, unsigned char**obuf)
 	if (obuf) 
 		*obuf = ptr;
 	if (!ptr) {
-		if (0 == max_slack_pre%pagesize)
+		if (0 == plug_max_slack_pre%pagesize)
 			fplog(stderr, WARN, "allocation of aligned buffer failed -- use malloc\n");
-		ptr = (unsigned char*)malloc(bs + pagesize + max_slack_pre + max_slack_post);
+		ptr = (unsigned char*)malloc(bs + pagesize + plug_max_slack_pre + plug_max_slack_post);
 		if (!ptr) {
 			fplog(stderr, FATAL, "allocation of buffer of size %li failed!\n", 
-				bs+pagesize+max_slack_pre+max_slack_post);
+				bs+pagesize+plug_max_slack_pre+plug_max_slack_post);
 			cleanup(); exit(18);
 		}
 		if (obuf)
 			*obuf = ptr;
-		ptr += max_slack_pre+pagesize-1;
+		ptr += plug_max_slack_pre+pagesize-1;
 		ptr -= (unsigned long)ptr % pagesize;
 	} else
-		ptr += max_slack_pre;
-	memset(ptr-max_slack_pre, 0, bs+max_slack_pre+max_slack_post);
+		ptr += plug_max_slack_pre;
+	memset(ptr-plug_max_slack_pre, 0, bs+plug_max_slack_pre+plug_max_slack_post);
 	return ptr;
 }
 
@@ -2456,8 +2459,8 @@ void sanitize_and_prepare(opt_t *op, dpopt_t *dop, fstate_t *fst, dpstate_t *dst
 		fplog(stderr, WARN, "disable write avoidance (-W) for splice copy\n");
 		op->avoidwrite = 0;
 	}
-	max_slack_pre  += -max_neg_slack_pre *((op->softbs+15)/16);
-	max_slack_post += -max_neg_slack_post*((op->softbs+15)/16);
+	plug_max_slack_pre  += -plug_max_neg_slack_pre *((op->softbs+15)/16);
+	plug_max_slack_post += -plug_max_neg_slack_post*((op->softbs+15)/16);
 	fst->buf = zalloc_aligned_buf(op->softbs, &fst->origbuf);
 
 	/* Optimization: Don't reread from /dev/zero over and over ... */
@@ -2740,19 +2743,19 @@ int main(int argc, char* argv[])
 #ifdef USE_LIBDL
 	if (plugins)
 		load_plugins(plugins, opts);
-	if (not_sparse && opts->sparse) {
+	if (plug_not_sparse && opts->sparse) {
 		fplog(stderr, FATAL, "not all plugins handle -a/--sparse!\n");
 		exit(13);
 	}
-	if (not_sparse && !opts->nosparse) {
+	if (plug_not_sparse && !opts->nosparse) {
 		fplog(stderr, WARN, "some plugins don't handle sparse, enabled -A/--nosparse!\n");
 		opts->nosparse = 1;
 	}
-	if (have_block_cb && opts->reverse) {
+	if (plugins_loaded && opts->reverse) {
 		fplog(stderr, FATAL, "Plugins currently don't handle reverse\n");
 		exit(13);
 	}
-	if (have_block_cb && opts->dosplice) {
+	if (plugins_loaded && opts->dosplice) {
 		fplog(stderr, FATAL, "Plugins can't handle splice\n");
 		exit(13);
 	}
