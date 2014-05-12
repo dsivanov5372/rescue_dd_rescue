@@ -416,7 +416,7 @@ void call_plugins_close(opt_t *op, fstate_t *fst)
  *  requested.
  *  We are also passing the fstate struct, allowing a wide range of manipulations (use with care!)
  */
-unsigned char* call_plugins_block(unsigned char *bf, int *towr, int eof, int *skip, fstate_t *fst)
+unsigned char* call_plugins_block(unsigned char *bf, int *towr, int eof, int *skip, opt_t *op, fstate_t *fst)
 {
 	if (!plugins_opened)
 		return bf;
@@ -424,11 +424,15 @@ unsigned char* call_plugins_block(unsigned char *bf, int *towr, int eof, int *sk
 	int seq = 0;
 	LISTTYPE(ddr_plugin_t) *plug;
 	LISTFOREACH(ddr_plugins, plug) {
-		if (LISTDATA(plug).block_callback && seq >= *skip) {
+		ddr_plugin_t *plugp = &LISTDATA(plug);
+		if (plugp->block_callback && seq >= *skip) {
 			int myrec = 0;
-			bf = LISTDATA(plug).block_callback(fst, bf, towr, recall==-1? eof: 0, &myrec, &LISTDATA(plug).state);
+			bf = plugp->block_callback(fst, bf, towr, recall==-1? eof: 0, &myrec, &plugp->state);
 			if (myrec && recall==-1)
 				recall = seq;
+			if (op->sparse && plugp->changes_output) {
+				/* TODO: Do sparse detection again */
+			}
 		}
 		++seq;
 	}
@@ -1327,7 +1331,7 @@ ssize_t writeblock(int towrite,
 	unsigned char* wbuf;
 	do {
 		prev_tow = towrite;
-	       	wbuf = call_plugins_block(fst->buf, &towrite, eof, &redo, fst);
+	       	wbuf = call_plugins_block(fst->buf, &towrite, eof, &redo, op, fst);
 		if (!wbuf || !towrite) {
 			if (redo != -1) {
 				fst->ipos += prev_tow;
@@ -1336,9 +1340,7 @@ ssize_t writeblock(int towrite,
 			towrite = 0;
 			continue;
 		}
-		if (op->sparse && plug_output_chg) {
-			/* TODO: Do sparse detection again ... */
-		}
+		/* If sparse detection needs to be redone, it's handled in call_plugins_block() */
 		ssize_t wr = 0;
 		//errno = 0; /* should not be necessary */
 		do {
