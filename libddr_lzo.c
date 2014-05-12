@@ -154,7 +154,7 @@ typedef struct _lzo_state {
 	int seq;
 	int hdr_seen;
 	unsigned int blockno;
-	unsigned char eof_seen, do_bench, do_opt, do_search, debug;
+	unsigned char eof_seen, do_bench, do_opt, do_search, debug, nodiscard;
 	enum compmode mode;
 	comp_alg *algo;
 	const opt_t *opts;
@@ -297,7 +297,7 @@ void parse_block_hdr(blockhdr_t *hdr, unsigned int *unc_cksum, unsigned int *cmp
 
 const char *lzo_help = "The lzo plugin for dd_rescue de/compresses data on the fly.\n"
 		" Parameters: compress:decompress:benchmark:algo=lzo1?_?:optimize:flags=XXX\n"
-		"\tsearch:debug\n"
+		"\tsearch:debug:nodiscard\n"
 		"  Use algo=help for a list of (de)compression algorithms.\n";
 
 
@@ -359,6 +359,8 @@ int lzo_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			state->debug = 1;
 		else if (!memcmp(param, "opt", 3))
 			state->do_opt = 1;
+		else if (!memcmp(param, "nodisc", 6))
+			state->nodiscard = 1;
 		else if (!memcmp(param, "algo=", 5))
 			chose_alg(param+5, state);
 		else if (!memcmp(param, "alg=", 4))
@@ -793,7 +795,8 @@ int recover_decompr_error(lzo_state *state, fstate_t *fst,
 }
 
 
-#define BREAK ++do_break; break
+#define QUIT { raise(SIGQUIT); ++do_break; break; }
+#define BREAK if (!state->nodiscard) ++do_break; break
 #define DRAIN(x) do { ++do_break; *recall=1; 		\
 		   LZO_DEBUG(FPLOG(INFO, "Drain %i bytes before %s error handling\n", d_off, x));	\
 		   eof = 0;				\
@@ -900,8 +903,9 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 				if (!recover_decompr_error(state, fst, inlen, &c_off, d_off, 
 							   bhsz, unc_len, cmp_len,
 							   "compr checksum mismatch"))
-					raise(SIGQUIT);
-				break;
+					QUIT;
+				if (!state->nodiscard)
+					break;
 			}
 		}
 		dst_len = state->dbuflen-d_off;
@@ -952,9 +956,13 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 			err = state->algo->decompr(effbf+bhsz, cmp_len, (unsigned char*)state->dbuf+d_off, &dst_len, NULL);
 			LZO_DEBUG(FPLOG(INFO, "decompressed %i@%p -> %i\n",
 				cmp_len, effbf+bhsz, dst_len));
-			if (dst_len != unc_len)
+			if (dst_len != unc_len) {
 				FPLOG(WARN, "inconsistent uncompressed size @%i: %i <-> %i\n",
 					state->cmp_ln+state->cmp_hdr, unc_len, dst_len);
+				/* Rather than risking writing out garbage, write 0 */
+				if (dst_len < unc_len)
+					memset(state->dbuf+d_off+dst_len, 0, unc_len-dst_len);
+			}
 		} else {
 			memcpy(state->dbuf+d_off, effbf+bhsz, unc_len);
 			dst_len = unc_len;
@@ -969,7 +977,7 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 					state->cmp_ln+state->cmp_hdr, *towr, state->dbuflen, dst_len);
 			if (0 == recover_decompr_error(state, fst, inlen, &c_off, d_off, bhsz, 
 							unc_len, cmp_len, "input overrun"))
-				raise(SIGQUIT);
+				QUIT;
 			BREAK;
 		case LZO_E_EOF_NOT_FOUND:
 			/* TODO: Partial block, handle! */
@@ -977,28 +985,28 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 					state->cmp_ln+state->cmp_hdr, *towr, state->dbuflen, dst_len);
 			if (0 == recover_decompr_error(state, fst, inlen, &c_off, d_off, bhsz, 
 							unc_len, cmp_len, "EOF not found"))
-				raise(SIGQUIT);
+				QUIT;
 			BREAK;
 		case LZO_E_OUTPUT_OVERRUN:
 			FPLOG(FATAL, "output overrun @ %i: %i %i %i; try larger block sizes\n", 
 					state->cmp_ln+state->cmp_hdr, *towr, state->dbuflen, dst_len);
 			if (0 == recover_decompr_error(state, fst, inlen, &c_off, d_off, bhsz, 
 							unc_len, cmp_len, "output overrun"))
-				raise(SIGQUIT);
+				QUIT;
 			BREAK;
 		case LZO_E_LOOKBEHIND_OVERRUN:
 			FPLOG(FATAL, "lookbehind overrun @ %i: %i %i %i; data corrupt?\n", 
 					state->cmp_ln+state->cmp_hdr, *towr, state->dbuflen, dst_len);
 			if (0 == recover_decompr_error(state, fst, inlen, &c_off, d_off, bhsz, 
 							unc_len, cmp_len, "lookbehind overrun"))
-				raise(SIGQUIT);
+				QUIT;
 			BREAK;
 		case LZO_E_ERROR:
 			FPLOG(FATAL, "unspecified error @ %i: %i %i %i; data corrupt?\n", 
 					state->cmp_ln+state->cmp_hdr, *towr, state->dbuflen, dst_len);
 			if (0 == recover_decompr_error(state, fst, inlen, &c_off, d_off, bhsz,
 							unc_len, cmp_len, "unspecified error"))
-				raise(SIGQUIT);
+				QUIT;
 			BREAK;
 		case LZO_E_INPUT_NOT_CONSUMED:
 			/* TODO: Leftover bytes, store */
@@ -1006,7 +1014,7 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 					state->cmp_ln+state->cmp_hdr, *towr, state->dbuflen, dst_len);
 			recover_decompr_msg(state, fst, &c_off, d_off, bhsz, unc_len, cmp_len,
 					       "input not consumed");
-			BREAK;
+			break;
 		}
 		if (do_break)
 			break;
@@ -1027,8 +1035,9 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 						state->cmp_ln+state->cmp_hdr);
 				if (0 == recover_decompr_error(state, fst, inlen, &c_off, d_off, bhsz,
 							unc_len, cmp_len, "decompr checksum mismatch"))
-					raise(SIGQUIT);
-				break;
+					QUIT;
+				if (!state->nodiscard)
+					break;
 			}
 		}
 		if (state->debug)
