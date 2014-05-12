@@ -487,7 +487,7 @@ library's PRNG then generates the 256 bytes to seed it. This creates
 repeatable PRNG data. The RANDSEED value of 0 is special; it will create
 a seedval that's based on the current time and the process' PID and should
 be different for multiple runs of
-.B dd_recue .
+.B dd_rescue .
 .br
 If 
 .IR RANDSEED
@@ -563,7 +563,7 @@ The lzo plugin allows to compress and decompress data using liblzo2.
 lzo is an algorithm that is faster than most other algorithms but
 does not compress as well.
 See the
-.BR ddr_lzo(1)
+.BR ddr_lzo (1)
 man page for more details.
 .
 .SH EXIT STATUS
@@ -686,6 +686,8 @@ partition or disk.
 .SH SEE ALSO
 .BR README.dd_rescue 
 .BR README.dd_rhelp 
+.BR ddr_lzo (1)
+.br
 .BR wipe (1)
 .BR shred (1)
 .BR ddrescue (1)

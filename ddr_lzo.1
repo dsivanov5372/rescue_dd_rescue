@@ -11,11 +11,12 @@ ddr_lzo \- Data de/compression plugin for dd_rescue
 .B -L lzo[=option[:option[:...]]]
 .br
 or
+.br
 .B -L /path/to/libddr_lzo.so[=option[:option[:...]]]
 .
 .SH DESCRIPTION
 .SS About
-LZO is an algorithm that de/compresses data. It is tuned to speed
+LZO is an algorithm that de/compresses data. It is tuned ifor speed
 (especially decompression speed) and trades the size of the compressed
 file for it to some degree. There are variants with slow compression
 (yet still very fast decompression) available though. See the algorithm
@@ -28,7 +29,7 @@ and uses the plugin interface from it. See the
 man page for more information on
 .B dd_rescue.
 .
-.SS Defaults and Options
+.SH OPTIONS
 The plugin uses
 the lzo1x_1 algorithm by default (just like lzop does by default)
 and generates adler32 checksums to allow detecting data corruption. 
@@ -38,16 +39,6 @@ The lzo plugin choses compression or decompression mode automatically
 if one of the input/output files has an [lt]zo suffix; otherwise
 you may specify compress or decompress parameters on the
 command line.
-.br
-The plugin is new as of dd_rescue 1.43. Do not yet rely on data
-saved with this plugin as only backup for valuable data. Also
-expect some changes to the plugin in the near future. (This will
-not break the file format, as we're following lzop ....)
-.br
-While care has been applied to check the result of memory allocations ...,
-the decompressor code has not been audited or fuzzed (yet) to ensure 
-it's not  vulnerable to malicious data -- be careful when you process
-data from untrusted sources.
 .br
 The plugin also supports the parameter benchmark; if it's specified,
 it will output some information about CPU usage and resulting compression
@@ -74,7 +65,21 @@ Finally there is also a flags=XXXX parameter. This sets the flags field in
 the header (default ix 0x03000003) and is used for testing only. It is not
 sanity checked and you can easily set values that will break decompression
 or cause the plugin to abort. 
-
+.
+.SS Supported dd_rescue features
+extend
+sparse
+.
+.SS Error resilience and recovery
+Skip over bad blocks
+nodiscard
+search
+.
+.SS lzop compatibility
+Algo
+block size
+sparse
+.
 .SS Blocksize considerations
 When decompressing, the (soft) block size chosen in dd_rescue must be 
 sufficient; if you chose too small blocks, the plugin will warn and exit.
@@ -85,5 +90,47 @@ block sizes will typically result in slightly better compression ratios.
 The default from dd_rescue (128k) however is a good choice. It is NOT
 recommended to increase the block size too much -- when an lzo file gets
 corrupted, at least one block will be lost; larger blocks result in larger
-damage.
-
+damage. Also, blocks larger than 16M will not work well with the error
+tolerance features of ddr_lzo. Also note that too large blocks prevent
+decompression with lzop.
+.
+.SH BUGS/LIMITATIONS
+.SS Maturity
+The plugin is new as of dd_rescue 1.43. Do not yet rely on data
+saved with this plugin as only backup for valuable data. Also
+expect some changes to the plugin in the not too distant future. 
+ (This will not break the file format, as we're following lzop ....)
+.SS Security
+While care has been applied to check the result of memory allocations ...,
+the decompressor code has not been audited and only limited fuzzing
+has been applied to ensure it's not vulnerable to malicious data -- 
+be careful when you process data from untrusted sources.
+.
+.SH EXAMPLES
+tbw
+.
+.SH SEE ALSO
+.BR dd_rescue (1)
+.BR liblzo2\ documentation
+.BR lzop (1)
+..
+.SH AUTHOR
+Kurt Garloff <kurt@garloff.de>
+.
+.SH CREDITS
+The liblzo2 library and algorithm has been written by
+Markus Oberhumer.
+.br
+http://www.oberhumer.com/opensource/lzo/
+.br
+. 
+.SH COPYRIGHT
+This plugin is under the same license as dd_rescue: The GNU General 
+Public License (GPL) v2 or v3 - at your option.
+.
+.SH HISTORY
+The ddr_lzo plugin was first introduced with dd_rescue 1.43 (May 2014).
+.PP
+Some additional information can be found on
+.br
+http://garloff.de/kurt/linux/ddrescue/
