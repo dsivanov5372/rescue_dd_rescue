@@ -188,14 +188,24 @@ blk_dist_t* find_dist(LISTTYPE(blk_dist_t)* dlist, int blkno, enum disttype type
 	return NULL;
 }
 
+#define APPLY_DIST(TP, FIX, VAR, XOR) \
+	dist = find_dist(dists, blk, TP, FIX);	\
+	if (dist) {				\
+		fprintf(stderr, "Blk %i:" #VAR "(%x) " #XOR " %x\n",	\
+			blk, dist->offset, dist->val);	\
+		VAR XOR dist->val;		\
+	}
 
-#define CLEN blksz+(blksz>>6)+128
+
+
+
+#define CBFLEN blksz+(blksz>>6)+128
 int compress(int ifd, int ofd, unsigned int blksz, LISTTYPE(blk_dist_t)*dists)
 {	
 	int blk = 0;
 	ssize_t rd, wr = 0;
 	unsigned char *dbuf = malloc(blksz);
-	unsigned char *cbuf = malloc(CLEN); 
+	unsigned char *cbuf = malloc(CBFLEN); 
 	unsigned char *wmem = malloc(LZO1X_1_MEM_COMPRESS);
 	do {
 		rd = read(ifd, dbuf, blksz);
@@ -204,7 +214,7 @@ int compress(int ifd, int ofd, unsigned int blksz, LISTTYPE(blk_dist_t)*dists)
 		if (rd < 0)
 			error("Can't read");
 		uint32_t uadl = lzo_adler32(ADLER32_INIT_VALUE, dbuf, rd);
-		lzo_uint cln = CLEN;
+		lzo_uint cln = CBFLEN;
 		int err = lzo1x_1_compress(dbuf, rd, cbuf, &cln, wmem);
 		if (err)
 			abort();
@@ -212,40 +222,28 @@ int compress(int ifd, int ofd, unsigned int blksz, LISTTYPE(blk_dist_t)*dists)
 			memcpy(cbuf, dbuf, rd);
 			cln = rd;
 		}
+		blk_dist_t *dist;
 		/* Change bytes with fixing cmpr cksum */
-		blk_dist_t *dist = find_dist(dists, blk, BYTE, 1);
-		if (dist)
-			cbuf[dist->offset] = dist->val;
+		APPLY_DIST(BYTE, 1, cbuf[dist->offset], =);
 		uint32_t cadl = lzo_adler32(ADLER32_INIT_VALUE, cbuf, cln);
 		/* Change bytes without fixing cksum */
-		dist = find_dist(dists, blk, BYTE, 0);
-		if (dist)
-			cbuf[dist->offset] = dist->val;
+		APPLY_DIST(BYTE, 0, cbuf[dist->offset], =);
 		uint32_t ulen = rd;
 		uint32_t clen = cln;
-		/* Change ulen */
-		dist = find_dist(dists, blk, ULEN, -1);
-		if (dist)
-			ulen = dist->val;
-		/* Change clen */
-		dist = find_dist(dists, blk, CLEN, -1);
-		if (dist)
-			clen = dist->val;
-		/* Change ucksum */
-		dist = find_dist(dists, blk, UCKS, -1);
-		if (dist)
-			uadl ^= dist->val;
-		/* Change ccksum */
-		dist = find_dist(dists, blk, CCKS, -1);
-		if (dist)
-			cadl ^= dist->val;
-		uint32_t dum = ADLER32_INIT_VALUE;
+		/* Change ulen+clen */
+		APPLY_DIST(ULEN, -1, ulen, =);
+		APPLY_DIST(CLEN, -1, clen, =);
+		/* Change ucksum+ccksum */
+		APPLY_DIST(UCKS, -1, uadl, ^=);
+		APPLY_DIST(CCKS, -1, cadl, ^=);
 		/* Write blk header */
+		uint32_t dum = ADLER32_INIT_VALUE;
 		write32(ofd, ulen, &dum);
 		write32(ofd, clen, &dum);
 		write32(ofd, uadl, &dum);
 		if (cln != rd)
 			write32(ofd, cadl, &dum);
+		/* And write block */
 		wr += write(ofd, cbuf, cln); 
 		++blk;
 	} while (rd > 0);
@@ -256,6 +254,35 @@ int compress(int ifd, int ofd, unsigned int blksz, LISTTYPE(blk_dist_t)*dists)
 	free(cbuf);
 	free(dbuf);
 	return wr;
+}
+
+void dump_blkdists(LISTTYPE(blk_dist_t) *dlist) 
+{
+	LISTTYPE(blk_dist_t) *dist;
+	LISTFOREACH(dlist, dist) {
+		blk_dist_t *dst = &LISTDATA(dist);
+		enum disttype dtp = dst->dist;
+		if (dtp == BYTE)
+			printf("Blk %i: chg byte @ %x to %02x %c\n",
+				dst->blkno, 
+				dst->offset,
+				dst->val,
+				dst->fixup? ' ': '!');
+		else if (dtp == UCKS || dtp == CCKS)
+			printf("Blk %i: chg %s cksum %c\n",
+				dst->blkno,
+				(dst->dist == UCKS? "uchksum": "cchksum"),
+				dst->fixup? ' ': '!');
+		else if (dtp == ULEN || dtp == CLEN)
+			printf("Blk %i: chg %s to %08x %c\n",
+				dst->blkno,
+				(dst->dist == ULEN? "ulen": "clen"),
+				dst->val,
+				dst->fixup? ' ': '!');
+		else
+			abort();
+	}
+	
 }
 
 int main(int argc, char* argv[])
@@ -346,28 +373,7 @@ int main(int argc, char* argv[])
 			extrvers >> 12, extrvers & 0xfff,
 			meth, levl, hname, flags,
 			hdr_fixup? ' ': '!');
-		LISTTYPE(blk_dist_t) *dist;
-		LISTFOREACH(blk_dists, dist) {
-			blk_dist_t *dst = &LISTDATA(dist);
-			enum disttype dtp = dst->dist;
-			if (dtp == BYTE)
-				printf("Blk %i: chg byte @ %x to %02x %c\n",
-					dst->blkno, 
-					dst->offset,
-					dst->val,
-					dst->fixup? ' ': '!');
-			else if (dtp == UCKS || dtp == CCKS)
-				printf("Blk %i: chg %s cksum %c\n",
-					dst->blkno,
-					(dst->dist == UCKS? "uchksum": "cchksum"),
-					dst->fixup? ' ': '!');
-			else
-				printf("Blk %i: chg %s to %08x %c\n",
-					dst->blkno,
-					(dst->dist == ULEN? "ulen": "clen"),
-					dst->val,
-					dst->fixup? ' ': '!');
-		}
+		dump_blkdists(blk_dists);
 	}
 
 	int ifd = open(iname, O_RDONLY);
@@ -386,6 +392,9 @@ int main(int argc, char* argv[])
 
 	close(ofd);
 	close(ifd);
+	
+	if (debug)
+		dump_blkdists(blk_dists);
 
 	LISTTREEDEL(blk_dists, blk_dist_t);
 
