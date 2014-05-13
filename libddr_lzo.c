@@ -756,7 +756,6 @@ void recover_decompr_msg(lzo_state *state, fstate_t *fst,
 	if (cmp_len > MAXBLOCKSZ || unc_len > MAXBLOCKSZ)
 		can_recover = 0;
 	/* We need to have drained data before coming here */
-	assert(d_off == 0);
 	enum ddrlog_t prio = can_recover? WARN: FATAL;
 	FPLOG(prio, "decompr err block %i@%i/%i (size %i+%i/%i):\n",
 			state->blockno,
@@ -785,8 +784,9 @@ int recover_decompr_error(lzo_state *state, fstate_t *fst,
 				state->cmp_ln+state->cmp_hdr;
 	assert(fst->ipos+c_off+state->hdroff == alt_ipos);
 #endif
-	if (check_blklen_and_next(state, fst, bflen,
-				  *c_off, bhsz, unc_len, cmp_len)) {
+	int recoverable = check_blklen_and_next(state, fst, bflen, *c_off, 
+						bhsz, unc_len, cmp_len);
+	if (recoverable && !state->nodiscard) {
 		state->cmp_hdr += bhsz;
 		*c_off += cmp_len+bhsz;
 		//Don't d_off += dst_len, as we're skipping; instead:
@@ -796,7 +796,7 @@ int recover_decompr_error(lzo_state *state, fstate_t *fst,
 		state->blockno++;
 		return 1;
 	}
-	return 0;
+	return recoverable;
 }
 
 
