@@ -159,10 +159,16 @@ extracted to several files from lzop. The holes are encoded in the
 filenames, so a proper assembly of the fragments is possible.
 .P
 lzop only supports the lzo1x_ family of algorithms.
-
-Algo
-block size
-sparse
+If you chose another algorithm to compress data with the lzo
+plugin, it will set the needed_version_to_extract field in the
+resulting lzop file to the plugin's own version (1.789) to indicate
+incompatibility with lzop (as of 1.03).
+.br
+lzop by default uses block sizes of 256kiB (on Unix systems), but
+supports de/compression with different block sizes as well. The
+maximum possible is 64MiB; for reasons of error resilience, it is
+however NOT recommended to use blocks larger than 16MiB, see
+below.
 .
 .SS Blocksize considerations
 When decompressing, the (soft) block size chosen in dd_rescue must be 
@@ -170,20 +176,35 @@ sufficient; if you chose too small blocks, the plugin will warn and exit.
 .br
 For compression, the chosen (soft)blocksize in dd_rescue will determine
 the size of blocks to be fed to the lzo??_?_compress() routines. Larger
-block sizes will typically result in slightly better compression ratios.
-The default from dd_rescue (128k) however is a good choice. It is NOT
+block sizes will typically result in slightly better compression ratios,
+though the returns on increasing the block size quickly diminish after
+64k.
+.br
+The default from dd_rescue (128kiB) is a good choice. It is NOT
 recommended to increase the block size too much -- when an lzo file gets
 corrupted, at least one block will be lost; larger blocks result in larger
-damage. Also, blocks larger than 16M will not work well with the error
-tolerance features of ddr_lzo. Also note that too large blocks prevent
-decompression with lzop.
+damage. Also, blocks larger than 16MiB will not work well with the error
+tolerance features of ddr_lzo. Also note that blocks larger than 64MiB
+prevent decompression with lzop.
 .
 .SH BUGS/LIMITATIONS
 .SS Maturity
 The plugin is new as of dd_rescue 1.43. Do not yet rely on data
 saved with this plugin as only backup for valuable data. Also
 expect some changes to the plugin in the not too distant future. 
- (This will not break the file format, as we're following lzop ....)
+(This will not break the file format, as we're following lzop ....)
+.br 
+Compressed data is more sensitive to data corruption than plain data.
+Note that the checksums (adler32 or crc32) in the lzop file format
+do NOT allow to correct for errors; they just allow a somewhat reliable
+detection of data corruption. (Ideally, a 32bit checksum just misses
+1 out of 2^32 corruptions; crc32 comes a bit closer to the ideal than
+adler32.) Also note that the checksums are NOT cryptographic hashes;
+a malicious attacker can easily find modifications of data that do not
+alter the checksums. Use par2 or similar software to create error 
+correcting codes (Reed-Solomon / Erasure Codes) if you want to be able
+to recover data in face of corruption. 
+.
 .SS Security
 While care has been applied to check the result of memory allocations ...,
 the decompressor code has not been audited and only limited fuzzing
@@ -191,13 +212,39 @@ has been applied to ensure it's not vulnerable to malicious data --
 be careful when you process data from untrusted sources.
 .
 .SH EXAMPLES
-tbw
+.TP
+.BI dd_rescue\ \-ptAL\ lzo=algo=lzo1x_1_15:compress,MD5\ infile\ outfile
+compresses data from
+.IR infile
+into
+.IR outfile
+using the algorithm lzo1x_1_15 and calculates the MD5 hash value of outfile.
+outfile will have time stamp and access rights copied over from infile and
+it will be emptied before (if the file happens to exist). The output file
+won't have encoded holes; errors in the infile will result in zeros.
+.TP
+.BI dd_rescue\ \-aL\ MD5,lzo=compress:bench,MD5,lzo=decompress,MD5\ infile\ infile2
+will copy 
+.IR infile
+to
+.IR infile2
+compressing the data and decompressing it again on the fly. It will output
+MD5 hashes for the compressed data as well (though it's not stored) and for
+the two infiles -- the output should be identical, obviously. This command
+is rather artificial, used for testing. The -a flag makes dd_rescue detect
+zero blocks and create holes, thus testing hole encoding (sparse files)
+and decoding as well if the infile has sizable regions filled with zeros.
+.TP
+.BI dd_rescue\ \-s1M\ \-S0\ -L\ lzo=search,nodiscard\ infile.lzo\ outfile
+will search for a lzop block header in infile.lzo starting at position 1MiB
+into the file and decompress the remainder of the file. On finding corrupted
+blocks, it will still write the output from the decompressor to outfile.
 .
 .SH SEE ALSO
 .BR dd_rescue (1)
 .BR liblzo2\ documentation
 .BR lzop (1)
-..
+.
 .SH AUTHOR
 Kurt Garloff <kurt@garloff.de>
 .
