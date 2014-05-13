@@ -34,7 +34,8 @@
  * - Use termcap to fetch cursor up/down and color codes
  * - Display more infos on errors by collecting info from syslog
  * - Option to send TRIM on zeroed file blocks
- * - Options to compress with libz, liblzo, libbz2, lzma, ... 
+ * - Plugins for compression/decompression other than liblzo2
+ * - Reed-Solomon/Erasure codes a la par2
  */
 
 #ifdef HAVE_CONFIG_H
@@ -1251,6 +1252,39 @@ static ssize_t blockiszero(const unsigned char* blk, const size_t ln,
 		rep->i_rep_zero = FIND_NONZERO_OPT(blk, ln);
 	return rep->i_rep_zero;
 }
+
+#if 0
+/* TODO: Use this in call_plugins_block() and in dowrite_sparse() */
+#define MAX(a,b) ((a)>(b)?(a):(b))
+static ssize_t find_zero_blk(const unsigned char* blk, const size_t ln,
+			     int *offs, opt_t *op, repeat_t *rep)
+{
+	*offs = 0;
+	int maxoff = 0;
+	ssize_t zlen = blockiszero(blk, ln, op, rep);
+	if (zlen == ln)
+		return ln;
+	ssize_t maxzlen = zlen;
+	for (*offs = MAX(pagesize, pagesize*(zlen/pagesize)); *offs < ln; *offs += pagesize) {
+		zlen = blockiszero(blk+*offs, ln-*offs, op, rep);
+		if (zlen > maxzlen) {
+			maxzlen = zlen;
+			maxoff = *offs;
+			/* opt */
+			if (zlen == ln-*offs)
+				return zlen;
+			if (zlen > pagesize)
+				*offs += pagesize*(zlen/pagesize);
+		}
+	}
+	if (maxzlen >= pagesize) {
+		*offs = maxoff;
+		return maxzlen;
+	}
+	return 0;
+}
+#endif
+
 
 static inline ssize_t mypread(int fd, void* bf, size_t sz, loff_t off,
 			      opt_t *op, fstate_t *fst, repeat_t *rep, 

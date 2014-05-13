@@ -153,7 +153,7 @@ typedef struct _lzo_state {
 	uint32_t flags;
 	int seq;
 	int hdr_seen;
-	unsigned int blockno;
+	unsigned int blockno, holeno;
 	unsigned char eof_seen, do_bench, do_opt, do_search, debug, nodiscard;
 	enum compmode mode;
 	comp_alg *algo;
@@ -172,7 +172,7 @@ typedef struct _lzo_state {
 
 static unsigned int pagesize = 4096;
 
-void lzo_hdr(header_t* hdr, lzo_state *state)
+void lzo_hdr(header_t* hdr, char* inm, lzo_state *state)
 {
 	memset(hdr, 0, sizeof(header_t));
 	hdr->version = htons(F_VERSION);
@@ -185,15 +185,15 @@ void lzo_hdr(header_t* hdr, lzo_state *state)
 	hdr->level = state->algo->lev;
 	hdr->flags = htonl(state->flags);
 	hdr->nmlen = NAMELEN;
-	if (state->opts->iname) {
-		const char* nm = state->opts->iname;
+	const char* nm = inm? inm: state->opts->iname;
+	if (nm) {
 #ifdef HAVE_BASENAME
 		if (strlen(nm) > NAMELEN)
-			nm = basename(nm);
+			nm = basename(inm);
 #endif
 		memcpy(hdr->name, nm, MIN(NAMELEN, strlen(nm)));
 		struct stat stbf;
-		if (0 == stat(state->opts->iname, &stbf)) {
+		if (!inm && 0 == stat(state->opts->iname, &stbf)) {
 			hdr->mode = htonl(stbf.st_mode);
 			hdr->mtime_low = htonl(stbf.st_mtime & 0xffffffff);
 #if __WORDSIZE != 32
@@ -201,11 +201,13 @@ void lzo_hdr(header_t* hdr, lzo_state *state)
 #endif
 		}
 	}
-	hdr->hdr_checksum = htonl(lzo_adler32(ADLER32_INIT_VALUE, (const lzo_bytep)hdr, offsetof(header_t, hdr_checksum)));
+	hdr->hdr_checksum = htonl(state->flags & F_H_CRC32?
+			lzo_crc32  (  CRC32_INIT_VALUE, (const lzo_bytep)hdr, offsetof(header_t, hdr_checksum)) :
+			lzo_adler32(ADLER32_INIT_VALUE, (const lzo_bytep)hdr, offsetof(header_t, hdr_checksum)));
 	state->hdr_seen = sizeof(header_t);
 }
 
-int lzo_parse_hdr(unsigned char* bf, lzo_state *state)
+int lzo_parse_hdr(unsigned char* bf, char* nm, lzo_state *state)
 {
 	header_t *hdr = (header_t*)bf;
 	if (ntohs(hdr->version_needed_to_extract) > 0x1030 && ntohs(hdr->version_needed_to_extract) != F_VERSION) {
@@ -237,10 +239,6 @@ int lzo_parse_hdr(unsigned char* bf, lzo_state *state)
 		state->algo = ca2;
 
 	state->flags = ntohl(hdr->flags);
-	if (state->flags & F_MULTIPART) {
-		FPLOG(FATAL, "unsupported multipart archive\n");
-		return -4;
-	}
 	if ((state->flags & (F_CRC32_C | F_ADLER32_C)) == (F_CRC32_C | F_ADLER32_C)) {
 		FPLOG(FATAL, "Can't have both CRC32_C and ADLER32_C\n");
 		return -5;
@@ -268,6 +266,11 @@ int lzo_parse_hdr(unsigned char* bf, lzo_state *state)
 	}
 	state->hdr_seen = off;
 	state->cmp_hdr += off;
+	/* Return name, needs a buffer of at least NAMELEN+1 bytes */
+	if (nm) {
+		memcpy(nm, hdr, NAMELEN);
+		nm[NAMELEN] = 0;
+	}
 	return off;
 }
 
@@ -297,7 +300,7 @@ void parse_block_hdr(blockhdr_t *hdr, unsigned int *unc_cksum, unsigned int *cmp
 
 const char *lzo_help = "The lzo plugin for dd_rescue de/compresses data on the fly.\n"
 		" Parameters: compress:decompress:benchmark:algo=lzo1?_?:optimize:flags=XXX\n"
-		"\tsearch:debug:nodiscard\n"
+		"\tsearch:debug:nodiscard:crc32\n"
 		"  Use algo=help for a list of (de)compression algorithms.\n";
 
 
@@ -341,6 +344,8 @@ int lzo_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	 * in liblzo is rather slow, so stick with adler32 for now ..., unfortunately
 	 * file fmt does not allow crc32c, which has HW acceleration on various platforms */
 	state->flags = F_OS_UNIX | F_ADLER32_C | F_ADLER32_D;	/* 0x03000003 */
+	if (opt->sparse || !opt->nosparse)
+		state->flags |= F_MULTIPART;			/* 0x03000403 */
 	while (param) {
 		char* next = strchr(param, ':');
 		if (next)
@@ -357,6 +362,8 @@ int lzo_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			state->do_search = 1;
 		else if (!strcmp(param, "debug"))
 			state->debug = 1;
+		else if (!strcmp(param, "crc32"))
+			state->flags = (state->flags | F_H_CRC32 | F_CRC32_C | F_CRC32_D) & ~(F_ADLER32_C | F_ADLER32_D);
 		else if (!memcmp(param, "opt", 3))
 			state->do_opt = 1;
 		else if (!memcmp(param, "nodisc", 6))
@@ -518,6 +525,43 @@ uint32_t chksum_null(unsigned int ln, lzo_state *state)
 	return val;
 }
 
+/* We should just encode a block header with compr_len = 0 and correct checksums ...
+ * Problem is that this breaks lzop.
+ * Possible approaches:
+ * (a) Just swap uncompr and compr lengths -- this would lzop make detect EOF
+ * (b) Encode holes by using the MULTIPART feature (and encoding hole size
+ * 	in file name or extension header)
+ */
+int encode_hole_swap(unsigned char* bhdp, int nopre, loff_t hsz, int hlen, lzo_state *state)
+{
+	blockhdr_t *holehdr = nopre?  (blockhdr_t*)bhdp: (blockhdr_t*)(bhdp-hlen);
+	holehdr->uncmpr_len = 0; holehdr->cmpr_len = htonl(hsz);
+	holehdr->cmpr_chksum = htonl(chksum_null(hsz, state));
+	if (hlen > 12) {
+		holehdr->uncmpr_chksum = holehdr->cmpr_chksum;
+		holehdr->cmpr_chksum = htonl(state->flags&F_ADLER32_C? ADLER32_INIT_VALUE: CRC32_INIT_VALUE);
+	}
+	return hlen;
+}
+
+int encode_hole(unsigned char* bhdp, int nopre, loff_t hsz, int hlen, lzo_state *state)
+{
+	if (!(state->flags & F_MULTIPART))
+		return encode_hole_swap(bhdp, nopre, hsz, hlen, state);
+	hlen = sizeof(lzop_hdr)+sizeof(header_t)+4;
+	char fname[NAMELEN+1];
+	memcpy(fname, state->opts->iname, 5);
+	sprintf(fname+5, ".%04x.%07lx", state->holeno++, hsz>>9);
+	unsigned char* ptr = bhdp - (nopre? 0: hlen);
+	memset(ptr, 0, 4);	/* EOF */
+	ptr += 4;
+	memcpy(ptr, lzop_hdr, sizeof(lzop_hdr));
+	ptr += sizeof(lzop_hdr);
+	lzo_hdr((header_t*)ptr, fname, state);
+	return hlen;
+}
+
+
 unsigned char* lzo_compress(fstate_t *fst, unsigned char *bf, 
 			    int *towr, int eof, int *recall, lzo_state *state)
 {
@@ -530,6 +574,7 @@ unsigned char* lzo_compress(fstate_t *fst, unsigned char *bf,
 	unsigned int hlen = sizeof(blockhdr_t)-4+((state->flags&(F_ADLER32_C|F_CRC32_C))? 4: 0);
 	if (state->hdr_seen == 0) { // was: ooff == state->opts->init_opos) {
 		if (state->opts->init_opos > 0 && state->opts->extend) {
+			/* TODO: Check for multipart archive and attach a part if yes */
 			ssize_t ln = pread(fst->odes, bhdp, 512, 0);
 			if (ln < (int)(sizeof(lzop_hdr)+sizeof(header_t)-NAMELEN)) {
 				FPLOG(FATAL, "Can't extend lzo file with incomplete header of size %i\n", ln);
@@ -539,7 +584,7 @@ unsigned char* lzo_compress(fstate_t *fst, unsigned char *bf,
 				FPLOG(FATAL, "Can only extend lzo files with existing magic\n", ln);
 				abort();
 			};
-			if (lzo_parse_hdr(bhdp+sizeof(lzop_hdr), state) < 0)
+			if (lzo_parse_hdr(bhdp+sizeof(lzop_hdr), NULL, state) < 0)
 				abort();
 			/* TODO (optional): Jump block headers to see whether we are at a valid offset */
 			/* Due to different flags, blkhdr size could have changed ... */
@@ -548,7 +593,7 @@ unsigned char* lzo_compress(fstate_t *fst, unsigned char *bf,
 			fst->opos -= 4;
 		} else {
 			memcpy(state->dbuf+3, lzop_hdr, sizeof(lzop_hdr));
-			lzo_hdr((header_t*)hdrp, state);
+			lzo_hdr((header_t*)hdrp, NULL, state);
 			addwr = sizeof(header_t) + sizeof(lzop_hdr);
 			wrbf = state->dbuf+3;
 			state->cmp_hdr += sizeof(lzop_hdr)+sizeof(header_t);
@@ -556,31 +601,18 @@ unsigned char* lzo_compress(fstate_t *fst, unsigned char *bf,
 	}
 	if (fst->ipos > state->next_ipos) {
 		/* Sparse support */
-		const int unsigned hsz = fst->ipos - state->next_ipos;
+		const loff_t hsz = fst->ipos - state->next_ipos;
 		if (state->debug)
 			FPLOG(DEBUG, "hole %i@%i/%i (sz %i/%i+%i)\n",
 				state->blockno, state->next_ipos, fst->opos-hsz,
 				hsz, 0, hlen);
-		blockhdr_t *holehdr = addwr?  (blockhdr_t*)bhdp: (blockhdr_t*)(bhdp-hlen);
-		/* We just encode a block header with compr_len = 0 and correct checksums ...
-		 * Problem is that this breaks lzop.
-		 * Possible approaches:
-		 * (a) Just swap uncompr and compr lengths -- this would lzop make detect EOF
-		 * (b) Encode holes by using the MULTIPART feature (and encoding hole size
-		 * 	in file name or extension header)
-		 */
-		holehdr->cmpr_len = 0; holehdr->uncmpr_len = htonl(hsz);
-		holehdr->cmpr_chksum = htonl(chksum_null(hsz, state));
-		if (hlen > 12) {
-			holehdr->uncmpr_chksum = holehdr->cmpr_chksum;
-			holehdr->cmpr_chksum = htonl(state->flags&F_ADLER32_C? ADLER32_INIT_VALUE: CRC32_INIT_VALUE);
-		}
+		int holehdrsz = encode_hole(bhdp, addwr, hsz, hlen, state);
 		if (!addwr)
-			wrbf -= hlen;
+			wrbf -= holehdrsz;
 		else 
-			bhdp += hlen;
+			bhdp += holehdrsz;
 	
-		addwr += hlen;
+		addwr += holehdrsz;
 		state->next_ipos = fst->ipos;
 		state->blockno++;
 		/* Compensate for dd_rescue moving opos forward ... */
@@ -666,7 +698,7 @@ unsigned char* lzo_search_hdr(fstate_t *fst, unsigned char* bf, int *towr,
 	/* static */ uint32_t mask = htonl(~((MAXBLOCKSZ<<1)-1));
 	uint32_t unc_len = 0xffffffff, cmp_len=0xffffffff;
 	for (off = state->hdroff; off < *towr-8; ++off) {
-		/* TODO: Recognize LZOP header */
+		/* TODO: Need to recognize LZOP header -- MULTIPART!!! */
 		unc_len = *(uint32_t*)(fst->buf+off);
 		cmp_len = *(uint32_t*)(fst->buf+off+4);
 		if (unc_len & mask || cmp_len & mask)
@@ -778,12 +810,6 @@ int recover_decompr_error(lzo_state *state, fstate_t *fst,
 	recover_decompr_msg(state, fst, c_off, d_off, bhsz,
 			    unc_len, cmp_len, msg);
 	fst->nrerr++;
-#if 0
-	loff_t alt_ipos = state->opts->init_ipos?
-				state->opts->init_ipos+state->cmp_ln+state->cmp_hdr-sizeof(lzop_hdr)-state->hdr_seen:
-				state->cmp_ln+state->cmp_hdr;
-	assert(fst->ipos+c_off+state->hdroff == alt_ipos);
-#endif
 	int recoverable = check_blklen_and_next(state, fst, bflen, *c_off, 
 						bhsz, unc_len, cmp_len);
 	if (recoverable && !state->nodiscard) {
@@ -821,7 +847,6 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 	/* Decompression is tricky */
 	int c_off = 0;
 	int d_off = 0;
-	/* header parsing has happened in _open callback ... */
 	if (!state->hdr_seen) {
 		assert(ooff - state->opts->init_opos == 0);
 		if (memcmp(bf, lzop_hdr, sizeof(lzop_hdr))) {
@@ -829,7 +854,7 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 				FPLOG(FATAL, "lzop magic broken\n");
 				abort();
 			} else {
-				ssize_t ln = pread(fst->ides, state->dbuf, 512, 0);
+				ssize_t ln = pread(fst->ides, state->dbuf, 320, 0);
 				if (ln < (int)(sizeof(lzop_hdr) + sizeof(header_t)-NAMELEN)) {
 					FPLOG(FATAL, "lzop read too short (%i) for header\n", ln);
 					abort();
@@ -838,13 +863,13 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 					FPLOG(FATAL, "lzop magic broken\n");
 					abort();
 				}
-				if (lzo_parse_hdr(state->dbuf+sizeof(lzop_hdr), state) < 0)
+				if (lzo_parse_hdr(state->dbuf+sizeof(lzop_hdr), NULL, state) < 0)
 					abort();
 			}
 		} else {	
 			state->cmp_hdr = sizeof(lzop_hdr);
 			c_off += sizeof(lzop_hdr);
-			int err = lzo_parse_hdr(bf+c_off, state);
+			int err = lzo_parse_hdr(bf+c_off, NULL, state);
 			if (err < 0)
 				abort();
 			c_off += err;
@@ -872,7 +897,7 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 		if (have_len < 4)
 			break;
 		unc_len = ntohl(hdr->uncmpr_len);
-		if (!unc_len) {	
+		if (!unc_len && (!(state->flags & F_MULTIPART) || (eof && have_len < 8))) {
 			/* EOF */
 			state->eof_seen = 1;
 			state->cmp_hdr += 4;
@@ -881,10 +906,39 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 					state->cmp_ln+state->cmp_hdr);
 			break;
 		}
-		if (have_len < 8)
-			break;
+		if (!unc_len && state->flags & F_MULTIPART && have_len > 32) {
+			/* EOF with new LZOP sig */
+			LZO_DEBUG(FPLOG(INFO, "Next part ...\n"));
+			if (memcmp(effbf+4, lzop_hdr, sizeof(lzop_hdr))) {
+				FPLOG(FATAL, "EOF with MULTIPART, bot no new hdr\n");
+				raise(SIGQUIT);
+				break;
+			}
+			char fname[NAMELEN+1], dum[6];
+			int seq;
+			loff_t hsz;
+			int hln = lzo_parse_hdr(effbf+4+sizeof(lzop_hdr), fname, state);
+			int ret = sscanf(fname, "%s.%x.%lx", &dum, &seq, &hsz);
+			if (ret != 3) {
+				c_off += 4+sizeof(lzop_hdr+hln);
+				continue;
+			}
+			unc_len = hsz;
+			cmp_len = 0;
+		} else {
+			if (have_len < 8)
+				break;
 		
-		cmp_len = ntohl(hdr->cmpr_len);
+			cmp_len = ntohl(hdr->cmpr_len);
+		}
+#if 1 //def SWAP_HOLE
+		/* Alternative hole encoding */
+		if (!unc_len && cmp_len) {
+			unc_len = cmp_len;
+			cmp_len = 0;
+		};
+#endif
+
 		bhsz = bhdr_size(state, unc_len, cmp_len);
 		uint32_t unc_cksum = 0, cmp_cksum = 0;
 		if (have_len >= 16)
