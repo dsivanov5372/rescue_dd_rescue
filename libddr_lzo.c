@@ -28,6 +28,9 @@
 #include <lzo/lzo1b.h>
 #include <lzo/lzo2a.h>
 #include <time.h>
+#ifdef HAVE_ENDIAN_H
+#include <endian.h>
+#endif
 
 #ifdef HAVE_BASENAME
 char* basename(const char*);
@@ -468,7 +471,7 @@ void slackfree(void* base, lzo_state *state)
 }
 
 /* TO DO: We could as well adjust to real max (2*softbs) */
-#define MAXBLOCKSZ 16*1024*1024
+#define MAXBLOCKSZ 16UL*1024UL*1024UL
 int lzo_open(const opt_t *opt, int olnchg, 
 	     unsigned int totslack_pre, unsigned int totslack_post,
 	     void **stat)
@@ -714,6 +717,12 @@ int check_blklen_and_next(lzo_state *state, fstate_t *fst,
 	return 1;
 }
 
+#if __BYTE_ORDER == __BIG_ENDIAN
+#define HTONL(x) x
+#else
+#define HTONL(x) ((x<<24)&0xff000000) | ((x<<8)&0x00ff0000) | ((x>>8)&0x0000ff00) | ((x>>24)&0x000000ff)
+#endif
+
 unsigned char* lzo_search_hdr(fstate_t *fst, unsigned char* bf, int *towr,
 			      int eof, int *recall, lzo_state *state)
 {
@@ -722,13 +731,28 @@ unsigned char* lzo_search_hdr(fstate_t *fst, unsigned char* bf, int *towr,
 	 * (a) We need two 32bit words (big endian) that could be uncompressed
 	 *  and compressed length. We limit block sizes to <16M, so we can look
 	 *  for two null bytes.
+	 *  0x89, 0x4c, 0x5a, 0x4f, 0x00, 0x0d, 0x0a, 0x1a, 0x0a
 	 */
-	/* static */ uint32_t mask = htonl(~((MAXBLOCKSZ<<1)-1));
+	static const uint32_t lzo1 = HTONL(0x894c5a4f);
+	static const uint32_t lzo2 = HTONL(0x000d0a1a);
+	static const uint32_t mask = HTONL(~((MAXBLOCKSZ<<1)-1));
+	FPLOG(DEBUG, "Mask %08x LZO %08x %08x\n", mask, lzo1, lzo2);
 	uint32_t unc_len = 0xffffffff, cmp_len=0xffffffff;
 	for (off = state->hdroff; off < *towr-8; ++off) {
-		/* TODO: Need to recognize LZOP header -- MULTIPART!!! */
 		unc_len = *(uint32_t*)(fst->buf+off);
 		cmp_len = *(uint32_t*)(fst->buf+off+4);
+		/* Recognize LZOP header -- MULTIPART!!! */
+		if (unc_len == lzo1 && cmp_len == lzo2 
+				&& fst->buf[off+8] == lzop_hdr[8]) {
+			loff_t hole;
+			int hlen = lzo_parse_hdr(fst->buf+off+sizeof(lzop_hdr), &hole, state);
+			FPLOG(INFO, "lzop header at %i (sz %i/hole %li)\n", fst->ipos+off, 
+					hlen+sizeof(lzop_hdr), hole);
+			fst->opos += hole;
+			off += hlen+sizeof(lzop_hdr);
+			unc_len = *(uint32_t*)(fst->buf+off);
+			cmp_len = *(uint32_t*)(fst->buf+off+4);
+		}
 		if (unc_len & mask || cmp_len & mask)
 			continue;
 		/* OK, we found a candidate ... */
