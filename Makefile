@@ -255,7 +255,7 @@ check: $(TARGETS) find_nonzero
 	./dd_rescue -x -a -b 16k -m32k dd_rescue TEST
 	./dd_rescue -x -a -b 16k -m17k /dev/zero TEST
 	MD5=$$(./dd_rescue -c0 -a -b16k -L ./libddr_MD5.so TEST TEST2 2>&1 | grep 'MD5(0)': | tail -n1 | sed 's/^dd_rescue: (info): MD5(0):[^:]*: //'); MD5S=$$(md5sum TEST | sed 's/ .*$$//'); echo $$MD5 $$MD5S; if test "$$MD5" != "$$MD5S"; then false; fi
-	dd_rescue -c0 -a -b16k -t -L ./libddr_MD5.so=output TEST /dev/null >MD5SUM.TEST
+	./dd_rescue -c0 -a -b16k -t -L ./libddr_MD5.so=output TEST /dev/null >MD5SUM.TEST
 	md5sum -c MD5SUM.TEST
 	rm -f TEST TEST2 MD5SUM.TEST
 	if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo; fi
