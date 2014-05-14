@@ -939,15 +939,19 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 			/* EOF with new LZOP sig */
 			LZO_DEBUG(FPLOG(INFO, "Next part ...\n"));
 			if (memcmp(effbf+4, lzop_hdr, sizeof(lzop_hdr))) {
-				FPLOG(FATAL, "EOF with MULTIPART, bot no new hdr\n");
+				FPLOG(FATAL, "EOF with MULTIPART, but no new hdr\n");
 				raise(SIGQUIT);
 				break;
 			}
 			loff_t hsz;
 			int hln = lzo_parse_hdr(effbf+4+sizeof(lzop_hdr), &hsz, state);
 			bhsz = hln+sizeof(lzop_hdr)+4;
-			if (!hsz)
+			if (!hsz) {
+				FPLOG(INFO, "MULTIPART, just append ...\n");
+				c_off += bhsz;
+				state->cmp_hdr += bhsz;
 				continue;
+			}
 			unc_len = hsz;
 			cmp_len = 0;
 		} else {
