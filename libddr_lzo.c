@@ -31,6 +31,15 @@
 
 #ifdef HAVE_BASENAME
 char* basename(const char*);
+#else
+static char* basename(const char *nm)
+{
+	const char* ptr = strrchr(nm, '/');	/* Not on DOS */
+	if (ptr)
+		return ptr+1;
+	else
+		return nm;
+}
 #endif
 
 // TODO: pass at runtime rather than compile time
@@ -59,7 +68,7 @@ static const unsigned char
 #define F_H_CRC32	0x00001000UL
 #define F_OS_UNIX	0x03000000UL
 
-#define NAMELEN 18
+#define NAMELEN 22
 
 typedef struct
 {
@@ -172,7 +181,7 @@ typedef struct _lzo_state {
 
 static unsigned int pagesize = 4096;
 
-void lzo_hdr(header_t* hdr, char* inm, lzo_state *state)
+void lzo_hdr(header_t* hdr, loff_t hole, lzo_state *state)
 {
 	memset(hdr, 0, sizeof(header_t));
 	hdr->version = htons(F_VERSION);
@@ -185,15 +194,23 @@ void lzo_hdr(header_t* hdr, char* inm, lzo_state *state)
 	hdr->level = state->algo->lev;
 	hdr->flags = htonl(state->flags);
 	hdr->nmlen = NAMELEN;
-	const char* nm = inm? inm: state->opts->iname;
-	if (nm) {
-#ifdef HAVE_BASENAME
+	if (hole) {
+		char nm[NAMELEN+1];
+		char* bnm = basename(state->opts->iname);
+		memcpy(nm, bnm, MIN(6, strlen(bnm)));
+		if (strlen(bnm) < 6)
+			memset(nm+strlen(bnm), ' ', 6-strlen(bnm));
+		sprintf(nm+6, ".%04x.%10lx", state->holeno++, hole>>9);
+		hdr->mode = htonl(0640);
+		hdr->mtime_low = htonl(hole & 0xffffffff);
+		hdr->mtime_high= htonl(hole >> 32);
+	} else {
+		const char* nm = state->opts->iname;
 		if (strlen(nm) > NAMELEN)
-			nm = basename(inm);
-#endif
+			nm = basename(nm);
 		memcpy(hdr->name, nm, MIN(NAMELEN, strlen(nm)));
 		struct stat stbf;
-		if (!inm && 0 == stat(state->opts->iname, &stbf)) {
+		if (nm && 0 == stat(state->opts->iname, &stbf)) {
 			hdr->mode = htonl(stbf.st_mode);
 			hdr->mtime_low = htonl(stbf.st_mtime & 0xffffffff);
 #if __WORDSIZE != 32
@@ -207,7 +224,7 @@ void lzo_hdr(header_t* hdr, char* inm, lzo_state *state)
 	state->hdr_seen = sizeof(header_t);
 }
 
-int lzo_parse_hdr(unsigned char* bf, char* nm, lzo_state *state)
+int lzo_parse_hdr(unsigned char* bf, loff_t* hole, lzo_state *state)
 {
 	header_t *hdr = (header_t*)bf;
 	if (ntohs(hdr->version_needed_to_extract) > 0x1030 && ntohs(hdr->version_needed_to_extract) != F_VERSION) {
@@ -266,10 +283,19 @@ int lzo_parse_hdr(unsigned char* bf, char* nm, lzo_state *state)
 	}
 	state->hdr_seen = off;
 	state->cmp_hdr += off;
-	/* Return name, needs a buffer of at least NAMELEN+1 bytes */
-	if (nm) {
-		memcpy(nm, hdr, NAMELEN);
+	/* Look for encoded holes */
+	if (hole) {
+		char nm[NAMELEN+1];
+		char dum[7];
+		memcpy(nm, hdr->name, NAMELEN);
 		nm[NAMELEN] = 0;
+		int seq;
+		int parsed = sscanf(nm, "%s.%x.%lx", dum, &seq, hole);
+		//*hole <<= 9;
+		if (parsed == 3)
+			*hole = (uint64_t)ntohl(hdr->mtime_high) << 32 | ntohl(hdr->mtime_low);
+		else
+			*hole = 0;
 	}
 	return off;
 }
