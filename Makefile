@@ -255,23 +255,25 @@ check: $(TARGETS) find_nonzero
 	./dd_rescue -x -a -b 16k -m32k dd_rescue TEST
 	./dd_rescue -x -a -b 16k -m17k /dev/zero TEST
 	MD5=$$(./dd_rescue -c0 -a -b16k -L ./libddr_MD5.so TEST TEST2 2>&1 | grep 'MD5(0)': | tail -n1 | sed 's/^dd_rescue: (info): MD5(0):[^:]*: //'); MD5S=$$(md5sum TEST | sed 's/ .*$$//'); echo $$MD5 $$MD5S; if test "$$MD5" != "$$MD5S"; then false; fi
-	rm -f TEST TEST2
-	# TODO:
-	# Use output option of MD5 and use md5sum -c to verify
+	dd_rescue -c0 -a -b16k -t -L ./libddr_MD5.so=output TEST /dev/null >MD5SUM.TEST
+	md5sum -c MD5SUM.TEST
+	rm -f TEST TEST2 MD5SUM.TEST
 	if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo; fi
 	
 check_lzo: $(TARGETS)
 	@echo "***** dd_rescue lzo (and MD5) plugin tests *****"
-	./dd_rescue -b32k -TL ./libddr_lzo.so dd_rescue dd_rescue.ddr.lzo
+	# TODO:
+	# Use output option of MD5 and use md5sum -c to verify
+	./dd_rescue -b32k -ATL ./libddr_lzo.so dd_rescue dd_rescue.ddr.lzo
 	lzop -t dd_rescue.ddr.lzo
 	@rm -f dd_rescue.ddr
 	lzop -d dd_rescue.ddr.lzo
 	cmp dd_rescue dd_rescue.ddr
 	@rm -f dd_rescue.ddr dd_rescue.ddr.lzo
-	./dd_rescue -b1M -L ./libddr_lzo.so=compress,./libddr_MD5.so dd_rescue dd_rescue.ddr.lzo
-	# TODO: Compare md5sums ...
+	./dd_rescue -b1M -L ./libddr_MD5.so=output,./libddr_lzo.so=compress,./libddr_MD5.so=output dd_rescue dd_rescue.ddr.lzo > dd_rescue.ddr.MD5SUM
+	md5sum -c dd_rescue.ddr.MD5SUM
 	md5sum dd_rescue dd_rescue.ddr.lzo
-	lzop -t dd_rescue.ddr.lzo
+	lzop -Nvl dd_rescue.ddr.lzo
 	./dd_rescue -b1M -TL ./libddr_MD5.so,./libddr_lzo.so=compress,./libddr_MD5.so,./libddr_lzo.so=decompress,./libddr_MD5.so dd_rescue dd_rescue.ddr
 	cmp dd_rescue dd_rescue.ddr
 	@rm -f dd_rescue.ddr dd_rescue.ddr.lzo dd_rescue.lzo
@@ -280,10 +282,11 @@ check_lzo: $(TARGETS)
 	cmp dd_rescue dd_rescue.cmp
 	@rm -f dd_rescue.cmp dd_rescue.lzo
 	./dd_rescue -b16k -L ./libddr_MD5.so,./libddr_lzo.so,./libddr_MD5.so dd_rescue dd_rescue.lzo
-	./dd_rescue -b8k -L ./libddr_MD5.so,./libddr_lzo.so,./libddr_MD5.so dd_rescue.lzo dd_rescue.cmp
+	./dd_rescue -b 8k -L ./libddr_MD5.so,./libddr_lzo.so,./libddr_MD5.so dd_rescue.lzo dd_rescue.cmp
 	cmp dd_rescue dd_rescue.cmp
 	md5sum dd_rescue dd_rescue.lzo
 	@rm -f dd_rescue.lzo dd_rescue.cmp
+	# TODO: Add sparse testing and MULTIPART testing and extend
 
 	
 check_lzo_algos: $(TARGETS)
