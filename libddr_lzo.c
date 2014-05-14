@@ -32,6 +32,14 @@
 #include <endian.h>
 #endif
 
+#if __WORDSIZE == 64
+#define LL "l"
+#elif __WORDSIZE == 32
+#define LL "ll"
+#else
+#error __WORDSIZE unknown
+#endif
+
 #ifdef HAVE_BASENAME
 char* basename(const char*);
 #else
@@ -202,7 +210,7 @@ void lzo_hdr(header_t* hdr, loff_t hole, lzo_state *state)
 		/* This would abort with -D_FORTIFY_SOURCE=2 
 		sprintf(hdr->name+6, ".%04x.%010lx", state->holeno++, hole);
 		*/
-		sprintf(hdr->name, ":%04x:%010lx", state->holeno++, hole);
+		sprintf(hdr->name, ":%04x:%010" LL "x", state->holeno++, hole);
 		memmove(hdr->name+6, hdr->name, NAMELEN-6);
 		memcpy(hdr->name, bnm, MIN(6, strlen(bnm)));
 		if (strlen(bnm) < 6)
@@ -300,7 +308,7 @@ int lzo_parse_hdr(unsigned char* bf, loff_t* hole, lzo_state *state)
 		char* ptr = strchr(nm, ':');
 		if (ptr) {
 			int seq;
-			int parsed = sscanf(ptr+1, "%x:%lx", &seq, hole);
+			int parsed = sscanf(ptr+1, "%x:%" LL "x", &seq, hole);
 			if (parsed == 2)
 				*hole = (uint64_t)ntohl(hdr->mtime_high) << 32 | ntohl(hdr->mtime_low);
 		}
