@@ -274,18 +274,21 @@ check_lzo: $(TARGETS)
 	md5sum -c dd_rescue.ddr.MD5SUM
 	md5sum dd_rescue dd_rescue.ddr.lzo
 	lzop -Nvl dd_rescue.ddr.lzo
-	./dd_rescue -b1M -TL ./libddr_MD5.so,./libddr_lzo.so=compress,./libddr_MD5.so,./libddr_lzo.so=decompress,./libddr_MD5.so dd_rescue dd_rescue.ddr
+	./dd_rescue -b1M -TL ./libddr_MD5.so=output,./libddr_lzo.so=compress,./libddr_MD5.so,./libddr_lzo.so=decompress,./libddr_MD5.so=outfd=1 dd_rescue dd_rescue.ddr > dd_rescue.ddr.MD5
 	cmp dd_rescue dd_rescue.ddr
-	@rm -f dd_rescue.ddr dd_rescue.ddr.lzo dd_rescue.lzo
+	md5sum -c dd_rescue.ddr.MD5
+	@rm -f dd_rescue.ddr dd_rescue.ddr.lzo dd_rescue.lzo dd_rescue.ddr.MD5
 	lzop dd_rescue
 	./dd_rescue -b1M -TL ./libddr_lzo.so dd_rescue.lzo dd_rescue.cmp
 	cmp dd_rescue dd_rescue.cmp
 	@rm -f dd_rescue.cmp dd_rescue.lzo
-	./dd_rescue -b16k -L ./libddr_MD5.so,./libddr_lzo.so,./libddr_MD5.so dd_rescue dd_rescue.lzo
-	./dd_rescue -b 8k -L ./libddr_MD5.so,./libddr_lzo.so,./libddr_MD5.so dd_rescue.lzo dd_rescue.cmp
+	./dd_rescue -b16k -L ./libddr_MD5.so=output,./libddr_lzo.so,./libddr_MD5.so=output dd_rescue dd_rescue.lzo > MD5.1
+	./dd_rescue -b 8k -L ./libddr_MD5.so=output,./libddr_lzo.so,./libddr_MD5.so=output dd_rescue.lzo dd_rescue.cmp > MD5.2
 	cmp dd_rescue dd_rescue.cmp
 	md5sum dd_rescue dd_rescue.lzo
-	@rm -f dd_rescue.lzo dd_rescue.cmp
+	md5sum -c MD5.1
+	md5sum -c MD5.2
+	@rm -f dd_rescue.lzo dd_rescue.cmp MD5.1 MD5.2
 	# TODO: Add sparse testing and MULTIPART testing and extend
 
 	
