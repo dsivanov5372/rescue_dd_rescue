@@ -246,7 +246,7 @@ int main(int argc, char **argv)
 	// display result
 	for (i = 0; i < 16; i++)
 		printf("%2.2x", result[i]);
-	printf("  %s\n", argv[1]);
+	printf(" *%s\n", argv[1]);
 
 	return 0;
 }
