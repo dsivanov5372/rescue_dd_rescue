@@ -621,8 +621,15 @@ unsigned char* lzo_compress(fstate_t *fst, unsigned char *bf,
 			/* Due to different flags, blkhdr size could have changed ... */
 			hlen = sizeof(blockhdr_t)-4+((state->flags&(F_ADLER32_C|F_CRC32_C))? 4: 0);
 			/* Overwrite EOF */
-			fst->opos -= 4;
-		} else {
+			if (state->flags & F_MULTIPART) {
+				FPLOG(INFO, "extending by writing next part (MULTIPART)\n");
+				state->hdr_seen = 0;
+			} else {
+				FPLOG(INFO, "extending by overwriting EOF\n");
+				fst->opos -= 4;
+			}
+		}
+		if (state->hdr_seen == 0) {
 			memcpy(state->dbuf+3, lzop_hdr, sizeof(lzop_hdr));
 			lzo_hdr((header_t*)hdrp, 0, state);
 			addwr = sizeof(header_t) + sizeof(lzop_hdr);
@@ -712,7 +719,7 @@ int check_blklen_and_next(lzo_state *state, fstate_t *fst,
 				*(uint32_t*)(fst->buf+state->hdroff+c_off+bhsz+cln): 0;
 	uint32_t nextclen = bfln >= c_off+state->hdroff+bhsz+cln+8?
 				*(uint32_t*)(fst->buf+state->hdroff+c_off+bhsz+cln+4): 0;
-	if (nextulen > MAXBLOCKSZ || nextclen > MAXBLOCKSZ)
+	if (nextulen > MAXBLOCKSZ || (nextulen && nextclen > MAXBLOCKSZ))
 		return 0;
 	return 1;
 }
@@ -736,7 +743,7 @@ unsigned char* lzo_search_hdr(fstate_t *fst, unsigned char* bf, int *towr,
 	static const uint32_t lzo1 = HTONL(0x894c5a4f);
 	static const uint32_t lzo2 = HTONL(0x000d0a1a);
 	static const uint32_t mask = HTONL(~((MAXBLOCKSZ<<1)-1));
-	FPLOG(DEBUG, "Mask %08x LZO %08x %08x\n", mask, lzo1, lzo2);
+	//FPLOG(DEBUG, "Mask %08x LZO %08x %08x\n", mask, lzo1, lzo2);
 	uint32_t unc_len = 0xffffffff, cmp_len=0xffffffff;
 	for (off = state->hdroff; off < *towr-8; ++off) {
 		unc_len = *(uint32_t*)(fst->buf+off);
@@ -752,6 +759,9 @@ unsigned char* lzo_search_hdr(fstate_t *fst, unsigned char* bf, int *towr,
 			off += hlen+sizeof(lzop_hdr);
 			unc_len = *(uint32_t*)(fst->buf+off);
 			cmp_len = *(uint32_t*)(fst->buf+off+4);
+			if (state->debug)
+				FPLOG(DEBUG, "Next blk: %i/%i\n",
+					ntohl(unc_len), ntohl(cmp_len));
 		}
 		if (unc_len & mask || cmp_len & mask)
 			continue;
@@ -762,12 +772,17 @@ unsigned char* lzo_search_hdr(fstate_t *fst, unsigned char* bf, int *towr,
 		if (!check_blklen_and_next(state, fst, *towr, off-state->hdroff,
 					   16, unc_len, cmp_len) &&
 		    !check_blklen_and_next(state, fst, *towr, off-state->hdroff,
-			    		   12, unc_len, cmp_len))
+			    		   12, unc_len, cmp_len)) {
+			if (state->debug)
+				FPLOG(INFO, "Blk Cand @ %i failed chain tests ...\n",
+						fst->ipos+off);
 			continue;
+		}
 		/* Candidate found but we can't decode it with our buffer sizes ... */
 		if (cmp_len > 2*state->opts->softbs) {
-			FPLOG(INFO, "Blk Cand @ %i with large size %i, increase softblocksize\n",
-				fst->ipos+off, cmp_len);
+			if (state->debug)
+				FPLOG(INFO, "Blk Cand @ %i with large size %i, increase softblocksize\n",
+					fst->ipos+off, cmp_len);
 			continue;
 		}
 		/* Best case: We have a complete block */
@@ -778,35 +793,41 @@ unsigned char* lzo_search_hdr(fstate_t *fst, unsigned char* bf, int *towr,
 			/* If there is a compr chksum at all, we'll have both */
 			uint32_t ca32 = lzo_adler32(ADLER32_INIT_VALUE, fst->buf+off+16, cmp_len);
 			if (ca32 == ccks) 
-				state->flags = F_OS_UNIX | F_ADLER32_C | F_ADLER32_D;
+				state->flags = F_OS_UNIX | F_ADLER32_C | F_ADLER32_D | F_MULTIPART;
 			else {
 				uint32_t cc32 = lzo_crc32(CRC32_INIT_VALUE, fst->buf+off+16, cmp_len);
 				if (cc32 == ccks)
-					state->flags = F_OS_UNIX | F_CRC32_C | F_CRC32_D;
+					state->flags = F_OS_UNIX | F_CRC32_C | F_CRC32_D | F_MULTIPART;
 				else {
 					/* No checksum matches: Either we have no valid block or compression
 					 * has been done without compressed checksums -- try decompression ... */
 					lzo_uint dst_len = state->dbuflen;
 					/* No guessing of compression algo implemented yet ... */
 					int err = state->algo->decompr(fst->buf+off+12, cmp_len, state->dbuf, &dst_len, NULL);
-					if (err != LZO_E_OK)
+					if (err != LZO_E_OK || dst_len != unc_len) {
+						if (state->debug)
+							FPLOG(INFO, "Blk Cand @ %i failed decompression\n",
+								fst->ipos + off);
 						continue;
-					if (dst_len != unc_len)
-						continue;
+					}
 					/* Check decompr checksum */
 					ca32 = lzo_adler32(ADLER32_INIT_VALUE, state->dbuf, dst_len);
 					if (ca32 == ucks)
-						state->flags = F_OS_UNIX | F_ADLER32_D;
+						state->flags = F_OS_UNIX | F_ADLER32_D | F_MULTIPART;
 					else {
 						cc32 = lzo_crc32(CRC32_INIT_VALUE, state->dbuf, dst_len);
 						if (cc32 == ucks) 
-							state->flags = F_OS_UNIX | F_CRC32_D;
-						else
+							state->flags = F_OS_UNIX | F_CRC32_D | F_MULTIPART;
+						else {
+							//if (state->debug)
+							FPLOG(INFO, "Blk Cand @ %i fails decomp chksum test\n",
+									fst->ipos+off);
 							continue;
+						}
 					}
 				}
 			}
-			FPLOG(INFO, "Search: Block @ %i (flags %08x)\n",
+			FPLOG(INFO, "Found block @ %i (flags %08x)\n",
 				fst->ipos+off, state->flags);
 			//*towr -= off;
 			state->hdroff = off;
@@ -815,8 +836,21 @@ unsigned char* lzo_search_hdr(fstate_t *fst, unsigned char* bf, int *towr,
 			return fst->buf+off;
 		} else {
 			/* No complete block, prepare to append ...*/
-			memmove(state->obuf, fst->buf+off, *towr-off);
-			fst->buf += *towr-off;
+			const size_t totbufln = state->opts->softbs - ddr_plug.slack_post*((state->opts->softbs+15)/16);
+			const size_t left = totbufln - (*towr-off);
+			if (left < state->opts->softbs) {
+				FPLOG(INFO, "Buffer exhausted Blk Cand @ %i\n", fst->ipos+off);
+				off += fst->buf-state->obuf;
+				fst->buf = state->obuf;
+				assert(off >= 0);
+				continue;
+			}
+			if (state->debug)
+				FPLOG(DEBUG, "Incomplete block @ %i: (off %i@%p/%p)\n",
+					fst->ipos+off, off, fst->buf, state->obuf);
+			if (state->obuf != fst->buf+off)
+				memmove(state->obuf, fst->buf+off, *towr-off);
+			fst->buf = state->obuf + *towr-off;
 			state->hdroff = -(*towr-off);
 			*towr = 0;
 			return fst->buf;
