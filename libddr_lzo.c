@@ -195,12 +195,15 @@ void lzo_hdr(header_t* hdr, loff_t hole, lzo_state *state)
 	hdr->flags = htonl(state->flags);
 	hdr->nmlen = NAMELEN;
 	if (hole) {
-		char nm[NAMELEN+1];
 		char* bnm = basename(state->opts->iname);
-		memcpy(nm, bnm, MIN(6, strlen(bnm)));
+		/* This would abort with -D_FORTIFY_SOURCE=2 
+		sprintf(hdr->name+6, ".%04x.%010lx", state->holeno++, hole);
+		*/
+		sprintf(hdr->name, ":%04x:%010lx", state->holeno++, hole);
+		memmove(hdr->name+6, hdr->name, NAMELEN-6);
+		memcpy(hdr->name, bnm, MIN(6, strlen(bnm)));
 		if (strlen(bnm) < 6)
-			memset(nm+strlen(bnm), ' ', 6-strlen(bnm));
-		sprintf(nm+6, ".%04x.%10lx", state->holeno++, hole>>9);
+			memset(hdr->name+strlen(bnm), ' ', 6-strlen(bnm));
 		hdr->mode = htonl(0640);
 		hdr->mtime_low = htonl(hole & 0xffffffff);
 		hdr->mtime_high= htonl(hole >> 32);
@@ -233,27 +236,29 @@ int lzo_parse_hdr(unsigned char* bf, loff_t* hole, lzo_state *state)
 			ntohs(hdr->version_needed_to_extract) & 0xfff);
 		return -2;
 	}
-	comp_alg *ca, *ca2 = NULL;
-	state->algo = NULL;
-	for (ca = calgos; ca < calgos+sizeof(calgos)/sizeof(comp_alg); ++ca) {
-		if (hdr->method == ca->meth) {
-			ca2 = ca;
-			if (hdr->level == ca->lev) {
-				state->algo = ca;
-				break;
+	if (state->algo == NULL || state->algo->meth != hdr->method || state->algo->lev != hdr->level) { 
+		comp_alg *ca, *ca2 = NULL;
+		state->algo = NULL;
+		for (ca = calgos; ca < calgos+sizeof(calgos)/sizeof(comp_alg); ++ca) {
+			if (hdr->method == ca->meth) {
+				ca2 = ca;
+				if (hdr->level == ca->lev) {
+					state->algo = ca;
+					break;
+				}
 			}
 		}
+		if (!ca2) {
+			FPLOG(FATAL, "unsupported method %i level %i\n", hdr->method, hdr->level);
+			return -3;
+		}
+		/* lzop -1 special case: 2/1 means lzo1x_1_15 not _1_11 */
+		if (state->algo == calgos+1 && ntohs(hdr->version) != F_VERSION)
+			state->algo += 2;
+		/* If we have not found an exact match, just use the family -- good enough to decode */
+		if (!state->algo)
+			state->algo = ca2;
 	}
-	if (!ca2) {
-		FPLOG(FATAL, "unsupported method %i level %i\n", hdr->method, hdr->level);
-		return -3;
-	}
-	/* lzop -1 special case: 2/1 means lzo1x_1_15 not _1_11 */
-	if (state->algo == calgos+1 && ntohs(hdr->version) != F_VERSION)
-		state->algo += 2;
-	/* If we have not found an exact match, just use the family -- good enough to decode */
-	if (!state->algo)
-		state->algo = ca2;
 
 	state->flags = ntohl(hdr->flags);
 	if ((state->flags & (F_CRC32_C | F_ADLER32_C)) == (F_CRC32_C | F_ADLER32_C)) {
@@ -286,16 +291,16 @@ int lzo_parse_hdr(unsigned char* bf, loff_t* hole, lzo_state *state)
 	/* Look for encoded holes */
 	if (hole) {
 		char nm[NAMELEN+1];
-		char dum[7];
 		memcpy(nm, hdr->name, NAMELEN);
 		nm[NAMELEN] = 0;
-		int seq;
-		int parsed = sscanf(nm, "%s.%x.%lx", dum, &seq, hole);
-		//*hole <<= 9;
-		if (parsed == 3)
-			*hole = (uint64_t)ntohl(hdr->mtime_high) << 32 | ntohl(hdr->mtime_low);
-		else
-			*hole = 0;
+		*hole = 0;
+		char* ptr = strchr(nm, ':');
+		if (ptr) {
+			int seq;
+			int parsed = sscanf(ptr+1, "%x:%lx", &seq, hole);
+			if (parsed == 2)
+				*hole = (uint64_t)ntohl(hdr->mtime_high) << 32 | ntohl(hdr->mtime_low);
+		}
 	}
 	return off;
 }
@@ -575,15 +580,12 @@ int encode_hole(unsigned char* bhdp, int nopre, loff_t hsz, int hlen, lzo_state 
 	if (!(state->flags & F_MULTIPART))
 		return encode_hole_swap(bhdp, nopre, hsz, hlen, state);
 	hlen = sizeof(lzop_hdr)+sizeof(header_t)+4;
-	char fname[NAMELEN+1];
-	memcpy(fname, state->opts->iname, 5);
-	sprintf(fname+5, ".%04x.%07lx", state->holeno++, hsz>>9);
 	unsigned char* ptr = bhdp - (nopre? 0: hlen);
 	memset(ptr, 0, 4);	/* EOF */
 	ptr += 4;
 	memcpy(ptr, lzop_hdr, sizeof(lzop_hdr));
 	ptr += sizeof(lzop_hdr);
-	lzo_hdr((header_t*)ptr, fname, state);
+	lzo_hdr((header_t*)ptr, hsz, state);
 	return hlen;
 }
 
@@ -619,7 +621,7 @@ unsigned char* lzo_compress(fstate_t *fst, unsigned char *bf,
 			fst->opos -= 4;
 		} else {
 			memcpy(state->dbuf+3, lzop_hdr, sizeof(lzop_hdr));
-			lzo_hdr((header_t*)hdrp, NULL, state);
+			lzo_hdr((header_t*)hdrp, 0, state);
 			addwr = sizeof(header_t) + sizeof(lzop_hdr);
 			wrbf = state->dbuf+3;
 			state->cmp_hdr += sizeof(lzop_hdr)+sizeof(header_t);
@@ -940,21 +942,17 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 				raise(SIGQUIT);
 				break;
 			}
-			char fname[NAMELEN+1], dum[6];
-			int seq;
 			loff_t hsz;
-			int hln = lzo_parse_hdr(effbf+4+sizeof(lzop_hdr), fname, state);
-			int ret = sscanf(fname, "%s.%x.%lx", &dum, &seq, &hsz);
-			if (ret != 3) {
-				c_off += 4+sizeof(lzop_hdr+hln);
+			int hln = lzo_parse_hdr(effbf+4+sizeof(lzop_hdr), &hsz, state);
+			c_off += hln+sizeof(lzop_hdr)+4-bhdr_size(state, hsz, 0);
+			//effbf += hln+sizeof(lzop_hdr)+4;
+			if (!hsz)
 				continue;
-			}
 			unc_len = hsz;
 			cmp_len = 0;
 		} else {
 			if (have_len < 8)
 				break;
-		
 			cmp_len = ntohl(hdr->cmpr_len);
 		}
 #if 1 //def SWAP_HOLE
@@ -964,9 +962,9 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 			cmp_len = 0;
 		};
 #endif
-
 		bhsz = bhdr_size(state, unc_len, cmp_len);
 		uint32_t unc_cksum = 0, cmp_cksum = 0;
+
 		if (have_len >= 16)
 			 parse_block_hdr(hdr, &unc_cksum, &cmp_cksum, state);
 
@@ -983,7 +981,7 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 			uint32_t cksum = state->flags & F_ADLER32_C ?
 				lzo_adler32(ADLER32_INIT_VALUE, effbf+bhsz, cmp_len) :
 				lzo_crc32  (  CRC32_INIT_VALUE, effbf+bhsz, cmp_len);
-			if (cksum != cmp_cksum) {
+			if (cksum != cmp_cksum && (cmp_len || !(state->flags & F_MULTIPART))) {
 				if (d_off) 
 					DRAIN("ccksm");
 				++is_err;
@@ -995,6 +993,26 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 					break;
 			}
 		}
+
+		/* Sparse ... */
+		if (0 == cmp_len) {
+			if (d_off) 
+				DRAIN("hole");
+			if (state->debug)
+				FPLOG(DEBUG, "hole %i@%i/%i (sz %i+%i/%i)\n",
+					state->blockno, fst->ipos+c_off+state->hdroff,
+					fst->opos+d_off, bhsz, cmp_len, unc_len);
+			state->cmp_hdr += bhsz;
+			c_off += cmp_len+bhsz;
+			//Instead of d_off += unc_len;
+			fst->opos += unc_len;
+			state->cmp_ln += cmp_len;
+			//state->unc_ln += unc_len;
+			state->blockno++;
+			continue;
+		}
+
+
 		dst_len = state->dbuflen-d_off;
 		if (dst_len < unc_len) {
 			/* TODO: Check if drain would help us ... */
@@ -1014,23 +1032,6 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 			dst_len = newlen-d_off;
 		}
 		int err = 0;
-		/* Sparse ... */
-		if (0 == cmp_len) {
-			if (d_off) 
-				DRAIN("hole");
-			if (state->debug)
-				FPLOG(DEBUG, "hole %i@%i/%i (sz %i+%i/%i)\n",
-					state->blockno, fst->ipos+c_off+state->hdroff,
-					fst->opos+d_off, bhsz, cmp_len, unc_len);
-			state->cmp_hdr += bhsz;
-			c_off += cmp_len+bhsz;
-			//Instead of d_off += unc_len;
-			fst->opos += unc_len;
-			state->cmp_ln += cmp_len;
-			//state->unc_ln += unc_len;
-			state->blockno++;
-			continue;
-		}
 		/*
 		if (do_break)
 			break;
