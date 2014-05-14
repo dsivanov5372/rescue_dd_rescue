@@ -925,6 +925,7 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 		if (have_len < 4)
 			break;
 		unc_len = ntohl(hdr->uncmpr_len);
+		bhsz = bhdr_size(state, unc_len, cmp_len);
 		if (!unc_len && (!(state->flags & F_MULTIPART) || (eof && have_len < 8))) {
 			/* EOF */
 			state->eof_seen = 1;
@@ -944,8 +945,7 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 			}
 			loff_t hsz;
 			int hln = lzo_parse_hdr(effbf+4+sizeof(lzop_hdr), &hsz, state);
-			c_off += hln+sizeof(lzop_hdr)+4-bhdr_size(state, hsz, 0);
-			//effbf += hln+sizeof(lzop_hdr)+4;
+			bhsz = hln+sizeof(lzop_hdr)+4;
 			if (!hsz)
 				continue;
 			unc_len = hsz;
@@ -954,6 +954,7 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 			if (have_len < 8)
 				break;
 			cmp_len = ntohl(hdr->cmpr_len);
+			bhsz = bhdr_size(state, unc_len, cmp_len);
 		}
 #if 1 //def SWAP_HOLE
 		/* Alternative hole encoding */
@@ -962,7 +963,6 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 			cmp_len = 0;
 		};
 #endif
-		bhsz = bhdr_size(state, unc_len, cmp_len);
 		uint32_t unc_cksum = 0, cmp_cksum = 0;
 
 		if (have_len >= 16)
