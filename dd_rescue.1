@@ -540,22 +540,29 @@ for an overview of available plugins.
 
 .SH PLUGINS
 .SS MD5
-When the MD5 plugin is loaded, it will calculate an MD5 hash over the 
+When the MD5 plugin (subsequently referred to as ddr_MD5) is loaded, it 
+will calculate a cryptographic MD5 hash over the 
 copied data and print the result at the end of the copy operations. 
-It's output should be identical to calling md5sum on the target file 
+Its output should be identical to calling md5sum on the target file 
 (unless you only write part of the file),
 but saves time by not accessing the (possibly large) file a second time.
 The MD5 plugin handles sparse writes and arbitrary offsets fine.
 .br
-The MD5 plugin accepts the parameter output. If given, it will output
+ddr_MD5 accepts the parameter 
+.B output
+, which will cause ddr_MD5 to output
 the md5sum to stdout in the same format that md5sum uses. You can also
-specify outfd=INT to have the plugin write the md5 hash to a different
-file descriptor.
+specify
+.B outfd=INT
+to have the plugin write the md5 hash to a different
+file descriptor specified by the integer number INT. Note that ddr_MD5
+always processes data in binary mode and correctly indicates this with
+a star (*) in the output generated with output/outfd=.
 .br
 Please note that the MD5 algorithm is NOT recommended any more for
 good protetction against malicious attempts to hide data modification;
 it's not considered strong enough any more to prevent hash collisions.
-Use SHA-2 in preference. (There is not SHA-2 supporting plugin yet for
+Use SHA-256 in preference. (There is no SHA-2 supporting plugin yet for
 dd_rescue, but this may change in the near future ...)
 .
 .SS lzo
