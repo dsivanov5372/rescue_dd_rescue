@@ -262,8 +262,6 @@ check: $(TARGETS) find_nonzero
 	
 check_lzo: $(TARGETS)
 	@echo "***** dd_rescue lzo (and MD5) plugin tests *****"
-	# TODO:
-	# Use output option of MD5 and use md5sum -c to verify
 	./dd_rescue -b32k -ATL ./libddr_lzo.so dd_rescue dd_rescue.ddr.lzo
 	lzop -t dd_rescue.ddr.lzo
 	@rm -f dd_rescue.ddr
@@ -290,7 +288,21 @@ check_lzo: $(TARGETS)
 	md5sum -c MD5.2
 	@rm -f dd_rescue.lzo dd_rescue.cmp MD5.1 MD5.2
 	# TODO: Add sparse testing and MULTIPART testing and extend
-
+	./dd_rescue -a -m 64k /dev/zero test
+	./dd_rescue -ax dd_rescue test
+	./dd_rescue -a -m 128k /dev/zero test
+	./dd_rescue -aL ./libddr_MD5.so=output,./libddr_lzo.so,./libddr_MD5.so=output test test.lzo > MD5
+	md5sum -c MD5
+	rm -f MD5
+	./dd_rescue -axL ./libddr_lzo.so,./libddr_MD5=output dd_rescue test.lzo > MD5
+	md5sum -c MD5
+	lzop -vl test.lzo
+	cat dd_rescue >> test
+	./dd_rescue -aL ./libddr_lzo.so,./libddr_MD5=output test.lzo test.cmp > MD5
+	md5sum -c MD5
+	cmp test test.cmp
+	rm -f MD5 test test.lzo test.cmp
+	# TODO: Add fuzz testing ...
 	
 check_lzo_algos: $(TARGETS)
 	for alg in lzo1x_1 lzo1x_1_15 lzo1x_999 lzo1y_1 lzo1y_999 lzo1f_1 lzo1f_999 lzo1b_1 lzo1b_2 lzo1b_3 lzo1b_4 lzo1b_5 lzo1b_6 lzo1b_7 lzo1b_8 lzo1b_9 lzo1b_99 lzo1b_999 lzo2a_999; do ./dd_rescue -qATL ./libddr_lzo.so=algo=$$alg:benchmark dd_rescue dd_rescue.lzo; lzop -lt dd_rescue.lzo; ./dd_rescue -qATL ./libddr_lzo.so=benchmark dd_rescue.lzo dd_rescue.cmp; cmp dd_rescue dd_rescue.cmp || exit 1; done

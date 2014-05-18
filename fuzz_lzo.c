@@ -188,12 +188,12 @@ blk_dist_t* find_dist(LISTTYPE(blk_dist_t)* dlist, int blkno, enum disttype type
 	return NULL;
 }
 
-#define APPLY_DIST(TP, FIX, VAR, XOR) \
+#define APPLY_DIST(TP, FIX, VAR, APPL) \
 	dist = find_dist(dists, blk, TP, FIX);	\
 	if (dist) {				\
-		fprintf(stderr, "Blk %i: " #VAR "(%x) " #XOR " %x\n",	\
+		fprintf(stderr, "Blk %i: " #VAR "(%x) " #XPPL " %x\n",	\
 			blk, dist->offset, dist->val);	\
-		VAR XOR dist->val;		\
+		VAR APPL dist->val;		\
 	}
 
 
