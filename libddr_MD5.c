@@ -17,12 +17,7 @@
 #include <assert.h>
 
 // TODO: pass at runtime rather than compile time
-#ifdef DEBUG
-# define MD5_DEBUG(x) x
-//# define MD5_DEBUG(x) if (!state->olnchg) x
-#else
-# define MD5_DEBUG(x) do {} while (0)
-#endif
+#define MD5_DEBUG(x) if (state->debug) x
 
 #define FPLOG(lvl, fmt, args...) \
 	ddr_plug.fplog(stderr, lvl, "MD5(%i): " fmt, state->seq, ##args)
@@ -38,7 +33,7 @@ typedef struct _md5_state {
 	int seq;
 	int outfd;
 	unsigned char buflen;
-	unsigned char olnchg;
+	unsigned char olnchg, debug;
 	const opt_t *opts;
 } md5_state;
 
@@ -60,6 +55,8 @@ int md5_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			*next++ = 0;
 		if (!strcmp(param, "help"))
 			FPLOG(INFO, "%s", md5_help);
+		else if (!strcmp(param, "debug"))
+			state->debug = 1;
 		else if (!strcmp(param, "output"))
 			state->outfd = 1;
 		else if (!memcmp(param, "outfd=", 6))
@@ -75,11 +72,6 @@ int md5_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	return err;
 }
 
-/*int ifd, const char* inm, loff_t ioff, 
-	     int ofd, const char* onm, loff_t ooff, 
-	     unsigned int bsz, unsigned int hsz,
-	     loff_t exfer 
-	     */
 int md5_open(const opt_t *opt, int olnchg,
 	     unsigned int totslack_pre, unsigned int totslack_post,
 	     void **stat)
@@ -92,6 +84,10 @@ int md5_open(const opt_t *opt, int olnchg,
 	memset(state->buf, 0, 128);
 	state->buflen = 0;
 	state->olnchg = olnchg;
+	if (olnchg && (state->opts->sparse || !state->opts->nosparse)) {
+		FPLOG(WARN, "Size of potential holes may not be correct due to subsequent plugins;\n");
+		FPLOG(WARN, " MD5 hash may be miscomputed! Avoid holes (remove -a, specify -A).\n");
+	}
 	return 0;
 }
 
@@ -119,7 +115,7 @@ unsigned char* md5_block(fstate_t *fst, unsigned char* bf,
 {
 	md5_state *state = (md5_state*)*stat;
 	const loff_t ooff = fst->opos;
-	const loff_t opos = ooff - state->opts->init_opos;
+	const loff_t opos = state->olnchg? fst->ipos-state->opts->init_ipos : ooff-state->opts->init_opos;
 	int consumed = 0;
 	assert(bf);
 	MD5_DEBUG(FPLOG(INFO, "block(%i/%i): towr=%i, eof=%i, ooff=%i, md5_pos=%i, buflen=%i\n",
@@ -128,7 +124,7 @@ unsigned char* md5_block(fstate_t *fst, unsigned char* bf,
 	/* First block */
 	if (state->buflen) {
 		/* Handle leftover bytes ... */
-		if (!state->olnchg && opos > state->md5_pos+state->buflen) {
+		if (/*!state->olnchg &&*/ opos > state->md5_pos+state->buflen) {
 			/* First sparse piece  ... */
 			memset(state->buf+state->buflen, 0, 64-state->buflen);
 			md5_64(state->buf, &state->md5);
@@ -151,14 +147,14 @@ unsigned char* md5_block(fstate_t *fst, unsigned char* bf,
 	}
 	assert(state->olnchg || state->md5_pos <= opos + consumed);
 	/* Bulk sparse process */
-	while (!state->olnchg && opos > state->md5_pos+63) {
+	while (/*!state->olnchg &&*/ opos > state->md5_pos+63) {
 		assert(state->buflen == 0);
 		md5_64(state->buf, &state->md5);
 		state->md5_pos += 64;
 	}
 	/* Last sparse block */
 	int left = opos - (state->md5_pos+state->buflen);
-	if (!state->olnchg && left > 0 && *towr >= left) {
+	if (/*!state->olnchg &&*/ left > 0 && *towr >= left) {
 		assert(consumed == 0);
 		memcpy(state->buf+64-left, bf, left);
 		md5_64(state->buf, &state->md5);
