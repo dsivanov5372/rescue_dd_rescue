@@ -131,29 +131,37 @@ typedef struct {
 	unsigned char meth, lev;
 } comp_alg;
 
-/* Only 1/5, 2/1 and 3/9 are defined by lzop (and 2/1 is x1_1_15 in lzop not _1_11) */
-comp_alg calgos[] = { {"lzo1x_1",    lzo1x_1_compress,    lzo1x_decompress_safe, lzo1x_optimize, LZO1X_1_MEM_COMPRESS,    1, 5},
-		      {"lzo1x_1_11", lzo1x_1_11_compress, lzo1x_decompress_safe, lzo1x_optimize, LZO1X_1_11_MEM_COMPRESS, 2, 1},
-		      {"lzo1x_1_12", lzo1x_1_12_compress, lzo1x_decompress_safe, lzo1x_optimize, LZO1X_1_12_MEM_COMPRESS, 2, 2},
-		      {"lzo1x_1_15", lzo1x_1_15_compress, lzo1x_decompress_safe, lzo1x_optimize, LZO1X_1_15_MEM_COMPRESS, 2, 5},
-      		      {"lzo1x_999",  lzo1x_999_compress,  lzo1x_decompress_safe, lzo1x_optimize, LZO1X_999_MEM_COMPRESS,  3, 9},
-		      /* We DON'T use a different method indicator for the variants unlike lzop */
-		      {"lzo1y_1",    lzo1y_1_compress,    lzo1y_decompress_safe, lzo1y_optimize, LZO1Y_MEM_COMPRESS,     64, 1},
-		      {"lzo1y_999",  lzo1y_999_compress,  lzo1y_decompress_safe, lzo1y_optimize, LZO1Y_999_MEM_COMPRESS, 65, 9},
-		      {"lzo1f_1",    lzo1f_1_compress,    lzo1f_decompress_safe, NULL,           LZO1F_MEM_COMPRESS,     66, 1},
-		      {"lzo1f_999",  lzo1f_999_compress,  lzo1f_decompress_safe, NULL,           LZO1F_999_MEM_COMPRESS, 67, 9},
-		      {"lzo1b_1",    lzo1b_1_compress,    lzo1b_decompress_safe, NULL,           LZO1B_MEM_COMPRESS,     68, 1},
-		      {"lzo1b_2",    lzo1b_2_compress,    lzo1b_decompress_safe, NULL,           LZO1B_MEM_COMPRESS,     68, 2},
-		      {"lzo1b_3",    lzo1b_3_compress,    lzo1b_decompress_safe, NULL,           LZO1B_MEM_COMPRESS,     68, 3},
-		      {"lzo1b_4",    lzo1b_4_compress,    lzo1b_decompress_safe, NULL,           LZO1B_MEM_COMPRESS,     68, 4},
-		      {"lzo1b_5",    lzo1b_5_compress,    lzo1b_decompress_safe, NULL,           LZO1B_MEM_COMPRESS,     68, 5},
-		      {"lzo1b_6",    lzo1b_6_compress,    lzo1b_decompress_safe, NULL,           LZO1B_MEM_COMPRESS,     68, 6},
-		      {"lzo1b_7",    lzo1b_7_compress,    lzo1b_decompress_safe, NULL,           LZO1B_MEM_COMPRESS,     68, 7},
-		      {"lzo1b_8",    lzo1b_8_compress,    lzo1b_decompress_safe, NULL,           LZO1B_MEM_COMPRESS,     68, 8},
-		      {"lzo1b_9",    lzo1b_9_compress,    lzo1b_decompress_safe, NULL,           LZO1B_MEM_COMPRESS,     68, 9},
-		      {"lzo1b_99",   lzo1b_99_compress,   lzo1b_decompress_safe, NULL,           LZO1B_99_MEM_COMPRESS,  69, 9},
-		      {"lzo1b_999",  lzo1b_999_compress,  lzo1b_decompress_safe, NULL,           LZO1B_999_MEM_COMPRESS, 70, 9},
-		      {"lzo2a_999",  lzo2a_999_compress,  lzo2a_decompress_safe, NULL,           LZO2A_999_MEM_COMPRESS, 80, 9},
+/* Method/level table: Only 1/5, 2/1 and 3/9 are defined by lzop,
+ * (lzo1x_1,1x_1_15,1x_999).
+ * NRVYX if encoded 0xYX (BCD) and zlib is 128 in lzop. 
+ * We use lzop's codes here, but use a systematic approach
+ * for the algorithms not supported by lzop (as of 1.03).
+ */
+//																systematically
+comp_alg calgos[] = { {"lzo1x_1",    lzo1x_1_compress,    lzo1x_decompress_safe, lzo1x_optimize, LZO1X_1_MEM_COMPRESS,    1, 5},  // 88,1
+		      {"lzo1x_1_11", lzo1x_1_11_compress, lzo1x_decompress_safe, lzo1x_optimize, LZO1X_1_11_MEM_COMPRESS, 2, 11}, // 88,11 
+		      {"lzo1x_1_12", lzo1x_1_12_compress, lzo1x_decompress_safe, lzo1x_optimize, LZO1X_1_12_MEM_COMPRESS, 2, 12}, // 88,12
+		      {"lzo1x_1_15", lzo1x_1_15_compress, lzo1x_decompress_safe, lzo1x_optimize, LZO1X_1_15_MEM_COMPRESS, 2, 1},  // 88,15
+      		      {"lzo1x_999",  lzo1x_999_compress,  lzo1x_decompress_safe, lzo1x_optimize, LZO1X_999_MEM_COMPRESS,  3, 9},  // 88,29
+		      /* We DON'T use a different method indicator for the variants unlike lzop 
+		       * The encoding is the following: lzo1@_€ gets method 65+@-'a', 2@_€ -> 97+@-'a' 
+		       * and level € if €<=9, 19 for 99 and 29 for 999 */
+		      {"lzo1y_1",    lzo1y_1_compress,    lzo1y_decompress_safe, lzo1y_optimize, LZO1Y_MEM_COMPRESS,     89, 1},
+		      {"lzo1y_999",  lzo1y_999_compress,  lzo1y_decompress_safe, lzo1y_optimize, LZO1Y_999_MEM_COMPRESS, 89, 29},
+		      {"lzo1f_1",    lzo1f_1_compress,    lzo1f_decompress_safe, NULL,           LZO1F_MEM_COMPRESS,     70, 1},
+		      {"lzo1f_999",  lzo1f_999_compress,  lzo1f_decompress_safe, NULL,           LZO1F_999_MEM_COMPRESS, 70, 29},
+		      {"lzo1b_1",    lzo1b_1_compress,    lzo1b_decompress_safe, NULL,           LZO1B_MEM_COMPRESS,     66, 1},
+		      {"lzo1b_2",    lzo1b_2_compress,    lzo1b_decompress_safe, NULL,           LZO1B_MEM_COMPRESS,     66, 2},
+		      {"lzo1b_3",    lzo1b_3_compress,    lzo1b_decompress_safe, NULL,           LZO1B_MEM_COMPRESS,     66, 3},
+		      {"lzo1b_4",    lzo1b_4_compress,    lzo1b_decompress_safe, NULL,           LZO1B_MEM_COMPRESS,     66, 4},
+		      {"lzo1b_5",    lzo1b_5_compress,    lzo1b_decompress_safe, NULL,           LZO1B_MEM_COMPRESS,     66, 5},
+		      {"lzo1b_6",    lzo1b_6_compress,    lzo1b_decompress_safe, NULL,           LZO1B_MEM_COMPRESS,     66, 6},
+		      {"lzo1b_7",    lzo1b_7_compress,    lzo1b_decompress_safe, NULL,           LZO1B_MEM_COMPRESS,     66, 7},
+		      {"lzo1b_8",    lzo1b_8_compress,    lzo1b_decompress_safe, NULL,           LZO1B_MEM_COMPRESS,     66, 8},
+		      {"lzo1b_9",    lzo1b_9_compress,    lzo1b_decompress_safe, NULL,           LZO1B_MEM_COMPRESS,     66, 9},
+		      {"lzo1b_99",   lzo1b_99_compress,   lzo1b_decompress_safe, NULL,           LZO1B_99_MEM_COMPRESS,  66, 19},
+		      {"lzo1b_999",  lzo1b_999_compress,  lzo1b_decompress_safe, NULL,           LZO1B_999_MEM_COMPRESS, 66, 29},
+		      {"lzo2a_999",  lzo2a_999_compress,  lzo2a_decompress_safe, NULL,           LZO2A_999_MEM_COMPRESS, 97, 29},
 
 		    };	      
 
