@@ -318,7 +318,7 @@ check_lzo_test: $(TARGETS)
 	find . -type f | xargs ./test_lzo.sh
 
 check_malicious: $(TARGETS) fuzz_lzo
-	# TO BE DONE:
 	# Do intelligent fuzzing before feeding to dd_rescue -L lzo=decompress
 	# Intelligent fuzzing means starting from valid .lzo, and adding
 	#  distortions, with and without fixing checksums ...
+	./test_lzo_fuzz.sh

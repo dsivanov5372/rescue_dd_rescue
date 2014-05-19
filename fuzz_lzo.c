@@ -285,6 +285,7 @@ void dump_blkdists(LISTTYPE(blk_dist_t) *dlist)
 	
 }
 
+/* TODO: MULTIPART and sparse ... */
 int main(int argc, char* argv[])
 {
 	char fixup = 1;
