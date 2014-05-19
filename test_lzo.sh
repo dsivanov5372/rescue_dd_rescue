@@ -1,6 +1,6 @@
 #!/bin/bash
 
-LZOP=`type -p lzop || type -p true`
+LZOP=`type -p lzop || type -P true`
 
 compress_ddr_lzop_and_compare()
 {

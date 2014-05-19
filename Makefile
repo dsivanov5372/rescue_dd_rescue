@@ -34,12 +34,14 @@ COMPILER = $(shell $(CC) --version | head -n1)
 DEFINES = -DVERSION=\"$(VERSION)\"  -D__COMPILER__="\"$(COMPILER)\"" # -DPLUGSEARCH="\"$(LIBDIR)\""
 OUT = -o dd_rescue
 
-LZOP = $(shell type -p lzop || type -p true)
+LZOP = $(shell type -p lzop || type -P true)
 
 ifeq ($(shell grep 'HAVE_LZO_LZO1X_H 1' config.h >/dev/null 2>&1 && echo 1), 1)
   LIBTARGETS += libddr_lzo.so
   OTHTARGETS += fuzz_lzo
   HAVE_LZO=1
+else
+  HAVE_LZO=0
 endif
 
 ifeq ($(CC),wcl386)
