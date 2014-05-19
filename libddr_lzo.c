@@ -41,7 +41,7 @@
 #endif
 
 #ifdef HAVE_BASENAME
-char* basename(const char*);
+const char* basename(const char*);
 #else
 static char* basename(const char *nm)
 {
@@ -214,7 +214,7 @@ void lzo_hdr(header_t* hdr, loff_t hole, lzo_state *state)
 	hdr->flags = htonl(state->flags);
 	hdr->nmlen = NAMELEN;
 	if (hole) {
-		char* bnm = basename(state->opts->iname);
+		const char* bnm = basename(state->opts->iname);
 		/* This would abort with -D_FORTIFY_SOURCE=2 
 		sprintf(hdr->name+6, ".%04x.%010lx", state->holeno++, hole);
 		*/
@@ -731,9 +731,9 @@ int check_blklen_and_next(lzo_state *state, fstate_t *fst,
 {
 	if (uln > MAXBLOCKSZ || cln > MAXBLOCKSZ)
 		return 0;
-	uint32_t nextulen = bfln >= c_off+state->hdroff+bhsz+cln+4?
+	uint32_t nextulen = (unsigned)bfln >= c_off+state->hdroff+bhsz+cln+4?
 				*(uint32_t*)(fst->buf+state->hdroff+c_off+bhsz+cln): 0;
-	uint32_t nextclen = bfln >= c_off+state->hdroff+bhsz+cln+8?
+	uint32_t nextclen = (unsigned)bfln >= c_off+state->hdroff+bhsz+cln+8?
 				*(uint32_t*)(fst->buf+state->hdroff+c_off+bhsz+cln+4): 0;
 	if (nextulen > MAXBLOCKSZ || (nextulen && nextclen > MAXBLOCKSZ))
 		return 0;
@@ -802,7 +802,7 @@ unsigned char* lzo_search_hdr(fstate_t *fst, unsigned char* bf, int *towr,
 			continue;
 		}
 		/* Best case: We have a complete block */
-		if (cmp_len+sizeof(blockhdr_t) <= *towr-off) {
+		if ((int32_t)(cmp_len+sizeof(blockhdr_t)) <= *towr-off) {
 			/* Do checksum tests etc. */
 			uint32_t ucks = ntohl(*(uint32_t*)(fst->buf+off+8));
 			uint32_t ccks = ntohl(*(uint32_t*)(fst->buf+off+12));

@@ -1037,7 +1037,7 @@ int copyxattr(const char* inm, const char* onm)
 		return -1;
 	}
 	int offs;
-	unsigned char* extrabuf = malloc(4096);
+	unsigned char* extrabuf = (unsigned char*)malloc(4096);
 	int ebufall = 4096;
 	for (offs = 0; offs < aln; offs += 1+strlen(attrs+offs)) {
 		ssize_t itln = getxattr(inm, attrs+offs, NULL, 0);

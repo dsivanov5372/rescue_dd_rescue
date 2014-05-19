@@ -202,6 +202,7 @@ fiemap: fiemap.c fiemap.h fstrim.h config.h fstrim.o
 distclean: clean
 	rm -f *~ config.h config.h.in config.status config.log configure
 	rm -rf autom4te.cache
+	rm -f *.cmp *.lzo test
 
 dist: distclean
 	tar cvzf ../dd_rescue-$(VERSION).tar.gz -C.. --exclude=$(MYDIR)/CV* --exclude $(MYDIR)/dd_rescue2* --exclude $(MYDIR)/.* $(MYDIR) --exclude $(MYDIR)/*.i --exclude $(MYDIR)/*~ --exclude $(MYDIR)*.S --exclude $(MYDIR)/*_32 --exclude $(MYDIR)/*_64 --exclude $(MYDIR)/*_android --exclude $(MYDIR)/*.o --exclude $(MYDIR)/*.po --exclude $(MYDIR)/*.so
