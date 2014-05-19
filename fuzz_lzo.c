@@ -163,7 +163,7 @@ int write_header(int ofd, const char* nm,
 	write32(ofd, 1400000000, &adl);
 	write32(ofd, 0, &adl);
 	write8(ofd, strlen(nm), &adl);
-	if (write(ofd, nm, strlen(nm)) != strlen(nm))
+	if (write(ofd, nm, strlen(nm)) != (int)strlen(nm))
 		abort();
 	adl = lzo_adler32(adl, (const unsigned char*)nm, strlen(nm));
 	write32(ofd, hdr_fixup? adl: 0xdeadbeef, &dum);
@@ -181,7 +181,7 @@ blk_dist_t* find_dist(LISTTYPE(blk_dist_t)* dlist, int blkno, enum disttype type
 	LISTTYPE(blk_dist_t) *dist;
 	LISTFOREACH(dlist, dist) {
 		blk_dist_t *dst = &LISTDATA(dist);
-		if (blkno == dst->blkno && type == dst->dist && 
+		if ((unsigned)blkno == dst->blkno && type == dst->dist && 
 			(fix == -1 || fix == dst->fixup))
 			return dst;
 	}
@@ -204,9 +204,9 @@ int compress(int ifd, int ofd, unsigned int blksz, LISTTYPE(blk_dist_t)*dists)
 {	
 	int blk = 0;
 	ssize_t rd, wr = 0;
-	unsigned char *dbuf = malloc(blksz);
-	unsigned char *cbuf = malloc(CBFLEN); 
-	unsigned char *wmem = malloc(LZO1X_1_MEM_COMPRESS);
+	unsigned char *dbuf = (unsigned char*)malloc(blksz);
+	unsigned char *cbuf = (unsigned char*)malloc(CBFLEN); 
+	unsigned char *wmem = (unsigned char*)malloc(LZO1X_1_MEM_COMPRESS);
 	do {
 		rd = read(ifd, dbuf, blksz);
 		if (!rd)
@@ -218,7 +218,7 @@ int compress(int ifd, int ofd, unsigned int blksz, LISTTYPE(blk_dist_t)*dists)
 		int err = lzo1x_1_compress(dbuf, rd, cbuf, &cln, wmem);
 		if (err)
 			abort();
-		if (cln >= rd) {
+		if (cln >= (unsigned)rd) {
 			memcpy(cbuf, dbuf, rd);
 			cln = rd;
 		}
@@ -241,7 +241,7 @@ int compress(int ifd, int ofd, unsigned int blksz, LISTTYPE(blk_dist_t)*dists)
 		write32(ofd, ulen, &dum);
 		write32(ofd, clen, &dum);
 		write32(ofd, uadl, &dum);
-		if (cln != rd)
+		if (cln != (unsigned)rd)
 			write32(ofd, cadl, &dum);
 		/* And write block */
 		wr += write(ofd, cbuf, cln); 
