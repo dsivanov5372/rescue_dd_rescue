@@ -95,7 +95,7 @@ It's meant for debugging purposes.
 Finally there is also a 
 .B flags=XXXX 
 parameter. This sets the flags field in
-the header (default is 0x03000003) and is used for testing only. It is not
+the header (default is 0x03000403) and is used for testing only. It is not
 sanity checked and you can easily set values that will break decompression
 or cause ddr_lzo to abort. Really only use for development purposes when
 you know meaning of the various bits.
@@ -214,7 +214,7 @@ detection of data corruption. (Ideally, a 32bit checksum just misses
 to the ideal than adler32. You may pass the 
 .B crc32
 option to use crc32 instead of adler32 checksums at the expense of
-some speed -- unforuntately the crc32 polynomial for lzop/gzip/... is not 
+some speed -- unfortunately the crc32 polynomial for lzop/gzip/... is not 
 the crc32c polynomial that has hardware support on many CPUs these days.)
 Also note that the checksums are NOT cryptographic hashes;
 a malicious attacker can easily find modifications of data that do not
