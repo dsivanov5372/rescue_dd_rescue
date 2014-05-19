@@ -34,7 +34,7 @@ COMPILER = $(shell $(CC) --version | head -n1)
 DEFINES = -DVERSION=\"$(VERSION)\"  -D__COMPILER__="\"$(COMPILER)\"" # -DPLUGSEARCH="\"$(LIBDIR)\""
 OUT = -o dd_rescue
 
-LZOP = $(shell type -p lzop || echo /usr/bin/true)
+LZOP = $(shell type -p lzop || type -p true)
 
 ifeq ($(shell grep 'HAVE_LZO_LZO1X_H 1' config.h >/dev/null 2>&1 && echo 1), 1)
   LIBTARGETS += libddr_lzo.so
