@@ -34,6 +34,8 @@ COMPILER = $(shell $(CC) --version | head -n1)
 DEFINES = -DVERSION=\"$(VERSION)\"  -D__COMPILER__="\"$(COMPILER)\"" # -DPLUGSEARCH="\"$(LIBDIR)\""
 OUT = -o dd_rescue
 
+LZOP = $(shell type -p lzop || echo /usr/bin/true)
+
 ifeq ($(shell grep 'HAVE_LZO_LZO1X_H 1' config.h >/dev/null 2>&1 && echo 1), 1)
   LIBTARGETS += libddr_lzo.so
   OTHTARGETS += fuzz_lzo
@@ -270,15 +272,15 @@ check: $(TARGETS) find_nonzero
 check_lzo: $(TARGETS)
 	@echo "***** dd_rescue lzo (and MD5) plugin tests *****"
 	./dd_rescue -b32k -ATL ./libddr_lzo.so dd_rescue dd_rescue.ddr.lzo
-	lzop -t dd_rescue.ddr.lzo
+	$(LZOP) -t dd_rescue.ddr.lzo
 	@rm -f dd_rescue.ddr
-	lzop -d dd_rescue.ddr.lzo
+	$(LZOP) -d dd_rescue.ddr.lzo
 	cmp dd_rescue dd_rescue.ddr
 	@rm -f dd_rescue.ddr dd_rescue.ddr.lzo
 	./dd_rescue -b1M -L ./libddr_MD5.so=output,./libddr_lzo.so=compress,./libddr_MD5.so=output dd_rescue dd_rescue.ddr.lzo > dd_rescue.ddr.MD5SUM
 	md5sum -c dd_rescue.ddr.MD5SUM
 	md5sum dd_rescue dd_rescue.ddr.lzo
-	lzop -Nvl dd_rescue.ddr.lzo
+	$(LZOP) -Nvl dd_rescue.ddr.lzo
 	./dd_rescue -b1M -TL ./libddr_MD5.so=output,./libddr_lzo.so=compress,./libddr_MD5.so,./libddr_lzo.so=decompress,./libddr_MD5.so=outfd=1 dd_rescue dd_rescue.ddr > dd_rescue.ddr.MD5
 	cmp dd_rescue dd_rescue.ddr
 	md5sum -c dd_rescue.ddr.MD5
@@ -286,7 +288,7 @@ check_lzo: $(TARGETS)
 	cmp dd_rescue dd_rescue.ddr
 	md5sum -c dd_rescue.ddr.MD5
 	@rm -f dd_rescue.ddr dd_rescue.ddr.lzo dd_rescue.lzo dd_rescue.ddr.MD5
-	lzop dd_rescue
+	$(LZOP) dd_rescue
 	./dd_rescue -b1M -TL ./libddr_lzo.so dd_rescue.lzo dd_rescue.cmp
 	cmp dd_rescue dd_rescue.cmp
 	@rm -f dd_rescue.cmp dd_rescue.lzo
@@ -307,7 +309,7 @@ check_lzo: $(TARGETS)
 	rm -f MD5 test2
 	./dd_rescue -axL ./libddr_lzo.so,./libddr_MD5.so=output dd_rescue test.lzo > MD5
 	#md5sum -c MD5
-	lzop -Nvl test.lzo
+	$(LZOP) -Nvl test.lzo
 	cat dd_rescue >> test
 	./dd_rescue -aL ./libddr_lzo.so,./libddr_MD5.so=output test.lzo test.cmp > MD5
 	md5sum -c MD5
@@ -315,7 +317,7 @@ check_lzo: $(TARGETS)
 	rm -f MD5 test test.lzo test.cmp
 	
 check_lzo_algos: $(TARGETS)
-	for alg in lzo1x_1 lzo1x_1_11 lzo1x_1_12 lzo1x_1_15 lzo1x_999 lzo1y_1 lzo1y_999 lzo1f_1 lzo1f_999 lzo1b_1 lzo1b_2 lzo1b_3 lzo1b_4 lzo1b_5 lzo1b_6 lzo1b_7 lzo1b_8 lzo1b_9 lzo1b_99 lzo1b_999 lzo2a_999; do ./dd_rescue -qATL ./libddr_lzo.so=algo=$$alg:benchmark dd_rescue dd_rescue.lzo || exit 1; lzop -lt dd_rescue.lzo; ./dd_rescue -qATL ./libddr_lzo.so=benchmark dd_rescue.lzo dd_rescue.cmp || exit 2; cmp dd_rescue dd_rescue.cmp || exit 3; done
+	for alg in lzo1x_1 lzo1x_1_11 lzo1x_1_12 lzo1x_1_15 lzo1x_999 lzo1y_1 lzo1y_999 lzo1f_1 lzo1f_999 lzo1b_1 lzo1b_2 lzo1b_3 lzo1b_4 lzo1b_5 lzo1b_6 lzo1b_7 lzo1b_8 lzo1b_9 lzo1b_99 lzo1b_999 lzo2a_999; do ./dd_rescue -qATL ./libddr_lzo.so=algo=$$alg:benchmark dd_rescue dd_rescue.lzo || exit 1; $(LZOP) -lt dd_rescue.lzo; ./dd_rescue -qATL ./libddr_lzo.so=benchmark dd_rescue.lzo dd_rescue.cmp || exit 2; cmp dd_rescue dd_rescue.cmp || exit 3; done
 
 check_lzo_test: $(TARGETS)
 	find . -type f

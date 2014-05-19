@@ -1,10 +1,12 @@
 #!/bin/bash
 
+LZOP=`type -p lzop || echo /usr/bin/true`
+
 compress_ddr_lzop_and_compare()
 {
 	echo "*** Test dd_r/lzop $1 ($2)"
 	./dd_rescue -qATL ./libddr_lzo.so=benchmark:algo=$2:compress $1 $1.ddr.lzo || exit 1
-	lzop -d $1.ddr.lzo || exit 2
+	$LZOP -d $1.ddr.lzo || exit 2
 	cmp $1.ddr $1 || exit 3
 	rm $1.ddr.lzo $1.ddr
 }
@@ -12,7 +14,7 @@ compress_ddr_lzop_and_compare()
 compress_lzop_ddr_and_compare()
 {
 	echo "*** Test lzop/dd_r $1 ($2)"
-	lzop $2 $1 -o $1.lzop.lzo || exit 4
+	$LZOP $2 $1 -o $1.lzop.lzo || exit 4
 	./dd_rescue -qATL ./libddr_lzo.so=benchmark:decompress $1.lzop.lzo $1.lzop || exit 5
 	cmp $1.lzop $1 || exit 6
 	rm $1.lzop $1.lzop.lzo
@@ -22,7 +24,7 @@ compress_ddr_ddr_and_compare()
 {
 	echo "*** Test dd_r/dd_r $1 ($2)"
 	./dd_rescue -qATL ./libddr_lzo.so=benchmark:algo=$2:compress $1 $1.ddr.lzo || exit 7
-	#lzop -t $1.ddr.lzo || exit 8
+	#$LZOP -t $1.ddr.lzo || exit 8
 	./dd_rescue -qATL ./libddr_lzo.so=benchmark:decompress $1.ddr.lzo $1.ddr || exit 8
 	cmp $1.ddr $1 || exit 9
 	rm $1.ddr.lzo $1.ddr

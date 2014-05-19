@@ -1,5 +1,7 @@
 #!/bin/bash
 
+LZOP=`type -p lzop || echo /usr/bin/true`
+
 test_fuzz()
 {
 	ERC=$1
@@ -20,7 +22,7 @@ test_fuzz()
 
 
 ./fuzz_lzo dd_rescue dd_rescue.lzo
-lzop -vl dd_rescue.lzo
+$LZOP -vl dd_rescue.lzo
 ./dd_rescue -L ./libddr_lzo.so dd_rescue.lzo /dev/null
 
 # Main tests ...
