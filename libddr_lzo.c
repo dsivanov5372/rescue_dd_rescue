@@ -488,7 +488,7 @@ void slackfree(void* base, lzo_state *state)
 
 /* TO DO: We could as well adjust to real max (2*softbs) */
 #define MAXBLOCKSZ 16UL*1024UL*1024UL
-int lzo_open(const opt_t *opt, int olnchg, 
+int lzo_open(const opt_t *opt, int ilnchg, int olnchg, 
 	     unsigned int totslack_pre, unsigned int totslack_post,
 	     void **stat)
 {

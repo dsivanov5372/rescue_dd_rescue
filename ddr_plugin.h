@@ -30,7 +30,7 @@ typedef int (_init_callback)(void **stat, char* param, int seq, const opt_t *opt
  *	ptr to buffer ptr, opaque handle.
  * 	Return value: 0 = OK, -x = ERROR, +x = Bytes consumed from input file.
  */
-typedef int (_open_callback)(const opt_t *opt, int olnchange, 
+typedef int (_open_callback)(const opt_t *opt, int ilnchange, int olnchange, 
 			     unsigned int totslack_pre, unsigned int totslack_post,
 			     void **stat);
 /** block_callback parameters: file state (contains file descriptors, positions,

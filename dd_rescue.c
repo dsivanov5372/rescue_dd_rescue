@@ -349,6 +349,7 @@ unsigned int plug_max_slack_pre = 0;
 int plug_max_neg_slack_pre = 0;
 unsigned int plug_max_slack_post = 0;
 int plug_max_neg_slack_post = 0;
+int plug_first_lenchg = -1;
 int plug_last_lenchg = -1;
 unsigned int plug_max_req_align = 0;
 char plug_not_sparse = 0;
@@ -375,7 +376,8 @@ void call_plugins_open(opt_t *op, fstate_t *fst)
 			fplog(stderr, INFO, "Pre %i Post %i TPre %i TPost %i\n",
 				spre, spost, slk_pre, slk_post);
 			 */
-			int err = LISTDATA(plug).open_callback(op, (plugins_opened < plug_last_lenchg ? 1: 0),
+			int err = LISTDATA(plug).open_callback(op, (plugins_opened > plug_first_lenchg? 1: 0),
+								   (plugins_opened < plug_last_lenchg ? 1: 0),
 						plug_max_slack_pre-slk_pre, plug_max_slack_post-slk_post,
 					        &LISTDATA(plug).state);
 			if (err < 0) {
@@ -519,6 +521,8 @@ void load_plugins(char* plugs, opt_t *op)
 			}
 			if (plug->changes_output_len)
 				plug_last_lenchg = plugno;
+			if (plug_first_lenchg == -1 && plug->changes_output_len)
+				plug_first_lenchg = plugno;
 			++plugno;
 		}
 		plugs = next;

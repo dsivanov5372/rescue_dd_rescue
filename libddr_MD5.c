@@ -33,7 +33,7 @@ typedef struct _md5_state {
 	int seq;
 	int outfd;
 	unsigned char buflen;
-	unsigned char olnchg, debug;
+	unsigned char ilnchg, olnchg, debug;
 	const opt_t *opts;
 } md5_state;
 
@@ -72,7 +72,7 @@ int md5_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	return err;
 }
 
-int md5_open(const opt_t *opt, int olnchg,
+int md5_open(const opt_t *opt, int ilnchg, int olnchg,
 	     unsigned int totslack_pre, unsigned int totslack_post,
 	     void **stat)
 {
@@ -83,9 +83,10 @@ int md5_open(const opt_t *opt, int olnchg,
 	state->name = (state->seq == 0? opt->iname: opt->oname);
 	memset(state->buf, 0, 128);
 	state->buflen = 0;
+	state->ilnchg = ilnchg;
 	state->olnchg = olnchg;
-	if (olnchg && (state->opts->sparse || !state->opts->nosparse)) {
-		FPLOG(WARN, "Size of potential holes may not be correct due to subsequent plugins;\n");
+	if (ilnchg && olnchg && (state->opts->sparse || !state->opts->nosparse)) {
+		FPLOG(WARN, "Size of potential holes may not be correct due to other plugins;\n");
 		FPLOG(WARN, " MD5 hash may be miscomputed! Avoid holes (remove -a, use -A).\n");
 	}
 	return 0;
@@ -103,7 +104,7 @@ void md5_last(md5_state *state, loff_t pos)
 {
 	//md5_block(0, 0, ooff, stat);
 	int left = pos - state->md5_pos;
-	assert(state->buflen == left);
+	assert(state->buflen == left || (state->ilnchg && state->olnchg));
 	/*
 	fprintf(stderr, "MD5_DEBUG: %s: len=%li, md5pos=%li\n", 
 		state->name, len, state->md5_pos);
@@ -157,6 +158,7 @@ unsigned char* md5_block(fstate_t *fst, unsigned char* bf,
 {
 	/* TODO: Replace usage of state->buf by using slack space
 	 * Hmmm, really? Probably buffer management is not sophisticated enough currently ... */
+	/* TODO: If both ilnchg and olnchg are set, switch off sanity checks and go into dumb mode */
 	md5_state *state = (md5_state*)*stat;
 	const loff_t pos = state->olnchg? 
 			fst->ipos - state->opts->init_ipos:
@@ -165,11 +167,11 @@ unsigned char* md5_block(fstate_t *fst, unsigned char* bf,
 				state->seq, state->olnchg, *towr, eof, pos, state->md5_pos, state->buflen));
 	// Handle hole (sparse files)
 	const loff_t holesz = pos - (state->md5_pos + state->buflen);
-	assert(holesz >= 0);
+	assert(holesz >= 0 || (state->ilnchg && state->olnchg));
 	if (holesz)
 		md5_hole(fst, state, holesz);
 
-	assert(pos == state->md5_pos+state->buflen);
+	assert(pos == state->md5_pos+state->buflen || (state->ilnchg && state->olnchg));
 	int consumed = 0;
 	assert(bf);
 	/* First block */
@@ -186,7 +188,7 @@ unsigned char* md5_block(fstate_t *fst, unsigned char* bf,
 		}
 	}
 
-	assert(state->md5_pos+state->buflen == pos+consumed);
+	assert(state->md5_pos+state->buflen == pos+consumed || (state->ilnchg && state->olnchg));
 	/* Bulk buffer process */
 	int to_process = *towr - consumed;
 	assert(to_process >= 0);
@@ -197,7 +199,7 @@ unsigned char* md5_block(fstate_t *fst, unsigned char* bf,
 		md5_calc(bf+consumed, to_process, 0, &state->md5);
 		consumed += to_process; state->md5_pos += to_process;
 	}
-	assert(state->md5_pos+state->buflen == pos+consumed);
+	assert(state->md5_pos+state->buflen == pos+consumed || (state->ilnchg && state->olnchg));
 	to_process = *towr - consumed;
 	assert(to_process >= 0 && to_process < 64);
 	/* Copy remainder into buffer */
