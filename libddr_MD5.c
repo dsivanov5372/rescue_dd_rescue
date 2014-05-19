@@ -211,7 +211,7 @@ unsigned char* md5_block(fstate_t *fst, unsigned char* bf,
 		state->buflen = to_process;
 	}
 	if (eof)
-		md5_last(state, pos);
+		md5_last(state, pos+*towr);
 	return bf;
 }
 
