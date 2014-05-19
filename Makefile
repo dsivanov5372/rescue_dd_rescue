@@ -275,6 +275,9 @@ check_lzo: $(TARGETS)
 	./dd_rescue -b1M -TL ./libddr_MD5.so=output,./libddr_lzo.so=compress,./libddr_MD5.so,./libddr_lzo.so=decompress,./libddr_MD5.so=outfd=1 dd_rescue dd_rescue.ddr > dd_rescue.ddr.MD5
 	cmp dd_rescue dd_rescue.ddr
 	md5sum -c dd_rescue.ddr.MD5
+	./dd_rescue -b16k -TL ./libddr_MD5.so=output,./libddr_lzo.so=compress,./libddr_MD5.so,./libddr_lzo.so=decompress,./libddr_MD5.so=outfd=1 dd_rescue dd_rescue.ddr > dd_rescue.ddr.MD5
+	cmp dd_rescue dd_rescue.ddr
+	md5sum -c dd_rescue.ddr.MD5
 	@rm -f dd_rescue.ddr dd_rescue.ddr.lzo dd_rescue.lzo dd_rescue.ddr.MD5
 	lzop dd_rescue
 	./dd_rescue -b1M -TL ./libddr_lzo.so dd_rescue.lzo dd_rescue.cmp

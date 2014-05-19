@@ -110,7 +110,7 @@ void md5_last(md5_state *state, loff_t pos)
 		state->name, len, state->md5_pos);
 	 */
 	MD5_DEBUG(FPLOG(DEBUG, "Last block with %i bytes\n", state->buflen));
-	md5_calc(state->buf, state->buflen, pos, &state->md5);
+	md5_calc(state->buf, state->buflen, state->md5_pos+state->buflen, &state->md5);
 	state->md5_pos += state->buflen;
 }
 
@@ -168,7 +168,7 @@ unsigned char* md5_block(fstate_t *fst, unsigned char* bf,
 	// Handle hole (sparse files)
 	const loff_t holesz = pos - (state->md5_pos + state->buflen);
 	assert(holesz >= 0 || (state->ilnchg && state->olnchg));
-	if (holesz)
+	if (holesz && !(state->ilnchg && state->olnchg))
 		md5_hole(fst, state, holesz);
 
 	assert(pos == state->md5_pos+state->buflen || (state->ilnchg && state->olnchg));
@@ -203,7 +203,7 @@ unsigned char* md5_block(fstate_t *fst, unsigned char* bf,
 	to_process = *towr - consumed;
 	assert(to_process >= 0 && to_process < 64);
 	/* Copy remainder into buffer */
-	if (/*!state->olnchg &&*/ state->md5_pos + state->buflen != pos + consumed)
+	if (!(state->olnchg && state->ilnchg) && state->md5_pos + state->buflen != pos + consumed)
 		FPLOG(FATAL, "Inconsistency: MD5 pos %i, buff %i, st pos %" LL "i, cons %i, tbw %i\n",
 				state->md5_pos, state->buflen, pos, consumed, *towr);
 	if (to_process) {
