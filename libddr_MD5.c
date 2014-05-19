@@ -154,6 +154,12 @@ unsigned char* md5_block(fstate_t *fst, unsigned char* bf,
 	}
 	/* Last sparse block */
 	int left = opos - (state->md5_pos+state->buflen);
+	if (left > 0 && *towr == 0 && eof) {
+		memset(state->buf, 0, left);
+		state->buflen = left;
+		md5_last(state, ooff);
+		return bf;
+	}
 	if (/*!state->olnchg &&*/ left > 0 && *towr >= left) {
 		assert(consumed == 0);
 		memcpy(state->buf+64-left, bf, left);
@@ -173,10 +179,10 @@ unsigned char* md5_block(fstate_t *fst, unsigned char* bf,
 		consumed += mylen; state->md5_pos += mylen;
 	}
 	/* Copy remainder into buffer */
-	if (!state->olnchg && state->md5_pos + state->buflen != opos + consumed)
+	if (/*!state->olnchg &&*/ state->md5_pos + state->buflen != opos + consumed)
 		FPLOG(FATAL, "Inconsistency: MD5 pos %i, buff %i, st pos %i, cons %i, tbw %i\n",
 				state->md5_pos, state->buflen, opos, consumed, *towr);
-	assert(state->olnchg || state->md5_pos + state->buflen == opos + consumed);
+	assert(state->olnchg || eof || state->md5_pos + state->buflen == opos + consumed);
 	if (*towr - consumed) {
 		assert(state->buflen+*towr-consumed < 64);
 		MD5_DEBUG(FPLOG(INFO, "Store %i bytes @ %i\n", *towr-consumed, ooff+consumed));

@@ -288,15 +288,16 @@ check_lzo: $(TARGETS)
 	md5sum -c MD5.2
 	@rm -f dd_rescue.lzo dd_rescue.cmp MD5.1 MD5.2
 	# TODO: Add sparse testing and MULTIPART testing and extend
-	./dd_rescue -a -m 64k /dev/zero test
+	./dd_rescue -ta -m 64k /dev/zero test
 	./dd_rescue -ax dd_rescue test
-	./dd_rescue -a -m 128k /dev/zero test
-	./dd_rescue -aL ./libddr_MD5.so=output,./libddr_lzo.so,./libddr_MD5.so=output test test.lzo > MD5
+	./dd_rescue -axm 128k /dev/zero test
+	./dd_rescue -taL ./libddr_MD5.so test test2
+	./dd_rescue -taL ./libddr_MD5.so=output,./libddr_lzo.so,./libddr_MD5.so=output test test.lzo > MD5
 	md5sum -c MD5
-	rm -f MD5
+	rm -f MD5 test2
 	./dd_rescue -axL ./libddr_lzo.so,./libddr_MD5.so=output dd_rescue test.lzo > MD5
 	#md5sum -c MD5
-	lzop -vl test.lzo
+	lzop -Nvl test.lzo
 	cat dd_rescue >> test
 	./dd_rescue -aL ./libddr_lzo.so,./libddr_MD5.so=output test.lzo test.cmp > MD5
 	md5sum -c MD5
