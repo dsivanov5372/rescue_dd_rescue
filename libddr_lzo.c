@@ -354,7 +354,7 @@ const char *lzo_help = "The lzo plugin for dd_rescue de/compresses data on the f
 		"  Use algo=help for a list of (de)compression algorithms.\n";
 
 
-void chose_alg(char* anm, lzo_state *state)
+int choose_alg(char* anm, lzo_state *state)
 {
 	comp_alg *ca;
 	if (!strcmp(anm, "help")) {
@@ -362,16 +362,16 @@ void chose_alg(char* anm, lzo_state *state)
 		for (ca = calgos; ca < calgos+sizeof(calgos)/sizeof(comp_alg); ++ca)
 			FPLOG(INFO, "%s (%i, %i, %i)\n",
 					ca->name, ca->workmem, ca->meth, ca->lev);
-		exit(1);
+		return 1;
 	}
 	for (ca = calgos; ca < calgos+sizeof(calgos)/sizeof(comp_alg); ++ca) {
 		if (!strcmp(ca->name, anm)) {
 			state->algo = ca;
-			return;
+			return 0;
 		}
 	}
 	FPLOG(FATAL, "Algorithm %s not found, try algo=help\n", anm);
-	exit(13);
+	return 13;
 }
 
 
@@ -419,11 +419,11 @@ int lzo_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		else if (!memcmp(param, "nodisc", 6))
 			state->nodiscard = 1;
 		else if (!memcmp(param, "algo=", 5))
-			chose_alg(param+5, state);
+			err += choose_alg(param+5, state);
 		else if (!memcmp(param, "alg=", 4))
-			chose_alg(param+4, state);
+			err += choose_alg(param+4, state);
 		else if (!memcmp(param, "algorithm=", 10))
-			chose_alg(param+10, state);
+			err += choose_alg(param+10, state);
 		else if (!memcmp(param, "flags=", 6)) {
 			state->flags = strtol(param+6, NULL, 0);
 			/* TODO Sanity check for flags ... */
@@ -445,7 +445,7 @@ void* slackalloc(size_t ln, lzo_state *state)
 	if (!ptr) {
 		FPLOG(FATAL, "allocation of %i bytes failed: %s\n",
 			ln+state->slackpre+state->slackpost, strerror(errno));
-		exit(13);
+		raise(SIGQUIT);
 	}
 	state->orig_dbuf = ptr;
 	ptr += state->slackpre + pagesize-1;

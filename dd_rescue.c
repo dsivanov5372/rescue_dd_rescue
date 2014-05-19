@@ -480,9 +480,11 @@ ddr_plugin_t* insert_plugin(void* hdl, const char* nm, char* param, opt_t *op)
 			nm, param);
 		exit(13);
 	}
-	if (plug->init_callback)
-		if (plug->init_callback(&plug->state, param, plugins_loaded, op))
-			exit(13);
+	if (plug->init_callback) {
+		int ret = plug->init_callback(&plug->state, param, plugins_loaded, op);
+		if (ret)
+			exit(ret);
+	}
 	plugins_loaded++;
 	LISTAPPEND(ddr_plugins, *plug, ddr_plugin_t);
 	if (param && !memcmp(param, "help", 4))
