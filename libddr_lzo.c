@@ -1123,6 +1123,7 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 			LZO_DEBUG(FPLOG(INFO, "decompressed %i@%p -> %i\n",
 				cmp_len, effbf+bhsz, dst_len));
 			if (dst_len != unc_len) {
+				fst->nrerr++;
 				FPLOG(WARN, "inconsistent uncompressed size @%i: %i <-> %i\n",
 					state->cmp_ln+state->cmp_hdr, unc_len, dst_len);
 				/* Rather than risking writing out garbage, write 0 */

@@ -30,5 +30,6 @@ test_fuzz 1 "=nodiscard" 0 -U2
 test_fuzz 1 "=nodiscard" 0 -C3
 test_fuzz 1 "" 16384 -x1:0x6fe=0x1a
 test_fuzz 1 "=nodiscard" 32 -x1:0x6fe=0x1a
-
+test_fuzz 1 "" 16384 -u2=8192
+test_fuzz 2 "" 100000 -c4=8192
 
