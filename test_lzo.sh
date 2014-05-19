@@ -31,10 +31,12 @@ compress_ddr_ddr_and_compare()
 
 for name in "$@"; do
 	for alg in lzo1x_1 lzo1x_1_15 lzo1x_999; do
+		if test ! -r "$name"; then continue; fi
 		compress_ddr_lzop_and_compare "$name" $alg
 		compress_ddr_ddr_and_compare "$name" $alg
 	done
 	for alg in -1 -5 -9; do
+		if test ! -r "$name"; then continue; fi
 		compress_lzop_ddr_and_compare "$name" $alg
 	done
 done
