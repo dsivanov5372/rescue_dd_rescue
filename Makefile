@@ -265,7 +265,7 @@ check: $(TARGETS) find_nonzero
 	if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo; fi
 	if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo_algos; fi
 	if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo_test; fi
-	if test $(HAVE_LZO) = 1; then $(MAKE) check_malicious; fi
+	if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo_fuzz; fi
 	
 check_lzo: $(TARGETS)
 	@echo "***** dd_rescue lzo (and MD5) plugin tests *****"
@@ -321,7 +321,7 @@ check_lzo_test: $(TARGETS)
 	find . -type f
 	find . -type f | xargs ./test_lzo.sh
 
-check_malicious: $(TARGETS) fuzz_lzo
+check_lzo_fuzz: $(TARGETS) fuzz_lzo
 	# Do intelligent fuzzing before feeding to dd_rescue -L lzo=decompress
 	# Intelligent fuzzing means starting from valid .lzo, and adding
 	#  distortions, with and without fixing checksums ...

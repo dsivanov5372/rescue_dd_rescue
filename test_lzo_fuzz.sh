@@ -31,7 +31,7 @@ test_fuzz 1 "=nodiscard" 0 -C3
 test_fuzz 1 "" 16384 -x1:0x6fe=0x1a
 test_fuzz 1 "=nodiscard" 32 -x1:0x6fe=0x1a
 test_fuzz 1 "" 16384 -u2=8192
-test_fuzz 2 "" 100000 -c4=8192
+#test_fuzz 2 "" 100000 -c4=8192		# disabled because exit code can be either 1 or 2 ...
 # TODO: A lot more tests, with and without nodiscard
 # TODO: Do tests with -T, with good preexisting data and check whether nothing gets destroyed
 rm -f dd_rescue.lzo dd_rescue.cmp
