@@ -275,9 +275,9 @@ check_lzo: $(TARGETS)
 	@echo "***** dd_rescue lzo (and MD5) plugin tests *****"
 	./dd_rescue -b32k -ATL ./libddr_lzo.so dd_rescue dd_rescue.ddr.lzo
 	$(LZOP) -t dd_rescue.ddr.lzo
-	@rm -f dd_rescue.ddr
-	$(LZOP) -d dd_rescue.ddr.lzo
-	#cmp dd_rescue dd_rescue.ddr
+	@cp -p dd_rescue dd_rescue.ddr
+	$(LZOP) -fd dd_rescue.ddr.lzo
+	cmp dd_rescue dd_rescue.ddr
 	@rm -f dd_rescue.ddr dd_rescue.ddr.lzo
 	./dd_rescue -b1M -L ./libddr_MD5.so=output,./libddr_lzo.so=compress,./libddr_MD5.so=output dd_rescue dd_rescue.ddr.lzo > dd_rescue.ddr.MD5SUM
 	md5sum -c dd_rescue.ddr.MD5SUM

@@ -1,9 +1,10 @@
 #!/bin/bash
 
-LZOP=`type -p lzop || type -P true`
+LZOP=`type -p lzop` # || type -P true`
 
 compress_ddr_lzop_and_compare()
 {
+	test -x $LZOP || return
 	echo "*** Test dd_r/lzop $1 ($2)"
 	./dd_rescue -qATL ./libddr_lzo.so=benchmark:algo=$2:compress $1 $1.ddr.lzo || exit 1
 	$LZOP -d $1.ddr.lzo || exit 2
@@ -13,6 +14,7 @@ compress_ddr_lzop_and_compare()
 
 compress_lzop_ddr_and_compare()
 {
+	test -x $LZOP || return
 	echo "*** Test lzop/dd_r $1 ($2)"
 	$LZOP $2 $1 -o $1.lzop.lzo || exit 4
 	./dd_rescue -qATL ./libddr_lzo.so=benchmark:decompress $1.lzop.lzo $1.lzop || exit 5

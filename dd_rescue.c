@@ -1255,7 +1255,7 @@ static ssize_t blockiszero(const unsigned char* blk, const size_t ln,
 	if (!ln || *blk) 
 		rep->i_rep_zero = 0;
 	else
-		rep->i_rep_zero = FIND_NONZERO_OPT(blk, ln);
+		rep->i_rep_zero = find_nonzero(blk, ln);
 	return rep->i_rep_zero;
 }
 
