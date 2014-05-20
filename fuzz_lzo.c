@@ -176,7 +176,7 @@ void error(const char* txt)
 	abort();
 }
 		
-blk_dist_t* find_dist(LISTTYPE(blk_dist_t)* dlist, int blkno, enum disttype type, char fix)
+blk_dist_t* find_dist(LISTTYPE(blk_dist_t)* dlist, int blkno, enum disttype type, signed char fix)
 {
 	LISTTYPE(blk_dist_t) *dist;
 	LISTFOREACH(dlist, dist) {
@@ -271,7 +271,7 @@ void dump_blkdists(LISTTYPE(blk_dist_t) *dlist)
 		else if (dtp == UCKS || dtp == CCKS)
 			printf("Blk %i: chg %s cksum %c\n",
 				dst->blkno,
-				(dst->dist == UCKS? "uchksum": "cchksum"),
+				(dst->dist == UCKS? "uncmpr": "compr"),
 				dst->fixup? ' ': '!');
 		else if (dtp == ULEN || dtp == CLEN)
 			printf("Blk %i: chg %s to %08x %c\n",
