@@ -182,7 +182,8 @@ typedef struct _lzo_state {
 	int seq;
 	int hdr_seen;
 	unsigned int blockno, holeno;
-	unsigned char eof_seen, do_bench, do_opt, do_search, debug, nodiscard;
+	unsigned char eof_seen, do_bench, do_opt, do_search;
+	unsigned char debug, nodiscard;
 	enum compmode mode;
 	comp_alg *algo;
 	const opt_t *opts;
@@ -1127,8 +1128,10 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 				FPLOG(WARN, "inconsistent uncompressed size @%i: %i <-> %i\n",
 					state->cmp_ln+state->cmp_hdr, unc_len, dst_len);
 				/* Rather than risking writing out garbage, write 0 */
-				if (dst_len < unc_len)
+				if (err && dst_len < unc_len) {
 					memset(state->dbuf+d_off+dst_len, 0, unc_len-dst_len);
+					dst_len = unc_len;
+				}
 			}
 		} else {
 			memcpy(state->dbuf+d_off, effbf+bhsz, unc_len);
