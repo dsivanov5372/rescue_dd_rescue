@@ -185,6 +185,7 @@ typedef struct _lzo_state {
 	unsigned char eof_seen, do_bench, do_opt, do_search;
 	unsigned char debug, nodiscard;
 	enum compmode mode;
+	unsigned int last_ulen;
 	comp_alg *algo;
 	const opt_t *opts;
 	loff_t next_ipos;
@@ -1128,10 +1129,10 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 				FPLOG(WARN, "inconsistent uncompressed size @%i: %i <-> %i\n",
 					state->cmp_ln+state->cmp_hdr, unc_len, dst_len);
 				/* Rather than risking writing out garbage, write 0 */
-				/* TODO: Keep track of previous block's ulen to determine whom to trust */
-				if (err && dst_len < unc_len)
+				if (dst_len < unc_len)
 					memset(state->dbuf+d_off+dst_len, 0, unc_len-dst_len);
-				if (err)
+				/* We keep track of previous block's ulen to determine whom to trust */
+				if (err || unc_len == state->last_ulen)
 					dst_len = unc_len;
 				
 			}
@@ -1213,7 +1214,8 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 					QUIT;
 				if (!state->nodiscard)
 					break;
-			}
+			} else if (!err)
+				state->last_ulen = dst_len;
 		}
 		if (state->debug)
 			FPLOG(DEBUG, "block%i@%i/%i (sz %i+%i/%i)%c\n",
