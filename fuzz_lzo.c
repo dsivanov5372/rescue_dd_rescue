@@ -297,7 +297,7 @@ int main(int argc, char* argv[])
 	char meth = 1;
 	char levl = 5;
 	unsigned int flags = 0x03000003UL;	/* UNIX | ADLER32_C | ADLER32_D */
-	char c;
+	int c;
         while ((c = getopt(argc, argv, "hdb:v:V:m:l:n:f:u:c:x:U:C:!")) != -1) {
 		switch (c) {
 			case 'h':
@@ -353,7 +353,7 @@ int main(int argc, char* argv[])
 				usage();
 				break;
 			default:
-				fprintf(stderr, "ERROR: getopt() err!\n");
+				fprintf(stderr, "ERROR: getopt() err! '%c' '%c'\n", optopt, c);
 				abort();
 		}
 
