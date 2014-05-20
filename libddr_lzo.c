@@ -1129,10 +1129,11 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 					state->cmp_ln+state->cmp_hdr, unc_len, dst_len);
 				/* Rather than risking writing out garbage, write 0 */
 				/* TODO: Keep track of previous block's ulen to determine whom to trust */
-				if (err && dst_len < unc_len) {
+				if (err && dst_len < unc_len)
 					memset(state->dbuf+d_off+dst_len, 0, unc_len-dst_len);
+				if (err)
 					dst_len = unc_len;
-				}
+				
 			}
 		} else {
 			memcpy(state->dbuf+d_off, effbf+bhsz, unc_len);
