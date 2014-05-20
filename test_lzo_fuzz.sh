@@ -35,7 +35,7 @@ test_fuzz 1 1 "=nodiscard" 0 -C2
 test_fuzz 1 5 "" 16384 -x1:0x6fe=0x1a
 test_fuzz 1 6 "=nodiscard" 16384 -x1:0x6fe=0x1a
 test_fuzz 1 3 "" 16384 -u2=8192
-test_fuzz 1 4 "" 100000 -c1=8192
+test_fuzz 1 131 "" 100000 -c1=8192
 # TODO: A lot more tests, with and without nodiscard
 # TODO: Do tests with -T, with good preexisting data and check whether nothing gets destroyed
 rm -f dd_rescue.lzo dd_rescue.cmp
