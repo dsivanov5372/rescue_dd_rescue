@@ -6,6 +6,10 @@
  * License: GNU GPLv2 or v3
  */
 
+#ifndef _GNU_SOURCE
+# define _GNU_SOURCE 1
+#endif
+
 #define _LARGEFILE64_SOURCE 1
 #define _FILE_OFFSET_BITS 64
 
