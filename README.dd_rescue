@@ -184,6 +184,10 @@ dd_rescue has a few nifty features:
 * Version 1.43 brought the lzo plugin, allowing data compression/
   decompression using the fast lzo algorithm. It required the plugin interface
   to be reworked -- further changes will likely come.
+  The lzo plugin supports a number of features that lzop does not; it supports
+  sparse files (using the lzop MULTIPART feature to stay compatible), various
+  lzo algorithms, continuation with broken blocks (fuzz_lzo has been developed
+  to test error recovery), and appending to existing .lzo files.
 
 
 Copyright
@@ -220,6 +224,8 @@ frandom.c is adapted from the kernel module from Eli Billauer
 http://www.billauer.co.il
 dd_rhelp can be found at
 http://www.kalysto.org/utilities/dd_rhelp/index.en.html
+liblzo2 is from
+http://www.oberhumer.com/opensource/lzo/
 
 Have fun! 
 (Hopefully you don't need this program. But if you do: I wish it will be
