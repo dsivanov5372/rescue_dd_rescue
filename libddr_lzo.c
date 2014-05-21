@@ -45,9 +45,9 @@
 #endif
 
 #ifdef HAVE_BASENAME
-const char* basename(const char*);
+//const char* basename(const char*);
 #else
-static char* basename(const char *nm)
+static const char* basename(const char *nm)
 {
 	const char* ptr = strrchr(nm, '/');	/* Not on DOS */
 	if (ptr)
