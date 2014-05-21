@@ -531,9 +531,14 @@ int lzo_open(const opt_t *opt, int ilnchg, int olnchg,
 	state->dbuf = (unsigned char*)slackalloc(state->dbuflen, state);
 	if (state->do_bench) 
 		state->cpu = 0;
-	if (opt->softbs > MAXBLOCKSZ)
-		FPLOG(WARN, "Blocks larger than %iMiB not recommended %iMiB specified)\n",
-			MAXBLOCKSZ>>20, opt->softbs);
+	if (state->mode == COMPRESS) {
+		if (opt->softbs > MAXBLOCKSZ)
+			FPLOG(WARN, "Blocks larger than %iMiB not recommended (%iMiB specified)\n",
+				MAXBLOCKSZ>>20, opt->softbs>>20);
+		else if (opt->softbs > 256*1024)
+			FPLOG(WARN, "Blocks larger than 256kiB need recompilation of lzop (%ikiB specified)\n",
+				opt->softbs>>10);
+	}
 	state->next_ipos = opt->init_ipos;
 	return 0;
 	/* This breaks MD5 in chain before us

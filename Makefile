@@ -15,7 +15,8 @@ INSTALLFLAGS = -s
 prefix = $(DESTDIR)/usr
 INSTALLDIR = $(prefix)/bin
 #INSTALLDIR = $(DESTDIR)/bin
-INSTALLLIBDIR = $(prefix)/$(LIB)
+#INSTALLLIBDIR = $(prefix)/$(LIB)
+INSTALLLIBDIR = $(DESTDIR)/$(LIBDIR)
 MANDIR = $(prefix)/share/man
 #MYDIR = dd_rescue-$(VERSION)
 MYDIR = dd_rescue
@@ -279,11 +280,11 @@ check_lzo: $(TARGETS)
 	$(LZOP) -fd dd_rescue.ddr.lzo
 	cmp dd_rescue dd_rescue.ddr
 	@rm -f dd_rescue.ddr dd_rescue.ddr.lzo
-	./dd_rescue -b1M -L ./libddr_MD5.so=output,./libddr_lzo.so=compress,./libddr_MD5.so=output dd_rescue dd_rescue.ddr.lzo > dd_rescue.ddr.MD5SUM
+	./dd_rescue -b256k -L ./libddr_MD5.so=output,./libddr_lzo.so=compress,./libddr_MD5.so=output dd_rescue dd_rescue.ddr.lzo > dd_rescue.ddr.MD5SUM
 	md5sum -c dd_rescue.ddr.MD5SUM
 	md5sum dd_rescue dd_rescue.ddr.lzo
 	$(LZOP) -Nvl dd_rescue.ddr.lzo
-	./dd_rescue -b1M -TL ./libddr_MD5.so=output,./libddr_lzo.so=compress,./libddr_MD5.so,./libddr_lzo.so=decompress,./libddr_MD5.so=outfd=1 dd_rescue dd_rescue.ddr > dd_rescue.ddr.MD5
+	./dd_rescue -b256k -TL ./libddr_MD5.so=output,./libddr_lzo.so=compress,./libddr_MD5.so,./libddr_lzo.so=decompress,./libddr_MD5.so=outfd=1 dd_rescue dd_rescue.ddr > dd_rescue.ddr.MD5
 	cmp dd_rescue dd_rescue.ddr
 	md5sum -c dd_rescue.ddr.MD5
 	./dd_rescue -b16k -TL ./libddr_MD5.so=output,./libddr_lzo.so=compress,./libddr_MD5.so,./libddr_lzo.so=decompress,./libddr_MD5.so=outfd=1 dd_rescue dd_rescue.ddr > dd_rescue.ddr.MD5
@@ -292,7 +293,7 @@ check_lzo: $(TARGETS)
 	@cp -p dd_rescue.ddr.lzo dd_rescue.lzo
 	@rm -f dd_rescue.ddr dd_rescue.ddr.lzo dd_rescue.ddr.MD5
 	$(LZOP) -f dd_rescue
-	./dd_rescue -b1M -TL ./libddr_lzo.so dd_rescue.lzo dd_rescue.cmp
+	./dd_rescue -b256k -TL ./libddr_lzo.so dd_rescue.lzo dd_rescue.cmp
 	cmp dd_rescue dd_rescue.cmp
 	@rm -f dd_rescue.cmp dd_rescue.lzo
 	./dd_rescue -b16k -L ./libddr_MD5.so=output,./libddr_lzo.so,./libddr_MD5.so=output dd_rescue dd_rescue.lzo > MD5.1

@@ -176,10 +176,11 @@ resulting lzop file to ddr_lzo's own version (1.789) to indicate
 incompatibility with lzop (as of 1.03).
 .br
 lzop by default uses block sizes of 256kiB (on Unix systems), but
-supports de/compression with different block sizes as well. The
-maximum possible is 64MiB; for reasons of error resilience, it is
-however NOT recommended to use blocks larger than 16MiB, see
-below.
+supports de/compression with smaller block sizes as well. It needs
+to be recompiled to support block sizes up to a possible maximum
+of 64MiB. Thus staying below or at 256kiB is recommended; even
+when lzop compatibility is no concern, blocks larger than 16MiB
+are not recommended, see below.
 .
 .SS Blocksize considerations
 When decompressing, the (soft) block size chosen in dd_rescue must be 
@@ -196,8 +197,10 @@ The default from dd_rescue (128kiB) is a good choice. It is NOT
 recommended to increase the block size too much -- when an lzo file gets
 corrupted, at least one block will be lost; larger blocks result in larger
 damage. Also, blocks larger than 16MiB will not work well with the error
-tolerance features of ddr_lzo. Also note that blocks larger than 64MiB
-prevent decompression with lzop.
+tolerance features of ddr_lzo. Also note that blocks larger than 256kiB
+need recompilation of lzop if you want to be able to use lzop to
+process the .lzo files; blocks larger than 64MiB prevent decompression
+even with a recompiled lzop.
 .
 .SH BUGS/LIMITATIONS
 .SS Maturity
@@ -205,7 +208,7 @@ The plugin is new as of dd_rescue 1.43. Do not yet rely on data
 saved with ddr_lzo as the only backup for valuable data. Also
 expect some changes to ddr_lzo in the not too distant future. 
 (This should not break the file format, as we're following lzop ....)
-.br 
+.br
 Compressed data is more sensitive to data corruption than plain data.
 Note that the checksums (adler32 or crc32) in the lzop file format
 do NOT allow to correct for errors; they just allow a somewhat reliable
