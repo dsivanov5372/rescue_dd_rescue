@@ -6,12 +6,12 @@
  * Copyright: CC-BY-SA 3.0/GFDL
  */
 
+#include "sha256.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <netinet/in.h>
 #include <assert.h>
-#include "sha256.h"
 
 /*
 Note 1: All variables are 32 bit unsigned integers and addition is calculated modulo 2^32 
@@ -24,7 +24,7 @@ Note 4: Big-endian convention is used when expressing the constants in this pseu
 /*
  * Initialize hash values: (first 32 bits of the fractional parts of the square roots of the first 8 primes 2..19): 
  */
-void init_sha256(hash_t *ctx)
+void sha256_init(hash_t *ctx)
 {
 	memset((uint8_t*)ctx, 0, sizeof(hash_t));
 	ctx->sha256_h[0] = 0x6a09e667;
@@ -71,7 +71,12 @@ void sha256_64(const uint8_t* msg, hash_t* ctx)
  	/* for each chunk create a 64-entry message schedule array w[0..63] of 32-bit words */
 	uint32_t w[64];
  	/* copy chunk into first 16 words w[0..15] of the message schedule array */
-	memcpy(w, msg, 64/(sizeof(uint32_t)));
+#if 1
+	memcpy(w, msg, 64);
+#else
+	for (i = 0; i < 16; ++i)
+		w[i] = htonl(*(uint32_t*)(msg+4*i));
+#endif
 	/* Extend the first 16 words into the remaining 48 words w[16..63] of the message schedule array: */
 	for (i = 16; i < 64;  ++i) {
 		uint32_t s0 = RIGHTROTATE(w[i-15], 7) ^ RIGHTROTATE(w[i-15], 18) ^ (w[i-15] >> 3);
@@ -101,18 +106,20 @@ void sha256_64(const uint8_t* msg, hash_t* ctx)
 }
 
 static char _sha256_res[65];
-char* sha256_out(hash_t* ctx)
+char* sha256_out(char *buf, hash_t* ctx)
 {
 	/* Produce the final hash value (big-endian): */ 
 	//digest := hash := h0 append h1 append h2 append h3 append h4 append h5 append h6 append h7
+	if (!buf)
+		buf = _sha256_res;
 	int i;
-	*_sha256_res = 0;
+	*buf = 0;
 	for (i = 0; i < 8; ++i) {
 		char res[9];
 		sprintf(res, "%08x", htonl(ctx->sha256_h[i]));
-		strcat(_sha256_res, res);
+		strcat(buf, res);
 	}
-	return _sha256_res;
+	return buf;
 }
 
 /* We assume we have a few bytes behind ln  ... */
@@ -133,3 +140,95 @@ void sha256_calc(uint8_t *ptr, size_t chunk_ln, size_t final_len, hash_t *ctx)
 		sha256_64(ptr + offset, ctx);
 }
 
+#ifdef SHA256_MAIN
+#include <sys/stat.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <stdlib.h>
+#define BUFSIZE 65536
+int main(int argc, char **argv)
+{
+	hash_t ctx;
+
+	if (argc < 2) {
+		printf("usage: %s file [file [..]]\n", argv[0]);
+		return 1;
+	}
+
+
+	uint8_t *obf = (uint8_t *)malloc(BUFSIZE + 128);
+	uint8_t *bf = obf;
+#if defined(HAVE___BUILTIN_PREFETCH) && !defined(NO_ALIGN)
+	bf += 63;
+	bf -= ((unsigned long)bf % 64);
+#endif
+
+	if (!bf) {
+		fprintf(stderr, "sha256: Failed to allocate buffer of size %i\n",
+			BUFSIZE);
+		exit(2);
+	}
+
+	int arg;
+	for (arg = 1; arg < argc; ++arg) {
+		//uint8_t result[16];
+		struct stat stbf;
+		if (stat(argv[arg], &stbf)) {
+			fprintf(stderr, "sha256: Can't stat %s: %s\n", argv[arg],
+				strerror(errno));
+			free(obf);
+			exit(1);
+		}
+		size_t len = stbf.st_size;
+
+		int fd = 0;
+		if (strcmp(argv[arg], "-"))
+			fd = open(argv[arg], O_RDONLY);
+
+		if (fd < 0) {
+			fprintf(stderr, "sha256: Failed to open %s for reading: %s\n",
+				argv[arg], strerror(errno));
+			free(obf);
+			exit(3);
+		}
+
+#ifdef BENCH
+		int i;
+		for (i = 0; i < 10000; ++i) {
+#endif
+		sha256_init(&ctx);
+		while (1) {
+			ssize_t rd = read(fd, bf, BUFSIZE);
+			if (rd == 0) {
+				sha256_calc(bf, 0, len, &ctx);
+				break;
+			}
+			if (rd < 0) {
+				fprintf(stderr, "sha256: Error reading %s: %s\n",
+					argv[arg], strerror(errno));
+				free(bf);
+				exit(4);
+			}
+			if (rd < BUFSIZE) {
+				sha256_calc(bf, rd, len, &ctx);
+				break;
+			} else
+				sha256_calc(bf, BUFSIZE, 0, &ctx);
+		}
+
+#ifdef BENCH
+		lseek(fd, 0, SEEK_SET);
+		}
+#endif
+		if (fd)
+			close(fd);
+
+		// display result
+		printf("%s *%s\n", sha256_out(NULL, &ctx), argv[arg]);
+	}
+	free(obf);
+
+	return 0;
+}
+#endif

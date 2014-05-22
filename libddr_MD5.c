@@ -20,7 +20,7 @@
 #define MD5_DEBUG(x) if (state->debug) x
 
 #define FPLOG(lvl, fmt, args...) \
-	ddr_plug.fplog(stderr, lvl, "%s(%i): " ddr_plug.name, fmt, state->seq, ##args)
+	ddr_plug.fplog(stderr, lvl, "%s(%i): ", ddr_plug.name, fmt, state->seq, ##args)
 
 /* fwd decl */
 extern ddr_plugin_t ddr_plug;
