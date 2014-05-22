@@ -6,16 +6,21 @@
  * Copyright: CC-BY-SA 3.0/GFDL
  */
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE 1
+#endif
+
 #include "sha256.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <netinet/in.h>
 #include <assert.h>
+#include <unistd.h>
 
 /*
 Note 1: All variables are 32 bit unsigned integers and addition is calculated modulo 2^32 
-Note 2: For each round, there is one round constant k[i] and one entry in the message schedule array w[i], 0 ≤ i ≤ 63 
+Note 2: For each round; there is one round constant k[i] and one entry in the message schedule array w[i]; 0 ≤ i ≤ 63 
 Note 3: The compression function uses 8 working variables, a through h 
 Note 4: Big-endian convention is used when expressing the constants in this pseudocode, and when parsing message block data i
 	from bytes to words, for example, the first word of the input message "abc" after padding is 0x61626380 
@@ -36,7 +41,20 @@ void sha256_init(hash_t *ctx)
 	ctx->sha256_h[6] = 0x1f83d9ab;
 	ctx->sha256_h[7] = 0x5be0cd19;
 }
-			       
+
+void sha224_init(hash_t *ctx)
+{
+	memset((uint8_t*)ctx, 0, sizeof(hash_t));
+	ctx->sha256_h[0] = 0xc1059ed8;
+	ctx->sha256_h[1] = 0x367cd507;
+	ctx->sha256_h[2] = 0x3070dd17;
+	ctx->sha256_h[3] = 0xf70e5939;
+	ctx->sha256_h[4] = 0xffc00b31;
+	ctx->sha256_h[5] = 0x68581511;
+	ctx->sha256_h[6] = 0x64f98fa7;
+	ctx->sha256_h[7] = 0xbefa4fa4;
+}
+
 /* 
  * Initialize array of round constants: (first 32 bits of the fractional parts of the cube roots of the first 64 primes 2..311):
  */
@@ -117,6 +135,22 @@ char* sha256_out(char *buf, const hash_t* ctx)
 	return buf;
 }
 
+char* sha224_out(char *buf, const hash_t* ctx)
+{
+	/* Produce the final hash value (big-endian): */ 
+	//digest := hash := h0 append h1 append h2 append h3 append h4 append h5 append h6 append h7
+	if (!buf)
+		buf = _sha256_res;
+	int i;
+	*buf = 0;
+	for (i = 0; i < 7; ++i) {
+		char res[9];
+		sprintf(res, "%08x", ctx->sha256_h[i]);
+		strcat(buf, res);
+	}
+	return buf;
+}
+
 
 void output(unsigned char* ptr, int ln)
 {
@@ -180,6 +214,10 @@ int main(int argc, char **argv)
 {
 	hash_t ctx;
 
+	char is_sha224 = 0;
+	if (!strcmp(basename(argv[0]), "sha224"))
+	       is_sha224 = 1;
+
 	if (argc < 2) {
 		printf("usage: %s file [file [..]]\n", argv[0]);
 		return 1;
@@ -231,7 +269,10 @@ int main(int argc, char **argv)
 		for (i = 0; i < 10000; ++i) {
 #endif
 		size_t clen = 0;
-		sha256_init(&ctx);
+		if (is_sha224)
+			sha224_init(&ctx);
+		else
+			sha256_init(&ctx);
 		while (1) {
 			ssize_t rd = read(fd, bf, BUFSIZE);
 			if (rd == 0) {
@@ -260,7 +301,8 @@ int main(int argc, char **argv)
 			close(fd);
 
 		// display result
-		printf("%s *%s\n", sha256_out(NULL, &ctx), argv[arg]);
+		printf("%s *%s\n", is_sha224? sha224_out(NULL, &ctx): sha256_out(NULL, &ctx), 
+				argv[arg]);
 	}
 	free(obf);
 
