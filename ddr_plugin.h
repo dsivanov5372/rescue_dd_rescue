@@ -57,7 +57,7 @@ typedef int (_fplog_upcall)(FILE* const f, enum ddrlog_t logpre,
 			    const char* const fmt, ...);
 
 typedef struct _ddr_plugin {
-	/* Name of the plugin -- will be filled by loader if left empty */
+	/* Will be filled by loader */
 	const char* name;
 	/* Amount of extra bytes required in buffer, negative => softbs*slackspace/16 */
 	int slack_pre;

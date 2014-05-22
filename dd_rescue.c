@@ -510,8 +510,21 @@ void load_plugins(char* plugs, opt_t *op)
 		//errno = ENOENT;
 		void* hdl = dlopen(path, RTLD_NOW);
 		/* Allow full name (with absolute path if wanted) */
-		if (!hdl) 
+		if (!hdl) {
+			/* Second attempt: Try with name passed */
 			hdl = dlopen(plugs, RTLD_NOW);
+			/* Extract plugin name */
+			if (hdl) {
+				char* ptr = strrchr(plugs, '_');
+				if (ptr) {
+					char* ptr2 = strchr(ptr+1, '.');
+					if (ptr2) {
+						*ptr2 = 0;
+						plugs = ptr+1;
+					}
+				}
+			}
+		}
 		if (!hdl) {
 			fplog(stderr, FATAL, "Could not load plugin %s\n", plugs);
 			++errs;

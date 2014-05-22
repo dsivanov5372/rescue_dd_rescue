@@ -11,6 +11,7 @@
 #include <string.h>
 #include <netinet/in.h>
 #include <assert.h>
+#include "sha256.h"
 
 /*
 Note 1: All variables are 32 bit unsigned integers and addition is calculated modulo 2^32 
@@ -19,23 +20,21 @@ Note 3: The compression function uses 8 working variables, a through h
 Note 4: Big-endian convention is used when expressing the constants in this pseudocode, and when parsing message block data i
 	from bytes to words, for example, the first word of the input message "abc" after padding is 0x61626380 
 */
-typedef struct sha256_ctx {
-	uint32_t h[8];
-} sha256_ctx_t;
 
 /*
  * Initialize hash values: (first 32 bits of the fractional parts of the square roots of the first 8 primes 2..19): 
  */
-void init_sha256(sha256_ctx_t *ctx)
+void init_sha256(hash_t *ctx)
 {
-	ctx->h[0] = 0x6a09e667;
-	ctx->h[1] = 0xbb67ae85;
-	ctx->h[2] = 0x3c6ef372;
-	ctx->h[3] = 0xa54ff53a;
-	ctx->h[4] = 0x510e527f;
-	ctx->h[5] = 0x9b05688c;
-	ctx->h[6] = 0x1f83d9ab;
-	ctx->h[7] = 0x5be0cd19;
+	memset((uint8_t*)ctx, 0, sizeof(hash_t));
+	ctx->sha256_h[0] = 0x6a09e667;
+	ctx->sha256_h[1] = 0xbb67ae85;
+	ctx->sha256_h[2] = 0x3c6ef372;
+	ctx->sha256_h[3] = 0xa54ff53a;
+	ctx->sha256_h[4] = 0x510e527f;
+	ctx->sha256_h[5] = 0x9b05688c;
+	ctx->sha256_h[6] = 0x1f83d9ab;
+	ctx->sha256_h[7] = 0x5be0cd19;
 }
 			       
 /* 
@@ -66,7 +65,7 @@ uint32_t k[] = { 0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x5
  * break message into 512-bit chunks 
  * (The initial values in w[0..63] don't matter, so many implementations zero them here) 
  */
-void sha256_64(const uint8_t* msg, sha256_ctx_t* ctx)
+void sha256_64(const uint8_t* msg, hash_t* ctx)
 {
 	int i;
  	/* for each chunk create a 64-entry message schedule array w[0..63] of 32-bit words */
@@ -80,8 +79,8 @@ void sha256_64(const uint8_t* msg, sha256_ctx_t* ctx)
 		w[i] = w[i-16] + s0 + w[i-7] + s1;
 	}
 	/* Initialize working variables to current hash value:*/
-	uint32_t a = ctx->h[0], b = ctx->h[1], c = ctx->h[2], d = ctx->h[3];
-	uint32_t e = ctx->h[4], f = ctx->h[5], g = ctx->h[6], h = ctx->h[7];
+	uint32_t a = ctx->sha256_h[0], b = ctx->sha256_h[1], c = ctx->sha256_h[2], d = ctx->sha256_h[3];
+	uint32_t e = ctx->sha256_h[4], f = ctx->sha256_h[5], g = ctx->sha256_h[6], h = ctx->sha256_h[7];
 	/* Compression function main loop: */
 	for (i = 0; i < 64; ++i) {
 		uint32_t S1 = RIGHTROTATE(e, 6) ^ RIGHTROTATE(e, 11) ^ RIGHTROTATE(e, 25);
@@ -97,12 +96,12 @@ void sha256_64(const uint8_t* msg, sha256_ctx_t* ctx)
 		a = temp1 + temp2;
 	}
 	/* Add the compressed chunk to the current hash value: */
-	ctx->h[0] += a; ctx->h[1] += b; ctx->h[2] += c; ctx->h[3] += d;
-	ctx->h[4] += e; ctx->h[5] += f; ctx->h[6] += g; ctx->h[7] += h;
+	ctx->sha256_h[0] += a; ctx->sha256_h[1] += b; ctx->sha256_h[2] += c; ctx->sha256_h[3] += d;
+	ctx->sha256_h[4] += e; ctx->sha256_h[5] += f; ctx->sha256_h[6] += g; ctx->sha256_h[7] += h;
 }
 
 static char _sha256_res[65];
-char* sha256_out(sha256_ctx_t* ctx)
+char* sha256_out(hash_t* ctx)
 {
 	/* Produce the final hash value (big-endian): */ 
 	//digest := hash := h0 append h1 append h2 append h3 append h4 append h5 append h6 append h7
@@ -110,14 +109,14 @@ char* sha256_out(sha256_ctx_t* ctx)
 	*_sha256_res = 0;
 	for (i = 0; i < 8; ++i) {
 		char res[9];
-		sprintf(res, "%08x", htonl(ctx->h[i]));
+		sprintf(res, "%08x", htonl(ctx->sha256_h[i]));
 		strcat(_sha256_res, res);
 	}
 	return _sha256_res;
 }
 
 /* We assume we have a few bytes behind ln  ... */
-void sha256_calc(uint8_t *ptr, size_t chunk_ln, size_t final_len, sha256_ctx_t *ctx)
+void sha256_calc(uint8_t *ptr, size_t chunk_ln, size_t final_len, hash_t *ctx)
 {
 	if (final_len) {
 		ptr[chunk_ln] = 0x80;

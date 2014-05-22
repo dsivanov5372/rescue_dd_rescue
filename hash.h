@@ -2,6 +2,9 @@
 #define _HASH_H
 
 #include <stdint.h>
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
 
 #ifdef __GNUC__
 #define ALIGNED(x) __attribute__((aligned(x)))

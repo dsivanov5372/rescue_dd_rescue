@@ -20,13 +20,13 @@
 #define MD5_DEBUG(x) if (state->debug) x
 
 #define FPLOG(lvl, fmt, args...) \
-	ddr_plug.fplog(stderr, lvl, "MD5(%i): " fmt, state->seq, ##args)
+	ddr_plug.fplog(stderr, lvl, "%s(%i): " ddr_plug.name, fmt, state->seq, ##args)
 
 /* fwd decl */
 extern ddr_plugin_t ddr_plug;
 
 typedef struct _md5_state {
-	md5_ctx md5;
+	hash_t md5;
 	loff_t md5_pos;
 	const char* name;
 	uint8_t buf[128];
@@ -69,6 +69,8 @@ int md5_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		}
 		param = next;
 	}
+	if (state->debug)
+		FPLOG(DEBUG, "Initialized plugin %s\n", ddr_plug.name);
 	return err;
 }
 
@@ -238,7 +240,7 @@ int md5_close(loff_t ooff, void **stat)
 
 
 ddr_plugin_t ddr_plug = {
-	.name = "MD5",
+	//.name = "MD5",
 	.slack_pre = 64,	// not yet used
 	.slack_post = 64,	// not yet used
 	.needs_align = 0,

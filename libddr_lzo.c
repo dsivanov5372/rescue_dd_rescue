@@ -1364,7 +1364,7 @@ int lzo_close(loff_t ooff, void **stat)
 
 
 ddr_plugin_t ddr_plug = {
-	.name = "lzo",
+	//.name = "lzo",
 	.slack_pre = 8, /* For search */
 	.slack_post = -33,
 	.needs_align = 1,

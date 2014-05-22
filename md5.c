@@ -81,7 +81,7 @@ static inline uint32_t to_int32(const uint8_t *bytes)
 	a = _temp
 
 
-void md5_64(const uint8_t *ptr, md5_ctx *ctx)
+void md5_64(const uint8_t *ptr, hash_t *ctx)
 {
 	uint32_t _a, _b, _c, _d;
 	unsigned int i;
@@ -100,7 +100,8 @@ void md5_64(const uint8_t *ptr, md5_ctx *ctx)
 #endif
 
 	// Initialize hash value for this chunk:
-	_a = ctx->h[0]; _b = ctx->h[1]; _c = ctx->h[2]; _d = ctx->h[3];
+	_a = ctx->md5_h[0]; _b = ctx->md5_h[1]; 
+	_c = ctx->md5_h[2]; _d = ctx->md5_h[3];
 
 	for (i = 0; i < 16; ++i) {
 		const uint32_t f = (_b & _c) | ((~_b) & _d);
@@ -124,19 +125,21 @@ void md5_64(const uint8_t *ptr, md5_ctx *ctx)
 	}
 
 	// Add this chunk's hash to result so far:
-	ctx->h[0] += _a; ctx->h[1] += _b; ctx->h[2] += _c; ctx->h[3] += _d;
+	ctx->md5_h[0] += _a; ctx->md5_h[1] += _b; 
+	ctx->md5_h[2] += _c; ctx->md5_h[3] += _d;
 }
 
-void md5_init(md5_ctx *ctx)
+void md5_init(hash_t *ctx)
 {
-	ctx->h[0] = 0x67452301;
-	ctx->h[1] = 0xefcdab89;
-	ctx->h[2] = 0x98badcfe;
-	ctx->h[3] = 0x10325476;
+	memset((char*)ctx, 0, sizeof(hash_t));
+	ctx->md5_h[0] = 0x67452301;
+	ctx->md5_h[1] = 0xefcdab89;
+	ctx->md5_h[2] = 0x98badcfe;
+	ctx->md5_h[3] = 0x10325476;
 }
 
 /* We assume we have a few bytes behind ln  ... */
-void md5_calc(uint8_t *ptr, size_t chunk_ln, size_t final_len, md5_ctx *ctx)
+void md5_calc(uint8_t *ptr, size_t chunk_ln, size_t final_len, hash_t *ctx)
 {
 	if (final_len) {
 		ptr[chunk_ln] = 0x80;
@@ -154,7 +157,7 @@ void md5_calc(uint8_t *ptr, size_t chunk_ln, size_t final_len, md5_ctx *ctx)
 }
 
 static char _md5_res[33];
-char* md5_out(char* buf, const md5_ctx *ctx)
+char* md5_out(char* buf, const hash_t *ctx)
 {
 	if (!buf)
 		buf = _md5_res;
@@ -162,7 +165,7 @@ char* md5_out(char* buf, const md5_ctx *ctx)
 	int i;
 	for (i = 0; i < 4; ++i) {
 		char str[9];
-		sprintf(str, "%08x", htonl(ctx->h[i]));
+		sprintf(str, "%08x", htonl(ctx->md5_h[i]));
 		strcat(buf, str);
 	}
 	return buf;
@@ -176,7 +179,7 @@ char* md5_out(char* buf, const md5_ctx *ctx)
 #define BUFSIZE 65536
 int main(int argc, char **argv)
 {
-	md5_ctx ctx;
+	hash_t ctx;
 
 	if (argc < 2) {
 		printf("usage: %s file [file [..]]\n", argv[0]);

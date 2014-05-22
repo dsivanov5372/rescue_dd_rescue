@@ -127,7 +127,7 @@ fmt_no.o: fmt_no.c fmt_no.h config.h ddr_ctrl.h
 %.o: %.c %.h config.h ddr_ctrl.h
 	$(CC) $(CFLAGS) -c $<
 
-%.po: %.c ddr_plugin.h config.h ddr_ctrl.h
+%.po: %.c ddr_plugin.h config.h ddr_ctrl.h md5.h sha256.h hash.h
 	$(CC) $(CFLAGS) -fPIC -o $@ -c $<
 
 md5.po: md5.c md5.h config.h
@@ -169,10 +169,10 @@ libfalloc-static: dd_rescue.c $(HEADERS) $(OBJECTS) $(OBJECTS2)
 dd_rescue: dd_rescue.c $(HEADERS) $(OBJECTS) $(OBJECTS2)
 	$(CC) $(CFLAGS) $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2) -ldl
 
-md5: md5.c md5.h config.h
+md5: md5.c md5.h hash.h config.h
 	$(CC) $(CFLAGS_OPT) -DMD5_MAIN -o $@ $<
 
-sha256: sha256.c sha256.h config.h
+sha256: sha256.c sha256.h hash.h config.h
 	$(CC) $(CFLAGS_OPT) -DSHA256_MAIN -o $@ $<
 
 fuzz_lzo: fuzz_lzo.o
