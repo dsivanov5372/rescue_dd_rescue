@@ -50,13 +50,6 @@ uint32_t k[] = { 0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x5
 		 0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
 		 0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2};
 
-/*
- * Pre-processing: 
- * append the bit '1' to the message 
- * append k bits '0', where k is the minimum number >= 0 such that the resulting message length (modulo 512 in bits) is 448. 
- * append length of message (without the '1' bit or padding), in bits, as 64-bit big-endian integer 
- * (this will make the entire post-processed length a multiple of 512 bits)
- */
 
 #define  LEFTROTATE(x, c) (((x) << (c)) | ((x) >> (32 - (c))))
 #define RIGHTROTATE(x, c) (((x) >> (c)) | ((x) << (32 - (c))))
@@ -71,7 +64,7 @@ void sha256_64(const uint8_t* msg, hash_t* ctx)
  	/* for each chunk create a 64-entry message schedule array w[0..63] of 32-bit words */
 	uint32_t w[64];
  	/* copy chunk into first 16 words w[0..15] of the message schedule array */
-#if 1
+#if 0
 	memcpy(w, msg, 64);
 #else
 	for (i = 0; i < 16; ++i)
@@ -89,10 +82,12 @@ void sha256_64(const uint8_t* msg, hash_t* ctx)
 	/* Compression function main loop: */
 	for (i = 0; i < 64; ++i) {
 		uint32_t S1 = RIGHTROTATE(e, 6) ^ RIGHTROTATE(e, 11) ^ RIGHTROTATE(e, 25);
-		uint32_t ch = (e & f) ^ ((!e) & g);
+		//uint32_t ch = (e & f) ^ ((~e) & g);
+		uint32_t ch = g ^ (e & (f ^ g));
 		uint32_t temp1 = h + S1 + ch + k[i] + w[i];
 		uint32_t S0 = RIGHTROTATE(a, 2) ^ RIGHTROTATE(a, 13) ^ RIGHTROTATE(a, 22);
-		uint32_t maj = (a & b) ^ (a & c) ^ (b & c);
+		//uint32_t maj = (a & b) ^ (a & c) ^ (b & c);
+		uint32_t maj = (a & b) | (c & (a | b));
 		uint32_t temp2 = S0 + maj;
 
 		h = g; g = f; f = e;
@@ -122,16 +117,34 @@ char* sha256_out(char *buf, hash_t* ctx)
 	return buf;
 }
 
+/*
+ * Pre-processing: 
+ * append the bit '1' to the message 
+ * append k bits '0', where k is the minimum number >= 0 such that the resulting message length (modulo 512 in bits) is 448. 
+ * append length of message (without the '1' bit or padding), in bits, as 64-bit big-endian integer 
+ * (this will make the entire post-processed length a multiple of 512 bits)
+ */
 /* We assume we have a few bytes behind ln  ... */
 void sha256_calc(uint8_t *ptr, size_t chunk_ln, size_t final_len, hash_t *ctx)
 {
 	if (final_len) {
-		ptr[chunk_ln] = 0x80;
+		int pad = chunk_ln%64 < 56? 64: 128;
+		int last = chunk_ln-chunk_ln%64+pad;
+		memset(ptr+chunk_ln, 0, last-chunk_ln);
+		int cln = chunk_ln - chunk_ln % 4;
+		uint32_t val = htonl(*(uint32_t*)(ptr+cln));
+		val |= 0x80000000 >> (8*(chunk_ln-cln));
+		*(uint32_t*)(ptr+cln) = ntohl(val);
+
+		//ptr[chunk_ln] = 0x80;
 		int i;
-		for (i = chunk_ln + 1; i % 64 != 56; ++i)
+		/*
+		for (i = cln + 4; i % 64 != 56; ++i)
 			ptr[i] = 0;
-		*(uint32_t*)(ptr+i) = htonl(final_len << 3);
-		*(uint32_t*)(ptr+i+4) = htonl(final_len >> 29);
+		*/
+		i = last-8;
+		*(uint32_t*)(ptr+i) = htonl(final_len >> 29);
+		*(uint32_t*)(ptr+i+4) = htonl(final_len << 3);
 		chunk_ln = i + 8;
 	}
 	assert(0 == chunk_ln % 64);
@@ -174,17 +187,21 @@ int main(int argc, char **argv)
 	for (arg = 1; arg < argc; ++arg) {
 		//uint8_t result[16];
 		struct stat stbf;
-		if (stat(argv[arg], &stbf)) {
+		if (strcmp(argv[arg], "-") && stat(argv[arg], &stbf)) {
 			fprintf(stderr, "sha256: Can't stat %s: %s\n", argv[arg],
 				strerror(errno));
 			free(obf);
 			exit(1);
 		}
-		size_t len = stbf.st_size;
+		//size_t len = stbf.st_size;
 
-		int fd = 0;
+		int fd;
 		if (strcmp(argv[arg], "-"))
 			fd = open(argv[arg], O_RDONLY);
+		else {
+			fd = 0;
+			//len = 0;
+		}
 
 		if (fd < 0) {
 			fprintf(stderr, "sha256: Failed to open %s for reading: %s\n",
@@ -197,11 +214,12 @@ int main(int argc, char **argv)
 		int i;
 		for (i = 0; i < 10000; ++i) {
 #endif
+		size_t clen = 0;
 		sha256_init(&ctx);
 		while (1) {
 			ssize_t rd = read(fd, bf, BUFSIZE);
 			if (rd == 0) {
-				sha256_calc(bf, 0, len, &ctx);
+				sha256_calc(bf, 0, clen, &ctx);
 				break;
 			}
 			if (rd < 0) {
@@ -210,8 +228,9 @@ int main(int argc, char **argv)
 				free(bf);
 				exit(4);
 			}
+			clen += rd;
 			if (rd < BUFSIZE) {
-				sha256_calc(bf, rd, len, &ctx);
+				sha256_calc(bf, rd, clen, &ctx);
 				break;
 			} else
 				sha256_calc(bf, BUFSIZE, 0, &ctx);
