@@ -167,7 +167,7 @@ void md5_result(md5_ctx *ctx, uint8_t *digest)
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
-#define BUFSIZE 16384
+#define BUFSIZE 65536
 int main(int argc, char **argv)
 {
 	int i;
@@ -175,17 +175,10 @@ int main(int argc, char **argv)
 	md5_ctx ctx;
 
 	if (argc < 2) {
-		printf("usage: %s 'file'\n", argv[0]);
+		printf("usage: %s file [file [..]]\n", argv[0]);
 		return 1;
 	}
 
-	struct stat stbf;
-	if (stat(argv[1], &stbf)) {
-		fprintf(stderr, "md5: Can't stat %s: %s\n", argv[1],
-			strerror(errno));
-		exit(1);
-	}
-	size_t len = stbf.st_size;
 
 	uint8_t *obf = (uint8_t *)malloc(BUFSIZE + 128);
 	uint8_t *bf = obf;
@@ -200,19 +193,30 @@ int main(int argc, char **argv)
 		exit(2);
 	}
 
-	int fd = 0;
-	if (strcmp(argv[1], "-"))
-		fd = open(argv[1], O_RDONLY);
+	int arg;
+	for (arg = 1; arg < argc; ++arg) {
+		struct stat stbf;
+		if (stat(argv[arg], &stbf)) {
+			fprintf(stderr, "md5: Can't stat %s: %s\n", argv[arg],
+				strerror(errno));
+			free(obf);
+			exit(1);
+		}
+		size_t len = stbf.st_size;
 
-	if (fd < 0) {
-		fprintf(stderr, "md5: Failed to open %s for reading: %s\n",
-			argv[1], strerror(errno));
-		free(bf);
-		exit(3);
-	}
+		int fd = 0;
+		if (strcmp(argv[arg], "-"))
+			fd = open(argv[arg], O_RDONLY);
+
+		if (fd < 0) {
+			fprintf(stderr, "md5: Failed to open %s for reading: %s\n",
+				argv[arg], strerror(errno));
+			free(obf);
+			exit(3);
+		}
 
 #ifdef BENCH
-	for (i = 0; i < 10000; ++i) {
+		for (i = 0; i < 10000; ++i) {
 #endif
 		md5_init(&ctx);
 		while (1) {
@@ -223,7 +227,7 @@ int main(int argc, char **argv)
 			}
 			if (rd < 0) {
 				fprintf(stderr, "md5: Error reading %s: %s\n",
-					argv[1], strerror(errno));
+					argv[arg], strerror(errno));
 				free(bf);
 				exit(4);
 			}
@@ -237,16 +241,17 @@ int main(int argc, char **argv)
 		md5_result(&ctx, result);
 #ifdef BENCH
 		lseek(fd, 0, SEEK_SET);
-	}
+		}
 #endif
-	if (fd)
-		close(fd);
-	free(obf);
+		if (fd)
+			close(fd);
 
-	// display result
-	for (i = 0; i < 16; i++)
-		printf("%2.2x", result[i]);
-	printf(" *%s\n", argv[1]);
+		// display result
+		for (i = 0; i < 16; i++)
+			printf("%2.2x", result[i]);
+		printf(" *%s\n", argv[arg]);
+	}
+	free(obf);
 
 	return 0;
 }
