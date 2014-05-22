@@ -17,6 +17,7 @@
 #include <netinet/in.h>
 #include <assert.h>
 #include <unistd.h>
+#include <endian.h>
 
 /*
 Note 1: All variables are 64 bit unsigned integers and addition is calculated modulo 2^64 
@@ -81,6 +82,17 @@ uint64_t k[] ={ 0x428a2f98d728ae22ULL, 0x7137449123ef65cdULL, 0xb5c0fbcfec4d3b2f
 		0x4cc5d4becb3e42b6ULL, 0x597f299cfc657e2aULL, 0x5fcb6fab3ad6faecULL, 0x6c44198c4a475817ULL
 };
 
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+static inline uint64_t htonll(const uint64_t x)
+{
+	const uint32_t hi = x>>32;
+	const uint32_t lo = x;
+	return htonl(hi) + ((uint64_t)htonl(lo) << 32);
+}
+#else
+static inline uint64_t htonll(const uint64_t x)
+{ return x; }
+#endif
 
 #define  LEFTROTATE(x, c) (((x) << (c)) | ((x) >> (64 - (c))))
 #define RIGHTROTATE(x, c) (((x) >> (c)) | ((x) << (64 - (c))))
@@ -99,12 +111,12 @@ void sha512_128(const uint8_t* msg, hash_t* ctx)
 	memcpy(w, msg, 64);
 #else
 	for (i = 0; i < 16; ++i)
-		w[i] = htonl(*(uint64_t*)(msg+8*i));
+		w[i] = htonll(*(uint64_t*)(msg+8*i));
 #endif
 	/* Extend the first 16 words into the remaining 48 words w[16..63] of the message schedule array: */
 	for (i = 16; i < 80;  ++i) {
-		uint64_t s0 = RIGHTROTATE(w[i-15], 7) ^ RIGHTROTATE(w[i-15], 18) ^ (w[i-15] >> 3);
-		uint64_t s1 = RIGHTROTATE(w[i-2], 17) ^ RIGHTROTATE(w[i-2] , 19) ^ (w[i-2] >> 10);
+		uint64_t s0 = RIGHTROTATE(w[i-15], 1) ^ RIGHTROTATE(w[i-15], 8) ^ (w[i-15] >> 7);
+		uint64_t s1 = RIGHTROTATE(w[i-2], 19) ^ RIGHTROTATE(w[i-2] ,61) ^ (w[i-2]  >> 6);
 		w[i] = w[i-16] + s0 + w[i-7] + s1;
 	}
 	/* Initialize working variables to current hash value:*/
@@ -112,11 +124,11 @@ void sha512_128(const uint8_t* msg, hash_t* ctx)
 	uint64_t e = ctx->sha512_h[4], f = ctx->sha512_h[5], g = ctx->sha512_h[6], h = ctx->sha512_h[7];
 	/* Compression function main loop: */
 	for (i = 0; i < 80; ++i) {
-		uint64_t S1 = RIGHTROTATE(e, 6) ^ RIGHTROTATE(e, 11) ^ RIGHTROTATE(e, 25);
+		uint64_t S1 = RIGHTROTATE(e, 14) ^ RIGHTROTATE(e, 18) ^ RIGHTROTATE(e, 41);
 		//uint64_t ch = (e & f) ^ ((~e) & g);
 		uint64_t ch = g ^ (e & (f ^ g));
 		uint64_t temp1 = h + S1 + ch + k[i] + w[i];
-		uint64_t S0 = RIGHTROTATE(a, 2) ^ RIGHTROTATE(a, 13) ^ RIGHTROTATE(a, 22);
+		uint64_t S0 = RIGHTROTATE(a, 28) ^ RIGHTROTATE(a, 34) ^ RIGHTROTATE(a, 39);
 		//uint64_t maj = (a & b) ^ (a & c) ^ (b & c);
 		uint64_t maj = (a & b) | (c & (a | b));
 		uint64_t temp2 = S0 + maj;

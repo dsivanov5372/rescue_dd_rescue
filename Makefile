@@ -23,7 +23,7 @@ MYDIR = dd_rescue
 BINTARGETS = dd_rescue 
 LIBTARGETS = libddr_MD5.so 
 #TARGETS = libfalloc-dl
-OTHTARGETS = find_nonzero fiemap file_zblock fmt_no md5 sha256 sha512
+OTHTARGETS = find_nonzero fiemap file_zblock fmt_no md5 sha256 sha512 sha224 sha384
 OBJECTS = frandom.o fmt_no.o find_nonzero.o 
 FNZ_HEADERS = find_nonzero.h archdep.h ffs.h
 HEADERS = frandom.h fmt_no.h config.h list.h fstrim.h $(FNZ_HEADERS) splice.h fallocate64.h pread64.h ddr_plugin.h
@@ -177,11 +177,15 @@ md5: md5.c md5.h hash.h config.h
 
 sha256: sha256.c sha256.h hash.h config.h
 	$(CC) $(CFLAGS_OPT) -DSHA256_MAIN -o $@ $<
-	ln -s sha256 sha224
+
+sha224: sha256
+	ln -sf sha256 sha224
 
 sha512: sha512.c sha512.h hash.h config.h
 	$(CC) $(CFLAGS_OPT) -DSHA512_MAIN -o $@ $<
-	ln -s sha512 sha384
+	
+sha384: sha512
+	ln -sf sha512 sha384
 
 fuzz_lzo: fuzz_lzo.o
 	$(CC) -o $@ $^ -llzo2
