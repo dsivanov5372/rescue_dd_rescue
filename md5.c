@@ -162,11 +162,6 @@ char* md5_out(char* buf, const md5_ctx *ctx)
 	int i;
 	for (i = 0; i < 4; ++i) {
 		char str[9];
-#if 0
-		unsigned char wd[4];
-		to_bytes(ctx->h[i], wd);
-		sprintf(str, "%08x", (uint32_t)wd);
-#endif
 		sprintf(str, "%08x", htonl(ctx->h[i]));
 		strcat(buf, str);
 	}
@@ -257,14 +252,7 @@ int main(int argc, char **argv)
 			close(fd);
 
 		// display result
-#if 0
-		md5_result(&ctx, result);
-		for (i = 0; i < 16; i++)
-				printf("%2.2x", result[i]);
-		printf(" *%s\n", argv[arg]);
-#else
 		printf("%s *%s\n", md5_out(NULL, &ctx), argv[arg]);
-#endif
 	}
 	free(obf);
 
