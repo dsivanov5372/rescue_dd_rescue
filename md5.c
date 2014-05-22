@@ -204,17 +204,21 @@ int main(int argc, char **argv)
 	for (arg = 1; arg < argc; ++arg) {
 		//uint8_t result[16];
 		struct stat stbf;
-		if (stat(argv[arg], &stbf)) {
+		if (strcmp(argv[arg], "-") && stat(argv[arg], &stbf)) {
 			fprintf(stderr, "md5: Can't stat %s: %s\n", argv[arg],
 				strerror(errno));
 			free(obf);
 			exit(1);
 		}
-		size_t len = stbf.st_size;
+		//size_t len = stbf.st_size;
 
-		int fd = 0;
+		int fd;
 		if (strcmp(argv[arg], "-"))
 			fd = open(argv[arg], O_RDONLY);
+		else {
+			fd = 0;
+			//len = 0;
+		}
 
 		if (fd < 0) {
 			fprintf(stderr, "md5: Failed to open %s for reading: %s\n",
@@ -227,11 +231,12 @@ int main(int argc, char **argv)
 		int i;
 		for (i = 0; i < 10000; ++i) {
 #endif
+		size_t clen = 0;
 		md5_init(&ctx);
 		while (1) {
 			ssize_t rd = read(fd, bf, BUFSIZE);
 			if (rd == 0) {
-				md5_calc(bf, 0, len, &ctx);
+				md5_calc(bf, 0, clen, &ctx);
 				break;
 			}
 			if (rd < 0) {
@@ -240,8 +245,9 @@ int main(int argc, char **argv)
 				free(bf);
 				exit(4);
 			}
+			clen += rd;
 			if (rd < BUFSIZE) {
-				md5_calc(bf, rd, len, &ctx);
+				md5_calc(bf, rd, clen, &ctx);
 				break;
 			} else
 				md5_calc(bf, BUFSIZE, -1, &ctx);
