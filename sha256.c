@@ -111,10 +111,23 @@ char* sha256_out(char *buf, hash_t* ctx)
 	*buf = 0;
 	for (i = 0; i < 8; ++i) {
 		char res[9];
-		sprintf(res, "%08x", htonl(ctx->sha256_h[i]));
+		sprintf(res, "%08x", ctx->sha256_h[i]);
 		strcat(buf, res);
 	}
 	return buf;
+}
+
+
+void output(unsigned char* ptr, int ln)
+{
+	int i;
+	for (i = 0; i < ln; ++i) {
+		printf("%02x ", ptr[i]);
+		if (!((i+1)%16))
+			printf("\n");
+	}
+	if (i%16)
+		printf("\n");
 }
 
 /*
@@ -131,12 +144,14 @@ void sha256_calc(uint8_t *ptr, size_t chunk_ln, size_t final_len, hash_t *ctx)
 		int pad = chunk_ln%64 < 56? 64: 128;
 		int last = chunk_ln-chunk_ln%64+pad;
 		memset(ptr+chunk_ln, 0, last-chunk_ln);
+#if 0
 		int cln = chunk_ln - chunk_ln % 4;
 		uint32_t val = htonl(*(uint32_t*)(ptr+cln));
 		val |= 0x80000000 >> (8*(chunk_ln-cln));
 		*(uint32_t*)(ptr+cln) = ntohl(val);
-
-		//ptr[chunk_ln] = 0x80;
+#else
+		ptr[chunk_ln] = 0x80;
+#endif
 		int i;
 		/*
 		for (i = cln + 4; i % 64 != 56; ++i)
@@ -146,6 +161,7 @@ void sha256_calc(uint8_t *ptr, size_t chunk_ln, size_t final_len, hash_t *ctx)
 		*(uint32_t*)(ptr+i) = htonl(final_len >> 29);
 		*(uint32_t*)(ptr+i+4) = htonl(final_len << 3);
 		chunk_ln = i + 8;
+		//output(ptr, pad);
 	}
 	assert(0 == chunk_ln % 64);
 	uint32_t offset;
