@@ -12,6 +12,7 @@
 #include "hash.h"
 #include "md5.h"
 #include "sha256.h"
+#include "sha512.h"
 
 #include <stdlib.h>
 #include <unistd.h>
@@ -42,7 +43,10 @@ typedef struct {
 } hashalg_t;
 
 hashalg_t hashes[] = { 	{ "md5", md5_init, md5_64, md5_calc, md5_out, 64 },
-			{ "sha256", sha256_init, sha256_64, sha256_calc, sha256_out, 64 }
+			{ "sha256", sha256_init, sha256_64 , sha256_calc, sha256_out,  64 },
+			{ "sha224", sha224_init, sha256_64 , sha256_calc, sha224_out,  64 },
+			{ "sha512", sha512_init, sha512_128, sha512_calc, sha512_out, 128 },
+			{ "sha384", sha384_init, sha512_128, sha512_calc, sha384_out, 128 }
 };
 
 

@@ -185,7 +185,7 @@ char* sha384_out(char *buf, const hash_t* ctx)
 }
 
 
-void output(unsigned char* ptr, int ln)
+static void output(unsigned char* ptr, int ln)
 {
 	int i;
 	for (i = 0; i < ln; ++i) {
