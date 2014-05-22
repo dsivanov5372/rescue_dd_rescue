@@ -101,19 +101,19 @@ void sha256_64(const uint8_t* msg, sha256_ctx_t* ctx)
 	ctx->h[4] += e; ctx->h[5] += f; ctx->h[6] += g; ctx->h[7] += h;
 }
 
-static char sha256_res[65];
+static char _sha256_res[65];
 char* sha256_out(sha256_ctx_t* ctx)
 {
 	/* Produce the final hash value (big-endian): */ 
 	//digest := hash := h0 append h1 append h2 append h3 append h4 append h5 append h6 append h7
 	int i;
-	*sha256_res = 0;
+	*_sha256_res = 0;
 	for (i = 0; i < 8; ++i) {
 		char res[9];
 		sprintf(res, "%08x", htonl(ctx->h[i]));
-		strcat(sha256_res, res);
+		strcat(_sha256_res, res);
 	}
-	return sha256_res;
+	return _sha256_res;
 }
 
 /* We assume we have a few bytes behind ln  ... */

@@ -13,6 +13,7 @@
 #include <stdint.h>
 #include <endian.h>
 #include <assert.h>
+#include <netinet/in.h>
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -80,7 +81,7 @@ static inline uint32_t to_int32(const uint8_t *bytes)
 	a = _temp
 
 
-void md5_64(uint8_t *ptr, md5_ctx *ctx)
+void md5_64(const uint8_t *ptr, md5_ctx *ctx)
 {
 	uint32_t _a, _b, _c, _d;
 	unsigned int i;
@@ -99,7 +100,7 @@ void md5_64(uint8_t *ptr, md5_ctx *ctx)
 #endif
 
 	// Initialize hash value for this chunk:
-	_a = ctx->h0; _b = ctx->h1; _c = ctx->h2; _d = ctx->h3;
+	_a = ctx->h[0]; _b = ctx->h[1]; _c = ctx->h[2]; _d = ctx->h[3];
 
 	for (i = 0; i < 16; ++i) {
 		const uint32_t f = (_b & _c) | ((~_b) & _d);
@@ -123,15 +124,15 @@ void md5_64(uint8_t *ptr, md5_ctx *ctx)
 	}
 
 	// Add this chunk's hash to result so far:
-	ctx->h0 += _a; ctx->h1 += _b; ctx->h2 += _c; ctx->h3 += _d;
+	ctx->h[0] += _a; ctx->h[1] += _b; ctx->h[2] += _c; ctx->h[3] += _d;
 }
 
 void md5_init(md5_ctx *ctx)
 {
-	ctx->h0 = 0x67452301;
-	ctx->h1 = 0xefcdab89;
-	ctx->h2 = 0x98badcfe;
-	ctx->h3 = 0x10325476;
+	ctx->h[0] = 0x67452301;
+	ctx->h[1] = 0xefcdab89;
+	ctx->h[2] = 0x98badcfe;
+	ctx->h[3] = 0x10325476;
 }
 
 /* We assume we have a few bytes behind ln  ... */
@@ -152,14 +153,24 @@ void md5_calc(uint8_t *ptr, size_t chunk_ln, size_t final_len, md5_ctx *ctx)
 		md5_64(ptr + offset, ctx);
 }
 
-void md5_result(md5_ctx *ctx, uint8_t *digest)
+static char _md5_res[33];
+char* md5_out(char* buf, const md5_ctx *ctx)
 {
-	// var char digest[16] := h0 append h1 append h2 append h3 //(Output is
-	// in little-endian)
-	to_bytes(ctx->h0, digest);
-	to_bytes(ctx->h1, digest + 4);
-	to_bytes(ctx->h2, digest + 8);
-	to_bytes(ctx->h3, digest + 12);
+	if (!buf)
+		buf = _md5_res;
+	*buf = 0;
+	int i;
+	for (i = 0; i < 4; ++i) {
+		char str[9];
+#if 0
+		unsigned char wd[4];
+		to_bytes(ctx->h[i], wd);
+		sprintf(str, "%08x", (uint32_t)wd);
+#endif
+		sprintf(str, "%08x", htonl(ctx->h[i]));
+		strcat(buf, str);
+	}
+	return buf;
 }
 
 #ifdef MD5_MAIN
@@ -170,8 +181,6 @@ void md5_result(md5_ctx *ctx, uint8_t *digest)
 #define BUFSIZE 65536
 int main(int argc, char **argv)
 {
-	int i;
-	uint8_t result[16];
 	md5_ctx ctx;
 
 	if (argc < 2) {
@@ -195,6 +204,7 @@ int main(int argc, char **argv)
 
 	int arg;
 	for (arg = 1; arg < argc; ++arg) {
+		//uint8_t result[16];
 		struct stat stbf;
 		if (stat(argv[arg], &stbf)) {
 			fprintf(stderr, "md5: Can't stat %s: %s\n", argv[arg],
@@ -216,6 +226,7 @@ int main(int argc, char **argv)
 		}
 
 #ifdef BENCH
+		int i;
 		for (i = 0; i < 10000; ++i) {
 #endif
 		md5_init(&ctx);
@@ -238,7 +249,6 @@ int main(int argc, char **argv)
 				md5_calc(bf, BUFSIZE, 0, &ctx);
 		}
 
-		md5_result(&ctx, result);
 #ifdef BENCH
 		lseek(fd, 0, SEEK_SET);
 		}
@@ -247,9 +257,14 @@ int main(int argc, char **argv)
 			close(fd);
 
 		// display result
+#if 0
+		md5_result(&ctx, result);
 		for (i = 0; i < 16; i++)
-			printf("%2.2x", result[i]);
+				printf("%2.2x", result[i]);
 		printf(" *%s\n", argv[arg]);
+#else
+		printf("%s *%s\n", md5_out(NULL, &ctx), argv[arg]);
+#endif
 	}
 	free(obf);
 

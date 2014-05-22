@@ -219,26 +219,16 @@ unsigned char* md5_block(fstate_t *fst, unsigned char* bf,
 
 
 
-static char _md5_out_str[36];
-char* md5_out(uint8_t* res)
-{
-	int i;
-    	for (i = 0; i < 16; i++)
-        	sprintf(_md5_out_str+2*i, "%2.2x", res[i]);
-	return _md5_out_str;
-}
-
 int md5_close(loff_t ooff, void **stat)
 {
 	md5_state *state = (md5_state*)*stat;
-	uint8_t res[16];
-	md5_result(&state->md5, res);
+	char res[33];
 	loff_t firstpos = (state->seq == 0? state->opts->init_ipos: state->opts->init_opos);
 	FPLOG(INFO, "%s (%" LL "i-%" LL "i): %s\n",
-		state->name, firstpos, firstpos+state->md5_pos, md5_out(res));
+		state->name, firstpos, firstpos+state->md5_pos, md5_out(res, &state->md5));
 	if (state->outfd) {
 		char outbuf[256];
-		snprintf(outbuf, 255, "%s *%s\n", md5_out(res), state->name);
+		snprintf(outbuf, 255, "%s *%s\n", md5_out(res, &state->md5), state->name);
 		if (write(state->outfd, outbuf, strlen(outbuf)) <= 0)
 			FPLOG(WARN, "Could not write MD5 result to fd %i\n", state->outfd);
 	}
