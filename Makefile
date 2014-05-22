@@ -23,7 +23,7 @@ MYDIR = dd_rescue
 BINTARGETS = dd_rescue 
 LIBTARGETS = libddr_MD5.so 
 #TARGETS = libfalloc-dl
-OTHTARGETS = find_nonzero fiemap file_zblock fmt_no md5 sha256
+OTHTARGETS = find_nonzero fiemap file_zblock fmt_no md5 sha256 sha512
 OBJECTS = frandom.o fmt_no.o find_nonzero.o 
 FNZ_HEADERS = find_nonzero.h archdep.h ffs.h
 HEADERS = frandom.h fmt_no.h config.h list.h fstrim.h $(FNZ_HEADERS) splice.h fallocate64.h pread64.h ddr_plugin.h
@@ -127,7 +127,7 @@ fmt_no.o: fmt_no.c fmt_no.h config.h ddr_ctrl.h
 %.o: %.c %.h config.h ddr_ctrl.h
 	$(CC) $(CFLAGS) -c $<
 
-%.po: %.c ddr_plugin.h config.h ddr_ctrl.h md5.h sha256.h hash.h
+%.po: %.c ddr_plugin.h config.h ddr_ctrl.h md5.h sha256.h sha512.h hash.h
 	$(CC) $(CFLAGS) -fPIC -o $@ -c $<
 
 md5.po: md5.c md5.h config.h
@@ -136,7 +136,10 @@ md5.po: md5.c md5.h config.h
 sha256.po: sha256.c sha256.h config.h
 	$(CC) $(CFLAGS_OPT) -fPIC -o $@ -c $<
 
-libddr_MD5.so: libddr_MD5.po md5.po sha256.po
+sha512.po: sha512.c sha512.h config.h
+	$(CC) $(CFLAGS_OPT) -fPIC -o $@ -c $<
+
+libddr_MD5.so: libddr_MD5.po md5.po sha256.po sha512.po
 	$(CC) -shared -o $@ $^
 
 libddr_lzo.so: libddr_lzo.po
@@ -174,6 +177,11 @@ md5: md5.c md5.h hash.h config.h
 
 sha256: sha256.c sha256.h hash.h config.h
 	$(CC) $(CFLAGS_OPT) -DSHA256_MAIN -o $@ $<
+	ln -s sha256 sha224
+
+sha512: sha512.c sha512.h hash.h config.h
+	$(CC) $(CFLAGS_OPT) -DSHA512_MAIN -o $@ $<
+	ln -s sha512 sha384
 
 fuzz_lzo: fuzz_lzo.o
 	$(CC) -o $@ $^ -llzo2
