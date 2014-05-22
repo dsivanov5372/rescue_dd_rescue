@@ -12,6 +12,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <endian.h>
+#include <assert.h>
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -94,7 +95,7 @@ void md5_64(uint8_t *ptr, md5_ctx *ctx)
 	_c = ctx->h2;
 	_d = ctx->h3;
 
-	// Main loop:
+	// Main loop: Hopefully, compiler does the unswitching ...
 	for (i = 0; i < 64; ++i) {
 		uint32_t temp, f, g;
 		if (i < 16) {
@@ -145,8 +146,7 @@ void md5_calc(uint8_t *ptr, size_t chunk_ln, size_t final_len, md5_ctx *ctx)
 		to_bytes(final_len >> 29, ptr + i + 4);
 		chunk_ln = i + 8;
 	}
-	if (chunk_ln % 64)
-		abort();
+	assert(0 == chunk_ln % 64);
 	uint32_t offset;
 	for (offset = 0; offset < chunk_ln; offset += 64)
 		md5_64(ptr + offset, ctx);
