@@ -141,7 +141,7 @@ void md5_init(hash_t *ctx)
 /* We assume we have a few bytes behind ln  ... */
 void md5_calc(uint8_t *ptr, size_t chunk_ln, size_t final_len, hash_t *ctx)
 {
-	if (final_len) {
+	if (final_len != (size_t)-1) {
 		ptr[chunk_ln] = 0x80;
 		int i;
 		for (i = chunk_ln + 1; i % 64 != 56; ++i)
@@ -244,7 +244,7 @@ int main(int argc, char **argv)
 				md5_calc(bf, rd, len, &ctx);
 				break;
 			} else
-				md5_calc(bf, BUFSIZE, 0, &ctx);
+				md5_calc(bf, BUFSIZE, -1, &ctx);
 		}
 
 #ifdef BENCH

@@ -101,7 +101,7 @@ void sha256_64(const uint8_t* msg, hash_t* ctx)
 }
 
 static char _sha256_res[65];
-char* sha256_out(char *buf, hash_t* ctx)
+char* sha256_out(char *buf, const hash_t* ctx)
 {
 	/* Produce the final hash value (big-endian): */ 
 	//digest := hash := h0 append h1 append h2 append h3 append h4 append h5 append h6 append h7
@@ -140,7 +140,7 @@ void output(unsigned char* ptr, int ln)
 /* We assume we have a few bytes behind ln  ... */
 void sha256_calc(uint8_t *ptr, size_t chunk_ln, size_t final_len, hash_t *ctx)
 {
-	if (final_len) {
+	if (final_len != (size_t)-1) {
 		int pad = chunk_ln%64 < 56? 64: 128;
 		int last = chunk_ln-chunk_ln%64+pad;
 		memset(ptr+chunk_ln, 0, last-chunk_ln);
@@ -249,7 +249,7 @@ int main(int argc, char **argv)
 				sha256_calc(bf, rd, clen, &ctx);
 				break;
 			} else
-				sha256_calc(bf, BUFSIZE, 0, &ctx);
+				sha256_calc(bf, BUFSIZE, -1, &ctx);
 		}
 
 #ifdef BENCH

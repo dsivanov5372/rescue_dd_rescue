@@ -136,7 +136,7 @@ md5.po: md5.c md5.h config.h
 sha256.po: sha256.c sha256.h config.h
 	$(CC) $(CFLAGS_OPT) -fPIC -o $@ -c $<
 
-libddr_MD5.so: libddr_MD5.po md5.po
+libddr_MD5.so: libddr_MD5.po md5.po sha256.po
 	$(CC) -shared -o $@ $^
 
 libddr_lzo.so: libddr_lzo.po
@@ -275,7 +275,7 @@ check: $(TARGETS) find_nonzero
 	rm -f TEST TEST2 MD5SUM.TEST
 	if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo; fi
 	if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo_algos; fi
-	if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo_test; fi
+	#if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo_test; fi
 	if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo_fuzz; fi
 	
 check_lzo: $(TARGETS)
