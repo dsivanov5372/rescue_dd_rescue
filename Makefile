@@ -23,7 +23,7 @@ MYDIR = dd_rescue
 BINTARGETS = dd_rescue 
 LIBTARGETS = libddr_MD5.so 
 #TARGETS = libfalloc-dl
-OTHTARGETS = find_nonzero fiemap file_zblock fmt_no md5
+OTHTARGETS = find_nonzero fiemap file_zblock fmt_no md5 sha256
 OBJECTS = frandom.o fmt_no.o find_nonzero.o 
 FNZ_HEADERS = find_nonzero.h archdep.h ffs.h
 HEADERS = frandom.h fmt_no.h config.h list.h fstrim.h $(FNZ_HEADERS) splice.h fallocate64.h pread64.h ddr_plugin.h
@@ -133,6 +133,9 @@ fmt_no.o: fmt_no.c fmt_no.h config.h ddr_ctrl.h
 md5.po: md5.c md5.h config.h
 	$(CC) $(CFLAGS_OPT) -fPIC -o $@ -c $<
 
+sha256.po: sha256.c sha256.h config.h
+	$(CC) $(CFLAGS_OPT) -fPIC -o $@ -c $<
+
 libddr_MD5.so: libddr_MD5.po md5.po
 	$(CC) -shared -o $@ $^
 
@@ -168,6 +171,9 @@ dd_rescue: dd_rescue.c $(HEADERS) $(OBJECTS) $(OBJECTS2)
 
 md5: md5.c md5.h config.h
 	$(CC) $(CFLAGS_OPT) -DMD5_MAIN -o $@ $<
+
+sha256: sha256.c sha256.h config.h
+	$(CC) $(CFLAGS_OPT) -DSHA256_MAIN -o $@ $<
 
 fuzz_lzo: fuzz_lzo.o
 	$(CC) -o $@ $^ -llzo2

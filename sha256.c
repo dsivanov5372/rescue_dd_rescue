@@ -6,6 +6,12 @@
  * Copyright: CC-BY-SA 3.0/GFDL
  */
 
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+#include <netinet/in.h>
+#include <assert.h>
+
 /*
 Note 1: All variables are 32 bit unsigned integers and addition is calculated modulo 2^32 
 Note 2: For each round, there is one round constant k[i] and one entry in the message schedule array w[i], 0 ≤ i ≤ 63 
@@ -22,14 +28,14 @@ typedef struct sha256_ctx {
  */
 void init_sha256(sha256_ctx_t *ctx)
 {
-	ctx->h[0] := 0x6a09e667;
-	ctx->h[1] := 0xbb67ae85;
-	ctx->h[2] := 0x3c6ef372;
-	ctx->h[3] := 0xa54ff53a;
-	ctx->h[4] := 0x510e527f;
-	ctx->h[5] := 0x9b05688c;
-	ctx->h[6] := 0x1f83d9ab;
-	ctx->h[7] := 0x5be0cd19;
+	ctx->h[0] = 0x6a09e667;
+	ctx->h[1] = 0xbb67ae85;
+	ctx->h[2] = 0x3c6ef372;
+	ctx->h[3] = 0xa54ff53a;
+	ctx->h[4] = 0x510e527f;
+	ctx->h[5] = 0x9b05688c;
+	ctx->h[6] = 0x1f83d9ab;
+	ctx->h[7] = 0x5be0cd19;
 }
 			       
 /* 
@@ -60,7 +66,7 @@ uint32_t k[] = { 0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x5
  * break message into 512-bit chunks 
  * (The initial values in w[0..63] don't matter, so many implementations zero them here) 
  */
-void sha256_64(const unsigned char* msg, sha256_ctx_t* ctx)
+void sha256_64(const uint8_t* msg, sha256_ctx_t* ctx)
 {
 	int i;
  	/* for each chunk create a 64-entry message schedule array w[0..63] of 32-bit words */
@@ -85,13 +91,9 @@ void sha256_64(const unsigned char* msg, sha256_ctx_t* ctx)
 		uint32_t maj = (a & b) ^ (a & c) ^ (b & c);
 		uint32_t temp2 = S0 + maj;
 
-		h = g;
-		g = f;
-		f = e;
+		h = g; g = f; f = e;
 		e = d + temp1;
-		d = c;
-		c = b;
-		b = a;
+		d = c; c = b; b = a;
 		a = temp1 + temp2;
 	}
 	/* Add the compressed chunk to the current hash value: */
@@ -100,7 +102,7 @@ void sha256_64(const unsigned char* msg, sha256_ctx_t* ctx)
 }
 
 static char sha256_res[65];
-char* sha256_out(shat256_ctx_t* ctx)
+char* sha256_out(sha256_ctx_t* ctx)
 {
 	/* Produce the final hash value (big-endian): */ 
 	//digest := hash := h0 append h1 append h2 append h3 append h4 append h5 append h6 append h7
@@ -113,3 +115,22 @@ char* sha256_out(shat256_ctx_t* ctx)
 	}
 	return sha256_res;
 }
+
+/* We assume we have a few bytes behind ln  ... */
+void sha256_calc(uint8_t *ptr, size_t chunk_ln, size_t final_len, sha256_ctx_t *ctx)
+{
+	if (final_len) {
+		ptr[chunk_ln] = 0x80;
+		int i;
+		for (i = chunk_ln + 1; i % 64 != 56; ++i)
+			ptr[i] = 0;
+		*(uint32_t*)(ptr+i) = htonl(final_len << 3);
+		*(uint32_t*)(ptr+i+4) = htonl(final_len >> 29);
+		chunk_ln = i + 8;
+	}
+	assert(0 == chunk_ln % 64);
+	uint32_t offset;
+	for (offset = 0; offset < chunk_ln; offset += 64)
+		sha256_64(ptr + offset, ctx);
+}
+
