@@ -69,6 +69,18 @@ const char *hash_help = "The HASH plugin for dd_rescue calculates a cryptographi
 		" Parameters: output:outfd=FNO:debug:alg[o[rithm0]=ALG\n"
 		" Use algorithm=help to get a list of supported hash algorithms\n";
 
+
+hashalg_t *get_hashalg(const char* nm)
+{
+	int i;
+	for (i = 0; i < sizeof(hashes)/sizeof(hashalg_t); ++i)
+		if (!strcasecmp(nm, hashes[i].name))
+			return hashes+i;
+	return NULL;
+}
+
+
+
 int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 {
 	int err = 0;
@@ -77,6 +89,7 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	memset(state, 0, sizeof(hash_state));
 	state->seq = seq;
 	state->opts = opt;
+	state->alg = get_hashalg(ddr_plug.name);
 	while (param) {
 		char* next = strchr(param, ':');
 		if (next)
@@ -89,6 +102,12 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			state->outfd = 1;
 		else if (!memcmp(param, "outfd=", 6))
 			state->outfd = atoi(param+6);
+		else if (!memcmp(param, "algo=", 5))
+			state->alg = get_hashalg(param+5);
+		else if (!memcmp(param, "alg=", 4))
+			state->alg = get_hashalg(param+4);
+		else if (!memcmp(param, "algorithm=", 10))
+			state->alg = get_hashalg(param+10);
 		/* elif .... */
 		else {
 			FPLOG(FATAL, "plugin doesn't understand param %s\n",
@@ -97,7 +116,10 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		}
 		param = next;
 	}
-	state->alg = hashes;
+	if (!state->alg) {
+		FPLOG(FATAL, "No hash algorithm specified\n");
+		++err;
+	}
 	if (state->debug)
 		FPLOG(DEBUG, "Initialized plugin %s\n", ddr_plug.name);
 	return err;
