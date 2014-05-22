@@ -71,6 +71,15 @@ static inline uint32_t to_int32(const uint8_t *bytes)
 }
 #endif
 
+// Implicit: temp, i, f, g, k[], w[]
+#define MD5_SWAP(a,b,c,d)		\
+	const uint32_t _temp = d;	\
+	d = c;				\
+	c = b;				\
+	b = b + LEFTROTATE((a + f + k[i] + w[g]), r[i]);	\
+	a = _temp
+
+
 void md5_64(uint8_t *ptr, md5_ctx *ctx)
 {
 	uint32_t _a, _b, _c, _d;
@@ -90,40 +99,31 @@ void md5_64(uint8_t *ptr, md5_ctx *ctx)
 #endif
 
 	// Initialize hash value for this chunk:
-	_a = ctx->h0;
-	_b = ctx->h1;
-	_c = ctx->h2;
-	_d = ctx->h3;
+	_a = ctx->h0; _b = ctx->h1; _c = ctx->h2; _d = ctx->h3;
 
-	// Main loop: Hopefully, compiler does the unswitching ...
-	for (i = 0; i < 64; ++i) {
-		uint32_t temp, f, g;
-		if (i < 16) {
-			f = (_b & _c) | ((~_b) & _d);
-			g = i;
-		} else if (i < 32) {
-			f = (_d & _b) | ((~_d) & _c);
-			g = (5 * i + 1) % 16;
-		} else if (i < 48) {
-			f = _b ^ _c ^ _d;
-			g = (3 * i + 5) % 16;
-		} else {
-			f = _c ^ (_b | (~_d));
-			g = (7 * i) % 16;
-		}
-
-		temp = _d;
-		_d = _c;
-		_c = _b;
-		_b = _b + LEFTROTATE((_a + f + k[i] + w[g]), r[i]);
-		_a = temp;
+	for (i = 0; i < 16; ++i) {
+		const uint32_t f = (_b & _c) | ((~_b) & _d);
+		const uint32_t g = i;
+		MD5_SWAP(_a, _b, _c, _d);
+	}
+	for (; i < 32; ++i) {
+		const uint32_t f = (_d & _b) | ((~_d) & _c);
+		const uint32_t g = (5 * i + 1) % 16;
+		MD5_SWAP(_a, _b, _c, _d);
+	}
+	for (; i < 48; ++i) {
+		const uint32_t f = _b ^ _c ^ _d;
+		const uint32_t g = (3 * i + 5) % 16;
+		MD5_SWAP(_a, _b, _c, _d);
+	} 
+	for (; i < 64; ++i) {
+		const uint32_t f = _c ^ (_b | (~_d));
+		const uint32_t g = (7 * i) % 16;
+		MD5_SWAP(_a, _b, _c, _d);
 	}
 
 	// Add this chunk's hash to result so far:
-	ctx->h0 += _a;
-	ctx->h1 += _b;
-	ctx->h2 += _c;
-	ctx->h3 += _d;
+	ctx->h0 += _a; ctx->h1 += _b; ctx->h2 += _c; ctx->h3 += _d;
 }
 
 void md5_init(md5_ctx *ctx)
