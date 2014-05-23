@@ -545,7 +545,7 @@ will calculate a cryptographic hash over the
 copied data and print the result at the end of the copy operations.
 The hash algorithm can be chosen by specifying
 .B alg[o[rithm]]=ALG
-where ALG is one of md5, sha256, sha224, sha512, sha384. (Specify
+where ALG is one of md5, sha1, sha256, sha224, sha512, sha384. (Specify
 alg=help to get a list.)
 To abbreviate the syntax, the alg= piece can be omitted.
 .br
@@ -571,8 +571,9 @@ old MD5 name; it then defaults to the md5 algorithm.
 Please note that the md5 algorithm is NOT recommended any more for
 good protetction against malicious attempts to hide data modification;
 it's not considered strong enough any more to prevent hash collisions.
-Use sha256 in preference. (On 64bit machines, sha512 is faster than
-sha256 and is thus an even better choice.)
+sha1 is better, but the recommendation is to use the SHA-2 family of hashes.
+On 32bit machines, I'd recommend sha256, while on 64bit machines, sha512
+is faster and thus the best choice.
 .
 .SS lzo
 The lzo plugin allows to compress and decompress data using liblzo2.

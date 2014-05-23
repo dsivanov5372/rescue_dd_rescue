@@ -18,6 +18,7 @@
 typedef struct {
 	union {
 		uint32_t md5_h[4];
+		uint32_t sha1_h[5];
 		uint32_t sha256_h[8];
 		uint64_t sha512_h[8];
 	};

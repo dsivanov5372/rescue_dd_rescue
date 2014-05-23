@@ -23,7 +23,7 @@ MYDIR = dd_rescue
 BINTARGETS = dd_rescue 
 LIBTARGETS = libddr_hash.so libddr_MD5.so
 #TARGETS = libfalloc-dl
-OTHTARGETS = find_nonzero fiemap file_zblock fmt_no md5 sha256 sha512 sha224 sha384
+OTHTARGETS = find_nonzero fiemap file_zblock fmt_no md5 sha256 sha512 sha224 sha384 sha1
 OBJECTS = frandom.o fmt_no.o find_nonzero.o 
 FNZ_HEADERS = find_nonzero.h archdep.h ffs.h
 HEADERS = frandom.h fmt_no.h config.h list.h fstrim.h $(FNZ_HEADERS) splice.h fallocate64.h pread64.h ddr_plugin.h
@@ -127,19 +127,22 @@ fmt_no.o: fmt_no.c fmt_no.h config.h ddr_ctrl.h
 %.o: %.c %.h config.h ddr_ctrl.h
 	$(CC) $(CFLAGS) -c $<
 
-%.po: %.c ddr_plugin.h config.h ddr_ctrl.h md5.h sha256.h sha512.h hash.h
+%.po: %.c ddr_plugin.h config.h ddr_ctrl.h md5.h sha256.h sha512.h sha1.h hash.h
 	$(CC) $(CFLAGS) -fPIC -o $@ -c $<
 
-md5.po: md5.c md5.h config.h
+md5.po: md5.c md5.h hash.h config.h
 	$(CC) $(CFLAGS_OPT) -fPIC -o $@ -c $<
 
-sha256.po: sha256.c sha256.h config.h
+sha256.po: sha256.c sha256.h hash.h config.h
 	$(CC) $(CFLAGS_OPT) -fPIC -o $@ -c $<
 
-sha512.po: sha512.c sha512.h config.h
+sha512.po: sha512.c sha512.h hash.h config.h
 	$(CC) $(CFLAGS_OPT) -fPIC -o $@ -c $<
 
-libddr_hash.so: libddr_MD5.po md5.po sha256.po sha512.po
+sha1.po: sha1.c sha1.h hash.h config.h
+	$(CC) $(CFLAGS_OPT) -fPIC -o $@ -c $<
+
+libddr_hash.so: libddr_MD5.po md5.po sha256.po sha512.po sha1.po
 	$(CC) -shared -o $@ $^
 
 libddr_MD5.so: libddr_hash.so
@@ -189,6 +192,9 @@ sha512: sha512.c sha512.h hash.h config.h
 	
 sha384: sha512
 	ln -sf sha512 sha384
+
+sha1: sha1.c sha1.h hash.h config.h
+	$(CC) $(CFLAGS_OPT) -DSHA1_MAIN -o $@ $<
 
 fuzz_lzo: fuzz_lzo.o
 	$(CC) -o $@ $^ -llzo2
@@ -295,6 +301,8 @@ check: $(TARGETS) find_nonzero
 	sha384sum -c HASH.TEST
 	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=output:alg=sha512 TEST TEST2 >HASH.TEST
 	sha512sum -c HASH.TEST
+	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=output:alg=sha1 TEST TEST2 >HASH.TEST
+	sha1sum -c HASH.TEST
 	rm -f TEST TEST2 HASH.TEST
 	if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo; fi
 	if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo_algos; fi
