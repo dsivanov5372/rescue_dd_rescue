@@ -275,7 +275,7 @@ unsigned char* hash_blk_cb(fstate_t *fst, unsigned char* bf,
 int hash_close(loff_t ooff, void **stat)
 {
 	hash_state *state = (hash_state*)*stat;
-	char res[33];
+	char res[129];
 	loff_t firstpos = (state->seq == 0? state->opts->init_ipos: state->opts->init_opos);
 	FPLOG(INFO, "%s (%" LL "i-%" LL "i): %s\n",
 		state->fname, firstpos, firstpos+state->hash_pos, state->alg->hash_out(res, &state->hash));
