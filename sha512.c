@@ -162,7 +162,7 @@ char* sha512_out(char *buf, const hash_t* ctx)
 	*buf = 0;
 	for (i = 0; i < 8; ++i) {
 		char res[17];
-		sprintf(res, "%16" LL "x", ctx->sha512_h[i]);
+		sprintf(res, "%016" LL "x", ctx->sha512_h[i]);
 		strcat(buf, res);
 	}
 	return buf;
@@ -178,13 +178,14 @@ char* sha384_out(char *buf, const hash_t* ctx)
 	*buf = 0;
 	for (i = 0; i < 6; ++i) {
 		char res[17];
-		sprintf(res, "%16" LL "x", ctx->sha512_h[i]);
+		sprintf(res, "%016" LL "x", ctx->sha512_h[i]);
 		strcat(buf, res);
 	}
 	return buf;
 }
 
 
+#ifdef DEBUG
 static void output(unsigned char* ptr, int ln)
 {
 	int i;
@@ -196,6 +197,7 @@ static void output(unsigned char* ptr, int ln)
 	if (i%16)
 		printf("\n");
 }
+#endif
 
 /*
  * Pre-processing: 

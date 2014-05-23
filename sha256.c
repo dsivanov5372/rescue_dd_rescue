@@ -151,7 +151,7 @@ char* sha224_out(char *buf, const hash_t* ctx)
 	return buf;
 }
 
-
+#ifdef DEBUG
 static void output(unsigned char* ptr, int ln)
 {
 	int i;
@@ -163,6 +163,7 @@ static void output(unsigned char* ptr, int ln)
 	if (i%16)
 		printf("\n");
 }
+#endif
 
 /*
  * Pre-processing: 

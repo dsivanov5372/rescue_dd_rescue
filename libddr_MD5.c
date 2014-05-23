@@ -66,12 +66,13 @@ typedef struct _hash_state {
 
 const char *hash_help = "The HASH plugin for dd_rescue calculates a cryptographic checksum on the fly.\n"
 		" It supports unaligned blocks (arbitrary offsets) and sparse writing.\n"
-		" Parameters: output:outfd=FNO:debug:alg[o[rithm0]=ALG\n"
+		" Parameters: output:outfd=FNO:debug:alg[o[rithm]=ALG\n"
 		" Use algorithm=help to get a list of supported hash algorithms\n";
 
 
 hashalg_t *get_hashalg(const char* nm)
 {
+	// TODO: Handle alg=help
 	int i;
 	for (i = 0; i < sizeof(hashes)/sizeof(hashalg_t); ++i)
 		if (!strcasecmp(nm, hashes[i].name))
@@ -108,6 +109,7 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			state->alg = get_hashalg(param+4);
 		else if (!memcmp(param, "algorithm=", 10))
 			state->alg = get_hashalg(param+10);
+		/* Hmmm, should we try to support algname without alg= ? */
 		/* elif .... */
 		else {
 			FPLOG(FATAL, "plugin doesn't understand param %s\n",
@@ -277,8 +279,9 @@ int hash_close(loff_t ooff, void **stat)
 	hash_state *state = (hash_state*)*stat;
 	char res[129];
 	loff_t firstpos = (state->seq == 0? state->opts->init_ipos: state->opts->init_opos);
-	FPLOG(INFO, "%s (%" LL "i-%" LL "i): %s\n",
-		state->fname, firstpos, firstpos+state->hash_pos, state->alg->hash_out(res, &state->hash));
+	FPLOG(INFO, "%s %s (%" LL "i-%" LL "i): %s\n",
+		state->alg->name, state->fname, firstpos, firstpos+state->hash_pos, 
+		state->alg->hash_out(res, &state->hash));
 	if (state->outfd) {
 		char outbuf[512];
 		snprintf(outbuf, 511, "%s *%s\n", state->alg->hash_out(res, &state->hash), state->fname);

@@ -371,7 +371,7 @@ int choose_alg(char* anm, lzo_state *state)
 		return 1;
 	}
 	for (ca = calgos; ca < calgos+sizeof(calgos)/sizeof(comp_alg); ++ca) {
-		if (!strcmp(ca->name, anm)) {
+		if (!strcasecmp(ca->name, anm)) {
 			state->algo = ca;
 			return 0;
 		}

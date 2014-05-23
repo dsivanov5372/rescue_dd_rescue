@@ -2,7 +2,7 @@
 # (c) garloff@suse.de, 99/10/09, GNU GPL
 # $Id$
 
-VERSION = 1.43
+VERSION = 1.44
 
 DESTDIR = 
 
@@ -21,7 +21,7 @@ MANDIR = $(prefix)/share/man
 #MYDIR = dd_rescue-$(VERSION)
 MYDIR = dd_rescue
 BINTARGETS = dd_rescue 
-LIBTARGETS = libddr_MD5.so 
+LIBTARGETS = libddr_hash.so libddr_MD5.so
 #TARGETS = libfalloc-dl
 OTHTARGETS = find_nonzero fiemap file_zblock fmt_no md5 sha256 sha512 sha224 sha384
 OBJECTS = frandom.o fmt_no.o find_nonzero.o 
@@ -139,8 +139,11 @@ sha256.po: sha256.c sha256.h config.h
 sha512.po: sha512.c sha512.h config.h
 	$(CC) $(CFLAGS_OPT) -fPIC -o $@ -c $<
 
-libddr_MD5.so: libddr_MD5.po md5.po sha256.po sha512.po
+libddr_hash.so: libddr_MD5.po md5.po sha256.po sha512.po
 	$(CC) -shared -o $@ $^
+
+libddr_MD5.so: libddr_hash.so
+	ln -sf $< $@
 
 libddr_lzo.so: libddr_lzo.po
 	$(CC) -shared -o $@ $^ -llzo2
@@ -281,10 +284,18 @@ check: $(TARGETS) find_nonzero
 	./dd_rescue -a -b 16k -m 32k /dev/zero TEST
 	./dd_rescue -x -a -b 16k -m32k dd_rescue TEST
 	./dd_rescue -x -a -b 16k -m17k /dev/zero TEST
-	MD5=$$(./dd_rescue -c0 -a -b16k -L ./libddr_MD5.so TEST TEST2 2>&1 | grep 'MD5(0)': | tail -n1 | sed 's/^dd_rescue: (info): MD5(0):[^:]*: //'); MD5S=$$(md5sum TEST | sed 's/ .*$$//'); echo $$MD5 $$MD5S; if test "$$MD5" != "$$MD5S"; then false; fi
-	./dd_rescue -c0 -a -b16k -t -L ./libddr_MD5.so=output TEST /dev/null >MD5SUM.TEST
-	md5sum -c MD5SUM.TEST
-	rm -f TEST TEST2 MD5SUM.TEST
+	./dd_rescue -c0 -a -b16k -t -L ./libddr_MD5.so=output TEST TEST2 >HASH.TEST
+	md5sum -c HASH.TEST
+	#MD5=$$(./dd_rescue -c0 -a -b16k -L ./libddr_MD5.so TEST TEST2 2>&1 | grep 'MD5(0)': | tail -n1 | sed 's/^dd_rescue: (info): MD5(0):[^:]*: //'); MD5S=$$(md5sum TEST | sed 's/ .*$$//'); echo $$MD5 $$MD5S; if test "$$MD5" != "$$MD5S"; then false; fi
+	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=output:alg=sha224 TEST TEST2 >HASH.TEST
+	sha224sum -c HASH.TEST
+	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=output:alg=sha256 TEST TEST2 >HASH.TEST
+	sha256sum -c HASH.TEST
+	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=output:alg=sha384 TEST TEST2 >HASH.TEST
+	sha384sum -c HASH.TEST
+	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=output:alg=sha512 TEST TEST2 >HASH.TEST
+	sha512sum -c HASH.TEST
+	rm -f TEST TEST2 HASH.TEST
 	if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo; fi
 	if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo_algos; fi
 	#if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo_test; fi
