@@ -168,7 +168,7 @@ char* sha512_out(char *buf, const hash_t* ctx)
 	*buf = 0;
 	for (i = 0; i < 8; ++i) {
 		char res[17];
-		sprintf(res, "%016" LL "x", htole64(ctx->sha512_h[i]));
+		sprintf(res, "%016" LL "x", ctx->sha512_h[i]);
 		strcat(buf, res);
 	}
 	return buf;
@@ -184,7 +184,7 @@ char* sha384_out(char *buf, const hash_t* ctx)
 	*buf = 0;
 	for (i = 0; i < 6; ++i) {
 		char res[17];
-		sprintf(res, "%016" LL "x", htole64(ctx->sha512_h[i]));
+		sprintf(res, "%016" LL "x", ctx->sha512_h[i]);
 		strcat(buf, res);
 	}
 	return buf;

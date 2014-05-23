@@ -36,7 +36,7 @@ DEFINES = -DVERSION=\"$(VERSION)\"  -D__COMPILER__="\"$(COMPILER)\"" # -DPLUGSEA
 OUT = -o dd_rescue
 
 LZOP = $(shell type -p lzop || type -P true)
-HAVE_SHA256SUM = $(shell type -p sha256sum)
+HAVE_SHA256SUM = $(shell type -p sha256sum >/dev/null && echo 1 || echo 0)
 
 ifeq ($(shell grep 'HAVE_LZO_LZO1X_H 1' config.h >/dev/null 2>&1 && echo 1), 1)
   LIBTARGETS += libddr_lzo.so
@@ -301,7 +301,7 @@ check: $(TARGETS) find_nonzero md5 sha1 sha256 sha512
 	./sha1 /dev/null | sha1sum -c
 	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=output:alg=sha1 TEST TEST2 >HASH.TEST
 	sha1sum -c HASH.TEST
-	if test -n "$(HAVE_SHA256SUM)"; then $(MAKE) check_sha2; fi
+	if test $(HAVE_SHA256SUM) = 1; then $(MAKE) check_sha2; fi
 	./sha256 /dev/null
 	./sha512 /dev/null
 	rm -f TEST TEST2 HASH.TEST
