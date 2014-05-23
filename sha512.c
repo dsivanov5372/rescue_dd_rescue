@@ -236,6 +236,7 @@ void sha512_calc(uint8_t *ptr, size_t chunk_ln, size_t final_len, hash_t *ctx)
 
 #ifdef SHA512_MAIN
 #include <sys/stat.h>
+#include <libgen.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>

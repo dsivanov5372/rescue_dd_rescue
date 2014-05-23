@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <libgen.h>
 #include <unistd.h>
 #include <string.h>
 #include <assert.h>
@@ -751,6 +752,7 @@ int check_blklen_and_next(lzo_state *state, fstate_t *fst,
 	return 1;
 }
 
+#undef HTONL
 #if __BYTE_ORDER == __BIG_ENDIAN
 #define HTONL(x) x
 #else
