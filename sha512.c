@@ -2,7 +2,9 @@
  *
  * Algorithm translated to C from pseudocode at Wikipedia
  * by Kurt Garloff <kurt@garloff.de>
- * http://en.wikipedia.org/wiki/SHA512
+ * License: GNU GPL v2 or v3, at your option.
+ * Source:
+ * http://en.wikipedia.org/wiki/SHA-2
  * Copyright: CC-BY-SA 3.0/GFDL
  */
 

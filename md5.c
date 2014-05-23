@@ -3,7 +3,8 @@
  * Source: http://en.wikipedia.org/wiki/MD5
  * Copyright: CC-BY-SA 3.0 / GFDL
  *
- * Compile with: gcc -o md5 md5.c
+ * Implementation adjusted by Kurt Garloff<kurt@garloff.de>, 3-5/2014
+ * License: GNU GPL v2 or v3, at your option.
  */
 #include "md5.h"
 
