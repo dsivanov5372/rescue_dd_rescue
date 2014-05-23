@@ -255,7 +255,7 @@ install: $(TARGETS)
 	$(INSTALL) $(INSTASROOT) -m 644 dd_rescue.1 ddr_lzo.1 $(MANDIR)/man1/
 	gzip -9f $(MANDIR)/man1/dd_rescue.1 $(MANDIR)/man1/ddr_lzo.1
 
-check: $(TARGETS) find_nonzero
+check: $(TARGETS) find_nonzero md5 sha1 sha256 sha512
 	./dd_rescue --version
 	@echo "***** find_nonzero tests *****"
 	./find_nonzero 2
@@ -289,22 +289,28 @@ check: $(TARGETS) find_nonzero
 	@rm zero zero2
 	@rm -f TEST TEST2
 	@echo "***** dd_rescue MD5 plugin tests *****"
+	./md5 /dev/null
+	./md5 /dev/null | md5sum -c
 	./dd_rescue -a -b 16k -m 32k /dev/zero TEST
 	./dd_rescue -x -a -b 16k -m32k dd_rescue TEST
 	./dd_rescue -x -a -b 16k -m17k /dev/zero TEST
 	./dd_rescue -c0 -a -b16k -t -L ./libddr_MD5.so=output TEST TEST2 >HASH.TEST
 	md5sum -c HASH.TEST
 	#MD5=$$(./dd_rescue -c0 -a -b16k -L ./libddr_MD5.so TEST TEST2 2>&1 | grep 'MD5(0)': | tail -n1 | sed 's/^dd_rescue: (info): MD5(0):[^:]*: //'); MD5S=$$(md5sum TEST | sed 's/ .*$$//'); echo $$MD5 $$MD5S; if test "$$MD5" != "$$MD5S"; then false; fi
+	./sha1 /dev/null
+	./sha1 /dev/null | sha1sum -c
 	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=output:alg=sha1 TEST TEST2 >HASH.TEST
 	sha1sum -c HASH.TEST
 	if test -n "$(HAVE_SHA256SUM)"; then $(MAKE) check_sha2; fi
+	./sha256 /dev/null
+	./sha512 /dev/null
 	rm -f TEST TEST2 HASH.TEST
 	if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo; fi
 	if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo_algos; fi
 	#if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo_test; fi
 	if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo_fuzz; fi
 	
-check_sha2: $(TARGETS)
+check_sha2: $(TARGETS) sha224 sha384
 	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=output:alg=sha224 TEST TEST2 >HASH.TEST
 	sha224sum -c HASH.TEST
 	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=output:alg=sha256 TEST TEST2 >HASH.TEST
@@ -313,6 +319,10 @@ check_sha2: $(TARGETS)
 	sha384sum -c HASH.TEST
 	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=output:alg=sha512 TEST TEST2 >HASH.TEST
 	sha512sum -c HASH.TEST
+	./sha224 /dev/null | sha224sum -c
+	./sha256 /dev/null | sha256sum -c
+	./sha384 /dev/null | sha384sum -c
+	./sha512 /dev/null | sha512sum -c
 
 check_lzo: $(TARGETS)
 	@echo "***** dd_rescue lzo (and MD5) plugin tests *****"

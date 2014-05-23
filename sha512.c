@@ -87,9 +87,13 @@ uint64_t k[] ={ 0x428a2f98d728ae22ULL, 0x7137449123ef65cdULL, 0xb5c0fbcfec4d3b2f
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 static inline uint64_t htonll(const uint64_t x)
 {
+#if 1
+	return htobe64(x);
+#else
 	const uint32_t hi = x>>32;
 	const uint32_t lo = x;
 	return htonl(hi) + ((uint64_t)htonl(lo) << 32);
+#endif
 }
 #else
 static inline uint64_t htonll(const uint64_t x)
@@ -164,7 +168,7 @@ char* sha512_out(char *buf, const hash_t* ctx)
 	*buf = 0;
 	for (i = 0; i < 8; ++i) {
 		char res[17];
-		sprintf(res, "%016" LL "x", ctx->sha512_h[i]);
+		sprintf(res, "%016" LL "x", htole64(ctx->sha512_h[i]));
 		strcat(buf, res);
 	}
 	return buf;
@@ -180,7 +184,7 @@ char* sha384_out(char *buf, const hash_t* ctx)
 	*buf = 0;
 	for (i = 0; i < 6; ++i) {
 		char res[17];
-		sprintf(res, "%016" LL "x", ctx->sha512_h[i]);
+		sprintf(res, "%016" LL "x", htole64(ctx->sha512_h[i]));
 		strcat(buf, res);
 	}
 	return buf;
