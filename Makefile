@@ -36,6 +36,7 @@ DEFINES = -DVERSION=\"$(VERSION)\"  -D__COMPILER__="\"$(COMPILER)\"" # -DPLUGSEA
 OUT = -o dd_rescue
 
 LZOP = $(shell type -p lzop || type -P true)
+HAVE_SHA256SUM = $(shell type -p sha256sum)
 
 ifeq ($(shell grep 'HAVE_LZO_LZO1X_H 1' config.h >/dev/null 2>&1 && echo 1), 1)
   LIBTARGETS += libddr_lzo.so
@@ -294,6 +295,16 @@ check: $(TARGETS) find_nonzero
 	./dd_rescue -c0 -a -b16k -t -L ./libddr_MD5.so=output TEST TEST2 >HASH.TEST
 	md5sum -c HASH.TEST
 	#MD5=$$(./dd_rescue -c0 -a -b16k -L ./libddr_MD5.so TEST TEST2 2>&1 | grep 'MD5(0)': | tail -n1 | sed 's/^dd_rescue: (info): MD5(0):[^:]*: //'); MD5S=$$(md5sum TEST | sed 's/ .*$$//'); echo $$MD5 $$MD5S; if test "$$MD5" != "$$MD5S"; then false; fi
+	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=output:alg=sha1 TEST TEST2 >HASH.TEST
+	sha1sum -c HASH.TEST
+	if test -n "$(HAVE_SHA256SUM)"; then $(MAKE) check_sha2; fi
+	rm -f TEST TEST2 HASH.TEST
+	if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo; fi
+	if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo_algos; fi
+	#if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo_test; fi
+	if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo_fuzz; fi
+	
+check_sha2: $(TARGETS)
 	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=output:alg=sha224 TEST TEST2 >HASH.TEST
 	sha224sum -c HASH.TEST
 	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=output:alg=sha256 TEST TEST2 >HASH.TEST
@@ -302,14 +313,7 @@ check: $(TARGETS) find_nonzero
 	sha384sum -c HASH.TEST
 	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=output:alg=sha512 TEST TEST2 >HASH.TEST
 	sha512sum -c HASH.TEST
-	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=output:alg=sha1 TEST TEST2 >HASH.TEST
-	sha1sum -c HASH.TEST
-	rm -f TEST TEST2 HASH.TEST
-	if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo; fi
-	if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo_algos; fi
-	#if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo_test; fi
-	if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo_fuzz; fi
-	
+
 check_lzo: $(TARGETS)
 	@echo "***** dd_rescue lzo (and MD5) plugin tests *****"
 	./dd_rescue -b32k -ATL ./libddr_lzo.so dd_rescue dd_rescue.ddr.lzo

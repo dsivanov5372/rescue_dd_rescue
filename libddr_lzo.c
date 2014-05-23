@@ -46,9 +46,9 @@
 #endif
 
 #ifdef HAVE_BASENAME
-//const char* basename(const char*);
+//char* basename(char*);
 #else
-static const char* basename(const char *nm)
+static char* basename(char *nm)
 {
 	const char* ptr = strrchr(nm, '/');	/* Not on DOS */
 	if (ptr)
@@ -221,7 +221,7 @@ void lzo_hdr(header_t* hdr, loff_t hole, lzo_state *state)
 	hdr->flags = htonl(state->flags);
 	hdr->nmlen = NAMELEN;
 	if (hole) {
-		const char* bnm = basename(state->opts->iname);
+		char* bnm = basename((char*)state->opts->iname);
 		/* This would abort with -D_FORTIFY_SOURCE=2 
 		sprintf(hdr->name+6, ".%04x.%010lx", state->holeno++, hole);
 		*/
@@ -234,7 +234,7 @@ void lzo_hdr(header_t* hdr, loff_t hole, lzo_state *state)
 		hdr->mtime_low = htonl(hole & 0xffffffff);
 		hdr->mtime_high= htonl(hole >> 32);
 	} else {
-		const char* nm = state->opts->iname;
+		char* nm = (char*)state->opts->iname;
 		if (strlen(nm) > NAMELEN)
 			nm = basename(nm);
 		memcpy(hdr->name, nm, MIN(NAMELEN, strlen(nm)));
