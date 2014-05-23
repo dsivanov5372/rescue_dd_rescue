@@ -188,6 +188,8 @@ dd_rescue has a few nifty features:
   sparse files (using the lzop MULTIPART feature to stay compatible), various
   lzo algorithms, continuation with broken blocks (fuzz_lzo has been developed
   to test error recovery), and appending to existing .lzo files.
+* Version 1.44 renamed the MD5 plugin to the hash plugin, as we support the
+  SHA-2 family of cryptographic hashes now.
 
 
 Copyright

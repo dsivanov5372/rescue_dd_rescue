@@ -221,7 +221,7 @@ some speed -- unfortunately the crc32 polynomial for lzop/gzip/... is not
 the crc32c polynomial that has hardware support on many CPUs these days.)
 Also note that the checksums are NOT cryptographic hashes;
 a malicious attacker can easily find modifications of data that do not
-alter the checksums. Use MD5 or better SHA-256 for ensuring integrity
+alter the checksums. Use MD5 or better SHA-256/SHA-512 for ensuring integrity
 against attackers. Use par2 or similar software to create error 
 correcting codes (Reed-Solomon / Erasure Codes) if you want to be able
 to recover data in face of corruption. 
@@ -234,12 +234,12 @@ be careful when you process data from untrusted sources.
 .
 .SH EXAMPLES
 .TP
-.BI dd_rescue\ \-ptAL\ lzo=algo=lzo1x_1_15:compress,MD5\ infile\ outfile
+.BI dd_rescue\ \-ptAL\ lzo=algo=lzo1x_1_15:compress,hash=alg=sha256\ infile\ outfile
 compresses data from
 .IR infile
 into
 .IR outfile
-using the algorithm lzo1x_1_15 and calculates the MD5 hash value of outfile.
+using the algorithm lzo1x_1_15 and calculates the sha256 hash value of outfile.
 outfile will have time stamp and access rights copied over from infile and
 it will be emptied before (if the file happens to exist). The output file
 won't have encoded holes; errors in the infile will result in zeros.

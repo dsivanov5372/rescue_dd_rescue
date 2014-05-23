@@ -80,7 +80,7 @@ M -- 1024^2 size units (binary megabytes, MiB)
 G -- 1024^3 size units (binary gigabytes, GiB)
 .PP
 The following options may be used to modify the behaviour of 
-.B dd_rescue 
+.B dd_rescue .
 .
 .SS General options
 .TP 8
@@ -539,31 +539,40 @@ for an overview of available plugins.
 .
 
 .SH PLUGINS
-.SS MD5
-When the MD5 plugin (subsequently referred to as ddr_MD5) is loaded, it 
-will calculate a cryptographic MD5 hash over the 
-copied data and print the result at the end of the copy operations. 
-Its output should be identical to calling md5sum on the target file 
-(unless you only write part of the file),
-but saves time by not accessing the (possibly large) file a second time.
-The MD5 plugin handles sparse writes and arbitrary offsets fine.
+.SS hash
+When the hash plugin (subsequently referred to as ddr_hash) is loaded, it 
+will calculate a cryptographic hash over the 
+copied data and print the result at the end of the copy operations.
+The hash algorithm can be chosen by specifying
+.B alg[o[rithm]]=ALG
+where ALG is one of md5, sha256, sha224, sha512, sha384. (Specify
+alg=help to get a list.)
+To abbreviate the syntax, the alg= piece can be omitted.
 .br
-ddr_MD5 accepts the parameter 
+The computed value should be identical to calling md5sum/sha256sum/... on 
+the target file (unless you only write part of the file),
+but saves time by not accessing the (possibly large) file a second time.
+The hash plugin handles sparse writes and arbitrary offsets fine.
+.br
+ddr_hash accepts the parameter 
 .B output
-, which will cause ddr_MD5 to output
-the md5sum to stdout in the same format that md5sum uses. You can also
-specify
+, which will cause ddr_hash to output
+the cryptographic hash to stdout in the same format that md5sum/sha256sum/... use.
+You can also specify
 .B outfd=INT
-to have the plugin write the md5 hash to a different
-file descriptor specified by the integer number INT. Note that ddr_MD5
+to have the plugin write the hash to a different
+file descriptor specified by the integer number INT. Note that ddr_hash
 always processes data in binary mode and correctly indicates this with
 a star (*) in the output generated with output/outfd=.
 .br
-Please note that the MD5 algorithm is NOT recommended any more for
+For backwards compatibility, the hash plugin can also be referred to with the
+old MD5 name; it then defaults to the md5 algorithm.
+.br
+Please note that the md5 algorithm is NOT recommended any more for
 good protetction against malicious attempts to hide data modification;
 it's not considered strong enough any more to prevent hash collisions.
-Use SHA-256 in preference. (There is no SHA-2 supporting plugin yet for
-dd_rescue, but this may change in the near future ...)
+Use sha256 in preference. (On 64bit machines, sha512 is faster than
+sha256 and is thus an even better choice.)
 .
 .SS lzo
 The lzo plugin allows to compress and decompress data using liblzo2.
@@ -615,30 +624,33 @@ in more sectors with zeroes.
 .BI dd_rescue\ \-u\ /dev/zero\ DUMMY
 will achieve this ...)
 .TP
-.BI dd_rescue\ \-ATL\ MD5,lzo=compress:benchmark,MD5\ in\ out.lzo
+.BI dd_rescue\ \-ATL\ hash=md5:output,lzo=compress:bench,MD5:output\ in\ out.lzo
 copies the file
 .IR in
 to
 .IR out.lzo
-with using lzo (lzo1x_1) compression and calculating an MD5 hash
-(checksum) on both files. Note that the compress parameter to
-lzo is not strictly required here; the plugin could have deduced
+with using lzo (lzo1x_1) compression and calculating an md5 hash
+(checksum) on both files. The md5 hashes for both are also written 
+to stdout in the md5sum output format.
+Note that the compress parameter to lzo is not strictly required 
+here; the plugin could have deduced
 it from the filenames. This example shows that you can specify multiple
 plugins with multiple parameters; the plugins are forming a filter
 chain. You can specify the same plugin multiple times.
 .PP
-See also README.dd_rescue to learn about the possibilities.
+See also README.dd_rescue and ddr_lzo(1) to learn about the possibilities.
 .
-
 .SH BUGS/LIMITATIONS
 The source code does use the 64bit functions provided by glibc for file
 positioning. However, your kernel might not support it, so you might be
 unable to copy partitions larger then 2GB into a file.
 .br
 This program has been written using Linux and only tested on a couple of
-Linux systems. It should be possible to port it easily to other Un*x
-platforms, and I occasionally get hints from users of other *nix like
-systems that I take into account. Still, my own testing is limited to Linux.
+Linux systems. People have reported to have successfully used it on
+other Un*xish systems (such as xBSD or M*cOS), but these systems get little
+regular test coverage; so please be advised to test properly (possibly
+using the make check testsuite included with the source distribution) 
+before relying on dd_rescue on non Linux based systems.
 .br
 Currently, the escape sequence for moving the cursor up is hard coded in the
 sources. It's fine for most terminal emulations (including vt100 and linux),
@@ -652,12 +664,14 @@ by automatically keeping a list of copied sectors and approaching bad spots
 from both sides. There is a helper script dd_rhelp from LAB Valentin that
 does this. Integration of such a mode into 
 .B dd_rescue
-itself is non-trivial and due to the complexity of the source code probably
-will never happen.
+itself is non-trivial and due to the complexity of the source code might
+not happen.
 .br
 There also is a tool, GNU ddrescue, that is a reimplementation of this
 tool and which contains the capabilities to automate recovery of bad
-files in the way dd_rhelp does.
+files in the way dd_rhelp does. It does not have the feature richness
+of dd_rescue, but is reported to be easier to operate for error recovery
+than dd_rescue with dd_rhelp.
 .PP
 Please report bugs to me via email.
 .
@@ -667,7 +681,7 @@ delete sensitive data on purpose only implement a limited number of
 overwrites. While Peter Gutmann's classic analysis concludes that the
 then current harddisk technology requires more overwrites to be really
 secure, the author believes that modern hard disk technology does not
-allow data restoration in sectors that have been overwritten with the
+allow data restoration of sectors that have been overwritten with the
 --shred4 mode. This is in compliance with the recommendations from
 BSI GSDS M7.15.
 .br
@@ -675,8 +689,8 @@ Overwriting whole partitions or disks with random numbers is a fairly safe
 way to destroy data, unless the underlying storage device does too much
 magic. SSDs are doing fancy stuff in their Flash Translation Layer (FTL),
 so this tool might be insufficient to get rid of data. Use 
-SECURITY_ERASE (use hdparm) there (or if available encrypt data with 
-AES256 and safely destroy the key). 
+SECURITY_ERASE (use hdparm) there or -- if available -- encrypt data with 
+AES256 and safely destroy the key.
 Normal harddisks have a small risk of leaking a few sectors
 due to reallocation of flaky sectors.
 .br
@@ -742,9 +756,10 @@ Removing and (fs)trimming the output file's filesystem
 exists since 1.41. Support for compilation with bionic
 (Android's C library) with most features enabled also 
 came with 1.41.
-.br 
+.br
 Plugins exist since 1.42, the MD5 plugin came with 1.42, the
-lzo plugin with 1.43.
+lzo plugin with 1.43. 1.44 renamed the MD5 plugin to hash and
+added support for the SHA-2 family of hashes.
 .PP
 Some additional information can be found on
 .br
