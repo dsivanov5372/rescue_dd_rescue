@@ -87,7 +87,7 @@ uint64_t k[] ={ 0x428a2f98d728ae22ULL, 0x7137449123ef65cdULL, 0xb5c0fbcfec4d3b2f
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 static inline uint64_t htonll(const uint64_t x)
 {
-#if 1
+#ifdef HAVE_HTOBE64
 	return htobe64(x);
 #else
 	const uint32_t hi = x>>32;
