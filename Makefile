@@ -249,6 +249,7 @@ install: $(TARGETS)
 	#$(INSTALL) $(INSTASROOT) -g root -m 644 README.dd_rescue $(DOCDIR)/dd_rescue/
 	mkdir -p $(INSTALLLIBDIR)
 	$(INSTALL) $(INSTALLFLAGS) $(INSTASROOT) -m 755 $(LIBTARGETS) $(INSTALLLIBDIR)
+	ln -sf libddr_hash.so $(INSTALLLIBDIR)/libddr_MD5.so
 	mkdir -p $(MANDIR)/man1
 	$(INSTALL) $(INSTASROOT) -m 644 dd_rescue.1 ddr_lzo.1 $(MANDIR)/man1/
 	gzip -9f $(MANDIR)/man1/dd_rescue.1 $(MANDIR)/man1/ddr_lzo.1
