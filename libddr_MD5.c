@@ -70,13 +70,21 @@ const char *hash_help = "The HASH plugin for dd_rescue calculates a cryptographi
 		" Use algorithm=help to get a list of supported hash algorithms\n";
 
 
-hashalg_t *get_hashalg(const char* nm)
+hashalg_t *get_hashalg(hash_state *state, const char* nm)
 {
-	// TODO: Handle alg=help
 	int i;
-	for (i = 0; i < sizeof(hashes)/sizeof(hashalg_t); ++i)
-		if (!strcasecmp(nm, hashes[i].name))
+	const char help = !strcmp(nm, "help");
+	if (help)
+		FPLOG(INFO, "Supported algorithms:");
+	// TODO: Handle alg=help
+	for (i = 0; i < sizeof(hashes)/sizeof(hashalg_t); ++i) {
+		if (help)
+			fprintf(stderr, " %s", hashes[i].name);
+		else if (!strcasecmp(nm, hashes[i].name))
 			return hashes+i;
+	}
+	if (help)
+		fprintf(stderr, "\n");
 	return NULL;
 }
 
@@ -90,7 +98,7 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	memset(state, 0, sizeof(hash_state));
 	state->seq = seq;
 	state->opts = opt;
-	state->alg = get_hashalg(ddr_plug.name);
+	state->alg = get_hashalg(state, ddr_plug.name);
 	while (param) {
 		char* next = strchr(param, ':');
 		if (next)
@@ -104,17 +112,22 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		else if (!memcmp(param, "outfd=", 6))
 			state->outfd = atoi(param+6);
 		else if (!memcmp(param, "algo=", 5))
-			state->alg = get_hashalg(param+5);
+			state->alg = get_hashalg(state, param+5);
 		else if (!memcmp(param, "alg=", 4))
-			state->alg = get_hashalg(param+4);
+			state->alg = get_hashalg(state, param+4);
 		else if (!memcmp(param, "algorithm=", 10))
-			state->alg = get_hashalg(param+10);
-		/* Hmmm, should we try to support algname without alg= ? */
+			state->alg = get_hashalg(state, param+10);
 		/* elif .... */
+		/* Hmmm, ok, let's support algname without alg= */
 		else {
-			FPLOG(FATAL, "plugin doesn't understand param %s\n",
-				param);
-			++err;
+			hashalg_t *hash = get_hashalg(state, param);
+			if (hash)
+				state->alg = hash;
+			else {
+				FPLOG(FATAL, "plugin doesn't understand param %s\n",
+					param);
+				++err;
+			}
 		}
 		param = next;
 	}
