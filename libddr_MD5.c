@@ -19,6 +19,9 @@
 #include <unistd.h>
 #include <string.h>
 #include <assert.h>
+#ifdef HAVE_ATTR_XATTR_H
+# include <attr/xattr.h>
+#endif
 
 // TODO: pass at runtime rather than compile time
 #define HASH_DEBUG(x) if (state->debug) x
@@ -332,11 +335,30 @@ unsigned char* hash_blk_cb(fstate_t *fst, unsigned char* bf,
 int check_xattr(hash_state* state, char* res)
 {
 	// TODO: Read xattrs from fname, get attribute xattr_name, and compare first strlen(res) bytes
+	char chksum[129];
+	ssize_t itln = getxattr(state->fname, state->xattr_name, chksum, 129);
+	if (itln < strlen(res) || memcmp(res, chksum, strlen(res))) {
+		if (!itln)
+			FPLOG(WARN, "Hash could not be read from xattr of %s\n", state->fname);
+		else
+			FPLOG(WARN, "Hash from xattr of %s does not match\n", state->fname);
+		return EBADF;
+	}
+	if (state->opts->verbose || state->debug)
+		FPLOG(INFO, "Successfully validated hash from xattr of %s\n", state->fname);
 	return 0;
 }
+
 int write_xattr(hash_state* state, char* res)
 {
 	// TODO: Write xattr with xattr_name and contents res
+	if (setxattr(state->fname, state->xattr_name, res, strlen(res), 0)) {
+		FPLOG(WARN, "Failed writing hash to xattr of %s\n", state->fname);
+		return errno;
+	}
+	if (state->debug)
+		FPLOG(DEBUG, "Set xattr %s in %s to %s\n", state->xattr_name,
+				state->fname, res);
 	return 0;
 }
 #endif
