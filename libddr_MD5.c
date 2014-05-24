@@ -64,12 +64,15 @@ typedef struct _hash_state {
 	unsigned char buflen;
 	unsigned char ilnchg, olnchg, debug;
 	const opt_t *opts;
+	char chk_xattr, set_xattr;
+	char* xattr_name;
 } hash_state;
 
 
 const char *hash_help = "The HASH plugin for dd_rescue calculates a cryptographic checksum on the fly.\n"
-		" It supports unaligned blocks (arbitrary offsets) and sparse writing.\n"
-		" Parameters: output:outfd=FNO:debug:alg[o[rithm]=ALG:append=STR\n"
+		" It supports unaligned blocks (arbitrary offsets) and holes(sparse writing).\n"
+		" Parameters: output:outfd=FNO:debug:alg[o[rithm]=ALG:append=STR:\n"
+		"\tchk_xattr[=xattr_name]:set_xattr[=xattr_name]\n"
 		" Use algorithm=help to get a list of supported hash algorithms\n";
 
 
@@ -79,7 +82,6 @@ hashalg_t *get_hashalg(hash_state *state, const char* nm)
 	const char help = !strcmp(nm, "help");
 	if (help)
 		FPLOG(INFO, "Supported algorithms:");
-	// TODO: Handle alg=help
 	for (i = 0; i < sizeof(hashes)/sizeof(hashalg_t); ++i) {
 		if (help)
 			fprintf(stderr, " %s", hashes[i].name);
@@ -116,6 +118,14 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			state->outfd = atoi(param+6);
 		else if (!memcmp(param, "append=", 7))
 			state->append = param+7;
+		else if (!memcmp(param, "chk_xattr=", 10)) {
+			state->chk_xattr = 1; state->xattr_name = param+10; }
+		else if (!strcmp(param, "chk_xattr"))
+			state->chk_xattr = 1;
+		else if (!memcmp(param, "set_xattr=", 10)) {
+			state->set_xattr = 1; state->xattr_name = param+10; }
+		else if (!strcmp(param, "set_xattr")) 
+			state->set_xattr = 1;
 		else if (!memcmp(param, "algo=", 5))
 			state->alg = get_hashalg(state, param+5);
 		else if (!memcmp(param, "alg=", 4))
@@ -139,6 +149,11 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	if (!state->alg) {
 		FPLOG(FATAL, "No hash algorithm specified\n");
 		++err;
+	}
+	if ((state->chk_xattr || state->set_xattr) && !state->xattr_name) {
+		// FIXME: This one will leak ...
+		state->xattr_name = (char*)malloc(24);
+		snprintf(state->xattr_name, 24, "user.checksum.%s", state->alg->name);
 	}
 	if (state->debug)
 		FPLOG(DEBUG, "Initialized plugin %s\n", ddr_plug.name);
