@@ -565,6 +565,14 @@ file descriptor specified by the integer number INT. Note that ddr_hash
 always processes data in binary mode and correctly indicates this with
 a star (*) in the output generated with output/outfd=.
 .br
+ddr_hash also supports the parameter
+.B append=STRING
+which appends the given STRING to the output before computing the cryptographic
+hash. Treating the STRING as a shared secret, this can actually be used to protect
+against someone altering the contents (and recomputing the hash). It's thus a cheap
+way of a cryptographic signature (but with preshared secrets as opposed to public
+key cryptography).
+.br
 For backwards compatibility, the hash plugin can also be referred to with the
 old MD5 name; it then defaults to the md5 algorithm.
 .br

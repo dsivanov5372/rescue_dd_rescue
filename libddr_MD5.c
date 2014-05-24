@@ -56,6 +56,7 @@ typedef struct _hash_state {
 	hash_t hash;
 	loff_t hash_pos;
 	const char* fname;
+	const char* append;
 	hashalg_t *alg;
 	uint8_t buf[128];
 	int seq;
@@ -68,7 +69,7 @@ typedef struct _hash_state {
 
 const char *hash_help = "The HASH plugin for dd_rescue calculates a cryptographic checksum on the fly.\n"
 		" It supports unaligned blocks (arbitrary offsets) and sparse writing.\n"
-		" Parameters: output:outfd=FNO:debug:alg[o[rithm]=ALG\n"
+		" Parameters: output:outfd=FNO:debug:alg[o[rithm]=ALG:append=STR\n"
 		" Use algorithm=help to get a list of supported hash algorithms\n";
 
 
@@ -113,6 +114,8 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			state->outfd = 1;
 		else if (!memcmp(param, "outfd=", 6))
 			state->outfd = atoi(param+6);
+		else if (!memcmp(param, "append=", 7))
+			state->append = param+7;
 		else if (!memcmp(param, "algo=", 5))
 			state->alg = get_hashalg(state, param+5);
 		else if (!memcmp(param, "alg=", 4))
@@ -159,6 +162,7 @@ int hash_open(const opt_t *opt, int ilnchg, int olnchg,
 		strcpy(nnm, opt->iname);
 		strcat(nnm, "->");
 		strcat(nnm, opt->oname);
+		state->fname = nnm;
 	}
 	memset(state->buf, 0, 128);
 	state->buflen = 0;
@@ -189,6 +193,11 @@ void hash_last(hash_state *state, loff_t pos)
 		state->fname, len, state->hash_pos);
 	 */
 	HASH_DEBUG(FPLOG(DEBUG, "Last block with %i bytes\n", state->buflen));
+	if (state->append) {
+		memcpy(state->buf+state->buflen, state->append, strlen(state->append));
+		state->buflen += strlen(state->append);
+		HASH_DEBUG(FPLOG(DEBUG, "Append string with %i bytes for hash\n", strlen(state->append)));
+	}
 	state->alg->hash_calc(state->buf, state->buflen, state->hash_pos+state->buflen, &state->hash);
 	state->hash_pos += state->buflen;
 }
@@ -313,7 +322,7 @@ int hash_close(loff_t ooff, void **stat)
 			FPLOG(WARN, "Could not write HASH result to fd %i\n", state->outfd);
 	}
 	if (strcmp(state->fname, state->opts->iname) && strcmp(state->fname, state->opts->oname))
-		free(state->fname);
+		free((void*)state->fname);
 	free(*stat);
 	return 0;
 }
@@ -322,7 +331,7 @@ int hash_close(loff_t ooff, void **stat)
 ddr_plugin_t ddr_plug = {
 	//.name = "MD5",
 	.slack_pre = 128,	// not yet used
-	.slack_post = 128,	// not yet used
+	.slack_post = 256,	// not yet used
 	.needs_align = 0,
 	.handles_sparse = 1,
 	.init_callback  = hash_plug_init,
