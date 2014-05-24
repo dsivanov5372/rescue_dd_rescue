@@ -64,15 +64,19 @@ typedef struct _hash_state {
 	unsigned char buflen;
 	unsigned char ilnchg, olnchg, debug;
 	const opt_t *opts;
+#ifdef HAVE_ATTR_XATTR_H
 	char chk_xattr, set_xattr;
 	char* xattr_name;
+#endif
 } hash_state;
 
 
 const char *hash_help = "The HASH plugin for dd_rescue calculates a cryptographic checksum on the fly.\n"
 		" It supports unaligned blocks (arbitrary offsets) and holes(sparse writing).\n"
 		" Parameters: output:outfd=FNO:debug:alg[o[rithm]=ALG:append=STR:\n"
+#ifdef HAVE_ATTR_XATTR_H
 		"\tchk_xattr[=xattr_name]:set_xattr[=xattr_name]\n"
+#endif
 		" Use algorithm=help to get a list of supported hash algorithms\n";
 
 
@@ -118,6 +122,7 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			state->outfd = atoi(param+6);
 		else if (!memcmp(param, "append=", 7))
 			state->append = param+7;
+#ifdef HAVE_ATTR_XATTR_H
 		else if (!memcmp(param, "chk_xattr=", 10)) {
 			state->chk_xattr = 1; state->xattr_name = param+10; }
 		else if (!strcmp(param, "chk_xattr"))
@@ -126,6 +131,7 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			state->set_xattr = 1; state->xattr_name = param+10; }
 		else if (!strcmp(param, "set_xattr")) 
 			state->set_xattr = 1;
+#endif
 		else if (!memcmp(param, "algo=", 5))
 			state->alg = get_hashalg(state, param+5);
 		else if (!memcmp(param, "alg=", 4))
@@ -150,11 +156,13 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		FPLOG(FATAL, "No hash algorithm specified\n");
 		++err;
 	}
+#ifdef HAVE_ATTR_XATTR_H
 	if ((state->chk_xattr || state->set_xattr) && !state->xattr_name) {
 		// FIXME: This one will leak ...
 		state->xattr_name = (char*)malloc(24);
 		snprintf(state->xattr_name, 24, "user.checksum.%s", state->alg->name);
 	}
+#endif
 	if (state->debug)
 		FPLOG(DEBUG, "Initialized plugin %s\n", ddr_plug.name);
 	return err;
@@ -320,10 +328,22 @@ unsigned char* hash_blk_cb(fstate_t *fst, unsigned char* bf,
 	return bf;
 }
 
-
+#ifdef HAVE_ATTR_XATTR_H
+int check_xattr(hash_state* state, char* res)
+{
+	// TODO: Read xattrs from fname, get attribute xattr_name, and compare first strlen(res) bytes
+	return 0;
+}
+int write_xattr(hash_state* state, char* res)
+{
+	// TODO: Write xattr with xattr_name and contents res
+	return 0;
+}
+#endif
 
 int hash_close(loff_t ooff, void **stat)
 {
+	int err = 0;
 	hash_state *state = (hash_state*)*stat;
 	char res[129];
 	loff_t firstpos = (state->seq == 0? state->opts->init_ipos: state->opts->init_opos);
@@ -332,14 +352,20 @@ int hash_close(loff_t ooff, void **stat)
 		state->alg->hash_out(res, &state->hash));
 	if (state->outfd) {
 		char outbuf[512];
-		snprintf(outbuf, 511, "%s *%s\n", state->alg->hash_out(res, &state->hash), state->fname);
+		snprintf(outbuf, 511, "%s *%s\n", res, state->fname);
 		if (write(state->outfd, outbuf, strlen(outbuf)) <= 0)
 			FPLOG(WARN, "Could not write HASH result to fd %i\n", state->outfd);
 	}
+#ifdef HAVE_ATTR_XATTR_H
+	if (state->chk_xattr)
+		err += check_xattr(state, res);
+	if (state->set_xattr)
+		err += write_xattr(state, res);
+#endif
 	if (strcmp(state->fname, state->opts->iname) && strcmp(state->fname, state->opts->oname))
 		free((void*)state->fname);
 	free(*stat);
-	return 0;
+	return err;
 }
 
 
