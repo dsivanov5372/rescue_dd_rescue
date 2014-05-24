@@ -150,7 +150,16 @@ int hash_open(const opt_t *opt, int ilnchg, int olnchg,
 	state->opts = opt;
 	state->alg->hash_init(&state->hash);
 	state->hash_pos = 0;
-	state->fname = (state->seq == 0? opt->iname: opt->oname);
+	if (!olnchg && state->seq != 0)
+		state->fname = opt->oname;
+	else if (!ilnchg)
+		state->fname = opt->iname;
+	else {
+		char* nnm = (char*)malloc(strlen(opt->iname)+strlen(opt->oname)+3);
+		strcpy(nnm, opt->iname);
+		strcat(nnm, "->");
+		strcat(nnm, opt->oname);
+	}
 	memset(state->buf, 0, 128);
 	state->buflen = 0;
 	state->ilnchg = ilnchg;
@@ -303,6 +312,8 @@ int hash_close(loff_t ooff, void **stat)
 		if (write(state->outfd, outbuf, strlen(outbuf)) <= 0)
 			FPLOG(WARN, "Could not write HASH result to fd %i\n", state->outfd);
 	}
+	if (strcmp(state->fname, state->opts->iname) && strcmp(state->fname, state->opts->oname))
+		free(state->fname);
 	free(*stat);
 	return 0;
 }
