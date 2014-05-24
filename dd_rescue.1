@@ -549,11 +549,14 @@ where ALG is one of md5, sha1, sha256, sha224, sha512, sha384. (Specify
 alg=help to get a list.)
 To abbreviate the syntax, the alg= piece can be omitted.
 .br
+For backwards compatibility, the hash plugin can also be referred to with the
+old MD5 name; it then defaults to the md5 algorithm.
+.br
 The computed value should be identical to calling md5sum/sha256sum/... on 
 the target file (unless you only write part of the file),
 but saves time by not accessing the (possibly large) file a second time.
 The hash plugin handles sparse writes and arbitrary offsets fine.
-.br
+.PP
 ddr_hash accepts the parameter 
 .B output
 , which will cause ddr_hash to output
@@ -573,9 +576,24 @@ against someone altering the contents (and recomputing the hash). It's thus a ch
 way of a cryptographic signature (but with preshared secrets as opposed to public
 key cryptography).
 .br
-For backwards compatibility, the hash plugin can also be referred to with the
-old MD5 name; it then defaults to the md5 algorithm.
+You can store the cryptographic hash into the files by using the
+.B set_xattr
+option. The hash will be stored into the extended attribute user.checksum.ALG
+by default, but you can override the name of the attribute by specifying
+.B set_xattr=XATTR\.NAME
+instead.
 .br
+Likewise, using 
+.B chk_xattr
+will validate that the computed hash matches the one read from the extended
+attribute. The same default attribute name applies and you can likewise override
+it with
+.B chk_xattr=XATTR\.NAME .
+The check is only performed at the end of the copy, so copying will not
+be prevented by wrong hashes; however the exit code of dd_rescue will
+reflect a wrong hash. So copy to /dev/null and check the exit code if you
+want to prevent writing data where the hash sum is broken.
+.PP
 Please note that the md5 algorithm is NOT recommended any more for
 good protetction against malicious attempts to hide data modification;
 it's not considered strong enough any more to prevent hash collisions.
