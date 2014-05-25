@@ -214,7 +214,7 @@ nocolor: dd_rescue.c $(HEADERS) $(OBJECTS) $(OBJECTS2)
 static: dd_rescue.c $(HEADERS) $(OBJECTS)
 	$(CC) $(CFLAGS) -DNO_LIBDL -DNO_LIBFALLOCATE -static $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2)
 
-strip: $(TARGETS)
+strip: $(TARGETS) $(LIBTARGETS)
 	strip -S $^
 
 strip-all: $(OTHTARGETS)
