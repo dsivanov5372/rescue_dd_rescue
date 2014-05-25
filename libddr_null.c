@@ -23,8 +23,9 @@ typedef struct _null_state {
 	ddr_plug.fplog(stderr, lvl, "%s(%i): " fmt, ddr_plug.name, state->seq, ##args)
 
 const char* null_help = "The null plugin does nothing ...\n"
-			"Options: lnchange indicates that the length may be changed by null\n"
-			" (which is not true, but influences the behavior of the hash plugin\n";
+			"Options: debug:[no]lnchange. [no]lnchange indicates that the length may [not]\n"
+		        " be changed by ddr_null (which is not true, but influences the behavior of\n"
+			" the hash plugin)\n";
 
 int null_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 {
@@ -38,16 +39,16 @@ int null_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			*next++ = 0;
 		if (!strcmp(param, "help"))
 			FPLOG(INFO, "%s", null_help);
-		if (!strcmp(param, "lnchange"))
+		else if (!strcmp(param, "lnchange"))
 			ddr_plug.changes_output_len = 1;
-		if (!strcmp(param, "lenchange"))
+		else if (!strcmp(param, "lenchange"))
 			ddr_plug.changes_output_len = 1;
-		if (!strcmp(param, "lnchg"))
+		else if (!strcmp(param, "lnchg"))
 			ddr_plug.changes_output_len = 1;
 		/* Do we need this if loaded multiple times? */
-		if (!strcmp(param, "nolnchange"))
+		else if (!strcmp(param, "nolnchange"))
 			ddr_plug.changes_output_len = 0;
-		if (!strcmp(param, "debug"))
+		else if (!strcmp(param, "debug"))
 			state->debug = 1;
 		else {
 			FPLOG(FATAL, "plugin doesn't understand param %s\n",
@@ -55,7 +56,9 @@ int null_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			return 1;
 
 		}
+		param = next;
 	}
+	ddr_plug.changes_output = ddr_plug.changes_output_len;
 	return 0;
 }
 

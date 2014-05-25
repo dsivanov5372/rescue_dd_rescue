@@ -539,6 +539,18 @@ for an overview of available plugins.
 .
 
 .SH PLUGINS
+.SS null
+The null plugin (ddr_null) does nothing, except if you specify the
+.B lnchange
+option in which case the plugin indicates to others that it transforms the
+length of the output. This may be helpful for testing or to influence which
+file the hash plugin considers for reading/writing extended attributes from/to
+and for plugins to change their behavior with respect to hole detection.
+.br
+ddr_null_ddr also allows you to specify
+.B debug
+in which case it just reports the blocks that it passes on.
+.
 .SS hash
 When the hash plugin (subsequently referred to as ddr_hash) is loaded, it 
 will calculate a cryptographic hash over the 
@@ -575,7 +587,7 @@ hash. Treating the STRING as a shared secret, this can actually be used to prote
 against someone altering the contents (and recomputing the hash). It's thus a cheap
 way of a cryptographic signature (but with preshared secrets as opposed to public
 key cryptography).
-.br
+.PP
 You can store the cryptographic hash into the files by using the
 .B set_xattr
 option. The hash will be stored into the extended attribute user.checksum.ALG
@@ -583,7 +595,13 @@ by default, but you can override the name of the attribute by specifying
 .B set_xattr=XATTR\.NAME
 instead.
 .br
-Likewise, using 
+ddr_hash will use the output file to write the xattr to, unless a plugin 
+in the chain after ddr_hash indicates that it changes the file. (Currently,
+a length change indicator is used, though that will change some day.) 
+In that case, it will warn and use the input file, unless there's
+another plugin before ddr_hash in the chain which transforms the contents/length
+as well. In that case, there is no file that the checksum could be written
+to and ddr_hash will report an error.
 .B chk_xattr
 will validate that the computed hash matches the one read from the extended
 attribute. The same default attribute name applies and you can likewise override
@@ -592,7 +610,18 @@ it with
 The check is only performed at the end of the copy, so copying will not
 be prevented by wrong hashes; however the exit code of dd_rescue will
 reflect a wrong hash. So copy to /dev/null and check the exit code if you
-want to prevent writing data where the hash sum is broken.
+want to prevent writing data where the hash sum is broken. (If you want to
+avoid running dd_rescue twice, you can copy to a temporary file, check
+the exit value and then only move to the final name if checksums are
+intact and otherwise discard.)
+.br
+ddr_hash will use the input file to read the xattr from, unless a plugin 
+in the chain before ddr_hash indicates that it changes the file. (Currently,
+a length change indicator is used, though that will change some day.) 
+In that case, it will warn and use the output file, unless there's
+another plugin after ddr_hash in the chain which transforms the contents/length
+as well. In that case, there is no file that could hold a valid checksum
+and ddr_hash will report an error.
 .PP
 Please note that the md5 algorithm is NOT recommended any more for
 good protetction against malicious attempts to hide data modification;
@@ -664,6 +693,16 @@ here; the plugin could have deduced
 it from the filenames. This example shows that you can specify multiple
 plugins with multiple parameters; the plugins are forming a filter
 chain. You can specify the same plugin multiple times.
+.TP
+.BI dd_rescue\ \-L\ hash=sha512:set_xattr,null=lnchange\ infile\ /dev/null
+reads the file 
+.IR infile
+and computes its MD5 hash. It stores it in the input file's user.checksum.sha512
+attribute. Note the use of the null plugin with faking a transformation due
+to the lnchange parameter; this causes the hash plugin to write to the input
+file which it would not normally have done. Of course this
+will fail if you don't have the appropriate privileges to write xattrs to
+infile.
 .PP
 See also README.dd_rescue and ddr_lzo(1) to learn about the possibilities.
 .
