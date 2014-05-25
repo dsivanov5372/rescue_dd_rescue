@@ -650,10 +650,12 @@ unsigned char* lzo_compress(fstate_t *fst, unsigned char *bf,
 			hlen = sizeof(blockhdr_t)-4+((state->flags&(F_ADLER32_C|F_CRC32_C))? 4: 0);
 			/* Overwrite EOF */
 			if (state->flags & F_MULTIPART) {
-				FPLOG(INFO, "extending by writing next part (MULTIPART)\n");
+				if (!state->opts->quiet)
+					FPLOG(INFO, "extending by writing next part (MULTIPART)\n");
 				state->hdr_seen = 0;
 			} else {
-				FPLOG(INFO, "extending by overwriting EOF\n");
+				if (!state->opts->quiet)
+					FPLOG(INFO, "extending by overwriting EOF\n");
 				fst->opos -= 4;
 			}
 		}
@@ -782,7 +784,8 @@ unsigned char* lzo_search_hdr(fstate_t *fst, unsigned char* bf, int *towr,
 				&& fst->buf[off+8] == lzop_hdr[8]) {
 			loff_t hole;
 			int hlen = lzo_parse_hdr(fst->buf+off+sizeof(lzop_hdr), &hole, state);
-			FPLOG(INFO, "lzop header at %i (sz %i/hole %li)\n", fst->ipos+off, 
+			if (!state->opts->quiet)
+				FPLOG(INFO, "lzop header at %i (sz %i/hole %li)\n", fst->ipos+off, 
 					hlen+sizeof(lzop_hdr), hole);
 			fst->opos += hole;
 			off += hlen+sizeof(lzop_hdr);
@@ -803,14 +806,14 @@ unsigned char* lzo_search_hdr(fstate_t *fst, unsigned char* bf, int *towr,
 		    !check_blklen_and_next(state, fst, *towr, off-state->hdroff,
 			    		   12, unc_len, cmp_len)) {
 			if (state->debug)
-				FPLOG(INFO, "Blk Cand @ %i failed chain tests ...\n",
+				FPLOG(DEBUG, "Blk Cand @ %i failed chain tests ...\n",
 						fst->ipos+off);
 			continue;
 		}
 		/* Candidate found but we can't decode it with our buffer sizes ... */
 		if (cmp_len > 2*state->opts->softbs) {
 			if (state->debug)
-				FPLOG(INFO, "Blk Cand @ %i with large size %i, increase softblocksize\n",
+				FPLOG(DEBUG, "Blk Cand @ %i with large size %i, increase softblocksize\n",
 					fst->ipos+off, cmp_len);
 			continue;
 		}
@@ -835,7 +838,7 @@ unsigned char* lzo_search_hdr(fstate_t *fst, unsigned char* bf, int *towr,
 					int err = state->algo->decompr(fst->buf+off+12, cmp_len, state->dbuf, &dst_len, NULL);
 					if (err != LZO_E_OK || dst_len != unc_len) {
 						if (state->debug)
-							FPLOG(INFO, "Blk Cand @ %i failed decompression\n",
+							FPLOG(DEBUG, "Blk Cand @ %i failed decompression\n",
 								fst->ipos + off);
 						continue;
 					}
@@ -849,15 +852,16 @@ unsigned char* lzo_search_hdr(fstate_t *fst, unsigned char* bf, int *towr,
 							state->flags = F_OS_UNIX | F_CRC32_D | F_MULTIPART;
 						else {
 							//if (state->debug)
-							FPLOG(INFO, "Blk Cand @ %i fails decomp chksum test\n",
+							FPLOG(DEBUG, "Blk Cand @ %i fails decomp chksum test\n",
 									fst->ipos+off);
 							continue;
 						}
 					}
 				}
 			}
-			FPLOG(INFO, "Found block @ %i (flags %08x)\n",
-				fst->ipos+off, state->flags);
+			if (!state->opts->quiet)
+				FPLOG(INFO, "Found block @ %i (flags %08x)\n",
+					fst->ipos+off, state->flags);
 			//*towr -= off;
 			state->hdroff = off;
 			state->do_search = 0;
@@ -868,7 +872,8 @@ unsigned char* lzo_search_hdr(fstate_t *fst, unsigned char* bf, int *towr,
 			const size_t totbufln = state->opts->softbs - ddr_plug.slack_post*((state->opts->softbs+15)/16);
 			const size_t left = totbufln - (*towr-off);
 			if (left < state->opts->softbs) {
-				FPLOG(INFO, "Buffer exhausted Blk Cand @ %i\n", fst->ipos+off);
+				if (!state->opts->quiet)
+					FPLOG(INFO, "Buffer exhausted Blk Cand @ %i\n", fst->ipos+off);
 				off += fst->buf-state->obuf;
 				fst->buf = state->obuf;
 				assert(off >= 0);
@@ -944,7 +949,7 @@ int recover_decompr_error(lzo_state *state, fstate_t *fst,
 #define QUIT { raise(SIGQUIT); ++do_break; break; }
 #define BREAK if (!state->nodiscard) ++do_break; break
 #define DRAIN(x) do { ++do_break; *recall=1; 		\
-		   LZO_DEBUG(FPLOG(INFO, "Drain %i bytes before %s error handling\n", d_off, x));	\
+		   LZO_DEBUG(FPLOG(DEBUG, "Drain %i bytes before %s error handling\n", d_off, x));	\
 		   eof = 0;				\
        		   break; } while(0); 			\
 		   if (do_break) break
@@ -1004,7 +1009,7 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 		char is_err = 0;
 		effbf = bf+c_off+state->hdroff;
 		lzo_uint dst_len;
-		LZO_DEBUG(FPLOG(INFO, "dec blk @ %p (offs %i, stoffs %i, bln %zi, tbw %i)\n",
+		LZO_DEBUG(FPLOG(DEBUG, "dec blk @ %p (offs %i, stoffs %i, bln %zi, tbw %i)\n",
 				effbf, effbf-state->obuf, state->hdroff, totbufln, inlen));
 		blockhdr_t *hdr = (blockhdr_t*)effbf;
 		have_len = inlen-state->hdroff-c_off;
@@ -1024,7 +1029,7 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 		}
 		if (!unc_len && state->flags & F_MULTIPART && have_len > 32) {
 			/* EOF with new LZOP sig */
-			LZO_DEBUG(FPLOG(INFO, "Next part ...\n"));
+			LZO_DEBUG(FPLOG(DEBUG, "Next part ...\n"));
 			if (memcmp(effbf+4, lzop_hdr, sizeof(lzop_hdr))) {
 				FPLOG(FATAL, "EOF with MULTIPART, but no new hdr\n");
 				raise(SIGQUIT);
@@ -1034,7 +1039,8 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 			int hln = lzo_parse_hdr(effbf+4+sizeof(lzop_hdr), &hsz, state);
 			bhsz = hln+sizeof(lzop_hdr)+4;
 			if (!hsz) {
-				FPLOG(INFO, "MULTIPART, just append ...\n");
+				if (!state->opts->quiet)
+					FPLOG(INFO, "MULTIPART, just append ...\n");
 				c_off += bhsz;
 				state->cmp_hdr += bhsz;
 				continue;
@@ -1063,7 +1069,7 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 		if (cmp_len == unc_len) 
 			cmp_cksum = unc_cksum;
 		
-		LZO_DEBUG(FPLOG(INFO, "dec blk @ %p (hdroff %i, cln %i, uln %i, have %i)\n",
+		LZO_DEBUG(FPLOG(DEBUG, "dec blk @ %p (hdroff %i, cln %i, uln %i, have %i)\n",
 				effbf, c_off+state->hdroff, unc_len, cmp_len, have_len));
 		/* Block incomplete? Then we're done for this round ... */
 		if (have_len < bhsz+cmp_len)
@@ -1133,7 +1139,7 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 				FPLOG(WARN, "compressed %i > uncompressed %i breaks lzop\n",
 					cmp_len, unc_len);
 			err = state->algo->decompr(effbf+bhsz, cmp_len, (unsigned char*)state->dbuf+d_off, &dst_len, NULL);
-			LZO_DEBUG(FPLOG(INFO, "decompressed %i@%p -> %i\n",
+			LZO_DEBUG(FPLOG(DEBUG, "decompressed %i@%p -> %i\n",
 				cmp_len, effbf+bhsz, dst_len));
 			if (dst_len != unc_len) {
 				fst->nrerr++;
@@ -1271,7 +1277,7 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 		/* We have enough space to just append */
 		state->hdroff -= inlen-c_off;
 		fst->buf += inlen;
-		LZO_DEBUG(FPLOG(INFO, "append  @ %p\n", fst->buf));
+		LZO_DEBUG(FPLOG(DEBUG, "append  @ %p\n", fst->buf));
 
 	/* OK, now for the bad cases:
 	 * (a) We can't append, but everything fits if we memmove to start
@@ -1281,7 +1287,7 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 	} else if (bhsz+cmp_len < totbufln &&
 		   have_len+nextrd < totbufln) {
 		/* We need to move block to beg of buffer */
-		LZO_DEBUG(FPLOG(INFO, "move %i bytes to buffer head\n", have_len));
+		LZO_DEBUG(FPLOG(DEBUG, "move %i bytes to buffer head\n", have_len));
 		if (effbf != state->obuf) {
 			memmove(state->obuf, effbf, have_len);
 			++state->nr_memmove;
@@ -1336,30 +1342,32 @@ int lzo_close(loff_t ooff, void **stat)
 		slackfree(state->dbuf, state);
 	if (state->workspace)
 		free(state->workspace);
-	if (state->mode == COMPRESS)
-		FPLOG(INFO, "%s_compress %.1fkiB (%1.f%%) + %i <- %.1fkiB\n",
-			state->algo->name,
-			state->cmp_ln/1024.0, 
-			100.0*((double)state->cmp_ln/state->unc_ln),
-			state->cmp_hdr,
-			state->unc_ln/1024.0);
-	else {
-		FPLOG(INFO, "%s_decompr %.1fkiB (%.1f%%) + %i -> %.1fkiB\n",
-			state->algo->name,
-			state->cmp_ln/1024.0, 
-			100.0*((double)state->cmp_ln/state->unc_ln),
-			state->cmp_hdr,
-			state->unc_ln/1024.0);
-		if (state->do_bench)
-			FPLOG(INFO, "%i reallocs (%ikiB), %i(+%i) moves\n",
-				state->nr_realloc, state->dbuflen/1024,
-				state->nr_memmove, state->nr_cheapmemmove);
-	}
-	/* Only output if it took us more than 0.05s, otherwise it's completely meaningless */
-	if (state->do_bench && state->cpu/(CLOCKS_PER_SEC/20) > 0)
-		FPLOG(INFO, "%.2fs CPU time, %.1fMiB/s\n",
+	if (state->do_bench || !state->opts->quiet) {
+		if (state->mode == COMPRESS)
+			FPLOG(INFO, "%s_compress %.1fkiB (%1.f%%) + %i <- %.1fkiB\n",
+				state->algo->name,
+				state->cmp_ln/1024.0, 
+				100.0*((double)state->cmp_ln/state->unc_ln),
+				state->cmp_hdr,
+				state->unc_ln/1024.0);
+		else {
+			FPLOG(INFO, "%s_decompr %.1fkiB (%.1f%%) + %i -> %.1fkiB\n",
+				state->algo->name,
+				state->cmp_ln/1024.0, 
+				100.0*((double)state->cmp_ln/state->unc_ln),
+				state->cmp_hdr,
+				state->unc_ln/1024.0);
+			if (state->do_bench)
+				FPLOG(INFO, "%i reallocs (%ikiB), %i(+%i) moves\n",
+					state->nr_realloc, state->dbuflen/1024,
+					state->nr_memmove, state->nr_cheapmemmove);
+		}
+		/* Only output if it took us more than 0.05s, otherwise it's completely meaningless */
+		if (state->do_bench && state->cpu/(CLOCKS_PER_SEC/20) > 0)
+			FPLOG(INFO, "%.2fs CPU time, %.1fMiB/s\n",
 				(double)state->cpu/CLOCKS_PER_SEC, 
 				state->unc_ln/1024 / (state->cpu/(CLOCKS_PER_SEC/1024.0)));
+	}
 	free(*stat);
 	return 0;
 }

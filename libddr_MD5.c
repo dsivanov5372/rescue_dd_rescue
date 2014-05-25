@@ -345,7 +345,8 @@ int check_xattr(hash_state* state, char* res)
 	const char* name = state->opts->iname;
 	if (state->ilnchg && !state->olnchg) {
 		name = state->opts->oname;
-		FPLOG(INFO, "Read xattr from output file %s\n", name);
+		if (!state->opts->quiet)
+			FPLOG(INFO, "Read xattr from output file %s\n", name);
 	} else if (state->ilnchg) {
 		FPLOG(WARN, "Can't read xattrs in the middle of plugin chain (%s)\n", state->fname);
 		return ENOENT;
@@ -361,7 +362,7 @@ int check_xattr(hash_state* state, char* res)
 		FPLOG(WARN, "Hash from xattr of %s does not match\n", name);
 		return EBADF;
 	}
-	if (state->opts->verbose || state->debug)
+	if (!state->opts->quiet || state->debug)
 		FPLOG(INFO, "Successfully validated hash from xattr of %s\n", name);
 	return 0;
 }
@@ -372,7 +373,8 @@ int write_xattr(hash_state* state, char* res)
 	const char* name = state->opts->oname;
 	if (state->olnchg && !state->ilnchg) {
 		name = state->opts->iname;
-		FPLOG(INFO, "Write xattr to input file %s\n", name);
+		if (!state->opts->quiet)
+			FPLOG(INFO, "Write xattr to input file %s\n", name);
 	} else if (state->olnchg) {
 		FPLOG(WARN, "Can't write xattr in the middle of plugin chain (%s)\n", state->fname);
 		return ENOENT;
@@ -394,9 +396,10 @@ int hash_close(loff_t ooff, void **stat)
 	hash_state *state = (hash_state*)*stat;
 	char res[129];
 	loff_t firstpos = (state->seq == 0? state->opts->init_ipos: state->opts->init_opos);
-	FPLOG(INFO, "%s %s (%" LL "i-%" LL "i): %s\n",
-		state->alg->name, state->fname, firstpos, firstpos+state->hash_pos, 
-		state->alg->hash_out(res, &state->hash));
+	state->alg->hash_out(res, &state->hash);
+	if (!state->opts->quiet) 
+		FPLOG(INFO, "%s %s (%" LL "i-%" LL "i): %s\n",
+			state->alg->name, state->fname, firstpos, firstpos+state->hash_pos, res);
 	if (state->outfd) {
 		char outbuf[512];
 		snprintf(outbuf, 511, "%s *%s\n", res, state->fname);
