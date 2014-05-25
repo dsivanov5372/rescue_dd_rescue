@@ -21,7 +21,7 @@ MANDIR = $(prefix)/share/man
 #MYDIR = dd_rescue-$(VERSION)
 MYDIR = dd_rescue
 BINTARGETS = dd_rescue 
-LIBTARGETS = libddr_hash.so libddr_MD5.so
+LIBTARGETS = libddr_hash.so libddr_MD5.so libddr_null.so
 #TARGETS = libfalloc-dl
 OTHTARGETS = find_nonzero fiemap file_zblock fmt_no md5 sha256 sha512 sha224 sha384 sha1
 OBJECTS = frandom.o fmt_no.o find_nonzero.o 
@@ -151,6 +151,9 @@ libddr_MD5.so: libddr_hash.so
 
 libddr_lzo.so: libddr_lzo.po
 	$(CC) -shared -o $@ $^ -llzo2
+
+libddr_null.so: libddr_null.po
+	$(CC) -shared -o $@ $^
 
 find_nonzero.o: find_nonzero.c $(FNZ_HEADERS) config.h
 	$(CC) $(CFLAGS_OPT) -c $< $(SSE)

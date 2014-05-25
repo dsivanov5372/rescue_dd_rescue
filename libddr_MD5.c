@@ -167,7 +167,7 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	}
 #endif
 	if (state->debug)
-		FPLOG(DEBUG, "Initialized plugin %s\n", ddr_plug.name);
+		FPLOG(DEBUG, "Initialized plugin %s (%s)\n", ddr_plug.name, state->alg->name);
 	return err;
 }
 
