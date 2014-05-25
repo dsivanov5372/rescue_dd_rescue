@@ -463,7 +463,19 @@ ddr_plugin_t* insert_plugin(void* hdl, const char* nm, char* param, opt_t *op)
 	if (!plug->name)
 		plug->name = nm;
 	plug->fplog = fplog;
-
+	/* Call init after dd_rescue-filled fields have been set; this allows the
+	 * init_callback to adjust fiels like slack, align_needs, output_chg
+	 * depending on parameters and options ... */
+	if (param && !plug->init_callback) {
+		fplog(stderr, FATAL, "Plugin %s has no init callback to consume passed param %s\n",
+			nm, param);
+		exit(13);
+	}
+	if (plug->init_callback) {
+		int ret = plug->init_callback(&plug->state, param, plugins_loaded, op);
+		if (ret)
+			exit(ret);
+	}
 	if (plug->slack_pre > 0)
 		plug_max_slack_pre += plug->slack_pre;
 	else if (plug->slack_pre < 0)
@@ -479,16 +491,6 @@ ddr_plugin_t* insert_plugin(void* hdl, const char* nm, char* param, opt_t *op)
 		plug_not_sparse = 1;
 	if (plug->changes_output)
 		plug_output_chg = 1;
-	if (param && !plug->init_callback) {
-		fplog(stderr, FATAL, "Plugin %s has no init callback to consume passed param %s\n",
-			nm, param);
-		exit(13);
-	}
-	if (plug->init_callback) {
-		int ret = plug->init_callback(&plug->state, param, plugins_loaded, op);
-		if (ret)
-			exit(ret);
-	}
 	plugins_loaded++;
 	LISTAPPEND(ddr_plugins, *plug, ddr_plugin_t);
 	if (param && !memcmp(param, "help", 4))
