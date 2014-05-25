@@ -61,14 +61,14 @@ typedef struct _hash_state {
 	const char* fname;
 	const char* append;
 	hashalg_t *alg;
-	uint8_t buf[128];
+	uint8_t buf[256];
 	int seq;
 	int outfd;
 	unsigned char buflen;
 	unsigned char ilnchg, olnchg, debug;
 	const opt_t *opts;
 #ifdef HAVE_ATTR_XATTR_H
-	char chk_xattr, set_xattr;
+	char chk_xattr, set_xattr, nmalloc;
 	char* xattr_name;
 #endif
 } hash_state;
@@ -161,8 +161,8 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	}
 #ifdef HAVE_ATTR_XATTR_H
 	if ((state->chk_xattr || state->set_xattr) && !state->xattr_name) {
-		// FIXME: This one will leak ...
 		state->xattr_name = (char*)malloc(24);
+		state->nmalloc = 1;
 		snprintf(state->xattr_name, 24, "user.checksum.%s", state->alg->name);
 	}
 #endif
@@ -411,6 +411,8 @@ int hash_close(loff_t ooff, void **stat)
 		err += check_xattr(state, res);
 	if (state->set_xattr)
 		err += write_xattr(state, res);
+	if (state->nmalloc)
+		free((void*)state->xattr_name);
 #endif
 	if (strcmp(state->fname, state->opts->iname) && strcmp(state->fname, state->opts->oname))
 		free((void*)state->fname);
