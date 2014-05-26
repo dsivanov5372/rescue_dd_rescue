@@ -65,10 +65,11 @@ typedef struct _hash_state {
 	int seq;
 	int outfd;
 	unsigned char buflen;
-	unsigned char ilnchg, olnchg, ichg, ochg, debug;
+	unsigned char ilnchg, olnchg, ichg, ochg, debug, outf, chkf;
+	char* chkfnm;
 	const opt_t *opts;
 #ifdef HAVE_ATTR_XATTR_H
-	char chk_xattr, set_xattr, xnmalloc;
+	char chk_xattr, set_xattr, xnmalloc, xfallback;
 	char* xattr_name;
 #endif
 } hash_state;
@@ -79,9 +80,9 @@ typedef struct _hash_state {
 
 const char *hash_help = "The HASH plugin for dd_rescue calculates a cryptographic checksum on the fly.\n"
 		" It supports unaligned blocks (arbitrary offsets) and holes(sparse writing).\n"
-		" Parameters: output:outfd=FNO:debug:alg[o[rithm]=ALG:append=STR:\n"
+		" Parameters: output:outfd=FNO:outnm=FILE:check:chknm=FILE:debug:alg[o[rithm]=ALG:append=STR:\n"
 #ifdef HAVE_ATTR_XATTR_H
-		"\tchk_xattr[=xattr_name]:set_xattr[=xattr_name]\n"
+		"\tchk_xattr[=xattr_name]:set_xattr[=xattr_name]:fallback[=FILE]\n"
 #endif
 		" Use algorithm=help to get a list of supported hash algorithms\n";
 
@@ -137,7 +138,17 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			state->set_xattr = 1; state->xattr_name = param+10; }
 		else if (!strcmp(param, "set_xattr")) 
 			state->set_xattr = 1;
+		else if (!strcmp(param, "fallback")) 
+			state->xfallback = 1;
+		else if (!memcmp(param, "fallback=", 9)) {
+			state->xfallback = 1; state->chkfnm = param+9; }
 #endif
+		else if (!memcmp(param, "outnm=", 6)) {
+			state->outf = 1; state->chkfnm=param+6; }
+		else if (!memcmp(param, "chknm=", 6)) {
+			state->chkf = 1; state->chkfnm=param+6; }
+		else if (!strcmp(param, "check")) {
+			state->chkf = 1; state->chkfnm=NULL; }
 		else if (!memcmp(param, "algo=", 5))
 			state->alg = get_hashalg(state, param+5);
 		else if (!memcmp(param, "alg=", 4))
@@ -395,6 +406,32 @@ int write_xattr(hash_state* state, char* res)
 	return 0;
 }
 #endif
+
+
+/* 
+ * XXXSUM file parsing and updating routines
+ */
+
+/* file offset in the chksum file which has the chksum for nm, -1 = not found */
+loff_t find_chks(hash_state* st, FILE* f, const char* nm)
+{
+	return -1;
+}
+
+/* get chksum */
+char* get_chks(hash_state* st, const char* nm)
+{
+	return NULL;
+}
+
+/* update chksum */
+int upd_chks(hash_state* st, const char *nm)
+{
+	return -ENOENT;
+}
+
+
+
 
 int hash_close(loff_t ooff, void **stat)
 {
