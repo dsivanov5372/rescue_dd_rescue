@@ -18,6 +18,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <libgen.h>
+#include <ctype.h>
 #include <assert.h>
 #ifdef HAVE_ATTR_XATTR_H
 # include <attr/xattr.h>
@@ -148,7 +150,7 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		else if (!memcmp(param, "chknm=", 6)) {
 			state->chkf = 1; state->chkfnm=param+6; }
 		else if (!strcmp(param, "check")) {
-			state->chkf = 1; state->chkfnm=NULL; }
+			state->chkf = 1; state->chkfnm="-"; }
 		else if (!memcmp(param, "algo=", 5))
 			state->alg = get_hashalg(state, param+5);
 		else if (!memcmp(param, "alg=", 4))
@@ -413,23 +415,98 @@ int write_xattr(hash_state* state, char* res)
  */
 
 /* file offset in the chksum file which has the chksum for nm, -1 = not found */
-loff_t find_chks(hash_state* st, FILE* f, const char* nm)
+off_t find_chks(hash_state* st, FILE* f, const char* nm, char* res)
 {
+	char *lnbf = NULL;
+	size_t lln = 0;
+	char* bnm = basename((char*)nm);
+	while (!feof_unlocked(f)) {
+		char *fnm, *fwh;
+		off_t pos = ftello(f);
+		ssize_t n = getline(&lnbf, &lln, f);
+		if (n <= 0)
+			break;
+		fwh = strchr(lnbf, ' ');
+		if (!fwh)
+			continue;
+		fnm = fwh;
+		++fnm;
+		if (*fnm == '*' || *fnm == ' ')
+			fnm++;
+		if (!strcmp(fnm, nm) || !strcmp(fnm, bnm)) {
+			if (res && fwh-lnbf <= 2*sizeof(hash_t)) {
+				memcpy(res, lnbf, fwh-lnbf);
+				res[fwh-lnbf] = 0;
+			}
+			free(lnbf);
+			return pos;
+		}
+	}
+	if (lnbf)
+		free(lnbf);
 	return -1;
 }
 
-/* get chksum */
-char* get_chks(hash_state* st, const char* nm)
+FILE* fopen_chks(hash_state *state, const char* mode)
 {
-	return NULL;
+	char* fnm = state->chkfnm;
+	if (!strcmp("-", fnm))
+		return stdin;
+	if (!fnm) {
+		char cfnm[16];
+		sprintf(cfnm, "%ssums", state->alg->name);
+		fnm = cfnm;
+		while (*fnm) {
+			*fnm = toupper(*fnm);
+			fnm++;
+		}
+		fnm = cfnm;
+	}
+	return fopen(fnm, mode);
+}
+
+static char _chks[129];
+/* get chksum */
+char* get_chks(hash_state* state, const char* nm)
+{
+	FILE *f = fopen_chks(state, "r");
+	if (!f)
+		return NULL;
+	*_chks = 0;
+	find_chks(state, f, nm, _chks);
+	if (f != stdin)
+		fclose(f);
+	return *_chks? _chks: NULL;
 }
 
 /* update chksum */
-int upd_chks(hash_state* st, const char *nm)
+int upd_chks(hash_state* state, const char *nm, const char *chks)
 {
-	return -ENOENT;
+	FILE *f = fopen(chks, "r");
+	int err = 0;
+	if (!f) {
+		f = fopen(chks, "w");
+		if (!f)
+			return -errno;
+		fprintf(f, "%s *%s\n", chks, nm);
+		err = -errno;
+	} else {
+		off_t pos = find_chks(state, f, nm, _chks);
+		if (pos == -1 || strlen(chks) != strlen(_chks)) {
+			fclose(f);
+			f = fopen_chks(state, "a");
+			fprintf(f, "%s *%s\n", chks, nm);
+			err = -errno;
+		} else {
+			if (strcmp(chks, _chks)) {
+				if (pwrite(fileno(f), chks, strlen(chks), pos) <= 0)
+					err = -errno;
+			}
+		}
+	}
+	fclose(f);
+	return err;
 }
-
 
 
 
