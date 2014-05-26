@@ -356,60 +356,6 @@ unsigned char* hash_blk_cb(fstate_t *fst, unsigned char* bf,
 	return bf;
 }
 
-#ifdef HAVE_ATTR_XATTR_H
-int check_xattr(hash_state* state, char* res)
-{
-	// TODO: Read xattrs from fname, get attribute xattr_name, and compare first strlen(res) bytes
-	const char* name = state->opts->iname;
-	if (state->ichg && !state->ochg) {
-		name = state->opts->oname;
-		if (!state->opts->quiet)
-			FPLOG(INFO, "Read xattr from output file %s\n", name);
-	} else if (state->ichg) {
-		FPLOG(WARN, "Can't read xattrs in the middle of plugin chain (%s)\n", state->fname);
-		return -ENOENT;
-	}
-	/* Longest is 128byte hex for SHA512 (8x64byte numbers -> 8x16 digits) */
-	char chksum[129];
-	ssize_t itln = getxattr(name, state->xattr_name, chksum, 129);
-	const int rln = strlen(res);
-	if (!itln) {
-		FPLOG(WARN, "Hash could not be read from xattr of %s\n", name);
-		return -ENOENT;
-	} else if (itln < rln || memcmp(res, chksum, rln)) {
-		FPLOG(WARN, "Hash from xattr of %s does not match\n", name);
-		return -EBADF;
-	}
-	if (!state->opts->quiet || state->debug)
-		FPLOG(INFO, "Successfully validated hash from xattr of %s\n", name);
-	return 0;
-}
-
-int write_xattr(hash_state* state, char* res)
-{
-	// TODO: Write xattr with xattr_name and contents res
-	const char* name = state->opts->oname;
-	if (state->ochg && !state->ichg) {
-		name = state->opts->iname;
-		if (!state->opts->quiet)
-			FPLOG(INFO, "Write xattr to input file %s\n", name);
-	} else if (state->ochg) {
-		FPLOG(WARN, "Can't write xattr in the middle of plugin chain (%s)\n",
-				state->fname);
-		return -ENOENT;
-	}
-	if (setxattr(name, state->xattr_name, res, strlen(res), 0)) {
-		FPLOG(WARN, "Failed writing hash to xattr of %s\n", name);
-		return -errno;
-	}
-	if (state->debug)
-		FPLOG(DEBUG, "Set xattr %s in %s to %s\n",
-				state->xattr_name, name, res);
-	return 0;
-}
-#endif
-
-
 /* 
  * XXXSUM file parsing and updating routines
  */
@@ -433,6 +379,7 @@ off_t find_chks(hash_state* st, FILE* f, const char* nm, char* res)
 		++fnm;
 		if (*fnm == '*' || *fnm == ' ')
 			fnm++;
+		fnm[strlen(fnm)-1] = 0;	// Remove trailing \n
 		if (!strcmp(fnm, nm) || !strcmp(fnm, bnm)) {
 			if (res && fwh-lnbf <= 2*sizeof(hash_t)) {
 				memcpy(res, lnbf, fwh-lnbf);
@@ -450,7 +397,7 @@ off_t find_chks(hash_state* st, FILE* f, const char* nm, char* res)
 FILE* fopen_chks(hash_state *state, const char* mode)
 {
 	char* fnm = state->chkfnm;
-	if (!strcmp("-", fnm))
+	if (fnm && !strcmp("-", fnm))
 		return stdin;
 	if (!fnm) {
 		char cfnm[16];
@@ -482,10 +429,10 @@ char* get_chks(hash_state* state, const char* nm)
 /* update chksum */
 int upd_chks(hash_state* state, const char *nm, const char *chks)
 {
-	FILE *f = fopen(chks, "r");
+	FILE *f = fopen_chks(state, "r");
 	int err = 0;
 	if (!f) {
-		f = fopen(chks, "w");
+		f = fopen_chks(state, "w");
 		if (!f)
 			return -errno;
 		fprintf(f, "%s *%s\n", chks, nm);
@@ -509,6 +456,114 @@ int upd_chks(hash_state* state, const char *nm, const char *chks)
 }
 
 
+#ifdef HAVE_ATTR_XATTR_H
+int check_xattr(hash_state* state, const char* res)
+{
+	const char* name = state->opts->iname;
+	if (state->ichg && !state->ochg) {
+		name = state->opts->oname;
+		if (!state->opts->quiet)
+			FPLOG(INFO, "Read xattr from output file %s\n", name);
+	} else if (state->ichg) {
+		FPLOG(WARN, "Can't read xattrs in the middle of plugin chain (%s)\n", state->fname);
+		return -ENOENT;
+	}
+	/* Longest is 128byte hex for SHA512 (8x64byte numbers -> 8x16 digits) */
+	char chksum[129];
+	ssize_t itln = getxattr(name, state->xattr_name, chksum, 129);
+	const int rln = strlen(res);
+	if (itln <= 0) {
+		FPLOG(WARN, "Hash could not be read from xattr of %s\n", name);
+		if (state->xfallback) {
+			char* cks = get_chks(state, name);
+			if (!cks) {
+				FPLOG(WARN, "no hash found for %s\n", name);
+				return -ENOENT;
+			} else if (strcmp(cks, res)) {
+				FPLOG(WARN, "Hash from chksum file for %s does not match\n", name);
+				return -EBADF;
+			}
+		} else
+			return -ENOENT;
+	} else if (itln < rln || memcmp(res, chksum, rln)) {
+		FPLOG(WARN, "Hash from xattr of %s does not match\n", name);
+		return -EBADF;
+	}
+	if (!state->opts->quiet || state->debug)
+		FPLOG(INFO, "Successfully validated hash from xattr of %s\n", name);
+	return 0;
+}
+
+int write_xattr(hash_state* state, const char* res)
+{
+	const char* name = state->opts->oname;
+	if (state->ochg && !state->ichg) {
+		name = state->opts->iname;
+		if (!state->opts->quiet)
+			FPLOG(INFO, "Write xattr to input file %s\n", name);
+	} else if (state->ochg) {
+		FPLOG(WARN, "Can't write xattr in the middle of plugin chain (%s)\n",
+				state->fname);
+		return -ENOENT;
+	}
+	if (setxattr(name, state->xattr_name, res, strlen(res), 0)) {
+		FPLOG(WARN, "Failed writing hash to xattr of %s\n", name);
+		if (state->xfallback) {
+			int err = upd_chks(state, name, res);
+			if (err) {
+				FPLOG(WARN, "Failed writing to chksum file for %s: %s\n", name, strerror(-err));
+				return err;
+			}
+		} else
+			return -errno;
+	}
+	if (state->debug)
+		FPLOG(DEBUG, "Set xattr %s in %s to %s\n",
+				state->xattr_name, name, res);
+	return 0;
+}
+#endif
+
+int check_chkf(hash_state *state, const char* res)
+{
+	const char* name = state->opts->iname;
+	if (state->ichg && !state->ochg) {
+		name = state->opts->oname;
+		if (!state->opts->quiet)
+			FPLOG(INFO, "Read checksum for output file %s\n", name);
+	} else if (state->ichg) {
+		FPLOG(WARN, "Can't read checksum in the middle of plugin chain (%s)\n", state->fname);
+		return -ENOENT;
+	}
+	char* cks = get_chks(state, name);
+	if (!cks) {
+		FPLOG(WARN, "Can't find checksum for %s\n", name);
+		return -ENOENT;
+	}
+	if (strcmp(cks, res)) {
+		FPLOG(WARN, "Hash from chksum file for %s does not match\n", name);
+		return -EBADF;
+	}
+	return 0;
+}
+
+int write_chkf(hash_state *state, const char *res)
+{
+	const char* name = state->opts->oname;
+	if (state->ochg && !state->ichg) {
+		name = state->opts->iname;
+		if (!state->opts->quiet)
+			FPLOG(INFO, "Write checksum for input file %s\n", name);
+	} else if (state->ochg) {
+		FPLOG(WARN, "Can't write checksum in the middle of plugin chain (%s)\n",
+				state->fname);
+		return -ENOENT;
+	}
+	int err = upd_chks(state, name, res);
+	if (err) 
+		FPLOG(WARN, "Hash writing for %s failed\n", name);
+	return err;
+}
 
 int hash_close(loff_t ooff, void **stat)
 {
@@ -528,6 +583,10 @@ int hash_close(loff_t ooff, void **stat)
 			--err;
 		}
 	}
+	if (state->chkf) 
+		err += check_chkf(state, res);
+	if (state->outf)
+		err += write_chkf(state, res);
 #ifdef HAVE_ATTR_XATTR_H
 	if (state->chk_xattr)
 		err += check_xattr(state, res);
