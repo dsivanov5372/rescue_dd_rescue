@@ -541,10 +541,14 @@ for an overview of available plugins.
 .SH PLUGINS
 .SS null
 The null plugin (ddr_null) does nothing, except if you specify the
-.B lnchange
-option in which case the plugin indicates to others that it transforms the
-length of the output. This may be helpful for testing or to influence which
-file the hash plugin considers for reading/writing extended attributes from/to
+.B [no]lnchange
+or the
+.B [no]change
+options in which case the plugin indicates to others that it transforms the
+length of the output or the data of the stream. (With the no prefix, it's
+reset to the default no change indication again.) 
+This may be helpful for testing or to influence which file the hash plugin 
+considers for reading/writing extended attributes from/to
 and for plugins to change their behavior with respect to hole detection.
 .br
 ddr_null_ddr also allows you to specify
@@ -596,10 +600,9 @@ by default, but you can override the name of the attribute by specifying
 instead.
 .br
 ddr_hash will use the output file to write the xattr to, unless a plugin 
-in the chain after ddr_hash indicates that it changes the file. (Currently,
-a length change indicator is used, though that will change some day.) 
+in the chain after ddr_hash indicates that it changes the data.
 In that case, it will warn and use the input file, unless there's
-another plugin before ddr_hash in the chain which transforms the contents/length
+another plugin before ddr_hash in the chain which transforms the data
 as well. In that case, there is no file that the checksum could be written
 to and ddr_hash will report an error.
 .B chk_xattr
@@ -616,10 +619,9 @@ the exit value and then only move to the final name if checksums are
 intact and otherwise discard.)
 .br
 ddr_hash will use the input file to read the xattr from, unless a plugin 
-in the chain before ddr_hash indicates that it changes the file. (Currently,
-a length change indicator is used, though that will change some day.) 
+in the chain before ddr_hash indicates that it changes the data.
 In that case, it will warn and use the output file, unless there's
-another plugin after ddr_hash in the chain which transforms the contents/length
+another plugin after ddr_hash in the chain which transforms the data
 as well. In that case, there is no file that could hold a valid checksum
 and ddr_hash will report an error.
 .PP
@@ -694,12 +696,12 @@ it from the filenames. This example shows that you can specify multiple
 plugins with multiple parameters; the plugins are forming a filter
 chain. You can specify the same plugin multiple times.
 .TP
-.BI dd_rescue\ \-L\ hash=sha512:set_xattr,null=lnchange\ infile\ /dev/null
+.BI dd_rescue\ \-L\ hash=sha512:set_xattr,null=change\ infile\ /dev/null
 reads the file 
 .IR infile
 and computes its MD5 hash. It stores it in the input file's user.checksum.sha512
-attribute. Note the use of the null plugin with faking a transformation due
-to the lnchange parameter; this causes the hash plugin to write to the input
+attribute. Note the use of the null plugin with faking data change with
+the change parameter; this causes the hash plugin to write to the input
 file which it would not normally have done. Of course this
 will fail if you don't have the appropriate privileges to write xattrs to
 infile.

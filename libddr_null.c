@@ -23,9 +23,10 @@ typedef struct _null_state {
 	ddr_plug.fplog(stderr, lvl, "%s(%i): " fmt, ddr_plug.name, state->seq, ##args)
 
 const char* null_help = "The null plugin does nothing ...\n"
-			"Options: debug:[no]lnchange. [no]lnchange indicates that the length may [not]\n"
-		        " be changed by ddr_null (which is not true, but influences the behavior of\n"
-			" the hash plugin)\n";
+			"Options: debug:[no]lnchange:[no]change. [no]lnchange indicates that the length\n"
+		        " may [not] be changed by ddr_null; [no]change indicates that the contents may\n"
+			" [not] be changed by ddr_null.	(Both is not true, but influences the behavior\n"
+			" of other plugins)\n";
 
 int null_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 {
@@ -41,13 +42,22 @@ int null_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			FPLOG(INFO, "%s", null_help);
 		else if (!strcmp(param, "lnchange"))
 			ddr_plug.changes_output_len = 1;
-		else if (!strcmp(param, "lenchange"))
-			ddr_plug.changes_output_len = 1;
 		else if (!strcmp(param, "lnchg"))
 			ddr_plug.changes_output_len = 1;
 		/* Do we need this if loaded multiple times? */
 		else if (!strcmp(param, "nolnchange"))
 			ddr_plug.changes_output_len = 0;
+		else if (!strcmp(param, "nolnchg"))
+			ddr_plug.changes_output_len = 0;
+		else if (!strcmp(param, "change"))
+			ddr_plug.changes_output = 1;
+		else if (!strcmp(param, "chg"))
+			ddr_plug.changes_output = 1;
+		/* Do we need this if loaded multiple times? */
+		else if (!strcmp(param, "nochange"))
+			ddr_plug.changes_output = 0;
+		else if (!strcmp(param, "nochg"))
+			ddr_plug.changes_output = 0;
 		else if (!strcmp(param, "debug"))
 			state->debug = 1;
 		else {
@@ -58,11 +68,13 @@ int null_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		}
 		param = next;
 	}
-	ddr_plug.changes_output = ddr_plug.changes_output_len;
+	/* If the length changes, so does the contents ... */
+	if (ddr_plug.changes_output_len && !ddr_plug.changes_output)
+		FPLOG(WARN, "Change indication for length without contents change?\n");
 	return 0;
 }
 
-int null_open(const opt_t *opt, int ilnchg, int olnchg,
+int null_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	      unsigned int totslack_pre, unsigned int totslack_post,
 	      void **stat)
 {

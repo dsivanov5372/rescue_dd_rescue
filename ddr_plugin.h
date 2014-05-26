@@ -22,18 +22,20 @@ typedef struct _progress_t progress_t;
 #endif
 
 /** init callback parameters:
- * opaque handle, parameters from commandline, sequece in filter chain
+ * opaque handle, parameters from commandline, sequence in filter chain,
+ * pointer to options.
+ * Return value: 0 = OK, -x = ERROR
  */
 typedef int (_init_callback)(void **stat, char* param, int seq, const opt_t *opt);
-/** open_callback parameters: input file descriptor, input file name,
- * 	initial offset input file, same 3 params for output file,
- * 	soft (large) block size, hard (fallback) block size,
- * 	estimated xfer size, flag that olen will change after writing,
- *	total slack size for all plugins,
- *	ptr to buffer ptr, opaque handle.
+/** open_callback parameters: pointer to options, four flags telling the
+ * 	plugin whether length, and/or contents of the stream are changed
+ * 	by other plugins before (i) or after (o) this one,
+ * 	required extra buffer memory before and after the main buffer
+ * 	and the opaque handle
  * 	Return value: 0 = OK, -x = ERROR, +x = Bytes consumed from input file.
  */
 typedef int (_open_callback)(const opt_t *opt, int ilnchange, int olnchange, 
+			     int ichange, int ochange,
 			     unsigned int totslack_pre, unsigned int totslack_post,
 			     void **stat);
 /** block_callback parameters: file state (contains file descriptors, positions,

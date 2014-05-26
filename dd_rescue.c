@@ -351,6 +351,8 @@ unsigned int plug_max_slack_post = 0;
 int plug_max_neg_slack_post = 0;
 int plug_first_lenchg = 9999;
 int plug_last_lenchg = -1;
+int plug_first_chg = 9999;
+int plug_last_chg = -1;
 unsigned int plug_max_req_align = 0;
 char plug_not_sparse = 0;
 char plug_output_chg = 0;
@@ -378,11 +380,13 @@ void call_plugins_open(opt_t *op, fstate_t *fst)
 			 */
 			int err = LISTDATA(plug).open_callback(op, (plugins_opened > plug_first_lenchg? 1: 0),
 								   (plugins_opened < plug_last_lenchg ? 1: 0),
+								   (plugins_opened > plug_first_chg? 1: 0),
+								   (plugins_opened < plug_last_chg ? 1: 0),
 						plug_max_slack_pre-slk_pre, plug_max_slack_post-slk_post,
 					        &LISTDATA(plug).state);
 			if (err < 0) {
 				fplog(stderr, WARN, "Error initializing plugin %s: %s!\n",
-					LISTDATA(plug).name, strerror(err));
+					LISTDATA(plug).name, strerror(-err));
 				exit(13);
 			} else if (err>0) {
 				fst->ipos += err;
@@ -407,7 +411,7 @@ int call_plugins_close(opt_t *op, fstate_t *fst)
 			int err = LISTDATA(plug).close_callback(fst->opos, &LISTDATA(plug).state);
 			if (err) {
 				fplog(stderr, WARN, "Error closing plugin %s: %s!\n",
-					LISTDATA(plug).name, strerror(err));
+					LISTDATA(plug).name, strerror(-err));
 				++errs;
 			}
 		}
@@ -474,7 +478,7 @@ ddr_plugin_t* insert_plugin(void* hdl, const char* nm, char* param, opt_t *op)
 	if (plug->init_callback) {
 		int ret = plug->init_callback(&plug->state, param, plugins_loaded, op);
 		if (ret)
-			exit(ret);
+			exit(-ret);
 	}
 	if (plug->slack_pre > 0)
 		plug_max_slack_pre += plug->slack_pre;
@@ -544,6 +548,10 @@ void load_plugins(char* plugs, opt_t *op)
 				plug_last_lenchg = plugno;
 			if (plug_first_lenchg == 9999 && plug->changes_output_len)
 				plug_first_lenchg = plugno;
+			if (plug->changes_output)
+				plug_last_chg = plugno;
+			if (plug_first_chg == 9999 && plug->changes_output)
+				plug_first_chg = plugno;
 			++plugno;
 		}
 		plugs = next;

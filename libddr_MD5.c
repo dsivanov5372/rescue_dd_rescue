@@ -65,10 +65,10 @@ typedef struct _hash_state {
 	int seq;
 	int outfd;
 	unsigned char buflen;
-	unsigned char ilnchg, olnchg, debug;
+	unsigned char ilnchg, olnchg, ichg, ochg, debug;
 	const opt_t *opts;
 #ifdef HAVE_ATTR_XATTR_H
-	char chk_xattr, set_xattr, nmalloc;
+	char chk_xattr, set_xattr, xnmalloc;
 	char* xattr_name;
 #endif
 } hash_state;
@@ -150,19 +150,19 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			else {
 				FPLOG(FATAL, "plugin doesn't understand param %s\n",
 					param);
-				++err;
+				--err;
 			}
 		}
 		param = next;
 	}
 	if (!state->alg) {
 		FPLOG(FATAL, "No hash algorithm specified\n");
-		++err;
+		--err;
 	}
 #ifdef HAVE_ATTR_XATTR_H
 	if ((state->chk_xattr || state->set_xattr) && !state->xattr_name) {
 		state->xattr_name = (char*)malloc(24);
-		state->nmalloc = 1;
+		state->xnmalloc = 1;
 		snprintf(state->xattr_name, 24, "user.checksum.%s", state->alg->name);
 	}
 #endif
@@ -171,7 +171,7 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	return err;
 }
 
-int hash_open(const opt_t *opt, int ilnchg, int olnchg,
+int hash_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	     unsigned int totslack_pre, unsigned int totslack_post,
 	     void **stat)
 {
@@ -180,9 +180,9 @@ int hash_open(const opt_t *opt, int ilnchg, int olnchg,
 	state->opts = opt;
 	state->alg->hash_init(&state->hash);
 	state->hash_pos = 0;
-	if (!olnchg && state->seq != 0)
+	if (!ochg && state->seq != 0)
 		state->fname = opt->oname;
-	else if (!ilnchg)
+	else if (!ichg)
 		state->fname = opt->iname;
 	else {
 		char* nnm = (char*)malloc(strlen(opt->iname)+strlen(opt->oname)+3);
@@ -192,7 +192,7 @@ int hash_open(const opt_t *opt, int ilnchg, int olnchg,
 		state->fname = nnm;
 #ifdef HAVE_ATTR_XATTR_H
 		if (state->chk_xattr || state->set_xattr) {
-			++err;
+			--err;
 			FPLOG(WARN, "Can't access xattr in the middle of a plugin chain!");
 		}
 #endif
@@ -201,7 +201,9 @@ int hash_open(const opt_t *opt, int ilnchg, int olnchg,
 	state->buflen = 0;
 	state->ilnchg = ilnchg;
 	state->olnchg = olnchg;
-	if (ilnchg && olnchg && (state->opts->sparse || !state->opts->nosparse)) {
+	state->ichg = ichg;
+	state->ochg = ochg;
+	if (ichg && ochg && (state->opts->sparse || !state->opts->nosparse)) {
 		FPLOG(WARN, "Size of potential holes may not be correct due to other plugins;\n");
 		FPLOG(WARN, " MD5 hash may be miscomputed! Avoid holes (remove -a, use -A).\n");
 	}
@@ -343,13 +345,13 @@ int check_xattr(hash_state* state, char* res)
 {
 	// TODO: Read xattrs from fname, get attribute xattr_name, and compare first strlen(res) bytes
 	const char* name = state->opts->iname;
-	if (state->ilnchg && !state->olnchg) {
+	if (state->ichg && !state->ochg) {
 		name = state->opts->oname;
 		if (!state->opts->quiet)
 			FPLOG(INFO, "Read xattr from output file %s\n", name);
-	} else if (state->ilnchg) {
+	} else if (state->ichg) {
 		FPLOG(WARN, "Can't read xattrs in the middle of plugin chain (%s)\n", state->fname);
-		return ENOENT;
+		return -ENOENT;
 	}
 	/* Longest is 128byte hex for SHA512 (8x64byte numbers -> 8x16 digits) */
 	char chksum[129];
@@ -357,10 +359,10 @@ int check_xattr(hash_state* state, char* res)
 	const int rln = strlen(res);
 	if (!itln) {
 		FPLOG(WARN, "Hash could not be read from xattr of %s\n", name);
-		return ENOENT;
+		return -ENOENT;
 	} else if (itln < rln || memcmp(res, chksum, rln)) {
 		FPLOG(WARN, "Hash from xattr of %s does not match\n", name);
-		return EBADF;
+		return -EBADF;
 	}
 	if (!state->opts->quiet || state->debug)
 		FPLOG(INFO, "Successfully validated hash from xattr of %s\n", name);
@@ -371,21 +373,22 @@ int write_xattr(hash_state* state, char* res)
 {
 	// TODO: Write xattr with xattr_name and contents res
 	const char* name = state->opts->oname;
-	if (state->olnchg && !state->ilnchg) {
+	if (state->ochg && !state->ichg) {
 		name = state->opts->iname;
 		if (!state->opts->quiet)
 			FPLOG(INFO, "Write xattr to input file %s\n", name);
-	} else if (state->olnchg) {
-		FPLOG(WARN, "Can't write xattr in the middle of plugin chain (%s)\n", state->fname);
-		return ENOENT;
+	} else if (state->ochg) {
+		FPLOG(WARN, "Can't write xattr in the middle of plugin chain (%s)\n",
+				state->fname);
+		return -ENOENT;
 	}
 	if (setxattr(name, state->xattr_name, res, strlen(res), 0)) {
 		FPLOG(WARN, "Failed writing hash to xattr of %s\n", name);
-		return errno;
+		return -errno;
 	}
 	if (state->debug)
-		FPLOG(DEBUG, "Set xattr %s in %s to %s\n", state->xattr_name,
-				name, res);
+		FPLOG(DEBUG, "Set xattr %s in %s to %s\n",
+				state->xattr_name, name, res);
 	return 0;
 }
 #endif
@@ -403,15 +406,17 @@ int hash_close(loff_t ooff, void **stat)
 	if (state->outfd) {
 		char outbuf[512];
 		snprintf(outbuf, 511, "%s *%s\n", res, state->fname);
-		if (write(state->outfd, outbuf, strlen(outbuf)) <= 0)
+		if (write(state->outfd, outbuf, strlen(outbuf)) <= 0) {
 			FPLOG(WARN, "Could not write HASH result to fd %i\n", state->outfd);
+			--err;
+		}
 	}
 #ifdef HAVE_ATTR_XATTR_H
 	if (state->chk_xattr)
 		err += check_xattr(state, res);
 	if (state->set_xattr)
 		err += write_xattr(state, res);
-	if (state->nmalloc)
+	if (state->xnmalloc)
 		free((void*)state->xattr_name);
 #endif
 	if (strcmp(state->fname, state->opts->iname) && strcmp(state->fname, state->opts->oname))
