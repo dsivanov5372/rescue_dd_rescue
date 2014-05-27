@@ -302,7 +302,7 @@ check: $(TARGETS) find_nonzero md5 sha1 sha256 sha512
 	#MD5=$$(./dd_rescue -c0 -a -b16k -L ./libddr_MD5.so TEST TEST2 2>&1 | grep 'MD5(0)': | tail -n1 | sed 's/^dd_rescue: (info): MD5(0):[^:]*: //'); MD5S=$$(md5sum TEST | sed 's/ .*$$//'); echo $$MD5 $$MD5S; if test "$$MD5" != "$$MD5S"; then false; fi
 	./sha1 /dev/null
 	./sha1 /dev/null | sha1sum -c
-	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=output:alg=sha1 TEST TEST2 >HASH.TEST
+	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=outnm=HASH.TEST:alg=sha1 TEST TEST2
 	sha1sum -c HASH.TEST
 	if test $(HAVE_SHA256SUM) = 1; then $(MAKE) check_sha2; fi
 	./sha256 /dev/null
@@ -312,6 +312,8 @@ check: $(TARGETS) find_nonzero md5 sha1 sha256 sha512
 	if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo_algos; fi
 	#if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo_test; fi
 	if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo_fuzz; fi
+	# TODO: Add tests for libddr_null
+	# TODO: Add tests with hash set_xattr and chk_xattr (with fallback as not all filesystems support xattrs ...)
 	
 check_sha2: $(TARGETS) sha224 sha384
 	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=output:alg=sha224 TEST TEST2 >HASH.TEST
@@ -374,8 +376,6 @@ check_lzo: $(TARGETS)
 	md5sum -c MD5
 	cmp test test.cmp
 	rm -f MD5 test test.lzo test.cmp
-	# TODO: Add tests for libddr_null
-	# TODO: Add tests with hash set_xattr and chk_xattr (problem: not all filesystems support xattrs ...)
 	
 check_lzo_algos: $(TARGETS)
 	for alg in lzo1x_1 lzo1x_1_11 lzo1x_1_12 lzo1x_1_15 lzo1x_999 lzo1y_1 lzo1y_999 lzo1f_1 lzo1f_999 lzo1b_1 lzo1b_2 lzo1b_3 lzo1b_4 lzo1b_5 lzo1b_6 lzo1b_7 lzo1b_8 lzo1b_9 lzo1b_99 lzo1b_999 lzo2a_999; do ./dd_rescue -qATL ./libddr_lzo.so=algo=$$alg:benchmark dd_rescue dd_rescue.lzo || exit 1; $(LZOP) -lt dd_rescue.lzo; ./dd_rescue -qATL ./libddr_lzo.so=benchmark dd_rescue.lzo dd_rescue.cmp || exit 2; cmp dd_rescue dd_rescue.cmp || exit 3; done

@@ -21,6 +21,7 @@
 #include <libgen.h>
 #include <ctype.h>
 #include <assert.h>
+#include <errno.h>
 #ifdef HAVE_ATTR_XATTR_H
 # include <attr/xattr.h>
 #endif
@@ -69,7 +70,7 @@ typedef struct _hash_state {
 	int outfd;
 	unsigned char buflen;
 	unsigned char ilnchg, olnchg, ichg, ochg, debug, outf, chkf, chkfalloc;
-	char* chkfnm;
+	const char* chkfnm;
 	const opt_t *opts;
 #ifdef HAVE_ATTR_XATTR_H
 	char chk_xattr, set_xattr, xnmalloc, xfallback;
@@ -405,6 +406,26 @@ unsigned char* hash_blk_cb(fstate_t *fst, unsigned char* bf,
  * XXXSUM file parsing and updating routines
  */
 
+#ifndef HAVE_FEOF_UNLOCKED
+#define feof_unlocked(x) feof(x)
+#endif
+
+#ifndef HAVE_GETLINE
+ssize_t getline(char **bf, size_t *sz, FILE *f)
+{
+	if (*sz == 0) {
+		*bf = (char*)malloc(1024);
+		*sz = 1024;
+	}
+	char* bret = fgets(*bf, *sz, f);
+	if (!bret)
+		return -1;
+	int ln = strlen(bret);
+	//if (bret[ln-1] != '\n') increase_buffersize();
+	return ln;
+}
+#endif
+
 /* file offset in the chksum file which has the chksum for nm, -1 = not found */
 off_t find_chks(hash_state* st, FILE* f, const char* nm, char* res)
 {
@@ -424,7 +445,10 @@ off_t find_chks(hash_state* st, FILE* f, const char* nm, char* res)
 		++fnm;
 		if (*fnm == '*' || *fnm == ' ')
 			fnm++;
-		fnm[strlen(fnm)-1] = 0;	// Remove trailing \n
+		int last = strlen(fnm)-1;
+		// Remove trailing \n\r
+		while (last > 0 && (fnm[last] == '\n' || fnm[last] == '\r'))
+			fnm[last--] = 0;
 		if (!strcmp(fnm, nm) || !strcmp(fnm, bnm)) {
 			if (res && fwh-lnbf <= 2*sizeof(hash_t)) {
 				memcpy(res, lnbf, fwh-lnbf);
@@ -441,7 +465,7 @@ off_t find_chks(hash_state* st, FILE* f, const char* nm, char* res)
 
 FILE* fopen_chks(hash_state *state, const char* mode)
 {
-	char* fnm = state->chkfnm;
+	const char* fnm = state->chkfnm;
 	assert(fnm);
 	if (!strcmp("-", fnm))
 		return stdin;
@@ -486,6 +510,7 @@ int upd_chks(hash_state* state, const char *nm, const char *chks)
 			if (strcmp(chks, _chks)) {
 				if (pwrite(fileno(f), chks, strlen(chks), pos) <= 0)
 					err = -errno;
+				//pwrite(fileno(f), "*", 1, pos+strlen(chks)+1);
 			}
 		}
 	}
