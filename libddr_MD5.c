@@ -86,7 +86,7 @@ const char *hash_help = "The HASH plugin for dd_rescue calculates a cryptographi
 		" Parameters: output:outfd=FNO:outnm=FILE:check:chknm=FILE:debug:[alg[o[rithm]=]ALG\n"
 		"\t:append=STR:prepend=STR\n"
 #ifdef HAVE_ATTR_XATTR_H
-		"\t:chk_xattr[=xattr_name]:set_xattr[=xattr_name]:fallback[=FILE]\n"
+		"\t:chk_xattr[=xattr_name]:set_xattr[=xattr_name]:fallb[ack][=FILE]\n"
 #endif
 		" Use algorithm=help to get a list of supported hash algorithms\n";
 
@@ -144,10 +144,14 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			state->set_xattr = 1; state->xattr_name = param+10; }
 		else if (!strcmp(param, "set_xattr")) 
 			state->set_xattr = 1;
+		else if (!strcmp(param, "fallb")) 
+			state->xfallback = 1;
 		else if (!strcmp(param, "fallback")) 
 			state->xfallback = 1;
 		else if (!memcmp(param, "fallback=", 9)) {
 			state->xfallback = 1; state->chkfnm = param+9; }
+		else if (!memcmp(param, "fallb=", 6)) {
+			state->xfallback = 1; state->chkfnm = param+6; }
 #endif
 		else if (!memcmp(param, "outnm=", 6)) {
 			state->outf = 1; state->chkfnm=param+6; }
@@ -186,18 +190,14 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		snprintf(state->xattr_name, 24, "user.checksum.%s", state->alg->name);
 	}
 #endif
-	if (!state->chkfnm && (state->chkf || state->outf
+	if ((!state->chkfnm || !*state->chkfnm) && (state->chkf || state->outf
 #ifdef HAVE_ATTR_XATTR_H
 				|| state->xfallback
 #endif
 			     				)) {
 		char cfnm[16];
-		sprintf(cfnm, "%ssums", state->alg->name);
-		char* fnm = cfnm;
-		while (*fnm) {
-			*fnm = toupper(*fnm);
-			fnm++;
-		}
+		// if (!strcmp(state->alg->name, "md5")) strcpy(cfnm, "MD5SUMS"); else
+		sprintf(cfnm, "CHECKSUMS.%s", state->alg->name);
 		state->chkfalloc = 1;
 		state->chkfnm = strdup(cfnm);
 	}

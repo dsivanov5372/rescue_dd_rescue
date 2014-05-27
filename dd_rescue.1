@@ -546,7 +546,7 @@ or the
 .B [no]change
 options in which case the plugin indicates to others that it transforms the
 length of the output or the data of the stream. (With the no prefix, it's
-reset to the default no change indication again.) 
+reset to the default no-change indication again.) 
 This may be helpful for testing or to influence which file the hash plugin 
 considers for reading/writing extended attributes from/to
 and for plugins to change their behavior with respect to hole detection.
@@ -573,6 +573,20 @@ the target file (unless you only write part of the file),
 but saves time by not accessing the (possibly large) file a second time.
 The hash plugin handles sparse writes and arbitrary offsets fine.
 .PP
+ddr_hash also supports the parameter
+.B append=STRING
+which appends the given STRING to the output before computing the cryptographic
+hash. Treating the STRING as a shared secret, this can actually be used to protect
+against someone not knowing the secret altering the contents (and recomputing the 
+hash) without anyone noticing. It's thus a cheap way of a cryptographic signature
+(but with preshared secrets as opposed to public key cryptography).
+.br
+ddr_hash also supports
+.B prepend=STRING
+which is likely harder to attack with brute force than an appended string.
+Note that ddr_hash always prepends multiples of the hash algorithm's block
+size and pads the STRING with 0 to match.
+.PP
 ddr_hash accepts the parameter 
 .B output
 , which will cause ddr_hash to output
@@ -584,46 +598,78 @@ file descriptor specified by the integer number INT. Note that ddr_hash
 always processes data in binary mode and correctly indicates this with
 a star (*) in the output generated with output/outfd=.
 .br
-ddr_hash also supports the parameter
-.B append=STRING
-which appends the given STRING to the output before computing the cryptographic
-hash. Treating the STRING as a shared secret, this can actually be used to protect
-against someone altering the contents (and recomputing the hash). It's thus a cheap
-way of a cryptographic signature (but with preshared secrets as opposed to public
-key cryptography).
+The checksum can also be written to a file by giving the
+.B outnm=CHKNAME
+parameter. Then a file with CHKNAME will be created and a md5sum/sha256sum/...
+compatible line will be printed to the file. If the file exists and contains
+an entry for the file, it will be updated. If the file exists and does not
+contain an entry for the file, one will be appended. If NAME is omitted, the
+filename CHECKSUMS.alg will be used (alg is replaced by the chosen algorithm).
+If the checksum can't be written, a warning will be printed and the exit code
+of dd_rescue will become non-zero.
+.PP
+The checksum can be validated using 
+.B checknm=CHKNAME .
+The file will be read and ddr_hash will look for an md5sum/sha256sum/...
+compatible line with a matching file name to take the checksum from and
+compare it to the one computed. If NAME is omitted, the same default 
+as described above (in outnm=...) will be used. You can also read the
+checksum from stdin if you prefer by specifying the
+.B check
+option.
+.br
+Note that in any case, the check is only performed after the copy operation
+is completed -- a faulty checksum will thus NOT result in the copy not
+taking place. However, the exit code of dd_rescue will indicate the
+error. (If you want to avoid copying data with a broken checksum into
+the final target, use a temporary target that you delete upon error and
+only move to the final location if dd_rescue's exit value is 0; you can
+of course also copy to /dev/null for testing beforehand, but it might
+be too costly reading the input file twice.)
 .PP
 You can store the cryptographic hash into the files by using the
 .B set_xattr
 option. The hash will be stored into the extended attribute user.checksum.ALG
 by default, but you can override the name of the attribute by specifying
 .B set_xattr=XATTR\.NAME
-instead.
+instead. If the xattr can't be written, an error will be reported, unless
+you also specify the 
+.B fallb[ack][=CHKNAME]
+option. In that case, ddr_hash tries to write the checksum to the CHKNAME
+checksums file. (For the default for CHKNAME, see outnm= option above.)
 .br
-ddr_hash will use the output file to write the xattr to, unless a plugin 
-in the chain after ddr_hash indicates that it changes the data.
-In that case, it will warn and use the input file, unless there's
-another plugin before ddr_hash in the chain which transforms the data
-as well. In that case, there is no file that the checksum could be written
-to and ddr_hash will report an error.
 .B chk_xattr
 will validate that the computed hash matches the one read from the extended
 attribute. The same default attribute name applies and you can likewise override
 it with
 .B chk_xattr=XATTR\.NAME .
-The check is only performed at the end of the copy, so copying will not
-be prevented by wrong hashes; however the exit code of dd_rescue will
-reflect a wrong hash. So copy to /dev/null and check the exit code if you
-want to prevent writing data where the hash sum is broken. (If you want to
-avoid running dd_rescue twice, you can copy to a temporary file, check
-the exit value and then only move to the final name if checksums are
-intact and otherwise discard.)
+A missing attribute is considered an error (although the same fallback is
+tried if you specify the fallback option). A broken checksum is of course
+considered an error as well, but just like with checknm=CHKNAME won't
+prevent the copy. See the discussion there.
+.PP
+Note that for output,outfd,outnm=,set_xattr ddr_hash will use the 
+output file name to attach the checksum to (be it by setting xattr or the
+file name used in the checksum file), unless a plugin 
+in the chain after ddr_hash indicates that it changes the data.
+In that case, it will warn and associate the checksum with the input file
+name, unless there's another plugin before ddr_hash in the chain which 
+indicates data transformation as well. In that case, there is no file that
+the checksum could be associated with and ddr_hash will report an error.
 .br
-ddr_hash will use the input file to read the xattr from, unless a plugin 
-in the chain before ddr_hash indicates that it changes the data.
-In that case, it will warn and use the output file, unless there's
-another plugin after ddr_hash in the chain which transforms the data
-as well. In that case, there is no file that could hold a valid checksum
-and ddr_hash will report an error.
+Likewise for chknm=,check,chk_xattr ddr_hash will use the input file
+name to get the checksum (be it by reading the xattr or by looking for
+the input file name in a checksums file) unless there's a plugin in the
+chain before ddr_hash that indicates that it changes the data. The output
+file name will then be used, unless there's another plugin after ddr_hash 
+indicating data change as well, in which case there's no file we could
+get the checksum for and thus an error is reported.
+.PP
+If your system supports extended attributes, those have the advantage
+of travelling with the files; thus a rename or copy (with dd_rescue -p)
+will maintain the checksum. Checksum files on the other hand can be
+handled everywhere (including the transfer via ftp or http) and can
+be cryptographically signed with PGP/GnuPG.
 .PP
 Please note that the md5 algorithm is NOT recommended any more for
 good protetction against malicious attempts to hide data modification;
@@ -696,15 +742,16 @@ it from the filenames. This example shows that you can specify multiple
 plugins with multiple parameters; the plugins are forming a filter
 chain. You can specify the same plugin multiple times.
 .TP
-.BI dd_rescue\ \-L\ hash=sha512:set_xattr,null=change\ infile\ /dev/null
+.BI dd_rescue\ \-L\ hash=sha512:set_xattr:fallb,null=change\ infile\ /dev/null
 reads the file 
 .IR infile
-and computes its MD5 hash. It stores it in the input file's user.checksum.sha512
-attribute. Note the use of the null plugin with faking data change with
+and computes its sha512 hash. It stores it in the input file's user.checksum.sha512
+attribute (and falls back to writing it to CHECKSUMS.sha512 if xattrs can't be
+written). Note the use of the null plugin with faking data change with
 the change parameter; this causes the hash plugin to write to the input
 file which it would not normally have done. Of course this
 will fail if you don't have the appropriate privileges to write xattrs to
-infile.
+infile nor to write the checksum to CHECKSUMS.sha512.
 .PP
 See also README.dd_rescue and ddr_lzo(1) to learn about the possibilities.
 .
