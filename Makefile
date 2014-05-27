@@ -312,8 +312,17 @@ check: $(TARGETS) find_nonzero md5 sha1 sha256 sha512
 	if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo_algos; fi
 	#if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo_test; fi
 	if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo_fuzz; fi
-	# TODO: Add tests for libddr_null
-	# TODO: Add tests with hash set_xattr and chk_xattr (with fallback as not all filesystems support xattrs ...)
+	# Tests for libddr_null
+	./dd_rescue -L ./libddr_null.so=debug dd_rescue /dev/null
+	# Tests with hash set_xattr and chk_xattr (with fallback as not all filesystems support xattrs ...)
+	./dd_rescue -tL ./libddr_hash.so=sha256:set_xattr:fallback dd_rescue /tmp/dd_rescue
+	./dd_rescue -L ./libddr_hash.so=sha256:chk_xattr:fallback /tmp/dd_rescue /dev/null
+	rm -f /tmp/dd_rescue CHECKSUMS.sha256
+	# Tests with prepend and append
+	./dd_rescue -tL ./libddr_hash.so=sha512:set_xattr:fallback:prepend=abc:append=xyz dd_rescue /tmp/dd_rescue
+	./dd_rescue  -L ./libddr_hash.so=sha512:chk_xattr:fallback /tmp/dd_rescue /dev/null && false || true
+	./dd_rescue  -L ./libddr_hash.so=sha512:chk_xattr:fallback:prepend=abc:append=xyz /tmp/dd_rescue /dev/null
+	rm -f /tmp/dd_rescue CHECKSUMS.sha512
 	
 check_sha2: $(TARGETS) sha224 sha384
 	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=output:alg=sha224 TEST TEST2 >HASH.TEST
@@ -322,13 +331,17 @@ check_sha2: $(TARGETS) sha224 sha384
 	sha256sum -c CHECKSUMS.sha256
 	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=output:alg=sha384 TEST TEST2 >HASH.TEST
 	sha384sum -c HASH.TEST
-	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=output:alg=sha512 TEST TEST2 >HASH.TEST
-	sha512sum -c HASH.TEST
+	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=outnm=:alg=sha512 TEST TEST2
+	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=outnm=:alg=sha512,./libddr_null.so=change dd_rescue /dev/null
+	sha512sum -c CHECKSUMS.sha512
+	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=sha512:chknm=CHECKSUMS.sha512 TEST2 /dev/null
+	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=alg=sha512:chknm= dd_rescue /dev/null
+	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=sha512:check dd_rescue /dev/null <CHECKSUMS.sha512
 	./sha224 /dev/null | sha224sum -c
 	./sha256 /dev/null | sha256sum -c
 	./sha384 /dev/null | sha384sum -c
 	./sha512 /dev/null | sha512sum -c
-	rm -f HASH.TEST CHECKSUMS.sha256 TEST2
+	rm -f HASH.TEST CHECKSUMS.sha256 CHECKSUMS.sha512 TEST2
 
 check_lzo: $(TARGETS)
 	@echo "***** dd_rescue lzo (and MD5) plugin tests *****"
