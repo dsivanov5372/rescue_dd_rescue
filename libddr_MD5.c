@@ -206,6 +206,8 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	return err;
 }
 
+#define MIN(a,b) ((a)<(b)? (a): (b))
+
 int hash_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	     unsigned int totslack_pre, unsigned int totslack_post,
 	     void **stat)
@@ -232,7 +234,23 @@ int hash_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 		}
 #endif
 	}
-	memset(state->buf, 0, 128);
+	if (state->prepend) {
+		const int blksz = state->alg->blksz;
+		int done = 0; int remain = strlen(state->prepend);
+		while (remain >= blksz) {
+			state->alg->hash_block((uint8_t*)(state->prepend)+done, &state->hash);
+			remain -= blksz;
+			done += blksz;
+		}
+		HASH_DEBUG(FPLOG(DEBUG, "Prepending %i+%i bytes (padded with %i bytes)\n",
+				done, remain, blksz-remain));
+		if (remain) {
+			memcpy(state->buf, state->prepend+done, remain);
+			memset(state->buf+remain, 0, blksz-remain);
+			state->alg->hash_block(state->buf, &state->hash);
+		}
+	}
+	memset(state->buf, 0, sizeof(state->buf));
 	state->buflen = 0;
 	state->ilnchg = ilnchg;
 	state->olnchg = olnchg;
@@ -253,6 +271,13 @@ int hash_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 #error __WORDSIZE unknown
 #endif
 
+inline int round_down(int val, const int gran)
+{
+	return val-val%gran;
+}
+	
+#define round_up(v, g) round_down(v+g-1, g)
+
 void hash_last(hash_state *state, loff_t pos)
 {
 	//hash_block(0, 0, ooff, stat);
@@ -268,7 +293,10 @@ void hash_last(hash_state *state, loff_t pos)
 		state->buflen += strlen(state->append);
 		HASH_DEBUG(FPLOG(DEBUG, "Append string with %i bytes for hash\n", strlen(state->append)));
 	}
-	state->alg->hash_calc(state->buf, state->buflen, state->hash_pos+state->buflen, &state->hash);
+	int preln = state->prepend? round_up(strlen(state->prepend), state->alg->blksz): 0;
+	if (preln)
+		HASH_DEBUG(FPLOG(DEBUG, "Account for %i extra prepended bytes\n", preln));
+	state->alg->hash_calc(state->buf, state->buflen, state->hash_pos+state->buflen+preln, &state->hash);
 	state->hash_pos += state->buflen;
 }
 
@@ -280,8 +308,6 @@ static inline void hash_block_buf(hash_state* state, int clear)
 	if (clear)
 		memset(state->buf, 0, clear);
 }
-
-#define MIN(a,b) ((a)<(b)? (a): (b))
 
 void hash_hole(fstate_t *fst, hash_state *state, loff_t holelen)
 {
@@ -440,7 +466,7 @@ char* get_chks(hash_state* state, const char* nm)
 /* update chksum */
 int upd_chks(hash_state* state, const char *nm, const char *chks)
 {
-	FILE *f = fopen_chks(state, "r");
+	FILE *f = fopen_chks(state, "r+");
 	int err = 0;
 	if (!f) {
 		errno = 0;
