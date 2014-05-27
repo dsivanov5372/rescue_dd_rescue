@@ -318,8 +318,8 @@ check: $(TARGETS) find_nonzero md5 sha1 sha256 sha512
 check_sha2: $(TARGETS) sha224 sha384
 	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=output:alg=sha224 TEST TEST2 >HASH.TEST
 	sha224sum -c HASH.TEST
-	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=output:alg=sha256 TEST TEST2 >HASH.TEST
-	sha256sum -c HASH.TEST
+	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=outnm=:alg=sha256 TEST TEST2 >HASH.TEST
+	sha256sum -c CHECKSUMS.sha256
 	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=output:alg=sha384 TEST TEST2 >HASH.TEST
 	sha384sum -c HASH.TEST
 	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=output:alg=sha512 TEST TEST2 >HASH.TEST
@@ -328,6 +328,7 @@ check_sha2: $(TARGETS) sha224 sha384
 	./sha256 /dev/null | sha256sum -c
 	./sha384 /dev/null | sha384sum -c
 	./sha512 /dev/null | sha512sum -c
+	rm -f HASH.TEST CHECKSUMS.sha256 TEST2
 
 check_lzo: $(TARGETS)
 	@echo "***** dd_rescue lzo (and MD5) plugin tests *****"
