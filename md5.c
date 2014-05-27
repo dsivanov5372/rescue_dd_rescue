@@ -51,10 +51,12 @@ static inline void to_bytes(uint32_t val, uint8_t *bytes)
 {
 	*(uint32_t *)bytes = val;
 }
+#if 0	// Unused
 static inline uint32_t to_int32(const uint8_t *bytes)
 {
 	return *(const uint32_t *)bytes;
 }
+#endif
 #else
 /* Store val into bytes in little endian fmt */
 static inline void to_bytes(uint32_t val, uint8_t *bytes)
