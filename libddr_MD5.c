@@ -54,20 +54,21 @@ hashalg_t hashes[] = { 	{ "md5", md5_init, md5_64, md5_calc, md5_out, 64 },
 			{ "sha224", sha224_init, sha256_64 , sha256_calc, sha224_out,  64 },
 			{ "sha512", sha512_init, sha512_128, sha512_calc, sha512_out, 128 },
 			{ "sha384", sha384_init, sha512_128, sha512_calc, sha384_out, 128 }
+			// SHA3 ...
 };
 
 
 typedef struct _hash_state {
 	hash_t hash;
 	loff_t hash_pos;
-	const char* fname;
-	const char* append;
+	const char *fname;
+	const char *append, *prepend;
 	hashalg_t *alg;
-	uint8_t buf[256];
+	uint8_t buf[288];	// enough for SHA-3 with max blksz of 144Bytes
 	int seq;
 	int outfd;
 	unsigned char buflen;
-	unsigned char ilnchg, olnchg, ichg, ochg, debug, outf, chkf;
+	unsigned char ilnchg, olnchg, ichg, ochg, debug, outf, chkf, chkfalloc;
 	char* chkfnm;
 	const opt_t *opts;
 #ifdef HAVE_ATTR_XATTR_H
@@ -82,9 +83,10 @@ typedef struct _hash_state {
 
 const char *hash_help = "The HASH plugin for dd_rescue calculates a cryptographic checksum on the fly.\n"
 		" It supports unaligned blocks (arbitrary offsets) and holes(sparse writing).\n"
-		" Parameters: output:outfd=FNO:outnm=FILE:check:chknm=FILE:debug:alg[o[rithm]=ALG:append=STR:\n"
+		" Parameters: output:outfd=FNO:outnm=FILE:check:chknm=FILE:debug:[alg[o[rithm]=]ALG\n"
+		"\t:append=STR:prepend=STR\n"
 #ifdef HAVE_ATTR_XATTR_H
-		"\tchk_xattr[=xattr_name]:set_xattr[=xattr_name]:fallback[=FILE]\n"
+		"\t:chk_xattr[=xattr_name]:set_xattr[=xattr_name]:fallback[=FILE]\n"
 #endif
 		" Use algorithm=help to get a list of supported hash algorithms\n";
 
@@ -131,6 +133,8 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			state->outfd = atoi(param+6);
 		else if (!memcmp(param, "append=", 7))
 			state->append = param+7;
+		else if (!memcmp(param, "prepend=", 8))
+			state->prepend = param+8;
 #ifdef HAVE_ATTR_XATTR_H
 		else if (!memcmp(param, "chk_xattr=", 10)) {
 			state->chk_xattr = 1; state->xattr_name = param+10; }
@@ -182,6 +186,21 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		snprintf(state->xattr_name, 24, "user.checksum.%s", state->alg->name);
 	}
 #endif
+	if (!state->chkfnm && (state->chkf || state->outf
+#ifdef HAVE_ATTR_XATTR_H
+				|| state->xfallback
+#endif
+			     				)) {
+		char cfnm[16];
+		sprintf(cfnm, "%ssums", state->alg->name);
+		char* fnm = cfnm;
+		while (*fnm) {
+			*fnm = toupper(*fnm);
+			fnm++;
+		}
+		state->chkfalloc = 1;
+		state->chkfnm = strdup(cfnm);
+	}
 	if (state->debug)
 		FPLOG(DEBUG, "Initialized plugin %s (%s)\n", ddr_plug.name, state->alg->name);
 	return err;
@@ -397,19 +416,11 @@ off_t find_chks(hash_state* st, FILE* f, const char* nm, char* res)
 FILE* fopen_chks(hash_state *state, const char* mode)
 {
 	char* fnm = state->chkfnm;
-	if (fnm && !strcmp("-", fnm))
+	assert(fnm);
+	if (!strcmp("-", fnm))
 		return stdin;
-	if (!fnm) {
-		char cfnm[16];
-		sprintf(cfnm, "%ssums", state->alg->name);
-		fnm = cfnm;
-		while (*fnm) {
-			*fnm = toupper(*fnm);
-			fnm++;
-		}
-		fnm = cfnm;
-	}
-	return fopen(fnm, mode);
+	else
+		return fopen(fnm, mode);
 }
 
 static char _chks[129];
@@ -432,6 +443,7 @@ int upd_chks(hash_state* state, const char *nm, const char *chks)
 	FILE *f = fopen_chks(state, "r");
 	int err = 0;
 	if (!f) {
+		errno = 0;
 		f = fopen_chks(state, "w");
 		if (!f)
 			return -errno;
@@ -459,6 +471,8 @@ int upd_chks(hash_state* state, const char *nm, const char *chks)
 #ifdef HAVE_ATTR_XATTR_H
 int check_xattr(hash_state* state, const char* res)
 {
+	char xatstr[128];
+	strcpy(xatstr, "xattr");
 	const char* name = state->opts->iname;
 	if (state->ichg && !state->ochg) {
 		name = state->opts->oname;
@@ -473,30 +487,34 @@ int check_xattr(hash_state* state, const char* res)
 	ssize_t itln = getxattr(name, state->xattr_name, chksum, 129);
 	const int rln = strlen(res);
 	if (itln <= 0) {
-		FPLOG(WARN, "Hash could not be read from xattr of %s\n", name);
 		if (state->xfallback) {
 			char* cks = get_chks(state, name);
+			snprintf(xatstr, 128, "chksum file %s", state->chkfnm);
 			if (!cks) {
-				FPLOG(WARN, "no hash found for %s\n", name);
+				FPLOG(WARN, "no hash found in xattr nor %s for %s\n", xatstr, name);
 				return -ENOENT;
 			} else if (strcmp(cks, res)) {
-				FPLOG(WARN, "Hash from chksum file for %s does not match\n", name);
+				FPLOG(WARN, "Hash from %s for %s does not match\n", xatstr, name);
 				return -EBADF;
 			}
-		} else
+		} else {
+			FPLOG(WARN, "Hash could not be read from xattr of %s\n", name);
 			return -ENOENT;
+		}
 	} else if (itln < rln || memcmp(res, chksum, rln)) {
 		FPLOG(WARN, "Hash from xattr of %s does not match\n", name);
 		return -EBADF;
 	}
 	if (!state->opts->quiet || state->debug)
-		FPLOG(INFO, "Successfully validated hash from xattr of %s\n", name);
+		FPLOG(INFO, "Successfully validated hash from %s for %s\n", xatstr, name);
 	return 0;
 }
 
 int write_xattr(hash_state* state, const char* res)
 {
 	const char* name = state->opts->oname;
+	char xatstr[128];
+	snprintf(xatstr, 128, "xattr %s", state->xattr_name);
 	if (state->ochg && !state->ichg) {
 		name = state->opts->iname;
 		if (!state->opts->quiet)
@@ -507,19 +525,22 @@ int write_xattr(hash_state* state, const char* res)
 		return -ENOENT;
 	}
 	if (setxattr(name, state->xattr_name, res, strlen(res), 0)) {
-		FPLOG(WARN, "Failed writing hash to xattr of %s\n", name);
 		if (state->xfallback) {
 			int err = upd_chks(state, name, res);
+			snprintf(xatstr, 128, "chksum file %s", state->chkfnm);
 			if (err) {
-				FPLOG(WARN, "Failed writing to chksum file for %s: %s\n", name, strerror(-err));
+				FPLOG(WARN, "Failed writing to %s for %s: %s\n", 
+						xatstr, name, strerror(-err));
 				return err;
 			}
-		} else
+		} else {
+			FPLOG(WARN, "Failed writing hash to xattr of %s\n", name);
 			return -errno;
+		}
 	}
 	if (state->debug)
-		FPLOG(DEBUG, "Set xattr %s in %s to %s\n",
-				state->xattr_name, name, res);
+		FPLOG(DEBUG, "Set %s for %s to %s\n",
+				xatstr, name, res);
 	return 0;
 }
 #endif
@@ -530,18 +551,18 @@ int check_chkf(hash_state *state, const char* res)
 	if (state->ichg && !state->ochg) {
 		name = state->opts->oname;
 		if (!state->opts->quiet)
-			FPLOG(INFO, "Read checksum for output file %s\n", name);
+			FPLOG(INFO, "Read checksum from %s for output file %s\n", state->chkfnm, name);
 	} else if (state->ichg) {
 		FPLOG(WARN, "Can't read checksum in the middle of plugin chain (%s)\n", state->fname);
 		return -ENOENT;
 	}
 	char* cks = get_chks(state, name);
 	if (!cks) {
-		FPLOG(WARN, "Can't find checksum for %s\n", name);
+		FPLOG(WARN, "Can't find checksum in %s for %s\n", state->chkfnm, name);
 		return -ENOENT;
 	}
 	if (strcmp(cks, res)) {
-		FPLOG(WARN, "Hash from chksum file for %s does not match\n", name);
+		FPLOG(WARN, "Hash from chksum file %s for %s does not match\n", state->chkfnm, name);
 		return -EBADF;
 	}
 	return 0;
@@ -553,7 +574,7 @@ int write_chkf(hash_state *state, const char *res)
 	if (state->ochg && !state->ichg) {
 		name = state->opts->iname;
 		if (!state->opts->quiet)
-			FPLOG(INFO, "Write checksum for input file %s\n", name);
+			FPLOG(INFO, "Write checksum to %s for input file %s\n", state->chkfnm, name);
 	} else if (state->ochg) {
 		FPLOG(WARN, "Can't write checksum in the middle of plugin chain (%s)\n",
 				state->fname);
@@ -561,7 +582,7 @@ int write_chkf(hash_state *state, const char *res)
 	}
 	int err = upd_chks(state, name, res);
 	if (err) 
-		FPLOG(WARN, "Hash writing for %s failed\n", name);
+		FPLOG(WARN, "Hash writing to %s for %s failed\n", state->chkfnm, name);
 	return err;
 }
 
@@ -595,6 +616,8 @@ int hash_close(loff_t ooff, void **stat)
 	if (state->xnmalloc)
 		free((void*)state->xattr_name);
 #endif
+	if (state->chkfalloc)
+		free((void*)state->chkfnm);
 	if (strcmp(state->fname, state->opts->iname) && strcmp(state->fname, state->opts->oname))
 		free((void*)state->fname);
 	free(*stat);
@@ -604,8 +627,8 @@ int hash_close(loff_t ooff, void **stat)
 
 ddr_plugin_t ddr_plug = {
 	//.name = "MD5",
-	.slack_pre = 128,	// not yet used
-	.slack_post = 256,	// not yet used
+	.slack_pre = 144,	// not yet used
+	.slack_post = 288,	// not yet used
 	.needs_align = 0,
 	.handles_sparse = 1,
 	.init_callback  = hash_plug_init,

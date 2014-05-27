@@ -385,13 +385,13 @@ void call_plugins_open(opt_t *op, fstate_t *fst)
 						plug_max_slack_pre-slk_pre, plug_max_slack_post-slk_post,
 					        &LISTDATA(plug).state);
 			if (err < 0) {
-				fplog(stderr, WARN, "Error initializing plugin %s: %s!\n",
-					LISTDATA(plug).name, strerror(-err));
+				fplog(stderr, WARN, "Error initializing plugin %s(%i): %s!\n",
+					LISTDATA(plug).name, plugins_opened, strerror(-err));
 				exit(13);
 			} else if (err>0) {
 				fst->ipos += err;
-				fplog(stderr, WARN, "Plugin %s skipping %i bytes might break other plugins!\n",
-					LISTDATA(plug).name, err);
+				fplog(stderr, WARN, "Plugin %s(%i) skipping %i bytes might break other plugins!\n",
+					LISTDATA(plug).name, plugins_opened, err);
 			}
 		}
 		++plugins_opened;
@@ -403,6 +403,7 @@ void call_plugins_open(opt_t *op, fstate_t *fst)
 int call_plugins_close(opt_t *op, fstate_t *fst)
 {
 	int errs = 0;
+	int seq = 0;
 	if (!plugins_opened)
 		return 0;
 	LISTTYPE(ddr_plugin_t) *plug;
@@ -410,11 +411,12 @@ int call_plugins_close(opt_t *op, fstate_t *fst)
 		if (LISTDATA(plug).close_callback) {
 			int err = LISTDATA(plug).close_callback(fst->opos, &LISTDATA(plug).state);
 			if (err) {
-				fplog(stderr, WARN, "Error closing plugin %s: %s!\n",
-					LISTDATA(plug).name, strerror(-err));
+				fplog(stderr, WARN, "Plugin %s(%i) reported error on close: %s!\n",
+					LISTDATA(plug).name, seq, strerror(-err));
 				++errs;
 			}
 		}
+		++seq;
 		--plugins_opened;
 	}
 	return errs;
