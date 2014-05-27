@@ -190,6 +190,9 @@ dd_rescue has a few nifty features:
   to test error recovery), and appending to existing .lzo files.
 * Version 1.44 renamed the MD5 plugin to the hash plugin, as we support the
   SHA-2 family of cryptographic hashes now.
+* Version 1.45 added sha1 to ddr_hash as well as the chk_xattr:chknm=:check
+  and outnm:set_xattr parameters that allow to conveniently store and validate
+  hashes on files.
 
 
 Copyright
