@@ -7,6 +7,13 @@
  * License: GNU GPLv2 or v3
  */
 
+#ifndef _GNU_SOURCE
+# define _GNU_SOURCE 1
+#endif
+
+#define _LARGEFILE64_SOURCE 1
+#define _FILE_OFFSET_BITS 64
+
 #include "ddr_plugin.h"
 #include "ddr_ctrl.h"
 #include "hash.h"
@@ -16,12 +23,12 @@
 #include "sha1.h"
 
 #include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
 #include <libgen.h>
 #include <ctype.h>
 #include <assert.h>
 #include <errno.h>
+#include <unistd.h>
 #ifdef HAVE_ATTR_XATTR_H
 # include <attr/xattr.h>
 #endif
