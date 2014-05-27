@@ -43,7 +43,7 @@ nolib:
 	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm $@
 
 strip: dd_rescue
-	strip -S dd_rescue
+	strip -S dd_rescue libddr_*.so
 
 find_nonzero: $(DEPS)
 	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm $@
