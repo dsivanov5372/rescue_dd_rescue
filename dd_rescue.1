@@ -370,10 +370,13 @@ When copying files, this option does result in file metadata (timestamps,
 ownership, access rights, xattrs) to be copied, similar to the option with the
 same name in the cp program.
 .br
-Note that this option is only available if 
+Note that ACLs and xattrs will only be copied if 
 .B dd_rescue
-has been compiled with libxattr support and the library can by dynamically
-loaded on the system.
+has been compiled with libxattr support and the library can be dynamically
+loaded on the system. Also note that failing to copy the attributes with
+.IR -p
+is not considered a failure and thus won't negatively affect the exit code
+of dd_rescue.
 .TP 8
 .BR \-t ", " \-\-truncate
 tells
