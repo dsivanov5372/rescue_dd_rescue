@@ -220,6 +220,7 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 }
 
 #define MIN(a,b) ((a)<(b)? (a): (b))
+#define MAX(a,b) ((a)<(b)? (b): (a))
 
 int hash_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	     unsigned int totslack_pre, unsigned int totslack_post,
@@ -707,8 +708,9 @@ int pbkdf2(hashalg_t *hash, unsigned char* pwd, int plen,
 	/* TODO: Use secure buffer */
 	hash_t hashval;
 	const unsigned int hlen = hash->hashln;
-	unsigned char* buf = (unsigned char*)malloc(plen+slen+klen+64);
-	unsigned char* khash = (unsigned char*)malloc(klen+klen-1-(klen+klen-1)%hlen);
+	const unsigned int khlen = hlen*(1+(klen-1)/hlen);
+	unsigned char* buf = (unsigned char*)malloc(plen+MAX(slen+klen, hlen)+hash->blksz);
+	unsigned char* khash = (unsigned char*)malloc(khlen);
 	/* TODO: Input validation */
 	memcpy(buf, pwd, plen);
 	memcpy(buf+plen, salt, slen);
@@ -733,8 +735,8 @@ int pbkdf2(hashalg_t *hash, unsigned char* pwd, int plen,
 			memxor(key+p*hlen, (unsigned char*)&hashval, MIN(hlen, klen-p*hlen));
 		}
 	}
-	memset(buf, 0, plen+slen+klen+64);
-	memset(khash, 0, klen+klen-1-(klen+klen-1)%hlen);
+	memset(buf, 0, plen+slen+klen+hash->blksz);
+	memset(khash, 0, khlen);
 	asm("":::"memory");
 	free(khash);
 	free(buf);
