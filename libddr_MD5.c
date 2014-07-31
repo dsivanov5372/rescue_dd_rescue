@@ -95,7 +95,7 @@ typedef struct _hash_state {
 const char *hash_help = "The HASH plugin for dd_rescue calculates a cryptographic checksum on the fly.\n"
 		" It supports unaligned blocks (arbitrary offsets) and holes(sparse writing).\n"
 		" Parameters: output:outfd=FNO:outnm=FILE:check:chknm=FILE:debug:[alg[o[rithm]=]ALG\n"
-		"\t:append=STR:prepend=STR\n"
+		"\t:append=STR:prepend=STR:pbkdf2=ALG/PWD/SALT/ITER/LEN\n"
 #ifdef HAVE_ATTR_XATTR_H
 		"\t:chk_xattr[=xattr_name]:set_xattr[=xattr_name]:fallb[ack][=FILE]\n"
 #endif
@@ -119,7 +119,7 @@ hashalg_t *get_hashalg(hash_state *state, const char* nm)
 	return NULL;
 }
 
-
+int do_pbkdf2(hash_state*, char*);
 
 int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 {
@@ -176,6 +176,8 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			state->alg = get_hashalg(state, param+4);
 		else if (!memcmp(param, "algorithm=", 10))
 			state->alg = get_hashalg(state, param+10);
+		else if (!memcmp(param, "pbkdf2=", 7))
+			err += do_pbkdf2(state, param+7);
 		/* elif .... */
 		/* Hmmm, ok, let's support algname without alg= */
 		else {
@@ -739,6 +741,59 @@ int pbkdf2(hashalg_t *hash, unsigned char* pwd, int plen,
 	return 0;
 }
 
+int do_pbkdf2(hash_state *state, char* param)
+{
+	char* next = strchr(param, '/');
+	if (next)
+		*next++ = 0;
+	else
+		goto out_err;
+	hashalg_t *halg = get_hashalg(state, param);
+	
+	param = next;
+	next = strchr(param, '/');
+	if (next)
+		*next++ = 0;
+	else
+		goto out_err;
+	char* pwd = param;
+	
+	param = next;
+	next = strchr(param, '/');
+	if (next)
+		*next++ = 0;
+	else
+		goto out_err;
+	char* salt = param;
+
+	param = next;
+	next = strchr(param, '/');
+	if (next)
+		*next++ = 0;
+	else
+		goto out_err;
+	unsigned int iter = atol(param);
+
+	int klen = atol(next)/8;
+
+	unsigned char *key = (unsigned char*)malloc(klen);
+
+	int err = pbkdf2(halg, (unsigned char*)pwd, strlen(pwd), 
+			 (unsigned char*)salt, strlen(salt),
+			 iter, key, klen);
+	
+	FPLOG(INFO, "PBKDF2(%s, %s, %s, %i, %i) =",
+		halg->name, pwd, salt, iter, klen*8);
+	int i;
+	for (i = 0; i < klen; ++i)
+		fprintf(stderr, " %02x", key[i]);
+	fprintf(stderr, "\n");
+	free(key);
+	return err;
+    out_err:
+	FPLOG(FATAL, "Syntax: pbkdf2=ALG/PWD/SALT/ITER/KEYLEN\n");		
+	return 1;
+}
 
 
 ddr_plugin_t ddr_plug = {
