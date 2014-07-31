@@ -688,7 +688,7 @@ int hash_close(loff_t ooff, void **stat)
 	return err;
 }
 
-void memxor(unsigned char* p1, unsigned char *p2, ssize_t ln)
+void memxor(unsigned char* p1, const unsigned char *p2, ssize_t ln)
 {
 	while (ln >= 4) {
 		*(unsigned int*)p1 ^= *(unsigned int*)p2;
@@ -708,7 +708,8 @@ int pbkdf2(hashalg_t *hash, unsigned char* pwd, int plen,
 	/* TODO: Use secure buffer */
 	hash_t hashval;
 	const unsigned int hlen = hash->hashln;
-	const unsigned int khlen = hlen*(1+(klen-1)/hlen);
+	const unsigned int khrnd = 1+(klen-1)/hlen;
+	const unsigned int khlen = hlen*khrnd;
 	unsigned char* buf = (unsigned char*)malloc(plen+MAX(slen+klen, hlen)+hash->blksz);
 	unsigned char* khash = (unsigned char*)malloc(khlen);
 	/* TODO: Input validation */
@@ -716,7 +717,7 @@ int pbkdf2(hashalg_t *hash, unsigned char* pwd, int plen,
 	memcpy(buf+plen, salt, slen);
 	int blen = plen+slen+4;
 	int i, p;
-	for (p = 0; p < 1+(klen-1)/hlen; ++p) {
+	for (p = 0; p < khrnd; ++p) {
 		unsigned int ctr = htonl(p+1);
 		memcpy(buf+plen+slen, &ctr, 4);
 		hash->hash_init(&hashval);
@@ -726,7 +727,7 @@ int pbkdf2(hashalg_t *hash, unsigned char* pwd, int plen,
 	}
 	blen = plen+hlen;
 	for (i = 1; i < iter; ++i) {
-		for (p = 0; p < 1+(klen-1)/hlen; ++p) {
+		for (p = 0; p < khrnd; ++p) {
 			memcpy(buf+plen, khash+p*hlen, hlen);
 			hash->hash_init(&hashval);
 			hash->hash_calc(buf, blen, blen, &hashval);
