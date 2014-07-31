@@ -37,7 +37,7 @@ int main(int argc, char *argv[])
 	char* obuf = malloc(1+2*olen);
 	PBKDF2_HMAC_SHA1(argv[1], (unsigned char*)argv[2], atol(argv[3]), olen, obuf);
 	printf("PBKDF2(SHA1  , ...) = %s\n", obuf);
-	PBKDF2_HMAC_SHA1(argv[1], (unsigned char*)argv[2], atol(argv[3]), olen, obuf);
+	PBKDF2_HMAC_SHA512(argv[1], (unsigned char*)argv[2], atol(argv[3]), olen, obuf);
 	printf("PBKDF2(SHA512, ...) = %s\n", obuf);
 	free(obuf);
 	return 0;
