@@ -33,6 +33,8 @@
 # include <attr/xattr.h>
 #endif
 
+#include <netinet/in.h>	/* For ntohl/htonl */
+
 // TODO: pass at runtime rather than compile time
 #define HASH_DEBUG(x) if (state->debug) x
 
@@ -54,14 +56,15 @@ typedef struct {
 	hash_calc_fn *hash_calc;
 	hash_out_fn *hash_out;
 	unsigned int blksz;
+	unsigned int hashln; /* in bytes */
 } hashalg_t;
 
-hashalg_t hashes[] = { 	{ "md5", md5_init, md5_64, md5_calc, md5_out, 64 },
-			{ "sha1", sha1_init, sha1_64, sha1_calc, sha1_out, 64 },
-			{ "sha256", sha256_init, sha256_64 , sha256_calc, sha256_out,  64 },
-			{ "sha224", sha224_init, sha256_64 , sha256_calc, sha224_out,  64 },
-			{ "sha512", sha512_init, sha512_128, sha512_calc, sha512_out, 128 },
-			{ "sha384", sha384_init, sha512_128, sha512_calc, sha384_out, 128 }
+hashalg_t hashes[] = { 	{ "md5", md5_init, md5_64, md5_calc, md5_out, 64, 16 },
+			{ "sha1", sha1_init, sha1_64, sha1_calc, sha1_out, 64, 20 },
+			{ "sha256", sha256_init, sha256_64 , sha256_calc, sha256_out,  64, 32 },
+			{ "sha224", sha224_init, sha256_64 , sha256_calc, sha224_out,  64, 28 },
+			{ "sha512", sha512_init, sha512_128, sha512_calc, sha512_out, 128, 64 },
+			{ "sha384", sha384_init, sha512_128, sha512_calc, sha384_out, 128, 48 }
 			// SHA3 ...
 };
 
@@ -681,6 +684,61 @@ int hash_close(loff_t ooff, void **stat)
 	free(*stat);
 	return err;
 }
+
+void memxor(unsigned char* p1, unsigned char *p2, ssize_t ln)
+{
+	while (ln >= 4) {
+		*(unsigned int*)p1 ^= *(unsigned int*)p2;
+		ln -= 4;
+		p1 += 4; p2 += 4;
+	}
+	while (ln-- > 0) 
+		*p1++ ^= *p2++;
+}
+
+
+int pbkdf2(hashalg_t *hash, unsigned char* pwd, int plen,
+			    unsigned char* salt, int slen,
+			    unsigned int iter,
+			    unsigned char* key, int klen)
+{
+	/* TODO: Use secure buffer */
+	hash_t hashval;
+	const unsigned int hlen = hash->hashln;
+	unsigned char* buf = (unsigned char*)malloc(plen+slen+klen+64);
+	unsigned char* khash = (unsigned char*)malloc(klen+klen-1-(klen+klen-1)%hlen);
+	/* TODO: Input validation */
+	memcpy(buf, pwd, plen);
+	memcpy(buf+plen, salt, slen);
+	int blen = plen+slen+4;
+	int i, p;
+	for (p = 0; p < 1+(klen-1)/hlen; ++p) {
+		unsigned int ctr = htonl(p+1);
+		memcpy(buf+plen+slen, &ctr, 4);
+		hash->hash_init(&hashval);
+		hash->hash_calc(buf, blen, blen, &hashval);
+		memcpy(khash+p*hlen, &hashval, hlen);
+		memcpy(key+p*hlen, &hashval, MIN(hlen, klen-p*hlen));
+	}
+	blen = plen+hlen;
+	for (i = 1; i < iter; ++i) {
+		for (p = 0; p < 1+(klen-1)/hlen; ++p) {
+			memcpy(buf+plen, khash+p*hlen, hlen);
+			hash->hash_init(&hashval);
+			hash->hash_calc(buf, blen, blen, &hashval);
+			/* Store as init val for next iter */
+			memcpy(khash+p*hlen, &hashval, hlen);
+			memxor(key+p*hlen, (unsigned char*)&hashval, MIN(hlen, klen-p*hlen));
+		}
+	}
+	memset(buf, 0, plen+slen+klen+64);
+	memset(khash, 0, klen+klen-1-(klen+klen-1)%hlen);
+	asm("":::"memory");
+	free(khash);
+	free(buf);
+	return 0;
+}
+
 
 
 ddr_plugin_t ddr_plug = {
