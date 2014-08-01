@@ -700,18 +700,19 @@ void memxor(unsigned char* p1, const unsigned char *p2, ssize_t ln)
 }
 
 
-int pbkdf2(hashalg_t *hash, unsigned char* pwd, int plen,
-			    unsigned char* salt, int slen,
-			    unsigned int iter,
-			    unsigned char* key, int klen)
+int pbkdf2(hashalg_t *hash,   unsigned char* pwd,  int plen,
+			      unsigned char* salt, int slen,
+	   unsigned int iter, unsigned char* key,  int klen)
 {
 	/* TODO: Use secure buffer */
 	hash_t hashval;
 	const unsigned int hlen = hash->hashln;
 	const unsigned int khrnd = 1+(klen-1)/hlen;
 	const unsigned int khlen = hlen*khrnd;
-	unsigned char* buf = (unsigned char*)malloc(plen+MAX(slen+klen, hlen)+hash->blksz);
+	const unsigned int bflen = plen+MAX(slen+4, hlen)+hash->blksz;
+	unsigned char* buf = (unsigned char*)malloc(bflen);
 	unsigned char* khash = (unsigned char*)malloc(khlen);
+	memset(buf, 0, bflen); memset(khash, 0, khlen);
 	/* TODO: Input validation */
 	memcpy(buf, pwd, plen);
 	memcpy(buf+plen, salt, slen);
@@ -720,8 +721,11 @@ int pbkdf2(hashalg_t *hash, unsigned char* pwd, int plen,
 	for (p = 0; p < khrnd; ++p) {
 		unsigned int ctr = htonl(p+1);
 		memcpy(buf+plen+slen, &ctr, 4);
-		hash->hash_init(&hashval);
-		hash->hash_calc(buf, blen, blen, &hashval);
+		if (iter) {
+			hash->hash_init(&hashval);
+			hash->hash_calc(buf, blen, /*-1*/ blen, &hashval);
+		} else 
+			memcpy(&hashval, buf, hlen);
 		memcpy(khash+p*hlen, &hashval, hlen);
 		memcpy(key+p*hlen, &hashval, MIN(hlen, klen-p*hlen));
 	}
@@ -730,7 +734,7 @@ int pbkdf2(hashalg_t *hash, unsigned char* pwd, int plen,
 		for (p = 0; p < khrnd; ++p) {
 			memcpy(buf+plen, khash+p*hlen, hlen);
 			hash->hash_init(&hashval);
-			hash->hash_calc(buf, blen, blen, &hashval);
+			hash->hash_calc(buf, blen, /*-1*/ blen, &hashval);
 			/* Store as init val for next iter */
 			memcpy(khash+p*hlen, &hashval, hlen);
 			memxor(key+p*hlen, (unsigned char*)&hashval, MIN(hlen, klen-p*hlen));
@@ -785,11 +789,11 @@ int do_pbkdf2(hash_state *state, char* param)
 			 (unsigned char*)salt, strlen(salt),
 			 iter, key, klen);
 	
-	FPLOG(INFO, "PBKDF2(%s, %s, %s, %i, %i) =",
+	FPLOG(INFO, "PBKDF2(%s, %s, %s, %i, %i) = ",
 		halg->name, pwd, salt, iter, klen*8);
 	int i;
 	for (i = 0; i < klen; ++i)
-		fprintf(stderr, " %02x", key[i]);
+		fprintf(stderr, "%02x", key[i]);
 	fprintf(stderr, "\n");
 	free(key);
 	return err;

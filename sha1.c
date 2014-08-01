@@ -156,7 +156,12 @@ void sha1_calc(uint8_t *ptr, size_t chunk_ln, size_t final_len, hash_t *ctx)
 		chunk_ln = i + 8;
 		//output(ptr, pad);
 	}
+#if 1
 	assert(0 == chunk_ln % 64);
+#else
+	if (chunk_ln % 64)
+		memset(ptr+chunk_ln, 0, 64 - chunk_ln%64);
+#endif
 	uint32_t offset;
 	for (offset = 0; offset < chunk_ln; offset += 64)
 		sha1_64(ptr + offset, ctx);
