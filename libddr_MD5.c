@@ -740,7 +740,7 @@ int pbkdf2(hashalg_t *hash,   unsigned char* pwd,  int plen,
 			memxor(key+p*hlen, (unsigned char*)&hashval, MIN(hlen, klen-p*hlen));
 		}
 	}
-	memset(buf, 0, plen+slen+klen+hash->blksz);
+	memset(buf, 0, bflen);
 	memset(khash, 0, khlen);
 	asm("":::"memory");
 	free(khash);
