@@ -793,7 +793,7 @@ int do_pbkdf2(hash_state *state, char* param)
 		halg->name, pwd, salt, iter, klen*8);
 	int i;
 	for (i = 0; i < klen; ++i)
-		fprintf(stderr, "%02x", key[i]);
+		fprintf(stderr, "%02x", key[i+3-2*(i%4)]);
 	fprintf(stderr, "\n");
 	free(key);
 	return err;
