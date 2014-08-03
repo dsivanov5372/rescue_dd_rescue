@@ -699,6 +699,36 @@ void memxor(unsigned char* p1, const unsigned char *p2, ssize_t ln)
 		*p1++ ^= *p2++;
 }
 
+int hmac(hashalg_t* hash, unsigned char* pwd, int plen,
+			  unsigned char* msg, ssize_t mlen,
+			  unsigned char* res)
+{
+	const unsigned int hlen = hash->hashln; 
+	unsigned char ibuf[hlen], obuf[hlen];
+	memset(ibuf, 0x36, hlen);
+	memset(obuf, 0x5c, hlen);
+	if (plen > hlen) {
+		hash_t hv;
+		hash->hash_init(&hv);
+		hash->hash_calc(pwd, plen, plen, &hv);
+		memcpy(pwd, &hv, hlen);
+		plen = hlen;
+	}
+	memxor(ibuf, pwd, plen);
+	memxor(obuf, pwd, plen);
+	hash_t ihv;
+	hash->hash_init(&ihv);
+	hash->hash_block(ibuf, &ihv);
+	hash->hash_calc(msg, mlen, mlen+hlen, &ihv);
+	hash_t ohv;
+	hash->hash_init(&ohv);
+	hash->hash_block(obuf, &ohv);
+	hash->hash_calc((uint8_t*)&ihv, hlen, 2*hlen, &ohv);
+	memcpy(res, &ohv, hlen);
+	return 0;
+}
+		
+
 
 int pbkdf2(hashalg_t *hash,   unsigned char* pwd,  int plen,
 			      unsigned char* salt, int slen,
