@@ -34,6 +34,7 @@
 #endif
 
 #include <netinet/in.h>	/* For ntohl/htonl */
+#include <endian.h>
 
 // TODO: pass at runtime rather than compile time
 #define HASH_DEBUG(x) if (state->debug) x
@@ -702,6 +703,7 @@ void memxor(unsigned char* p1, const unsigned char *p2, ssize_t ln)
 void hashout(unsigned char* hv, unsigned int hln)
 {
 	int i;
+	/* FIXME: Incorrect for 64bit hashes ... */
 	for (i = 0; i < hln; ++i)
 		fprintf(stderr, "%02x", hv[i+3-2*(i%4)]);
 	fprintf(stderr, "\n");
@@ -716,7 +718,6 @@ int hmac(hashalg_t* hash, unsigned char* pwd, int plen,
 	unsigned char ibuf[blen], obuf[blen];
 	memset(ibuf, 0x36, blen);
 	memset(obuf, 0x5c, blen);
-	/* FIXME: Shouldn't this be blksz-9 */
 	if (plen > hash->blksz) {
 		hash_t hv;
 		unsigned char pcpy[2*blen];
@@ -730,25 +731,29 @@ int hmac(hashalg_t* hash, unsigned char* pwd, int plen,
 	memxor(ibuf, pwd, plen);
 	memxor(obuf, pwd, plen);
 	assert(blen >= hlen);
-	unsigned char ihv[blen];
-	hash->hash_init((hash_t*)ihv);
-	hash->hash_block(ibuf, (hash_t*)ihv);
-	hash->hash_calc(msg, mlen, blen+mlen, (hash_t*)ihv);
-#if 0
+	hash_t ihv;
+	hash->hash_init(&ihv);
+	hash->hash_block(ibuf, &ihv);
+	hash->hash_calc(msg, mlen, blen+mlen, &ihv);
+	unsigned char ibe[blen];
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+	/* FIXME: Broken for 64bit hashes sha-512, 384 */
 	int i;
 	for (i = 0; i < hlen; ++i)
-		ihv[i] = ihv[i+3-2*(i%4)];
+		ibe[i] = *((unsigned char*)&ihv+i+3-2*(i%4));
+#else
+	memcpy(ibe, &ihv, hlen);
 #endif
 	hash->hash_init(hval);
 	hash->hash_block(obuf, hval);
-	hash->hash_calc(ihv, hlen, blen+hlen, hval);
-#if 1
+	hash->hash_calc(ibe, hlen, blen+hlen, hval);
+#if 0
 	fprintf(stderr, "Inner (%i): (%02x %02x %02x %02x %02x %02x ..., %s) = ",
 		blen+mlen, ibuf[0], ibuf[1], ibuf[2], ibuf[3], ibuf[4], ibuf[5], msg);
-	hashout(ihv, hlen);
+	hashout((unsigned char*)&ihv, hlen);
 	fprintf(stderr, "Outer (%i): (%02x %02x %02x %02x %02x %02x ..., %02x %02x %02x %02x ...)\n",
 		blen+hlen, obuf[0], obuf[1], obuf[2], obuf[3], obuf[4], obuf[5],
-		ihv[0], ihv[1], ihv[2], ihv[3]);
+		ibe[0], ibe[1], ibe[2], ibe[3]);
 	fprintf(stderr, "HMAC(%s, %s(%i), %s(%i)) = ",
 		hash->name, pwd, plen, msg, mlen);
 	hashout((unsigned char*)hval, hlen);
