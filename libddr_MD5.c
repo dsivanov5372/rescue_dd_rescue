@@ -780,8 +780,9 @@ int pbkdf2(hashalg_t *hash,   unsigned char* pwd,  int plen,
 			hmac(hash, pwd, plen, buf, slen+4, &hashval);
 		else 
 			memcpy(&hashval, buf, hlen);
-		memcpy(khash+p*hlen, &hashval, hlen);
-		memcpy(key+p*hlen, &hashval, MIN(hlen, klen-p*hlen));
+		//memcpy(khash+p*hlen, &hashval, hlen);
+		hash->hash_beout(khash+p*hlen, &hashval);
+		memcpy(key+p*hlen, khash+p*hlen, MIN(hlen, klen-p*hlen));
 	}
 	for (i = 1; i < iter; ++i) {
 		for (p = 0; p < khrnd; ++p) {
