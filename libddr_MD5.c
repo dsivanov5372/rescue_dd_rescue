@@ -714,8 +714,16 @@ int hmac(hashalg_t* hash, unsigned char* pwd, int plen,
 	const unsigned int hlen = hash->hashln; 
 	const unsigned int blen = hash->blksz;
 	unsigned char ibuf[blen], obuf[blen];
+#if 1
 	memset(ibuf, 0x36, blen);
 	memset(obuf, 0x5c, blen);
+#else
+	int i;
+	for (i = 0; i < blen; ++i) {
+		ibuf[i] = 0x36+i;
+		obuf[i] = 0x5c+i;
+	}
+#endif
 	/* FIXME: Shouldn't this be blksz-9 */
 	if (plen > hash->blksz) {
 		hash_t hv;
@@ -768,19 +776,17 @@ int pbkdf2(hashalg_t *hash,   unsigned char* pwd,  int plen,
 	}
 	/* TODO: Input validation */
 	int i, p;
-	int blen = slen+4;
 	memcpy(buf, salt, slen);
 	for (p = 0; p < khrnd; ++p) {
-		unsigned int ctr = htonl(p+1);
+		const unsigned int ctr = htonl(p+1);
 		memcpy(buf+slen, &ctr, 4);
 		if (iter) 
-			hmac(hash, pwd, plen, buf, blen, &hashval);
+			hmac(hash, pwd, plen, buf, slen+4, &hashval);
 		else 
 			memcpy(&hashval, buf, hlen);
 		memcpy(khash+p*hlen, &hashval, hlen);
 		memcpy(key+p*hlen, &hashval, MIN(hlen, klen-p*hlen));
 	}
-	blen = hlen;
 	for (i = 1; i < iter; ++i) {
 		for (p = 0; p < khrnd; ++p) {
 			memcpy(buf, khash+p*hlen, hlen);
