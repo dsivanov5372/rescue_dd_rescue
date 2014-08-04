@@ -121,7 +121,8 @@ void sha256_64(const uint8_t* msg, hash_t* ctx)
 }
 
 static char _sha256_res[65];
-char* sha256_out(char *buf, const hash_t* ctx)
+static inline 
+char* sha2xx_hexout(char *buf, const hash_t* ctx, int wd)
 {
 	/* Produce the final hash value (big-endian): */ 
 	//digest := hash := h0 append h1 append h2 append h3 append h4 append h5 append h6 append h7
@@ -129,7 +130,7 @@ char* sha256_out(char *buf, const hash_t* ctx)
 		buf = _sha256_res;
 	int i;
 	*buf = 0;
-	for (i = 0; i < 8; ++i) {
+	for (i = 0; i < wd; ++i) {
 		char res[9];
 		sprintf(res, "%08x", ctx->sha256_h[i]);
 		strcat(buf, res);
@@ -137,21 +138,36 @@ char* sha256_out(char *buf, const hash_t* ctx)
 	return buf;
 }
 
-char* sha224_out(char *buf, const hash_t* ctx)
+char* sha256_hexout(char *buf, const hash_t* ctx)
 {
-	/* Produce the final hash value (big-endian): */ 
-	//digest := hash := h0 append h1 append h2 append h3 append h4 append h5 append h6 append h7
-	if (!buf)
-		buf = _sha256_res;
+	return sha2xx_hexout(buf, ctx, 8);
+}
+char* sha224_hexout(char *buf, const hash_t* ctx)
+{
+	return sha2xx_hexout(buf, ctx, 7);
+}
+
+/* Big endian byte output */
+static inline
+unsigned char* sha2xx_beout(unsigned char* buf, const hash_t* ctx, int wd)
+{
+	assert(buf);
 	int i;
-	*buf = 0;
-	for (i = 0; i < 7; ++i) {
-		char res[9];
-		sprintf(res, "%08x", ctx->sha256_h[i]);
-		strcat(buf, res);
-	}
+	for (i = 0; i < wd; ++i)
+		*((uint32_t*)buf+i) = htonl(ctx->sha256_h[i]);
 	return buf;
 }
+
+unsigned char* sha256_beout(unsigned char *buf, const hash_t *ctx)
+{
+	return sha2xx_beout(buf, ctx, 8);
+}
+
+unsigned char* sha224_beout(unsigned char *buf, const hash_t *ctx)
+{
+	return sha2xx_beout(buf, ctx, 7);
+}
+
 
 #ifdef DEBUG
 static void output(unsigned char* ptr, int ln)

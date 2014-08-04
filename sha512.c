@@ -158,7 +158,8 @@ void sha512_128(const uint8_t* msg, hash_t* ctx)
 #endif
 
 static char _sha512_res[129];
-char* sha512_out(char *buf, const hash_t* ctx)
+static inline 
+char* sha5xx_hexout(char *buf, const hash_t *ctx, int wd)
 {
 	/* Produce the final hash value (big-endian): */ 
 	//digest := hash := h0 append h1 append h2 append h3 append h4 append h5 append h6 append h7
@@ -166,7 +167,7 @@ char* sha512_out(char *buf, const hash_t* ctx)
 		buf = _sha512_res;
 	int i;
 	*buf = 0;
-	for (i = 0; i < 8; ++i) {
+	for (i = 0; i < wd; ++i) {
 		char res[17];
 		sprintf(res, "%016" LL "x", ctx->sha512_h[i]);
 		strcat(buf, res);
@@ -174,22 +175,35 @@ char* sha512_out(char *buf, const hash_t* ctx)
 	return buf;
 }
 
-char* sha384_out(char *buf, const hash_t* ctx)
+char* sha512_hexout(char *buf, const hash_t* ctx)
 {
-	/* Produce the final hash value (big-endian): */ 
-	//digest := hash := h0 append h1 append h2 append h3 append h4 append h5 append h6 append h7
-	if (!buf)
-		buf = _sha512_res;
+	return sha5xx_hexout(buf, ctx, 8);
+}
+
+char* sha384_hexout(char *buf, const hash_t* ctx)
+{
+	return sha5xx_hexout(buf, ctx, 6);
+}
+
+static inline
+unsigned char* sha5xx_beout(unsigned char *buf, const hash_t *ctx, int wd)
+{
+	assert(buf);
 	int i;
-	*buf = 0;
-	for (i = 0; i < 6; ++i) {
-		char res[17];
-		sprintf(res, "%016" LL "x", ctx->sha512_h[i]);
-		strcat(buf, res);
-	}
+	for (i = 0; i < wd; ++i) 
+		*((uint64_t*)buf+i) = htonll(ctx->sha512_h[i]);
 	return buf;
 }
 
+unsigned char* sha512_beout(unsigned char *buf, const hash_t *ctx)
+{
+	return sha5xx_beout(buf, ctx, 8);
+}
+
+unsigned char* sha384_beout(unsigned char *buf, const hash_t *ctx)
+{
+	return sha5xx_beout(buf, ctx, 6);
+}
 
 #ifdef DEBUG
 static void output(unsigned char* ptr, int ln)

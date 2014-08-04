@@ -48,24 +48,26 @@ extern ddr_plugin_t ddr_plug;
 typedef void (hash_init_fn)(hash_t*);
 typedef void (hash_block_fn)(const uint8_t* ptr, hash_t*);
 typedef void (hash_calc_fn)(uint8_t* ptr, size_t chunk, size_t final, hash_t*);
-typedef char* (hash_out_fn)(char* buf, const hash_t*);
+typedef char* (hash_hexout_fn)(char* buf, const hash_t*);
+typedef unsigned char* (hash_beout_fn)(unsigned char* buf, const hash_t*);
 
 typedef struct {
 	const char* name;
 	hash_init_fn *hash_init;
 	hash_block_fn *hash_block;
 	hash_calc_fn *hash_calc;
-	hash_out_fn *hash_out;
+	hash_hexout_fn *hash_hexout;
+	hash_beout_fn *hash_beout;
 	unsigned int blksz;
 	unsigned int hashln; /* in bytes */
 } hashalg_t;
 
-hashalg_t hashes[] = { 	{ "md5", md5_init, md5_64, md5_calc, md5_out, 64, 16 },
-			{ "sha1", sha1_init, sha1_64, sha1_calc, sha1_out, 64, 20 },
-			{ "sha256", sha256_init, sha256_64 , sha256_calc, sha256_out,  64, 32 },
-			{ "sha224", sha224_init, sha256_64 , sha256_calc, sha224_out,  64, 28 },
-			{ "sha512", sha512_init, sha512_128, sha512_calc, sha512_out, 128, 64 },
-			{ "sha384", sha384_init, sha512_128, sha512_calc, sha384_out, 128, 48 }
+hashalg_t hashes[] = { 	{ "md5", md5_init, md5_64, md5_calc, md5_hexout, md5_beout, 64, 16 },
+			{ "sha1", sha1_init, sha1_64, sha1_calc, sha1_hexout, sha1_beout, 64, 20 },
+			{ "sha256", sha256_init, sha256_64 , sha256_calc, sha256_hexout, sha256_beout,  64, 32 },
+			{ "sha224", sha224_init, sha256_64 , sha256_calc, sha224_hexout, sha224_beout,  64, 28 },
+			{ "sha512", sha512_init, sha512_128, sha512_calc, sha512_hexout, sha512_beout, 128, 64 },
+			{ "sha384", sha384_init, sha512_128, sha512_calc, sha384_hexout, sha384_beout, 128, 48 }
 			// SHA3 ...
 };
 
@@ -657,7 +659,7 @@ int hash_close(loff_t ooff, void **stat)
 	hash_state *state = (hash_state*)*stat;
 	char res[129];
 	loff_t firstpos = (state->seq == 0? state->opts->init_ipos: state->opts->init_opos);
-	state->alg->hash_out(res, &state->hash);
+	state->alg->hash_hexout(res, &state->hash);
 	if (!state->opts->quiet) 
 		FPLOG(INFO, "%s %s (%" LL "i-%" LL "i): %s\n",
 			state->alg->name, state->fname, firstpos, firstpos+state->hash_pos, res);
@@ -700,15 +702,6 @@ void memxor(unsigned char* p1, const unsigned char *p2, ssize_t ln)
 		*p1++ ^= *p2++;
 }
 
-void hashout(unsigned char* hv, unsigned int hln)
-{
-	int i;
-	/* FIXME: Incorrect for 64bit hashes ... */
-	for (i = 0; i < hln; ++i)
-		fprintf(stderr, "%02x", hv[i+3-2*(i%4)]);
-	fprintf(stderr, "\n");
-}
-
 int hmac(hashalg_t* hash, unsigned char* pwd, int plen,
 			  unsigned char* msg, ssize_t mlen,
 			  hash_t *hval)
@@ -736,27 +729,20 @@ int hmac(hashalg_t* hash, unsigned char* pwd, int plen,
 	hash->hash_block(ibuf, &ihv);
 	hash->hash_calc(msg, mlen, blen+mlen, &ihv);
 	unsigned char ibe[blen];
-#if __BYTE_ORDER == __LITTLE_ENDIAN
-	/* FIXME: Broken for 64bit hashes sha-512, 384 */
-	int i;
-	for (i = 0; i < hlen; ++i)
-		ibe[i] = *((unsigned char*)&ihv+i+3-2*(i%4));
-#else
-	memcpy(ibe, &ihv, hlen);
-#endif
+	hash->hash_beout(ibe, &ihv);
 	hash->hash_init(hval);
 	hash->hash_block(obuf, hval);
 	hash->hash_calc(ibe, hlen, blen+hlen, hval);
+	/* hash->hash_beout(hout, hval); */
 #if 0
-	fprintf(stderr, "Inner (%i): (%02x %02x %02x %02x %02x %02x ..., %s) = ",
-		blen+mlen, ibuf[0], ibuf[1], ibuf[2], ibuf[3], ibuf[4], ibuf[5], msg);
-	hashout((unsigned char*)&ihv, hlen);
+	fprintf(stderr, "Inner (%i): (%02x %02x %02x %02x %02x %02x ..., %s) = %s\n",
+		blen+mlen, ibuf[0], ibuf[1], ibuf[2], ibuf[3], ibuf[4], ibuf[5], msg,
+		hash->hash_hexout(0, &ihv));
 	fprintf(stderr, "Outer (%i): (%02x %02x %02x %02x %02x %02x ..., %02x %02x %02x %02x ...)\n",
 		blen+hlen, obuf[0], obuf[1], obuf[2], obuf[3], obuf[4], obuf[5],
 		ibe[0], ibe[1], ibe[2], ibe[3]);
-	fprintf(stderr, "HMAC(%s, %s(%i), %s(%i)) = ",
-		hash->name, pwd, plen, msg, mlen);
-	hashout((unsigned char*)hval, hlen);
+	fprintf(stderr, "HMAC(%s, %s(%i), %s(%i)) = %s\n",
+		hash->name, pwd, plen, msg, mlen, hash->hash_hexout(0, hval);
 #endif
 	return 0;
 }
@@ -799,9 +785,11 @@ int pbkdf2(hashalg_t *hash,   unsigned char* pwd,  int plen,
 	}
 	for (i = 1; i < iter; ++i) {
 		for (p = 0; p < khrnd; ++p) {
+			hash_t hv;
 			memcpy(buf, khash+p*hlen, hlen);
-			hmac(hash, pwd, plen, buf, hlen, (hash_t*)(khash+p*hlen));
+			hmac(hash, pwd, plen, buf, hlen, &hv);
 			/* Store as init val for next iter */
+			hash->hash_beout(khash+p*hlen, &hv);
 			memxor(key+p*hlen, khash+p*hlen, MIN(hlen, klen-p*hlen));
 		}
 	}
@@ -811,6 +799,15 @@ int pbkdf2(hashalg_t *hash,   unsigned char* pwd,  int plen,
 	free(khash);
 	free(buf);
 	return 0;
+}
+
+static char _kout_buf[2049];
+char* kout(unsigned char* key, int klen)
+{
+	int i;
+	for (i = 0; i < klen; ++i)
+		sprintf(_kout_buf+2*i, "%02x", key[i]);
+	return _kout_buf;
 }
 
 int do_pbkdf2(hash_state *state, char* param)
@@ -858,9 +855,8 @@ int do_pbkdf2(hash_state *state, char* param)
 			 (unsigned char*)salt, strlen(salt),
 			 iter, key, klen);
 	
-	FPLOG(INFO, "PBKDF2(%s, %s, %s, %i, %i) = ",
-		halg->name, pwd, salt, iter, klen*8);
-	hashout(key, klen);
+	FPLOG(INFO, "PBKDF2(%s, %s, %s, %i, %i) = %s\n",
+		halg->name, pwd, salt, iter, klen*8, kout(key, klen));
 	free(key);
 	return err;
     out_err:

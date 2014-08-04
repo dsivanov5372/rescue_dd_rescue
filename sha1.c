@@ -99,7 +99,7 @@ void sha1_64(const uint8_t* msg, hash_t* ctx)
 }
 
 static char _sha1_res[41];
-char* sha1_out(char *buf, const hash_t* ctx)
+char* sha1_hexout(char *buf, const hash_t* ctx)
 {
 	/* Produce the final hash value (big-endian): */ 
 	//digest := hash := h0 append h1 append h2 append h3 append h4 append h5 append h6 append h7
@@ -112,6 +112,16 @@ char* sha1_out(char *buf, const hash_t* ctx)
 		sprintf(res, "%08x", ctx->sha1_h[i]);
 		strcat(buf, res);
 	}
+	return buf;
+}
+
+unsigned char* sha1_beout(unsigned char *buf, const hash_t* ctx)
+{
+	//digest := hash := h0 append h1 append h2 append h3 append h4 append h5 append h6 append h7
+	assert(buf);
+	int i;
+	for (i = 0; i < 5; ++i) 
+		*((uint32_t*)buf+i) = htonl(ctx->sha1_h[i]);		
 	return buf;
 }
 

@@ -162,7 +162,7 @@ void md5_calc(uint8_t *ptr, size_t chunk_ln, size_t final_len, hash_t *ctx)
 #define BSWAP32(x) ((x<<24) | ((x<<8)&0x00ff0000) | ((x>>8)&0x0000ff00) | (x>>24))
 
 static char _md5_res[33];
-char* md5_out(char* buf, const hash_t *ctx)
+char* md5_hexout(char* buf, const hash_t *ctx)
 {
 	if (!buf)
 		buf = _md5_res;
@@ -170,9 +170,20 @@ char* md5_out(char* buf, const hash_t *ctx)
 	int i;
 	for (i = 0; i < 4; ++i) {
 		char str[9];
+		/* FIXME !!! */
 		sprintf(str, "%08x", BSWAP32(ctx->md5_h[i]));
 		strcat(buf, str);
 	}
+	return buf;
+}
+
+unsigned char* md5_beout(unsigned char* buf, const hash_t *ctx)
+{
+	assert(buf);
+	int i;
+	/* FIXME !!! */
+	for (i = 0; i < 4; ++i) 
+		*((uint32_t*)buf+i) = htonl(BSWAP32(ctx->md5_h[i]));
 	return buf;
 }
 
