@@ -701,30 +701,32 @@ void memxor(unsigned char* p1, const unsigned char *p2, ssize_t ln)
 
 int hmac(hashalg_t* hash, unsigned char* pwd, int plen,
 			  unsigned char* msg, ssize_t mlen,
-			  unsigned char* res)
+			  hash_t *hval)
 {
 	const unsigned int hlen = hash->hashln; 
-	unsigned char ibuf[hlen], obuf[hlen];
-	memset(ibuf, 0x36, hlen);
-	memset(obuf, 0x5c, hlen);
-	if (plen > hlen) {
+	const unsigned int blen = hash->blksz;
+	unsigned char ibuf[blen], obuf[blen];
+	memset(ibuf, 0x36, blen);
+	memset(obuf, 0x5c, blen);
+	if (plen > hash->blksz) {
 		hash_t hv;
+		unsigned char pcpy[2*blen];
+		memcpy(pcpy, pwd, plen);
 		hash->hash_init(&hv);
-		hash->hash_calc(pwd, plen, plen, &hv);
-		memcpy(pwd, &hv, hlen);
+		hash->hash_calc(pcpy, plen, plen, &hv);
+		memcpy(pwd, &hv, hlen); 
+		pwd[hlen] = 0;
 		plen = hlen;
 	}
 	memxor(ibuf, pwd, plen);
 	memxor(obuf, pwd, plen);
-	hash_t ihv;
-	hash->hash_init(&ihv);
-	hash->hash_block(ibuf, &ihv);
-	hash->hash_calc(msg, mlen, mlen+hlen, &ihv);
-	hash_t ohv;
-	hash->hash_init(&ohv);
-	hash->hash_block(obuf, &ohv);
-	hash->hash_calc((uint8_t*)&ihv, hlen, 2*hlen, &ohv);
-	memcpy(res, &ohv, hlen);
+	unsigned char ihv[blen];
+	hash->hash_init((hash_t*)ihv);
+	hash->hash_block(ibuf, (hash_t*)ihv);
+	hash->hash_calc(msg, mlen, mlen+hlen, (hash_t*)ihv);
+	hash->hash_init(hval);
+	hash->hash_block(obuf, hval);
+	hash->hash_calc(ihv, hlen, blen+hlen, hval);
 	return 0;
 }
 		
@@ -739,39 +741,44 @@ int pbkdf2(hashalg_t *hash,   unsigned char* pwd,  int plen,
 	const unsigned int hlen = hash->hashln;
 	const unsigned int khrnd = 1+(klen-1)/hlen;
 	const unsigned int khlen = hlen*khrnd;
-	const unsigned int bflen = plen+MAX(slen+4, hlen)+hash->blksz;
+	const unsigned int bflen = MAX(slen+4, hlen)+hash->blksz;
 	unsigned char* buf = (unsigned char*)malloc(bflen);
 	unsigned char* khash = (unsigned char*)malloc(khlen);
 	memset(buf, 0, bflen); memset(khash, 0, khlen);
+	if (plen > hlen) {
+		hash_t hv;
+		hash->hash_init(&hv);
+		hash->hash_calc(pwd, plen, plen, &hv);
+		memcpy(pwd, &hv, hlen); 
+		pwd[hlen] = 0;
+		plen = hlen;
+	}
 	/* TODO: Input validation */
-	memcpy(buf, pwd, plen);
-	memcpy(buf+plen, salt, slen);
-	int blen = plen+slen+4;
 	int i, p;
+	int blen = slen+4;
+	memcpy(buf, salt, slen);
 	for (p = 0; p < khrnd; ++p) {
 		unsigned int ctr = htonl(p+1);
-		memcpy(buf+plen+slen, &ctr, 4);
-		if (iter) {
-			hash->hash_init(&hashval);
-			hash->hash_calc(buf, blen, /*-1*/ blen, &hashval);
-		} else 
+		memcpy(buf+slen, &ctr, 4);
+		if (iter) 
+			hmac(hash, pwd, plen, buf, blen, &hashval);
+		else 
 			memcpy(&hashval, buf, hlen);
 		memcpy(khash+p*hlen, &hashval, hlen);
 		memcpy(key+p*hlen, &hashval, MIN(hlen, klen-p*hlen));
 	}
-	blen = plen+hlen;
+	blen = hlen;
 	for (i = 1; i < iter; ++i) {
 		for (p = 0; p < khrnd; ++p) {
-			memcpy(buf+plen, khash+p*hlen, hlen);
-			hash->hash_init(&hashval);
-			hash->hash_calc(buf, blen, /*-1*/ blen, &hashval);
+			memcpy(buf, khash+p*hlen, hlen);
+			hmac(hash, pwd, plen, buf, hlen, &hashval);
 			/* Store as init val for next iter */
 			memcpy(khash+p*hlen, &hashval, hlen);
 			memxor(key+p*hlen, (unsigned char*)&hashval, MIN(hlen, klen-p*hlen));
 		}
 	}
-	memset(buf, 0, bflen);
 	memset(khash, 0, khlen);
+	memset(buf, 0, bflen);
 	asm("":::"memory");
 	free(khash);
 	free(buf);

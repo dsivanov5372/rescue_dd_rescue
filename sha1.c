@@ -137,7 +137,7 @@ static void output(unsigned char* ptr, int ln)
  * append length of message (without the '1' bit or padding), in bits, as 64-bit big-endian integer 
  * (this will make the entire post-processed length a multiple of 512 bits)
  */
-/* We assume we have a few bytes behind ln  ... */
+/* We assume we have a few bytes behind ln and can overwrite them ... */
 void sha1_calc(uint8_t *ptr, size_t chunk_ln, size_t final_len, hash_t *ctx)
 {
 	if (final_len != (size_t)-1) {
