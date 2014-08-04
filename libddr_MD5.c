@@ -714,16 +714,8 @@ int hmac(hashalg_t* hash, unsigned char* pwd, int plen,
 	const unsigned int hlen = hash->hashln; 
 	const unsigned int blen = hash->blksz;
 	unsigned char ibuf[blen], obuf[blen];
-#if 1
 	memset(ibuf, 0x36, blen);
 	memset(obuf, 0x5c, blen);
-#else
-	int i;
-	for (i = 0; i < blen; ++i) {
-		ibuf[i] = 0x36+i;
-		obuf[i] = 0x5c+i;
-	}
-#endif
 	/* FIXME: Shouldn't this be blksz-9 */
 	if (plen > hash->blksz) {
 		hash_t hv;
@@ -742,15 +734,28 @@ int hmac(hashalg_t* hash, unsigned char* pwd, int plen,
 	hash->hash_init((hash_t*)ihv);
 	hash->hash_block(ibuf, (hash_t*)ihv);
 	hash->hash_calc(msg, mlen, blen+mlen, (hash_t*)ihv);
+#if 0
+	int i;
+	for (i = 0; i < hlen; ++i)
+		ihv[i] = ihv[i+3-2*(i%4)];
+#endif
 	hash->hash_init(hval);
 	hash->hash_block(obuf, hval);
 	hash->hash_calc(ihv, hlen, blen+hlen, hval);
 #if 1
-	hashout((unsigned char*)&hval, hlen);
+	fprintf(stderr, "Inner (%i): (%02x %02x %02x %02x %02x %02x ..., %s) = ",
+		blen+mlen, ibuf[0], ibuf[1], ibuf[2], ibuf[3], ibuf[4], ibuf[5], msg);
+	hashout(ihv, hlen);
+	fprintf(stderr, "Outer (%i): (%02x %02x %02x %02x %02x %02x ..., %02x %02x %02x %02x ...)\n",
+		blen+hlen, obuf[0], obuf[1], obuf[2], obuf[3], obuf[4], obuf[5],
+		ihv[0], ihv[1], ihv[2], ihv[3]);
+	fprintf(stderr, "HMAC(%s, %s(%i), %s(%i)) = ",
+		hash->name, pwd, plen, msg, mlen);
+	hashout((unsigned char*)hval, hlen);
 #endif
 	return 0;
 }
-		
+
 
 
 int pbkdf2(hashalg_t *hash,   unsigned char* pwd,  int plen,
@@ -811,6 +816,10 @@ int do_pbkdf2(hash_state *state, char* param)
 	else
 		goto out_err;
 	hashalg_t *halg = get_hashalg(state, param);
+	if (!halg) {
+		FPLOG(FATAL, "Unknown hash alg %s!\n", param);
+		return 1;
+	}		
 	
 	param = next;
 	next = strchr(param, '/');
