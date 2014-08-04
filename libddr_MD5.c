@@ -699,6 +699,14 @@ void memxor(unsigned char* p1, const unsigned char *p2, ssize_t ln)
 		*p1++ ^= *p2++;
 }
 
+void hashout(unsigned char* hv, unsigned int hln)
+{
+	int i;
+	for (i = 0; i < hln; ++i)
+		fprintf(stderr, "%02x", hv[i+3-2*(i%4)]);
+	fprintf(stderr, "\n");
+}
+
 int hmac(hashalg_t* hash, unsigned char* pwd, int plen,
 			  unsigned char* msg, ssize_t mlen,
 			  hash_t *hval)
@@ -708,6 +716,7 @@ int hmac(hashalg_t* hash, unsigned char* pwd, int plen,
 	unsigned char ibuf[blen], obuf[blen];
 	memset(ibuf, 0x36, blen);
 	memset(obuf, 0x5c, blen);
+	/* FIXME: Shouldn't this be blksz-9 */
 	if (plen > hash->blksz) {
 		hash_t hv;
 		unsigned char pcpy[2*blen];
@@ -720,13 +729,17 @@ int hmac(hashalg_t* hash, unsigned char* pwd, int plen,
 	}
 	memxor(ibuf, pwd, plen);
 	memxor(obuf, pwd, plen);
+	assert(blen >= hlen);
 	unsigned char ihv[blen];
 	hash->hash_init((hash_t*)ihv);
 	hash->hash_block(ibuf, (hash_t*)ihv);
-	hash->hash_calc(msg, mlen, mlen+hlen, (hash_t*)ihv);
+	hash->hash_calc(msg, mlen, blen+mlen, (hash_t*)ihv);
 	hash->hash_init(hval);
 	hash->hash_block(obuf, hval);
 	hash->hash_calc(ihv, hlen, blen+hlen, hval);
+#if 1
+	hashout((unsigned char*)&hval, hlen);
+#endif
 	return 0;
 }
 		
@@ -771,10 +784,9 @@ int pbkdf2(hashalg_t *hash,   unsigned char* pwd,  int plen,
 	for (i = 1; i < iter; ++i) {
 		for (p = 0; p < khrnd; ++p) {
 			memcpy(buf, khash+p*hlen, hlen);
-			hmac(hash, pwd, plen, buf, hlen, &hashval);
+			hmac(hash, pwd, plen, buf, hlen, (hash_t*)(khash+p*hlen));
 			/* Store as init val for next iter */
-			memcpy(khash+p*hlen, &hashval, hlen);
-			memxor(key+p*hlen, (unsigned char*)&hashval, MIN(hlen, klen-p*hlen));
+			memxor(key+p*hlen, khash+p*hlen, MIN(hlen, klen-p*hlen));
 		}
 	}
 	memset(khash, 0, khlen);
@@ -828,10 +840,7 @@ int do_pbkdf2(hash_state *state, char* param)
 	
 	FPLOG(INFO, "PBKDF2(%s, %s, %s, %i, %i) = ",
 		halg->name, pwd, salt, iter, klen*8);
-	int i;
-	for (i = 0; i < klen; ++i)
-		fprintf(stderr, "%02x", key[i+3-2*(i%4)]);
-	fprintf(stderr, "\n");
+	hashout(key, klen);
 	free(key);
 	return err;
     out_err:
