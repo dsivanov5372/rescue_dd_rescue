@@ -14,7 +14,8 @@ unsigned int rdrand32()
 {
 	unsigned int val = (unsigned long)&rdrand32;
 	val = BSWAP32(val);
-	_rdrand32_step(&val);
+	if (have_rdrand)
+		_rdrand32_step(&val);
 	return val;
 }
 
@@ -23,7 +24,8 @@ unsigned long rdrand64()
 {
 	unsigned long long val = (unsigned long long)&rdrand64;
 	val = (unsigned long)BSWAP32((unsigned int)val&0xffffffff)<<32 | BSWAP32((unsigned int)(val>>32));
-	_rdrand64_step(&val);
+	if (have_rdrand)
+		_rdrand64_step(&val);
 	return val;
 }
 #else
@@ -34,7 +36,9 @@ unsigned long rdrand64()
 volatile unsigned int _rdrand_res;
 void probe_rdrand()
 {
-	_rdrand_res = rdrand32();
+	unsigned int val;
+	_rdrand32_step(&val);
+	_rdrand_res = val;
 }
 
 #ifdef __AES__

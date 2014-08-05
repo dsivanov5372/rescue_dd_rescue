@@ -2098,6 +2098,12 @@ void printversion()
 #ifdef HAVE_ATTR_XATTR_H
 	fprintf(stderr, "xattr ");
 #endif
+#ifdef __x86_64__
+	if (have_rdrand)
+		fprintf(stderr, "rdrnd ");
+	if (have_aesni)
+		fprintf(stderr, "aes ");
+#endif
 	fprintf(stderr, "%s", OPT_STR);
 	fprintf(stderr, ")\n");
 	fprintf(stderr, "dd_rescue is free software. It's protected by the terms of GNU GPL v2 or v3\n");

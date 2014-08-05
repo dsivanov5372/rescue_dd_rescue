@@ -131,11 +131,20 @@ static void get_libc_rand_bytes(u8 *buf, size_t len)
 		lbuf[i] = rand();
 }
 
+#ifdef __x86_64__
+unsigned int rdrand32();
+#endif
+
 unsigned int frandom_getseedval()
 {
 	struct timeval tv;
 	gettimeofday(&tv, NULL);
-	return (tv.tv_usec << 12) ^ tv.tv_sec ^ getpid();
+#ifdef __x86_64__
+	unsigned int hwrnd = rdrand32();
+#else
+	unsigned int hwrnd = (unsigned long)&frandom_getseedval;
+#endif
+	return (tv.tv_usec << 12) ^ tv.tv_sec ^ getpid() ^ hwrnd;
 }
 
 
