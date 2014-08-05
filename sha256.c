@@ -321,7 +321,7 @@ int main(int argc, char **argv)
 			close(fd);
 
 		// display result
-		printf("%s *%s\n", is_sha224? sha224_out(NULL, &ctx): sha256_out(NULL, &ctx), 
+		printf("%s *%s\n", is_sha224? sha224_hexout(NULL, &ctx): sha256_hexout(NULL, &ctx), 
 				argv[arg]);
 	}
 	free(obf);

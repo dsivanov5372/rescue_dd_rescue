@@ -351,7 +351,7 @@ int main(int argc, char **argv)
 			close(fd);
 
 		// display result
-		printf("%s *%s\n", is_sha384? sha384_out(NULL, &ctx): sha512_out(NULL, &ctx), 
+		printf("%s *%s\n", is_sha384? sha384_hexout(NULL, &ctx): sha512_hexout(NULL, &ctx), 
 				argv[arg]);
 	}
 	free(obf);

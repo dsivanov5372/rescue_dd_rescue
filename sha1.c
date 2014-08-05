@@ -268,7 +268,7 @@ int main(int argc, char **argv)
 			close(fd);
 
 		// display result
-		printf("%s *%s\n", sha1_out(NULL, &ctx), argv[arg]);
+		printf("%s *%s\n", sha1_hexout(NULL, &ctx), argv[arg]);
 	}
 	free(obf);
 

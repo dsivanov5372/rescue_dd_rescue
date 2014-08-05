@@ -277,7 +277,7 @@ int main(int argc, char **argv)
 			close(fd);
 
 		// display result
-		printf("%s *%s\n", md5_out(NULL, &ctx), argv[arg]);
+		printf("%s *%s\n", md5_hexout(NULL, &ctx), argv[arg]);
 	}
 	free(obf);
 
