@@ -133,6 +133,8 @@ static void get_libc_rand_bytes(u8 *buf, size_t len)
 
 #ifdef __x86_64__
 unsigned int rdrand32();
+#else
+#define BSWAP32(x) ((x<<24) | ((x<<8)&0x00ff0000) | ((x>>8)&0x0000ff00) | (x>>24))
 #endif
 
 unsigned int frandom_getseedval()
@@ -142,7 +144,7 @@ unsigned int frandom_getseedval()
 #ifdef __x86_64__
 	unsigned int hwrnd = rdrand32();
 #else
-	unsigned int hwrnd = (unsigned long)&frandom_getseedval;
+	unsigned int hwrnd = BSWAP32((unsigned int)(unsigned long)&frandom_getseedval);
 #endif
 	return (tv.tv_usec << 12) ^ tv.tv_sec ^ getpid() ^ hwrnd;
 }
