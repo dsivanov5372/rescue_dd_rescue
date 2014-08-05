@@ -334,7 +334,12 @@ check: $(TARGETS) find_nonzero md5 sha1 sha256 sha512
 	./dd_rescue -tL ./libddr_hash.so=sha512:set_xattr:fallback:prepend=abc:append=xyz dd_rescue /tmp/dd_rescue
 	./dd_rescue  -L ./libddr_hash.so=sha512:chk_xattr:fallback /tmp/dd_rescue /dev/null && false || true
 	./dd_rescue  -L ./libddr_hash.so=sha512:chk_xattr:fallback:prepend=abc:append=xyz /tmp/dd_rescue /dev/null
-	rm -f /tmp/dd_rescue CHECKSUMS.sha512
+	# Tests with HMAC
+	echo -n "what do ya want for nothing?" > TEST
+	echo "750c783e6ab0b503eaa86e310a5db738 *TEST" > HMACS.md5
+	./dd_rescue -L ./libddr_hash.so=md5:hmacpwd=Jefe:chknm= TEST /dev/null
+	# TODO: More HMAC tests
+	rm -f /tmp/dd_rescue CHECKSUMS.sha512 TEST HMACS.md5
 	
 check_sha2: $(TARGETS) sha224 sha384
 	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=output:alg=sha224 TEST TEST2 >HASH.TEST
