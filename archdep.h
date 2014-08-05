@@ -38,9 +38,13 @@ void probe_sse42();
 #else /* compiler supports both extensions */
 extern char have_avx2;
 extern char have_sse42;
-void probe_avx2(); void probe_sse42();
-#define ARCH_DECLS char have_avx2; char have_sse42; ARCH_DECL_386
-#define ARCH_DETECT have_avx2 = detect("avx2", probe_avx2); have_sse42 = detect("sse4.2", probe_sse42) ARCH_DETECT_386
+extern char have_rdrand;
+extern char have_aesni;
+void probe_avx2(); void probe_sse42(); void probe_rdrand(); void probe_aesni();
+#define ARCH_DECLS char have_aesni; char have_rdrand; char have_avx2; char have_sse42; ARCH_DECL_386
+#define ARCH_DETECT have_avx2 = detect("avx2", probe_avx2); have_sse42 = detect("sse4.2", probe_sse42); \
+			have_rdrand = detect2("rdrand", probe_rdrand); have_aesni = detect2("aes", probe_aesni) \
+			ARCH_DETECT_386
 #endif	/* SSE42 / AVX2 */
 
 #define FIND_NONZERO_OPT(x,y) (have_avx2? find_nonzero_avx2(x,y): (have_sse2? find_nonzero_sse2(x,y): find_nonzero_c(x,y)))

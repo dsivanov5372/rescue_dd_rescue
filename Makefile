@@ -2,7 +2,7 @@
 # (c) garloff@suse.de, 99/10/09, GNU GPL
 # $Id$
 
-VERSION = 1.45
+VERSION = 1.46
 
 DESTDIR = 
 
@@ -54,6 +54,7 @@ endif
 
 HAVE_AVX2 := $(shell echo "" | $(CC) -mavx2 -xc - 2>&1 | grep unrecognized || echo 1)
 HAVE_SSE42 := $(shell echo "" | $(CC) -msse4.2 -xc - 2>&1 | grep unrecognized || echo 1)
+HAVE_RDRNDAES := $(shell echo "" | $(CC) -mrdrnd -maes -xc - 2>&1 | grep unrecognized || echo 1)
 
 MACH := $(shell uname -m | tr A-Z a-z | sed 's/i[3456]86/i386/')
 
@@ -86,6 +87,11 @@ ifeq ($(HAVE_AVX2),1)
 	OBJECTS2 += find_nonzero_avx.o
 else
 	CFLAGS += -DNO_AVX2
+endif
+ifeq ($(HAVE_RDRNDAES),1)
+	OBJECTS2 += rdrand.o
+else
+	CFLAGS += -DNO_RDRND -DNO_AES
 endif
 endif
 
@@ -172,6 +178,9 @@ find_nonzero_main.o: find_nonzero.c $(FNZ_HEADERS) config.h
 
 ffs_sse42.o: ffs_sse42.c ffs.h archdep.h config.h
 	$(CC) $(CFLAGS_OPT) -msse4.2 -c $<
+
+rdrand.o: rdrand.c archdep.h
+	$(CC) $(CFLAGS) -mrdrnd -maes -c $<
 
 libfalloc: dd_rescue.c $(HEADERS) $(OBJECTS) $(OBJECTS2)
 	$(CC) $(CFLAGS) -DNO_LIBDL $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2) -lfallocate

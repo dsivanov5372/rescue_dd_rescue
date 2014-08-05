@@ -12,8 +12,8 @@
 
 #include <stdio.h>
 
-char cap_str[32];
-char FNZ_OPT[32];
+char cap_str[64];
+char FNZ_OPT[64];
 
 ARCH_DECLS
 
