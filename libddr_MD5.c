@@ -73,7 +73,7 @@ hashalg_t hashes[] = { 	{ "md5", md5_init, md5_64, md5_calc, md5_hexout, md5_beo
 
 
 typedef struct _hash_state {
-	hash_t hash;
+	hash_t hash, hmach;
 	loff_t hash_pos;
 	const char *fname;
 	const char *append, *prepend;
@@ -85,6 +85,8 @@ typedef struct _hash_state {
 	unsigned char ilnchg, olnchg, ichg, ochg, debug, outf, chkf, chkfalloc;
 	const char* chkfnm;
 	const opt_t *opts;
+	unsigned char* hmacpwd;
+	int hmacpln;
 #ifdef HAVE_ATTR_XATTR_H
 	char chk_xattr, set_xattr, xnmalloc, xfallback;
 	char* xattr_name;
@@ -98,7 +100,8 @@ typedef struct _hash_state {
 const char *hash_help = "The HASH plugin for dd_rescue calculates a cryptographic checksum on the fly.\n"
 		" It supports unaligned blocks (arbitrary offsets) and holes(sparse writing).\n"
 		" Parameters: output:outfd=FNO:outnm=FILE:check:chknm=FILE:debug:[alg[o[rithm]=]ALG\n"
-		"\t:append=STR:prepend=STR:pbkdf2=ALG/PWD/SALT/ITER/LEN\n"
+		"\t:append=STR:prepend=STR:hmacpwd=STR:hmacpwdfd=FNO:hmacpwdnm=FILE\n"
+		"\t:pbkdf2=ALG/PWD/SALT/ITER/LEN\n"
 #ifdef HAVE_ATTR_XATTR_H
 		"\t:chk_xattr[=xattr_name]:set_xattr[=xattr_name]:fallb[ack][=FILE]\n"
 #endif
@@ -179,6 +182,36 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			state->alg = get_hashalg(state, param+4);
 		else if (!memcmp(param, "algorithm=", 10))
 			state->alg = get_hashalg(state, param+10);
+		else if (!memcmp(param, "hmacpwd=", 8)) {
+			state->hmacpwd = (unsigned char*) param+8;
+			state->hmacpln = strlen(param+8);
+		}
+		else if (!memcmp(param, "hmacpwdfd=", 10)) {
+			int hfd = atol(param+10);
+			if (hfd == 0)
+				fprintf(stderr, "Enter HMAC password: ");
+			state->hmacpwd = malloc(128);
+			state->hmacpln = read(hfd, state->hmacpwd, 128);
+			if (state->hmacpln <= 0) {
+				FPLOG(FATAL, "No HMAC password entered!\n");
+				--err;
+			}
+		}
+		else if (!memcmp(param, "hmacpwdnm=", 10)) {
+			FILE *f = fopen(param+10, "r");
+			if (!f) {
+				FPLOG(FATAL, "Could not open %s for reading HMAC pwd!\n", param+10);
+				--err;
+				param = next;
+				continue;
+			}
+			state->hmacpwd = malloc(128);
+			state->hmacpln = fread(state->hmacpwd, 1, 128, f);
+			if (state->hmacpln <= 0) {
+				FPLOG(FATAL, "No HMAC pwd contents found in %s!\n", param+10);
+				--err;
+			}
+		}
 		else if (!memcmp(param, "pbkdf2=", 7))
 			err += do_pbkdf2(state, param+7);
 		/* elif .... */
@@ -217,9 +250,27 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		state->chkfalloc = 1;
 		state->chkfnm = strdup(cfnm);
 	}
+	if (state->hmacpln > state->alg->blksz) {
+		hash_t hv;
+		state->alg->hash_init(&hv);
+		state->alg->hash_calc(state->hmacpwd, state->hmacpln, state->hmacpln, &hv);
+		state->alg->hash_beout(state->hmacpwd, &hv);
+		state->hmacpln = state->alg->hashln;
+	}
 	if (state->debug)
 		FPLOG(DEBUG, "Initialized plugin %s (%s)\n", ddr_plug.name, state->alg->name);
 	return err;
+}
+
+void memxor(unsigned char* p1, const unsigned char *p2, ssize_t ln)
+{
+	while (ln >= sizeof(unsigned long)) {
+		*(unsigned long*)p1 ^= *(unsigned long*)p2;
+		ln -= sizeof(unsigned long);
+		p1 += sizeof(unsigned long); p2 += sizeof(unsigned long);
+	}
+	while (ln-- > 0) 
+		*p1++ ^= *p2++;
 }
 
 #define MIN(a,b) ((a)<(b)? (a): (b))
@@ -233,6 +284,14 @@ int hash_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	hash_state *state = (hash_state*)*stat;
 	state->opts = opt;
 	state->alg->hash_init(&state->hash);
+	if (state->hmacpwd) {
+		state->alg->hash_init(&state->hmach);
+		/* inner buf */
+		unsigned char ibuf[state->alg->blksz];
+		memset(ibuf, 0x36, state->alg->blksz);
+		memxor(ibuf, state->hmacpwd, state->hmacpln);
+		state->alg->hash_block(ibuf, &state->hmach);
+	}
 	state->hash_pos = 0;
 	if (!ochg && state->seq != 0)
 		state->fname = opt->oname;
@@ -256,6 +315,8 @@ int hash_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 		int done = 0; int remain = strlen(state->prepend);
 		while (remain >= blksz) {
 			state->alg->hash_block((uint8_t*)(state->prepend)+done, &state->hash);
+			if (state->hmacpwd)
+				state->alg->hash_block((uint8_t*)(state->prepend)+done, &state->hmach);
 			remain -= blksz;
 			done += blksz;
 		}
@@ -265,6 +326,8 @@ int hash_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			memcpy(state->buf, state->prepend+done, remain);
 			memset(state->buf+remain, 0, blksz-remain);
 			state->alg->hash_block(state->buf, &state->hash);
+			if (state->hmacpwd)
+				state->alg->hash_block(state->buf, &state->hmach);
 		}
 	}
 	memset(state->buf, 0, sizeof(state->buf));
@@ -275,7 +338,7 @@ int hash_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	state->ochg = ochg;
 	if (ichg && ochg && (state->opts->sparse || !state->opts->nosparse)) {
 		FPLOG(WARN, "Size of potential holes may not be correct due to other plugins;\n");
-		FPLOG(WARN, " MD5 hash may be miscomputed! Avoid holes (remove -a, use -A).\n");
+		FPLOG(WARN, " Hash/HMAC may be miscomputed! Avoid holes (remove -a, use -A).\n");
 	}
 	return err;
 }
@@ -314,12 +377,16 @@ void hash_last(hash_state *state, loff_t pos)
 	if (preln)
 		HASH_DEBUG(FPLOG(DEBUG, "Account for %i extra prepended bytes\n", preln));
 	state->alg->hash_calc(state->buf, state->buflen, state->hash_pos+state->buflen+preln, &state->hash);
+	if (state->hmacpwd)
+		state->alg->hash_calc(state->buf, state->buflen, state->hash_pos+state->buflen+preln+state->alg->blksz, &state->hmach);
 	state->hash_pos += state->buflen;
 }
 
 static inline void hash_block_buf(hash_state* state, int clear)
 {
 	state->alg->hash_block(state->buf, &state->hash);
+	if (state->hmacpwd)
+		state->alg->hash_block(state->buf, &state->hmach);
 	state->hash_pos += state->alg->blksz;
 	state->buflen = 0;
 	if (clear)
@@ -398,6 +465,8 @@ unsigned char* hash_blk_cb(fstate_t *fst, unsigned char* bf,
 		HASH_DEBUG(FPLOG(DEBUG, "Consume %i bytes @ %i\n", to_process, pos+consumed));
 		assert(state->buflen == 0);
 		state->alg->hash_calc(bf+consumed, to_process, -1, &state->hash);
+		if (state->hmacpwd)
+			state->alg->hash_calc(bf+consumed, to_process, -1, &state->hmach);
 		consumed += to_process; state->hash_pos += to_process;
 	}
 	assert(state->hash_pos+state->buflen == pos+consumed || (state->ilnchg && state->olnchg));
@@ -658,16 +727,34 @@ int hash_close(loff_t ooff, void **stat)
 	int err = 0;
 	hash_state *state = (hash_state*)*stat;
 	char res[129];
+	const unsigned int hlen = state->alg->hashln;
+	const unsigned int blen = state->alg->blksz;
 	loff_t firstpos = (state->seq == 0? state->opts->init_ipos: state->opts->init_opos);
 	state->alg->hash_hexout(res, &state->hash);
 	if (!state->opts->quiet) 
 		FPLOG(INFO, "%s %s (%" LL "i-%" LL "i): %s\n",
 			state->alg->name, state->fname, firstpos, firstpos+state->hash_pos, res);
+	/* If we calculate an HMAC, use it rather than the hash value for ev.thing else */
+	if (state->hmacpwd) {
+		assert(hlen < blen-9);
+		unsigned char obuf[2*blen];
+		memset(obuf, 0x5c, blen);
+		memxor(obuf, state->hmacpwd, state->hmacpln);
+		state->alg->hash_beout(obuf+blen, &state->hmach);
+		state->alg->hash_init(&state->hmach);
+		state->alg->hash_calc(obuf, blen+hlen, blen+hlen, &state->hmach);
+		state->alg->hash_hexout(res, &state->hmach);
+		if (!state->opts->quiet) 
+			FPLOG(INFO, "HMAC %s %s (%" LL "i-%" LL "i): %s\n",
+				state->alg->name, state->fname, firstpos, firstpos+state->hash_pos, res);
+	}
 	if (state->outfd) {
 		char outbuf[512];
 		snprintf(outbuf, 511, "%s *%s\n", res, state->fname);
 		if (write(state->outfd, outbuf, strlen(outbuf)) <= 0) {
-			FPLOG(WARN, "Could not write HASH result to fd %i\n", state->outfd);
+			FPLOG(WARN, "Could not write %s result to fd %i\n", 
+				(state->hmacpwd? "HMAC": "HASH"),
+				state->outfd);
 			--err;
 		}
 	}
@@ -691,17 +778,6 @@ int hash_close(loff_t ooff, void **stat)
 	return err;
 }
 
-void memxor(unsigned char* p1, const unsigned char *p2, ssize_t ln)
-{
-	while (ln >= 4) {
-		*(unsigned int*)p1 ^= *(unsigned int*)p2;
-		ln -= 4;
-		p1 += 4; p2 += 4;
-	}
-	while (ln-- > 0) 
-		*p1++ ^= *p2++;
-}
-
 int hmac(hashalg_t* hash, unsigned char* pwd, int plen,
 			  unsigned char* msg, ssize_t mlen,
 			  hash_t *hval)
@@ -717,7 +793,8 @@ int hmac(hashalg_t* hash, unsigned char* pwd, int plen,
 		memcpy(pcpy, pwd, plen);
 		hash->hash_init(&hv);
 		hash->hash_calc(pcpy, plen, plen, &hv);
-		memcpy(pwd, &hv, hlen); 
+		//memcpy(pwd, &hv, hlen); 
+		hash->hash_beout(pwd, &hv);
 		pwd[hlen] = 0;
 		plen = hlen;
 	}
@@ -766,7 +843,8 @@ int pbkdf2(hashalg_t *hash,   unsigned char* pwd,  int plen,
 		hash_t hv;
 		hash->hash_init(&hv);
 		hash->hash_calc(pwd, plen, plen, &hv);
-		memcpy(pwd, &hv, hlen); 
+		//memcpy(pwd, &hv, hlen); 
+		hash->hash_beout(pwd, &hv);
 		pwd[hlen] = 0;
 		plen = hlen;
 	}
