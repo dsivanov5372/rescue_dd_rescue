@@ -560,7 +560,7 @@ in which case it just reports the blocks that it passes on.
 .
 .SS hash
 When the hash plugin (subsequently referred to as ddr_hash) is loaded, it 
-will calculate a cryptographic hash over the 
+will calculate a cryptographic hash and optionally also a HMAC over the 
 copied data and print the result at the end of the copy operations.
 The hash algorithm can be chosen by specifying
 .B alg[o[rithm]]=ALG
@@ -582,13 +582,46 @@ which appends the given STRING to the output before computing the cryptographic
 hash. Treating the STRING as a shared secret, this can actually be used to protect
 against someone not knowing the secret altering the contents (and recomputing the 
 hash) without anyone noticing. It's thus a cheap way of a cryptographic signature
-(but with preshared secrets as opposed to public key cryptography).
+(but with preshared secrets as opposed to public key cryptography). Use HMAC for a
+somewhat better way to sign data with a shared secret.
 .br
 ddr_hash also supports
 .B prepend=STRING
 which is likely harder to attack with brute force than an appended string.
 Note that ddr_hash always prepends multiples of the hash algorithm's block
 size and pads the STRING with 0 to match.
+.PP
+ddr_hash can be used to compute a HMAC (Hash-based Message Authentication
+Code) instead of the plain hash. The HMAC uses a password that's 
+prepended and transformed twice to the data which is then hashed twice. 
+HMAC is believed to protect somewhat
+better against extension or collision attacks than a plain hash (with a
+plain prepended secret), so it's a better way to authenticate data with a
+shared secret. (You can use append/prepend in addition to HMAC, if you
+have a need for a scheme with more than one secret.)
+.br
+When HMAC is enabled with one of the following parameters, both the plain hash
+and the HMAC are computed by ddr_hash. Both are output to the console/log,
+but the HMAC is used instead of the hash value to be written to a CHECKSUMS
+file or to an extended attribute or checked against (see below).
+.B hmacpwd=STRING
+sets the shared secret (password) for computing the HMAC. Passing the secret on
+the command line has the disadvantage that the shell may mistreat some bytes
+as special characters and that the command line may be visible to all logged in
+users on the system.
+.B hmacpwdfd=INT
+sets a filedescriptor from with the secret (password) for HMAC computation will
+be read. Specifying 0 means standard input, in which case ddr_hash even prints
+a prompt for you ... Other numbers may be useful if dd_rescue is called from
+another program that opens a pipe to pass the secret.
+.B hmacpwdnm=INNAME
+sets a file from which the shared secret (password) is read. Note that all bytes
+(up to 2048 of them) are read and used, including trailing white space, 0-bytes
+or newlines.
+.br
+Please note that the ddr_hash plugin at this point does NOT take a lot of care
+to prevent the password/pre/appended secret from remaining in memory or leaking
+into a swap/page file. (This will be improved once I look into encryption plugins.)
 .PP
 ddr_hash accepts the parameter 
 .B output
@@ -602,12 +635,13 @@ always processes data in binary mode and correctly indicates this with
 a star (*) in the output generated with output/outfd=.
 .br
 The checksum can also be written to a file by giving the
-.B outnm=CHKNAME
-parameter. Then a file with CHKNAME will be created and a md5sum/sha256sum/...
+.B outnm=OUTNAME
+parameter. Then a file with OUTNAME will be created and a md5sum/sha256sum/...
 compatible line will be printed to the file. If the file exists and contains
 an entry for the file, it will be updated. If the file exists and does not
-contain an entry for the file, one will be appended. If NAME is omitted, the
-filename CHECKSUMS.alg will be used (alg is replaced by the chosen algorithm).
+contain an entry for the file, one will be appended. If OUTNAME is omitted, the
+filename CHECKSUMS.alg (or HMACS.alg if HMAC is enabled) will be used (alg 
+is replaced by the chosen algorithm).
 If the checksum can't be written, a warning will be printed and the exit code
 of dd_rescue will become non-zero.
 .PP
@@ -633,7 +667,8 @@ be too costly reading the input file twice.)
 You can store the cryptographic hash into the files by using the
 .B set_xattr
 option. The hash will be stored into the extended attribute user.checksum.ALG
-by default, but you can override the name of the attribute by specifying
+by default (user.hmac.ALG if HMAC is enabled), but you can override the name
+of the attribute by specifying
 .B set_xattr=XATTR\.NAME
 instead. If the xattr can't be written, an error will be reported, unless
 you also specify the 
@@ -680,6 +715,13 @@ it's not considered strong enough any more to prevent hash collisions.
 sha1 is better, but the recommendation is to use the SHA-2 family of hashes.
 On 32bit machines, I'd recommend sha256, while on 64bit machines, sha512
 is faster and thus the best choice.
+.PP
+ddr_hash also supports using the HMAC code and hashes for deriving
+keys from passwords using the PKCS5 PBKDF2 (password-based key derivation
+function) that allows you to improve the protection from mediocre passwords
+by using a salt and a relatively expensive key stretching operation. This
+is only meant for testing and thus not documented in this man page. See
+the built-in help function for a brief summary on the usage.
 .
 .SS lzo
 The lzo plugin allows to compress and decompress data using liblzo2.

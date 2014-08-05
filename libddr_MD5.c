@@ -127,6 +127,8 @@ hashalg_t *get_hashalg(hash_state *state, const char* nm)
 
 int do_pbkdf2(hash_state*, char*);
 
+#define MAX_HMACPWDLN 2048
+
 int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 {
 	int err = 0;
@@ -183,15 +185,16 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		else if (!memcmp(param, "algorithm=", 10))
 			state->alg = get_hashalg(state, param+10);
 		else if (!memcmp(param, "hmacpwd=", 8)) {
-			state->hmacpwd = (unsigned char*) param+8;
+			state->hmacpwd = malloc(MAX_HMACPWDLN);
+			strncpy((char*)state->hmacpwd, param+8, MAX_HMACPWDLN);
 			state->hmacpln = strlen(param+8);
 		}
 		else if (!memcmp(param, "hmacpwdfd=", 10)) {
 			int hfd = atol(param+10);
 			if (hfd == 0)
 				fprintf(stderr, "Enter HMAC password: ");
-			state->hmacpwd = malloc(128);
-			state->hmacpln = read(hfd, state->hmacpwd, 128);
+			state->hmacpwd = malloc(MAX_HMACPWDLN);
+			state->hmacpln = read(hfd, state->hmacpwd, MAX_HMACPWDLN);
 			if (state->hmacpln <= 0) {
 				FPLOG(FATAL, "No HMAC password entered!\n");
 				--err;
@@ -205,8 +208,8 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 				param = next;
 				continue;
 			}
-			state->hmacpwd = malloc(128);
-			state->hmacpln = fread(state->hmacpwd, 1, 128, f);
+			state->hmacpwd = malloc(MAX_HMACPWDLN);
+			state->hmacpln = fread(state->hmacpwd, 1, MAX_HMACPWDLN, f);
 			if (state->hmacpln <= 0) {
 				FPLOG(FATAL, "No HMAC pwd contents found in %s!\n", param+10);
 				--err;
@@ -236,7 +239,10 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	if ((state->chk_xattr || state->set_xattr) && !state->xattr_name) {
 		state->xattr_name = (char*)malloc(24);
 		state->xnmalloc = 1;
-		snprintf(state->xattr_name, 24, "user.checksum.%s", state->alg->name);
+		if (state->hmacpwd)
+			snprintf(state->xattr_name, 24, "user.hmac.%s", state->alg->name);
+		else
+			snprintf(state->xattr_name, 24, "user.checksum.%s", state->alg->name);
 	}
 #endif
 	if ((!state->chkfnm || !*state->chkfnm) && (state->chkf || state->outf
@@ -246,7 +252,10 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			     				)) {
 		char cfnm[32];
 		// if (!strcmp(state->alg->name, "md5")) strcpy(cfnm, "MD5SUMS"); else
-		snprintf(cfnm, 32, "CHECKSUMS.%s", state->alg->name);
+		if (state->hmacpwd)
+			snprintf(cfnm, 32, "HMACS.%s", state->alg->name);
+		else
+			snprintf(cfnm, 32, "CHECKSUMS.%s", state->alg->name);
 		state->chkfalloc = 1;
 		state->chkfnm = strdup(cfnm);
 	}
@@ -254,6 +263,7 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		hash_t hv;
 		state->alg->hash_init(&hv);
 		state->alg->hash_calc(state->hmacpwd, state->hmacpln, state->hmacpln, &hv);
+		memset(state->hmacpwd+state->alg->hashln, 0, 256-state->alg->hashln);
 		state->alg->hash_beout(state->hmacpwd, &hv);
 		state->hmacpln = state->alg->hashln;
 	}
@@ -774,6 +784,11 @@ int hash_close(loff_t ooff, void **stat)
 		free((void*)state->chkfnm);
 	if (strcmp(state->fname, state->opts->iname) && strcmp(state->fname, state->opts->oname))
 		free((void*)state->fname);
+	if (state->hmacpwd) {
+		memset(state->hmacpwd, 0, MAX_HMACPWDLN);
+		asm("":::"memory");
+		free(state->hmacpwd);
+	}
 	free(*stat);
 	return err;
 }
