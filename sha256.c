@@ -190,36 +190,32 @@ static void output(unsigned char* ptr, int ln)
  * append length of message (without the '1' bit or padding), in bits, as 64-bit big-endian integer 
  * (this will make the entire post-processed length a multiple of 512 bits)
  */
-/* We assume we have a few bytes behind ln  ... */
-void sha256_calc(uint8_t *ptr, size_t chunk_ln, size_t final_len, hash_t *ctx)
+void sha256_calc(const uint8_t *ptr, size_t chunk_ln, size_t final_len, hash_t *ctx)
 {
-	if (final_len != (size_t)-1) {
-		int pad = chunk_ln%64 < 56? 64: 128;
-		int last = chunk_ln-chunk_ln%64+pad;
-		memset(ptr+chunk_ln, 0, last-chunk_ln);
-#if 0
-		int cln = chunk_ln - chunk_ln % 4;
-		uint32_t val = htonl(*(uint32_t*)(ptr+cln));
-		val |= 0x80000000 >> (8*(chunk_ln-cln));
-		*(uint32_t*)(ptr+cln) = ntohl(val);
-#else
-		ptr[chunk_ln] = 0x80;
-#endif
-		int i;
-		/*
-		for (i = cln + 4; i % 64 != 56; ++i)
-			ptr[i] = 0;
-		*/
-		i = last-8;
-		*(uint32_t*)(ptr+i) = htonl(final_len >> 29);
-		*(uint32_t*)(ptr+i+4) = htonl(final_len << 3);
-		chunk_ln = i + 8;
-		//output(ptr, pad);
-	}
-	assert(0 == chunk_ln % 64);
-	uint32_t offset;
-	for (offset = 0; offset < chunk_ln; offset += 64)
+	size_t offset;
+	for (offset = 0; offset+64 <= chunk_ln; offset += 64)
 		sha256_64(ptr + offset, ctx);
+	if (offset == chunk_ln && final_len == (size_t)-1)
+		return;
+	const int remain = chunk_ln - offset;
+	uint8_t sha256_buf[64];
+	if (remain)
+		memcpy(sha256_buf, ptr+offset, remain);
+	memset(sha256_buf+remain, 0, 64-remain);
+	if (final_len == (size_t)-1) {
+		sha256_64(sha256_buf, ctx);
+		fprintf(stderr, "sha256: WARN: Incomplete block without EOF!\n");
+		return;
+	}
+	/* EOF */
+	sha256_buf[remain] = 0x80;
+	if (remain >= 56) {
+		sha256_64(sha256_buf, ctx);
+		memset(sha256_buf, 0, 56);
+	}
+	*(uint32_t*)(sha256_buf+56) = htonl(final_len >> 29);
+	*(uint32_t*)(sha256_buf+60) = htonl(final_len <<  3);
+	sha256_64(sha256_buf, ctx);
 }
 
 #ifdef SHA256_MAIN

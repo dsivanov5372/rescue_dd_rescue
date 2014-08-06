@@ -147,34 +147,32 @@ static void output(unsigned char* ptr, int ln)
  * append length of message (without the '1' bit or padding), in bits, as 64-bit big-endian integer 
  * (this will make the entire post-processed length a multiple of 512 bits)
  */
-/* We assume we have a few bytes behind ln and can overwrite them ... */
-void sha1_calc(uint8_t *ptr, size_t chunk_ln, size_t final_len, hash_t *ctx)
+void sha1_calc(const uint8_t *ptr, size_t chunk_ln, size_t final_len, hash_t *ctx)
 {
-	if (final_len != (size_t)-1) {
-		int pad = chunk_ln%64 < 56? 64: 128;
-		int last = chunk_ln-chunk_ln%64+pad;
-		memset(ptr+chunk_ln, 0, last-chunk_ln);
-		ptr[chunk_ln] = 0x80;
-		int i;
-		/*
-		for (i = cln + 4; i % 64 != 56; ++i)
-			ptr[i] = 0;
-		*/
-		i = last-8;
-		*(uint32_t*)(ptr+i) = htonl(final_len >> 29);
-		*(uint32_t*)(ptr+i+4) = htonl(final_len << 3);
-		chunk_ln = i + 8;
-		//output(ptr, pad);
-	}
-#if 1
-	assert(0 == chunk_ln % 64);
-#else
-	if (chunk_ln % 64)
-		memset(ptr+chunk_ln, 0, 64 - chunk_ln%64);
-#endif
-	uint32_t offset;
-	for (offset = 0; offset < chunk_ln; offset += 64)
+	size_t offset;
+	for (offset = 0; offset+64 <= chunk_ln; offset += 64)
 		sha1_64(ptr + offset, ctx);
+	if (offset == chunk_ln && final_len == (size_t)-1)
+		return;
+	const int remain = chunk_ln - offset;
+	uint8_t sha1_buf[64];
+	if (remain)
+		memcpy(sha1_buf, ptr+offset, remain);
+	memset(sha1_buf+remain, 0, 64-remain);
+	if (final_len == (size_t)-1) {
+		sha1_64(sha1_buf, ctx);
+		fprintf(stderr, "sha1: WARN: Incomplete block without EOF!\n");
+		return;
+	}
+	/* EOF */
+	sha1_buf[remain] = 0x80;
+	if (remain >= 56) {
+		sha1_64(sha1_buf, ctx);
+		memset(sha1_buf, 0, 56);
+	}
+	*(uint32_t*)(sha1_buf+56) = htonl(final_len >> 29);
+	*(uint32_t*)(sha1_buf+60) = htonl(final_len <<  3);
+	sha1_64(sha1_buf, ctx);
 }
 
 #ifdef SHA1_MAIN

@@ -226,30 +226,33 @@ static void output(unsigned char* ptr, int ln)
  * append length of message (without the '1' bit or padding), in bits, as 128-bit big-endian integer 
  * (this will make the entire post-processed length a multiple of 1024 bits)
  */
-/* We assume we have a few bytes behind ln  ... */
-void sha512_calc(uint8_t *ptr, size_t chunk_ln, size_t final_len, hash_t *ctx)
+void sha512_calc(const uint8_t *ptr, size_t chunk_ln, size_t final_len, hash_t *ctx)
 {
-	if (final_len != (size_t)-1) {
-		int pad = chunk_ln%128 < 112? 128: 256;
-		int last = chunk_ln-chunk_ln%128+pad;
-		memset(ptr+chunk_ln, 0, last-chunk_ln);
-		ptr[chunk_ln] = 0x80;
-		int i;
-		/*
-		for (i = cln + 4; i % 64 != 56; ++i)
-			ptr[i] = 0;
-		*/
-		i = last-16;
-		*(uint32_t*)(ptr+i+4) = htonl(final_len >> 61);
-		*(uint32_t*)(ptr+i+8) = htonl(final_len >> 29);
-		*(uint32_t*)(ptr+i+12) = htonl(final_len << 3);
-		chunk_ln = i + 16;
-		//output(ptr, pad);
-	}
-	assert(0 == chunk_ln % 128);
 	size_t offset;
-	for (offset = 0; offset < chunk_ln; offset += 128)
+	for (offset = 0; offset+128 <= chunk_ln; offset += 128)
 		sha512_128(ptr + offset, ctx);
+	if (offset == chunk_ln && final_len == (size_t)-1)
+		return;
+	const int remain = chunk_ln - offset;
+	uint8_t sha512_buf[128];
+	if (remain)
+		memcpy(sha512_buf, ptr+offset, remain);
+	memset(sha512_buf+remain, 0, 128-remain);
+	if (final_len == (size_t)-1) {
+		sha512_128(sha512_buf, ctx);
+		fprintf(stderr, "sha512: WARN: Incomplete block without EOF!\n");
+		return;
+	}
+	/* EOF */
+	sha512_buf[remain] = 0x80;
+	if (remain >= 112) {
+		sha512_128(sha512_buf, ctx);
+		memset(sha512_buf, 0, 116);
+	}
+	*(uint32_t*)(sha512_buf+116) = htonl(final_len >> 61);
+	*(uint32_t*)(sha512_buf+120) = htonl(final_len >> 29);
+	*(uint32_t*)(sha512_buf+124) = htonl(final_len <<  3);
+	sha512_128(sha512_buf, ctx);
 }
 
 #ifdef SHA512_MAIN

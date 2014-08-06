@@ -47,7 +47,7 @@ extern ddr_plugin_t ddr_plug;
 
 typedef void (hash_init_fn)(hash_t*);
 typedef void (hash_block_fn)(const uint8_t* ptr, hash_t*);
-typedef void (hash_calc_fn)(uint8_t* ptr, size_t chunk, size_t final, hash_t*);
+typedef void (hash_calc_fn)(const uint8_t* ptr, size_t chunk, size_t final, hash_t*);
 typedef char* (hash_hexout_fn)(char* buf, const hash_t*);
 typedef unsigned char* (hash_beout_fn)(unsigned char* buf, const hash_t*);
 

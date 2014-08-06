@@ -141,7 +141,6 @@ void md5_init(hash_t *ctx)
 	ctx->md5_h[3] = 0x10325476;
 }
 
-/* We assume we have a few bytes behind ln  ... */
 void md5_calc(const uint8_t *ptr, size_t chunk_ln, size_t final_len, hash_t *ctx)
 {
 	uint32_t offset;
@@ -149,7 +148,7 @@ void md5_calc(const uint8_t *ptr, size_t chunk_ln, size_t final_len, hash_t *ctx
 		md5_64(ptr + offset, ctx);
 	if (offset == chunk_ln && final_len == (size_t)-1)
 		return;
-	int remain = chunk_ln - offset;
+	const int remain = chunk_ln - offset;
 	uint8_t md5_buf[64];
 	if (remain)
 		memcpy(md5_buf, ptr+offset, remain);
@@ -165,7 +164,8 @@ void md5_calc(const uint8_t *ptr, size_t chunk_ln, size_t final_len, hash_t *ctx
 		md5_64(md5_buf, ctx);
 		memset(md5_buf, 0, 56);
 	}
-	to_bytes(final_len * 8, md5_buf+56);
+	/* FIXME: Confused? */
+	to_bytes(final_len <<  3, md5_buf+56);
 	to_bytes(final_len >> 29, md5_buf+60);
 	md5_64(md5_buf, ctx);
 }
