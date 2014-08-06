@@ -142,21 +142,32 @@ void md5_init(hash_t *ctx)
 }
 
 /* We assume we have a few bytes behind ln  ... */
-void md5_calc(uint8_t *ptr, size_t chunk_ln, size_t final_len, hash_t *ctx)
+void md5_calc(const uint8_t *ptr, size_t chunk_ln, size_t final_len, hash_t *ctx)
 {
-	if (final_len != (size_t)-1) {
-		ptr[chunk_ln] = 0x80;
-		int i;
-		for (i = chunk_ln + 1; i % 64 != 56; ++i)
-			ptr[i] = 0;
-		to_bytes(final_len * 8, ptr + i);
-		to_bytes(final_len >> 29, ptr + i + 4);
-		chunk_ln = i + 8;
-	}
-	assert(0 == chunk_ln % 64);
 	uint32_t offset;
-	for (offset = 0; offset < chunk_ln; offset += 64)
+	for (offset = 0; offset+64 <= chunk_ln; offset += 64)
 		md5_64(ptr + offset, ctx);
+	if (offset == chunk_ln && final_len == (size_t)-1)
+		return;
+	int remain = chunk_ln - offset;
+	uint8_t md5_buf[64];
+	if (remain)
+		memcpy(md5_buf, ptr+offset, remain);
+	memset(md5_buf+remain, 0, 64-remain);
+	if (final_len == (size_t)-1) {
+		md5_64(md5_buf, ctx);
+		fprintf(stderr, "md5: WARN: Incomplete block without EOF!\n");
+		return;
+	}
+	/* EOF */
+	md5_buf[remain] = 0x80;
+	if (remain >= 56) {
+		md5_64(md5_buf, ctx);
+		memset(md5_buf, 0, 56);
+	}
+	to_bytes(final_len * 8, md5_buf+56);
+	to_bytes(final_len >> 29, md5_buf+60);
+	md5_64(md5_buf, ctx);
 }
 
 #define BSWAP32(x) ((x<<24) | ((x<<8)&0x00ff0000) | ((x>>8)&0x0000ff00) | (x>>24))
