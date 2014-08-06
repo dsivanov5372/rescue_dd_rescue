@@ -73,6 +73,11 @@ ifeq ($(HAVE_AVX2),1)
 else
 	CFLAGS += -DNO_AVX2
 endif
+ifeq ($(HAVE_RDRNDAES),1)
+	OBJECTS2 += rdrand.o
+else
+	CFLAGS += -DNO_RDRND -DNO_AES
+endif
 endif
 
 ifeq ($(MACH),x86_64)

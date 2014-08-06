@@ -2098,11 +2098,13 @@ void printversion()
 #ifdef HAVE_ATTR_XATTR_H
 	fprintf(stderr, "xattr ");
 #endif
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__i386__)
 	if (have_rdrand)
 		fprintf(stderr, "rdrnd ");
+#if 0
 	if (have_aesni)
 		fprintf(stderr, "aes ");
+#endif
 #endif
 	fprintf(stderr, "%s", OPT_STR);
 	fprintf(stderr, ")\n");
