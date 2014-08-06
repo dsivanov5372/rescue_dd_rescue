@@ -317,6 +317,7 @@ check: $(TARGETS) find_nonzero md5 sha1 sha256 sha512
 	./dd_rescue -c0 -a -b16k -t -L ./libddr_MD5.so=output TEST TEST2 >HASH.TEST
 	md5sum -c HASH.TEST
 	#MD5=$$(./dd_rescue -c0 -a -b16k -L ./libddr_MD5.so TEST TEST2 2>&1 | grep 'MD5(0)': | tail -n1 | sed 's/^dd_rescue: (info): MD5(0):[^:]*: //'); MD5S=$$(md5sum TEST | sed 's/ .*$$//'); echo $$MD5 $$MD5S; if test "$$MD5" != "$$MD5S"; then false; fi
+	rm -f HASH.TEST
 	./sha1 /dev/null
 	./sha1 /dev/null | sha1sum -c
 	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=outnm=HASH.TEST:alg=sha1 TEST TEST2
@@ -343,8 +344,18 @@ check: $(TARGETS) find_nonzero md5 sha1 sha256 sha512
 	echo -n "what do ya want for nothing?" > TEST
 	echo "750c783e6ab0b503eaa86e310a5db738 *TEST" > HMACS.md5
 	./dd_rescue -L ./libddr_hash.so=md5:hmacpwd=Jefe:chknm= TEST /dev/null
-	# TODO: More HMAC tests
 	rm -f /tmp/dd_rescue CHECKSUMS.sha512 TEST HMACS.md5
+	FILES="*.c *.h *.po dd_rescue *.so"; \
+	for alg in md5 sha1 sha256 sha384; do \
+		./calchmac.py $$alg pass_$$alg $$FILES; \
+	done
+	for name in *.c *.h *.po dd_rescue *.so; do \
+		for alg in md5 sha1 sha256 sha384; do \
+			./dd_rescue -L ./libddr_hash.so=$$alg:hmacpwd=pass_$$alg:chknm= $$name /dev/null || exit 1; \
+		done \
+	done
+	rm -f HMACS.md5 HMACS.sha1 HMACS.sha256 HMACS.sha384
+
 	
 check_sha2: $(TARGETS) sha224 sha384
 	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=output:alg=sha224 TEST TEST2 >HASH.TEST

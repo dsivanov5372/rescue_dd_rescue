@@ -35,7 +35,7 @@ for fnm in sys.argv[3:]:
 	if not f:
 		print >>sys.stderr, "Could not open %s" % fnm
 		sys.exit(3)
-	print fnm,
+	#print fnm
 	fcont = f.read()
 	hm = hmac.HMAC(pwd, fcont, algo)
 	print >>hmf, "%s *%s" % (hm.hexdigest(), fnm)
