@@ -45,31 +45,10 @@
 /* fwd decl */
 extern ddr_plugin_t ddr_plug;
 
-typedef void (hash_init_fn)(hash_t*);
-typedef void (hash_block_fn)(const uint8_t* ptr, hash_t*);
-typedef void (hash_calc_fn)(const uint8_t* ptr, size_t chunk, size_t final, hash_t*);
-typedef char* (hash_hexout_fn)(char* buf, const hash_t*);
-typedef unsigned char* (hash_beout_fn)(unsigned char* buf, const hash_t*);
-
-typedef struct {
-	const char* name;
-	hash_init_fn *hash_init;
-	hash_block_fn *hash_block;
-	hash_calc_fn *hash_calc;
-	hash_hexout_fn *hash_hexout;
-	hash_beout_fn *hash_beout;
-	unsigned int blksz;
-	unsigned int hashln; /* in bytes */
-} hashalg_t;
-
-hashalg_t hashes[] = { 	{ "md5", md5_init, md5_64, md5_calc, md5_hexout, md5_beout, 64, 16 },
-			{ "sha1", sha1_init, sha1_64, sha1_calc, sha1_hexout, sha1_beout, 64, 20 },
-			{ "sha256", sha256_init, sha256_64 , sha256_calc, sha256_hexout, sha256_beout,  64, 32 },
-			{ "sha224", sha224_init, sha256_64 , sha256_calc, sha224_hexout, sha224_beout,  64, 28 },
-			{ "sha512", sha512_init, sha512_128, sha512_calc, sha512_hexout, sha512_beout, 128, 64 },
-			{ "sha384", sha384_init, sha512_128, sha512_calc, sha384_hexout, sha384_beout, 128, 48 }
+hashalg_t hashes[] = { MD5_HALG_T, SHA1_HALG_T, SHA256_HALG_T, SHA224_HALG_T, SHA512_HALG_T, SHA384_HALG_T,
 			// SHA3 ...
 };
+	
 
 
 typedef struct _hash_state {

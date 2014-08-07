@@ -12,4 +12,7 @@ char* sha224_hexout(char *buf, const hash_t* ctx);
 unsigned char* sha256_beout(unsigned char *buf, const hash_t* ctx);
 unsigned char* sha224_beout(unsigned char *buf, const hash_t* ctx);
 
+#define SHA256_HALG_T { "sha256", sha256_init, sha256_64 , sha256_calc, sha256_hexout, sha256_beout,  64, 32 }
+#define SHA224_HALG_T { "sha224", sha224_init, sha256_64 , sha256_calc, sha224_hexout, sha224_beout,  64, 28 }
+
 #endif

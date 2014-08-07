@@ -11,5 +11,8 @@ char* sha512_hexout(char *buf, const hash_t* ctx);
 char* sha384_hexout(char *buf, const hash_t* ctx);
 unsigned char* sha512_beout(unsigned char *buf, const hash_t* ctx);
 unsigned char* sha384_beout(unsigned char *buf, const hash_t* ctx);
+			
+#define SHA512_HALG_T { "sha512", sha512_init, sha512_128, sha512_calc, sha512_hexout, sha512_beout, 128, 64 }
+#define SHA384_HALG_T { "sha384", sha384_init, sha512_128, sha512_calc, sha384_hexout, sha384_beout, 128, 48 }
 
 #endif

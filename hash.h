@@ -25,4 +25,21 @@ typedef struct {
 	};
 } hash_t ALIGNED(32);
 
+typedef void (hash_init_fn)(hash_t*);
+typedef void (hash_block_fn)(const uint8_t* ptr, hash_t*);
+typedef void (hash_calc_fn)(const uint8_t* ptr, size_t chunk, size_t final, hash_t*);
+typedef char* (hash_hexout_fn)(char* buf, const hash_t*);
+typedef unsigned char* (hash_beout_fn)(unsigned char* buf, const hash_t*);
+
+typedef struct {
+	const char* name;
+	hash_init_fn *hash_init;
+	hash_block_fn *hash_block;
+	hash_calc_fn *hash_calc;
+	hash_hexout_fn *hash_hexout;
+	hash_beout_fn *hash_beout;
+	unsigned int blksz;
+	unsigned int hashln; /* in bytes */
+} hashalg_t;
+
 #endif

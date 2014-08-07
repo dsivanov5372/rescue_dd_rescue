@@ -13,5 +13,7 @@ void md5_calc(const uint8_t *ptr, size_t chunk_ln, size_t final_ln, hash_t* ctx)
 char* md5_hexout(char *buf, const hash_t* ctx);
 unsigned char* md5_beout(unsigned char *buf, const hash_t* ctx);
 
+#define MD5_HALG_T { "md5", md5_init, md5_64, md5_calc, md5_hexout, md5_beout, 64, 16 }
+
 #endif
 
