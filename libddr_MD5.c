@@ -273,13 +273,15 @@ int hash_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	hash_state *state = (hash_state*)*stat;
 	state->opts = opt;
 	state->alg->hash_init(&state->hash);
+	const unsigned int blen = state->alg->blksz;
 	if (state->hmacpwd) {
 		state->alg->hash_init(&state->hmach);
 		/* inner buf */
-		unsigned char ibuf[state->alg->blksz];
-		memset(ibuf, 0x36, state->alg->blksz);
+		unsigned char ibuf[blen];
+		memset(ibuf, 0x36, blen);
 		memxor(ibuf, state->hmacpwd, state->hmacpln);
 		state->alg->hash_block(ibuf, &state->hmach);
+		memset(ibuf, 0, blen); asm("":::"memory");
 	}
 	state->hash_pos = 0;
 	if (!ochg && state->seq != 0)
@@ -300,20 +302,19 @@ int hash_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 #endif
 	}
 	if (state->prepend) {
-		const int blksz = state->alg->blksz;
 		int done = 0; int remain = strlen(state->prepend);
-		while (remain >= blksz) {
+		while (remain >= blen) {
 			state->alg->hash_block((uint8_t*)(state->prepend)+done, &state->hash);
 			if (state->hmacpwd)
 				state->alg->hash_block((uint8_t*)(state->prepend)+done, &state->hmach);
-			remain -= blksz;
-			done += blksz;
+			remain -= blen;
+			done += blen;
 		}
 		HASH_DEBUG(FPLOG(DEBUG, "Prepending %i+%i bytes (padded with %i bytes)\n",
-				done, remain, blksz-remain));
+				done, remain, blen-remain));
 		if (remain) {
 			memcpy(state->buf, state->prepend+done, remain);
-			memset(state->buf+remain, 0, blksz-remain);
+			memset(state->buf+remain, 0, blen-remain);
 			state->alg->hash_block(state->buf, &state->hash);
 			if (state->hmacpwd)
 				state->alg->hash_block(state->buf, &state->hmach);
@@ -367,7 +368,9 @@ void hash_last(hash_state *state, loff_t pos)
 		HASH_DEBUG(FPLOG(DEBUG, "Account for %i extra prepended bytes\n", preln));
 	state->alg->hash_calc(state->buf, state->buflen, state->hash_pos+state->buflen+preln, &state->hash);
 	if (state->hmacpwd)
-		state->alg->hash_calc(state->buf, state->buflen, state->hash_pos+state->buflen+preln+state->alg->blksz, &state->hmach);
+		state->alg->hash_calc(state->buf, state->buflen, 
+				      state->hash_pos+state->buflen+preln+state->alg->blksz,
+				      &state->hmach);
 	state->hash_pos += state->buflen;
 }
 
@@ -384,11 +387,13 @@ static inline void hash_block_buf(hash_state* state, int clear)
 
 void hash_hole(fstate_t *fst, hash_state *state, loff_t holelen)
 {
+	const unsigned int blksz = state->alg->blksz;
 	if (state->buflen) {
+		const unsigned int remain = blksz - state->buflen;
 		HASH_DEBUG(FPLOG(DEBUG, "first sparse block (drain %i)\n", state->buflen));
-		memset(state->buf+state->buflen, 0, state->alg->blksz-state->buflen);
-		if (holelen >= state->alg->blksz-state->buflen) {
-			holelen -= (state->alg->blksz-state->buflen);
+		memset(state->buf+state->buflen, 0, remain);
+		if (holelen >= blksz-state->buflen) {
+			holelen -= remain;
 			hash_block_buf(state, state->buflen);
 		} else {
 			state->buflen += holelen;
@@ -396,12 +401,12 @@ void hash_hole(fstate_t *fst, hash_state *state, loff_t holelen)
 		}
 	}
 	assert(state->buflen == 0);
-	HASH_DEBUG(FPLOG(DEBUG, "bulk sparse %i\n", holelen-holelen%state->alg->blksz));
-	while (holelen >= state->alg->blksz) {
+	HASH_DEBUG(FPLOG(DEBUG, "bulk sparse %i\n", holelen-holelen%blksz));
+	while (holelen >= blksz) {
 		hash_block_buf(state, 0);
-		holelen -= state->alg->blksz;
+		holelen -= blksz;
 	}
-	assert(holelen >= 0 && holelen < state->alg->blksz);
+	assert(holelen >= 0 && holelen < blksz);
 	// memset(state->buf, 0, holelen);
 	state->buflen = holelen;
 	HASH_DEBUG(FPLOG(DEBUG, "sparse left %i (%i+%i)\n", holelen, state->hash_pos, state->buflen));
@@ -425,6 +430,7 @@ unsigned char* hash_blk_cb(fstate_t *fst, unsigned char* bf,
 	// Handle hole (sparse files)
 	const loff_t holesz = pos - (state->hash_pos + state->buflen);
 	assert(holesz >= 0 || (state->ilnchg && state->olnchg));
+	const unsigned int blksz = state->alg->blksz;
 	if (holesz && !(state->ilnchg && state->olnchg))
 		hash_hole(fst, state, holesz);
 
@@ -434,14 +440,14 @@ unsigned char* hash_blk_cb(fstate_t *fst, unsigned char* bf,
 	/* First block */
 	if (state->buflen && *towr) {
 		/* Reassemble and process first block */
-		consumed = MIN(state->alg->blksz-state->buflen, *towr);
+		consumed = MIN(blksz-state->buflen, *towr);
 		HASH_DEBUG(FPLOG(DEBUG, "Append %i bytes @ %i to store\n", consumed, pos));
 		memcpy(state->buf+state->buflen, bf, consumed);
-		if (consumed+state->buflen == state->alg->blksz) {
-			hash_block_buf(state, state->alg->blksz);
+		if (consumed+state->buflen == blksz) {
+			hash_block_buf(state, blksz);
 		} else {
 			state->buflen += consumed;
-			//memset(state->buf+state->buflen, 0, state->alg->blksz-state->buflen);
+			//memset(state->buf+state->buflen, 0, blksz-state->buflen);
 		}
 	}
 
@@ -449,7 +455,7 @@ unsigned char* hash_blk_cb(fstate_t *fst, unsigned char* bf,
 	/* Bulk buffer process */
 	int to_process = *towr - consumed;
 	assert(to_process >= 0);
-	to_process -= to_process%state->alg->blksz;
+	to_process -= to_process%blksz;
 	if (to_process) {
 		HASH_DEBUG(FPLOG(DEBUG, "Consume %i bytes @ %i\n", to_process, pos+consumed));
 		assert(state->buflen == 0);
@@ -460,7 +466,7 @@ unsigned char* hash_blk_cb(fstate_t *fst, unsigned char* bf,
 	}
 	assert(state->hash_pos+state->buflen == pos+consumed || (state->ilnchg && state->olnchg));
 	to_process = *towr - consumed;
-	assert(to_process >= 0 && to_process < state->alg->blksz);
+	assert(to_process >= 0 && to_process < blksz);
 	/* Copy remainder into buffer */
 	if (!(state->olnchg && state->ilnchg) && state->hash_pos + state->buflen != pos + consumed)
 		FPLOG(FATAL, "Inconsistency: HASH pos %i, buff %i, st pos %" LL "i, cons %i, tbw %i\n",
@@ -732,6 +738,7 @@ int hash_close(loff_t ooff, void **stat)
 		state->alg->hash_beout(obuf+blen, &state->hmach);
 		state->alg->hash_init(&state->hmach);
 		state->alg->hash_calc(obuf, blen+hlen, blen+hlen, &state->hmach);
+		memset(obuf, 0, blen); asm("":::"memory");
 		state->alg->hash_hexout(res, &state->hmach);
 		if (!state->opts->quiet) 
 			FPLOG(INFO, "HMAC %s %s (%" LL "i-%" LL "i): %s\n",
@@ -781,7 +788,7 @@ int hmac(hashalg_t* hash, unsigned char* pwd, int plen,
 	unsigned char ibuf[blen], obuf[blen];
 	memset(ibuf, 0x36, blen);
 	memset(obuf, 0x5c, blen);
-	if (plen > hash->blksz) {
+	if (plen > blen) {
 		hash_t hv;
 		unsigned char pcpy[2*blen];
 		memcpy(pcpy, pwd, plen);
