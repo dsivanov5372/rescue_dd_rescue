@@ -27,10 +27,14 @@ void probe_sse2();
 #ifdef NO_SSE42	/* compiler does not support -msse4.2 (nor -mavx2) */
 #define have_avx2 0
 #define have_sse42 0
+#define have_rdrand 0
+#define have_aesni 0
 #define ARCH_DETECT do {} while (0)
 #define ARCH_DECLS ARCH_DECL_386
 #elif defined(NO_AVX2) /* compiler does not support -mavx2 */
 #define have_avx2 0
+#define have_rdrand 0
+#define have_aesni 0
 extern char have_sse42;
 void probe_sse42();
 #define ARCH_DECLS char have_sse42; ARCH_DECL_386
