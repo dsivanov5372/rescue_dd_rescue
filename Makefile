@@ -23,7 +23,7 @@ MYDIR = dd_rescue
 BINTARGETS = dd_rescue 
 LIBTARGETS = libddr_hash.so libddr_MD5.so libddr_null.so
 #TARGETS = libfalloc-dl
-OTHTARGETS = find_nonzero fiemap file_zblock fmt_no md5 sha256 sha512 sha224 sha384 sha1 pbkdf2
+OTHTARGETS = find_nonzero fiemap file_zblock fmt_no md5 sha256 sha512 sha224 sha384 sha1
 OBJECTS = frandom.o fmt_no.o find_nonzero.o 
 FNZ_HEADERS = find_nonzero.h archdep.h ffs.h
 HEADERS = frandom.h fmt_no.h config.h list.h fstrim.h $(FNZ_HEADERS) splice.h fallocate64.h pread64.h ddr_plugin.h
@@ -44,6 +44,13 @@ ifeq ($(shell grep 'HAVE_LZO_LZO1X_H 1' config.h >/dev/null 2>&1 && echo 1), 1)
   HAVE_LZO=1
 else
   HAVE_LZO=0
+endif
+
+ifeq ($(shell grep 'HAVE_OPENSSL_EVP_H 1' config.h >/dev/null 2>&1 && echo 1), 1)
+  OTHTARGETS += pbkdf2
+  HAVE_OPENSSL=1
+else
+  HAVE_OPENSSL=0
 endif
 
 ifeq ($(CC),wcl386)

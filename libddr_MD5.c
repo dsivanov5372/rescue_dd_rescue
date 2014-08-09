@@ -92,7 +92,7 @@ const char *hash_help = "The HASH plugin for dd_rescue calculates a cryptographi
 
 hashalg_t *get_hashalg(hash_state *state, const char* nm)
 {
-	int i;
+	unsigned int i;
 	const char help = !strcmp(nm, "help");
 	if (help)
 		FPLOG(INFO, "Supported algorithms:");
@@ -189,13 +189,13 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		else if (!memcmp(param, "algorithm=", 10))
 			state->alg = get_hashalg(state, param+10);
 		else if (!memcmp(param, "hmacpwd=", 8)) {
-			state->hmacpwd = malloc(MAX_HMACPWDLN);
+			state->hmacpwd = (unsigned char*)malloc(MAX_HMACPWDLN);
 			strncpy((char*)state->hmacpwd, param+8, MAX_HMACPWDLN);
 			state->hmacpln = strlen(param+8);
 		}
 		else if (!memcmp(param, "hmacpwdfd=", 10)) {
 			int hfd = atol(param+10);
-			state->hmacpwd = malloc(MAX_HMACPWDLN);
+			state->hmacpwd = (unsigned char*)malloc(MAX_HMACPWDLN);
 			if (hfd == 0 && isatty(hfd))
 				state->hmacpln = hidden_input(state, "Enter HMAC password: ",
 							      hfd, state->hmacpwd, MAX_HMACPWDLN, 1);
@@ -214,7 +214,7 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 				param = next;
 				continue;
 			}
-			state->hmacpwd = malloc(MAX_HMACPWDLN);
+			state->hmacpwd = (unsigned char*)malloc(MAX_HMACPWDLN);
 			state->hmacpln = fread(state->hmacpwd, 1, MAX_HMACPWDLN, f);
 			if (state->hmacpln <= 0) {
 				FPLOG(FATAL, "No HMAC pwd contents found in %s!\n", param+10);
@@ -265,7 +265,7 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		state->chkfalloc = 1;
 		state->chkfnm = strdup(cfnm);
 	}
-	if (state->hmacpln > state->alg->blksz) {
+	if ((unsigned)state->hmacpln > state->alg->blksz) {
 		hash_t hv;
 		state->alg->hash_init(&hv);
 		state->alg->hash_calc(state->hmacpwd, state->hmacpln, state->hmacpln, &hv);
@@ -280,7 +280,7 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 
 void memxor(unsigned char* p1, const unsigned char *p2, ssize_t ln)
 {
-	while (ln >= sizeof(unsigned long)) {
+	while ((size_t)ln >= sizeof(unsigned long)) {
 		*(unsigned long*)p1 ^= *(unsigned long*)p2;
 		ln -= sizeof(unsigned long);
 		p1 += sizeof(unsigned long); p2 += sizeof(unsigned long);
@@ -330,7 +330,7 @@ int hash_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	}
 	if (state->prepend) {
 		int done = 0; int remain = strlen(state->prepend);
-		while (remain >= blen) {
+		while (remain >= (int)blen) {
 			state->alg->hash_block((uint8_t*)(state->prepend)+done, &state->hash);
 			if (state->hmacpwd)
 				state->alg->hash_block((uint8_t*)(state->prepend)+done, &state->hmach);
@@ -467,10 +467,10 @@ unsigned char* hash_blk_cb(fstate_t *fst, unsigned char* bf,
 	/* First block */
 	if (state->buflen && *towr) {
 		/* Reassemble and process first block */
-		consumed = MIN(blksz-state->buflen, *towr);
+		consumed = MIN((int)blksz-state->buflen, *towr);
 		HASH_DEBUG(FPLOG(DEBUG, "Append %i bytes @ %i to store\n", consumed, pos));
 		memcpy(state->buf+state->buflen, bf, consumed);
-		if (consumed+state->buflen == blksz) {
+		if (consumed+state->buflen == (int)blksz) {
 			hash_block_buf(state, blksz);
 		} else {
 			state->buflen += consumed;
@@ -493,7 +493,7 @@ unsigned char* hash_blk_cb(fstate_t *fst, unsigned char* bf,
 	}
 	assert(state->hash_pos+state->buflen == pos+consumed || (state->ilnchg && state->olnchg));
 	to_process = *towr - consumed;
-	assert(to_process >= 0 && to_process < blksz);
+	assert(to_process >= 0 && to_process < (int)blksz);
 	/* Copy remainder into buffer */
 	if (!(state->olnchg && state->ilnchg) && state->hash_pos + state->buflen != pos + consumed)
 		FPLOG(FATAL, "Inconsistency: HASH pos %i, buff %i, st pos %" LL "i, cons %i, tbw %i\n",
@@ -557,7 +557,7 @@ off_t find_chks(hash_state* st, FILE* f, const char* nm, char* res)
 		while (last > 0 && (fnm[last] == '\n' || fnm[last] == '\r'))
 			fnm[last--] = 0;
 		if (!strcmp(fnm, nm) || !strcmp(fnm, bnm)) {
-			if (res && fwh-lnbf <= 2*sizeof(hash_t)) {
+			if (res && fwh-lnbf <= 2*(int)sizeof(hash_t)) {
 				memcpy(res, lnbf, fwh-lnbf);
 				res[fwh-lnbf] = 0;
 			}
@@ -815,7 +815,7 @@ int hmac(hashalg_t* hash, unsigned char* pwd, int plen,
 	unsigned char ibuf[blen], obuf[blen];
 	memset(ibuf, 0x36, blen);
 	memset(obuf, 0x5c, blen);
-	if (plen > blen) {
+	if ((unsigned)plen > blen) {
 		hash_t hv;
 		unsigned char pcpy[2*blen];
 		memcpy(pcpy, pwd, plen);
@@ -863,11 +863,11 @@ int pbkdf2(hashalg_t *hash,   unsigned char* pwd,  int plen,
 	const unsigned int hlen = hash->hashln;
 	const unsigned int khrnd = 1+(klen-1)/hlen;
 	const unsigned int khlen = hlen*khrnd;
-	const unsigned int bflen = MAX(slen+4, hlen)+hash->blksz;
+	const unsigned int bflen = MAX((unsigned)slen+4, hlen)+hash->blksz;
 	unsigned char* buf = (unsigned char*)malloc(bflen);
 	unsigned char* khash = (unsigned char*)malloc(khlen);
 	memset(buf, 0, bflen); memset(khash, 0, khlen);
-	if (plen > hlen) {
+	if ((unsigned)plen > hlen) {
 		hash_t hv;
 		hash->hash_init(&hv);
 		hash->hash_calc(pwd, plen, plen, &hv);
@@ -877,7 +877,7 @@ int pbkdf2(hashalg_t *hash,   unsigned char* pwd,  int plen,
 		plen = hlen;
 	}
 	/* TODO: Input validation */
-	int i, p;
+	unsigned int i, p;
 	memcpy(buf, salt, slen);
 	for (p = 0; p < khrnd; ++p) {
 		const unsigned int ctr = htonl(p+1);
@@ -919,12 +919,17 @@ char* kout(unsigned char* key, int klen)
 
 int do_pbkdf2(hash_state *state, char* param)
 {
+	char *pwd, *salt;
+	unsigned int iter; int klen, err = 1;
+	unsigned char *key;
+	hashalg_t *halg;
+
 	char* next = strchr(param, '/');
 	if (next)
 		*next++ = 0;
 	else
 		goto out_err;
-	hashalg_t *halg = get_hashalg(state, param);
+	halg = get_hashalg(state, param);
 	if (!halg) {
 		FPLOG(FATAL, "Unknown hash alg %s!\n", param);
 		return 1;
@@ -936,7 +941,7 @@ int do_pbkdf2(hash_state *state, char* param)
 		*next++ = 0;
 	else
 		goto out_err;
-	char* pwd = param;
+	pwd = param;
 	
 	param = next;
 	next = strchr(param, '/');
@@ -944,7 +949,7 @@ int do_pbkdf2(hash_state *state, char* param)
 		*next++ = 0;
 	else
 		goto out_err;
-	char* salt = param;
+	salt = param;
 
 	param = next;
 	next = strchr(param, '/');
@@ -952,13 +957,13 @@ int do_pbkdf2(hash_state *state, char* param)
 		*next++ = 0;
 	else
 		goto out_err;
-	unsigned int iter = atol(param);
+	iter = atol(param);
 
-	int klen = atol(next)/8;
+	klen = atol(next)/8;
 
-	unsigned char *key = (unsigned char*)malloc(klen);
+	key = (unsigned char*)malloc(klen);
 
-	int err = pbkdf2(halg, (unsigned char*)pwd, strlen(pwd), 
+	err = pbkdf2(halg, (unsigned char*)pwd, strlen(pwd), 
 			 (unsigned char*)salt, strlen(salt),
 			 iter, key, klen);
 	

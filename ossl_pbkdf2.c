@@ -43,7 +43,7 @@ int main(int argc, char *argv[])
 	if (argc != 5)
 		usage();
 	int olen = atol(argv[4])/8;
-	char* obuf = malloc(1+2*olen);
+	char* obuf = (char*)malloc(1+2*olen);
 	OPENSSL_init();
 	PBKDF2_HMAC_SHA1(argv[1], (unsigned char*)argv[2], atol(argv[3]), olen, obuf);
 	printf("PBKDF2(SHA1  , ...) = %s\n", obuf);

@@ -27,6 +27,9 @@ config:
 	rm -f config.h
 	$(MAKE) -f Makefile.android config.h
 
+default: $(DEPS) 
+	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm $@
+
 dd_rescue: $(DEPS) 
 	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm $@
 
