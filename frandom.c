@@ -131,7 +131,7 @@ static void get_libc_rand_bytes(u8 *buf, size_t len)
 		lbuf[i] = rand();
 }
 
-#if defined(__x86_64__) || defined(__i386__)
+#if (defined(__x86_64__) || defined(__i386__)) && !defined(NO_RDRND)
 unsigned int rdrand32();
 #else
 #define BSWAP32(x) ((x<<24) | ((x<<8)&0x00ff0000) | ((x>>8)&0x0000ff00) | (x>>24))
