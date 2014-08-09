@@ -54,7 +54,7 @@ typedef unsigned char* (_block_callback)(fstate_t *fst, unsigned char* bf,
  */
 typedef int (_close_callback)(loff_t ooff, void **stat);
 
-enum ddrlog_t { NOHDR=0, DEBUG, INFO, WARN, FATAL };
+enum ddrlog_t { NOHDR=0, DEBUG, INFO, WARN, FATAL, GOOD, INPUT };
 typedef int (_fplog_upcall)(FILE* const f, enum ddrlog_t logpre, 
 			    const char* const fmt, ...);
 

@@ -285,13 +285,17 @@ char *graph;
 #define DDR_INFO  "dd_rescue: (info): "
 #define DDR_WARN  "dd_rescue: (warning): "
 #define DDR_FATAL "dd_rescue: (fatal): "
+#define DDR_GOOD  "dd_rescue: (success): "
+#define DDR_INPUT "dd_rescue: (input): "
 #define DDR_DEBUG_C ULINE DDR_DEBUG NORM
 #define DDR_INFO_C  BOLD DDR_INFO NORM
 #define DDR_WARN_C  AMBER DDR_WARN NORM
 #define DDR_FATAL_C RED DDR_FATAL NORM
+#define DDR_GOOD_C  GREEN DDR_GOOD NORM
+#define DDR_INPUT_C INV DDR_INPUT NORM
 
-const char* ddrlogpre[] = {"", DDR_DEBUG, DDR_INFO, DDR_WARN, DDR_FATAL };
-const char* ddrlogpre_c[] = {"", DDR_DEBUG_C, DDR_INFO_C, DDR_WARN_C, DDR_FATAL_C };
+const char* ddrlogpre[] = {"", DDR_DEBUG, DDR_INFO, DDR_WARN, DDR_FATAL, DDR_GOOD, DDR_INPUT };
+const char* ddrlogpre_c[] = {"", DDR_DEBUG_C, DDR_INFO_C, DDR_WARN_C, DDR_FATAL_C, DDR_GOOD_C, DDR_INPUT_C };
 
 
 #ifdef MISS_STRSIGNAL

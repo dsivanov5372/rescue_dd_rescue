@@ -177,7 +177,7 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			struct termios tcflags;
 			if (hfd == 0 && tcgetattr(hfd, &tcflags) == 0) {
 				struct termios tcflags2;
-				fprintf(stderr, "Enter HMAC password: ");
+				FPLOG(INPUT, "Enter HMAC password: ");
 				memcpy(&tcflags2, &tcflags, sizeof(struct termios));
 				tcflags2.c_lflag |= ICANON | ECHONL;
 				tcflags2.c_lflag &= ~ECHO;
@@ -962,7 +962,7 @@ int do_pbkdf2(hash_state *state, char* param)
 
 
 ddr_plugin_t ddr_plug = {
-	//.name = "MD5",
+	//.name = "hash",
 	.slack_pre = 144,	// not yet used
 	.slack_post = 288,	// not yet used
 	.needs_align = 0,
