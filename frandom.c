@@ -141,7 +141,7 @@ unsigned int frandom_getseedval()
 {
 	struct timeval tv;
 	gettimeofday(&tv, NULL);
-#if defined(__x86_64__) || defined(__i386__)
+#if (defined(__x86_64__) || defined(__i386__)) && !defined(NO_RDRND)
 	unsigned int hwrnd = rdrand32();
 #else
 	unsigned int hwrnd = BSWAP32((unsigned int)(unsigned long)&frandom_getseedval);

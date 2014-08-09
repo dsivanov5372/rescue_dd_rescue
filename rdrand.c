@@ -57,6 +57,14 @@ void probe_aesni()
 
 #else 
 # warning compile rdrand with -mrdrnd
+#if 0
+unsigned int rdrand32()
+{
+	unsigned int val = (unsigned long)&rdrand32;
+	val = BSWAP32(val);
+	return val;
+}
+#endif
 #endif
 
 

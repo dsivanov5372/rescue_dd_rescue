@@ -2102,7 +2102,7 @@ void printversion()
 #ifdef HAVE_ATTR_XATTR_H
 	fprintf(stderr, "xattr ");
 #endif
-#if defined(__x86_64__) || defined(__i386__)
+#if (defined(__x86_64__) || defined(__i386__)) && !defined(NO_RDRND)
 	if (have_rdrand)
 		fprintf(stderr, "rdrnd ");
 #if 0
