@@ -29,6 +29,8 @@
 #include <assert.h>
 #include <errno.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <termios.h>
 #ifdef HAVE_ATTR_XATTR_H
 # include <attr/xattr.h>
 #endif
@@ -171,10 +173,23 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		}
 		else if (!memcmp(param, "hmacpwdfd=", 10)) {
 			int hfd = atol(param+10);
-			if (hfd == 0)
-				fprintf(stderr, "Enter HMAC password: ");
 			state->hmacpwd = malloc(MAX_HMACPWDLN);
-			state->hmacpln = read(hfd, state->hmacpwd, MAX_HMACPWDLN);
+			struct termios tcflags;
+			if (hfd == 0 && tcgetattr(hfd, &tcflags) == 0) {
+				struct termios tcflags2;
+				fprintf(stderr, "Enter HMAC password: ");
+				memcpy(&tcflags2, &tcflags, sizeof(struct termios));
+				tcflags2.c_lflag |= ICANON | ECHONL;
+				tcflags2.c_lflag &= ~ECHO;
+				tcsetattr(hfd, TCSANOW, &tcflags2);
+				state->hmacpln = read(hfd, state->hmacpwd, MAX_HMACPWDLN);
+				if (state->hmacpwd[state->hmacpln-1] == '\n')
+					--state->hmacpln;
+				if (state->hmacpwd[state->hmacpln-1] == '\r')
+					--state->hmacpln;
+				tcsetattr(hfd, TCSANOW, &tcflags);
+			} else
+				state->hmacpln = read(hfd, state->hmacpwd, MAX_HMACPWDLN);
 			if (state->hmacpln <= 0) {
 				FPLOG(FATAL, "No HMAC password entered!\n");
 				--err;
