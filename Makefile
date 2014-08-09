@@ -347,7 +347,7 @@ check: $(TARGETS) find_nonzero md5 sha1 sha256 sha512
 	rm -f /tmp/dd_rescue CHECKSUMS.sha512 TEST HMACS.md5
 	FILES="*.c *.h *.po dd_rescue *.so"; \
 	for alg in md5 sha1 sha256 sha384; do \
-		./calchmac.py $$alg pass_$$alg $$FILES; \
+		./calchmac.py $$alg pass_$$alg $$FILES > HMACS.$$alg; \
 	done
 	for name in *.c *.h *.po dd_rescue *.so; do \
 		for alg in md5 sha1 sha256 sha384; do \

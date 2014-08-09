@@ -29,7 +29,7 @@ if not algo:
 	print >>sys.stderr, "Hash algorithm %s not found!" % alg
 	sys.exit(2)
 
-hmf = open("HMACS.%s" % alg, "w")
+#hmf = open("HMACS.%s" % alg, "w")
 for fnm in sys.argv[3:]:
 	f = file(fnm, "rb")
 	if not f:
@@ -38,5 +38,6 @@ for fnm in sys.argv[3:]:
 	#print fnm
 	fcont = f.read()
 	hm = hmac.HMAC(pwd, fcont, algo)
-	print >>hmf, "%s *%s" % (hm.hexdigest(), fnm)
+	#print >>hmf, "%s *%s" % (hm.hexdigest(), fnm)
+	print "%s *%s" %(hm.hexdigest(), fnm)
 
