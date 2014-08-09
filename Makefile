@@ -267,7 +267,7 @@ distclean: clean
 dist: distclean
 	#tar cvzf ../dd_rescue-$(VERSION).tar.gz -C.. --exclude=$(MYDIR)/CV* --exclude $(MYDIR)/dd_rescue2* --exclude $(MYDIR)/.* --exclude $(MYDIR)/*.i --exclude $(MYDIR)/*~ --exclude $(MYDIR)*.S --exclude $(MYDIR)/*_32 --exclude $(MYDIR)/*_64 --exclude $(MYDIR)/*_android --exclude $(MYDIR)/*.o --exclude $(MYDIR)/*.po --exclude $(MYDaIR)/*.so $(MYDIR) 
 	#cd .. && tar cvzf dd_rescue-$(VERSION).tar.gz $(MYDIR)/*.c $(MYDIR)/*.h $(MYDIR)/*.in $(MYDIR)/Makefile* $(MYDIR)/*.sh $(MYDIR)/*.1 $(MYDIR)/COPYING $(MYDIR)/README*
-	cvs status | grep ^File | sed 's@^File: \([a-zA-Z0-9_\.-]*\).*$$@dd_rescue/\1@' | xargs tar cvzf ../dd_rescue-$(VERSION).tar.gz -C.. 
+	cvs status | grep ^File | sed 's@^File: \([a-zA-Z0-9_\.-]*\).*$$@dd_rescue/\1@' | xargs tar cvjf ../dd_rescue-$(VERSION).tar.bz2 -C.. 
 
 
 install: $(TARGETS)
