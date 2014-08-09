@@ -42,7 +42,7 @@ void probe_sse42();
 #else /* compiler supports both extensions */
 extern char have_avx2;
 extern char have_sse42;
-#ifdef(NO_RDRND)
+#ifdef NO_RDRND
 #define have_rdrand 0
 #define have_aesni 0
 void probe_avx2(); void probe_sse42();
