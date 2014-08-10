@@ -43,13 +43,17 @@ typedef struct _aes_desc {
 	const char* name;
 	uint keylen;	/* bits */
 	uint rounds;
-	/* blocksize is always 16 as is rkey size*/
+	uint ctx_size;	/* Size for all round keys (and potentially addtl context in bytes) */
+	/* blocksize is always 16 as is rkey size */
 	AES_Key_Setup_fn *enc_key_setup, *dec_key_setup;
 	AES_Crypt_Blk_fn *enc_block, *dec_block;
 	AES_Crypt_CBC_fn *enc_cbc, *dec_cbc;
 	AES_Crypt_CTR_Prep_fn *ctr_prep;
 	AES_Crypt_CTR_fn *crypt_ctr;
 } aes_desc_t;
+
+typedef uchar* (xor_blk)(uchar i1[16], const uchar i2[16]);
+
 
 
 #endif
