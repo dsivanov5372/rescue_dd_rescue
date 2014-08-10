@@ -2,7 +2,7 @@
 # (c) garloff@suse.de, 99/10/09, GNU GPL
 # $Id$
 
-VERSION = 1.46
+VERSION = 1.47
 
 DESTDIR = 
 
@@ -23,7 +23,7 @@ MYDIR = dd_rescue
 BINTARGETS = dd_rescue 
 LIBTARGETS = libddr_hash.so libddr_MD5.so libddr_null.so
 #TARGETS = libfalloc-dl
-OTHTARGETS = find_nonzero fiemap file_zblock fmt_no md5 sha256 sha512 sha224 sha384 sha1
+OTHTARGETS = find_nonzero fiemap file_zblock fmt_no md5 sha256 sha512 sha224 sha384 sha1 test_aes
 OBJECTS = frandom.o fmt_no.o find_nonzero.o 
 FNZ_HEADERS = find_nonzero.h archdep.h ffs.h
 HEADERS = frandom.h fmt_no.h config.h list.h fstrim.h $(FNZ_HEADERS) splice.h fallocate64.h pread64.h ddr_plugin.h
@@ -102,6 +102,7 @@ else
 endif
 ifeq ($(HAVE_RDRNDAES),1)
 	OBJECTS2 += rdrand.o
+	AESNI_O = aesni.o
 else
 	CFLAGS += -DNO_RDRND -DNO_AES
 endif
@@ -258,6 +259,15 @@ fiemap: fiemap.c fiemap.h fstrim.h config.h fstrim.o
 
 pbkdf2: ossl_pbkdf2.c
 	$(CC) $(CFLAGS) -fpie -o $@ $< -lcrypto 
+
+test_aes: test_aes.c $(AESNI_O) aes_c.o secmem.o aesni.h
+	$(CC) $(CFLAGS) $(DEF) -o $@ $< $(AESNI_O) aes_c.o secmem.o -lcrypto
+
+aesni.o: aesni.c aesni.h
+	$(CC) $(CFLAGS) -O3 -maes -msse4.1 -c $<
+
+aes_c.o: aes_c.c aes_c.h
+	$(CC) $(CFLAGS) $(FULL_UNROLL) -O3 -c $<
 
 distclean: clean
 	rm -f *~ config.h config.h.in config.status config.log configure
