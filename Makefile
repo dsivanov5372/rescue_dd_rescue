@@ -261,13 +261,13 @@ pbkdf2: ossl_pbkdf2.c
 	$(CC) $(CFLAGS) -fpie -o $@ $< -lcrypto 
 
 test_aes: test_aes.c $(AESNI_O) aes_c.o secmem.o aesni.h
-	$(CC) $(CFLAGS) $(DEF) -o $@ $< $(AESNI_O) aes_c.o secmem.o -lcrypto
+	$(CC) $(CFLAGS) -fpie $(DEF) -o $@ $< $(AESNI_O) aes_c.o secmem.o -lcrypto
 
 aesni.o: aesni.c aesni.h
-	$(CC) $(CFLAGS) -O3 -maes -msse4.1 -c $<
+	$(CC) $(CFLAGS) -fpie -O3 -maes -msse4.1 -c $<
 
 aes_c.o: aes_c.c aes_c.h
-	$(CC) $(CFLAGS) $(FULL_UNROLL) -O3 -c $<
+	$(CC) $(CFLAGS) -fpie $(FULL_UNROLL) -O3 -c $<
 
 distclean: clean
 	rm -f *~ config.h config.h.in config.status config.log configure
