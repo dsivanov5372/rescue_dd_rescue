@@ -1,6 +1,7 @@
-#ifndef _AES_H
-#define _AES_H
+#ifndef _AES_C_H
+#define _AES_C_H
 
+#include "aes.h"
 #include <stdio.h>
 
 /* aes.c */

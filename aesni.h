@@ -4,7 +4,7 @@
  */
 
 #ifndef _AESNI_H
-#define _AESNI_h
+#define _AESNI_H
 
 #include <sys/types.h>
 

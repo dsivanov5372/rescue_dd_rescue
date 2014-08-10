@@ -263,10 +263,10 @@ pbkdf2: ossl_pbkdf2.c
 test_aes: test_aes.c $(AESNI_O) aes_c.o secmem.o aesni.h
 	$(CC) $(CFLAGS) -fpie $(DEF) -o $@ $< $(AESNI_O) aes_c.o secmem.o -lcrypto
 
-aesni.o: aesni.c aesni.h
+aesni.o: aesni.c aesni.h aes.h
 	$(CC) $(CFLAGS) -fpie -O3 -maes -msse4.1 -c $<
 
-aes_c.o: aes_c.c aes_c.h
+aes_c.o: aes_c.c aes_c.h aes.h
 	$(CC) $(CFLAGS) -fpie $(FULL_UNROLL) -O3 -c $<
 
 distclean: clean
