@@ -6,18 +6,15 @@
  */
 
 #include "aes.h"
-#ifdef __SSE4__
-static inline
-__m128i _mkmask(char ln)
-{
-	ln &= 0x0f;
-	return (ln >= 8? 
-			_mm_set_epi64x((1ULL<<(8*ln-64))-1, 0xffffffffffffffffULL):
-			_mm_set_epi64x(0ULL, (1ULL<<(8*ln))-1)
-		);
 
+#include <string.h>
+
+void xor16(uchar x1[16], const uchar x2[16])
+{
+	uint i;
+	for (i = 0; i < 16; ++i)
+		*(ulong*)(x1+i) ^= *(ulong*)(x2+i);
 }
-#endif
 
 
 void AES_Gen_CBC_Enc(AES_Crypt_Blk_fn *cryptfn, xor_blk *xorfn,
@@ -29,28 +26,20 @@ void AES_Gen_CBC_Enc(AES_Crypt_Blk_fn *cryptfn, xor_blk *xorfn,
 	while (len >= 16) {
 		xorfn(iv, input);
 		cryptfn(rkeys, rounds, iv, iv);
-		output = iv;
+		memcpy(output, iv, 16);
 		len -= 16; input += 16; output += 16;
 	}
 	if (len) {
-#ifdef __SSE4__
-		register __m128i dat = _mm_loadu_si128((const __m128i*)input);
-		__m128i mask = _mkmask(len);
-		dat = _mm_and_si128(dat, mask);
-		iv = _mm_xor_si128(iv, dat);
-#else
 		int i;
 		uchar in[16];
-		for (i = 0; i < len; ++i) {
-			if (i < len)
-				in[i] = input[i];
-			else
-				in[i] = 0;
-		}
+		for (i = 0; i < len; ++i) 
+			in[i] = input[i];
+		for (; i < 16; ++i)
+			in[i] = 0;
 		xorfn(iv, in);
-#endif
 		cryptfn(rkeys, rounds, iv, iv);
-		output = iv;
+		memcpy(output, iv, 16);
 	}
 }
-		       
+
+

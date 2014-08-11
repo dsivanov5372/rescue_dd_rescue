@@ -52,7 +52,7 @@ typedef struct _aes_desc {
 	AES_Crypt_CTR_fn *crypt_ctr;
 } aes_desc_t;
 
-typedef uchar* (xor_blk)(uchar i1[16], const uchar i2[16]);
+typedef void (xor_blk)(uchar i1[16], const uchar i2[16]);
 
 
 
