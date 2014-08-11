@@ -1144,43 +1144,7 @@ void AES_C_CTR_Crypt(const uchar* rkeys, uint rounds, uchar *ctr, const uchar *i
 	AES_Gen_CTR_Crypt(AES_C_Encrypt_Blk, rkeys, rounds, ctr, in, out, len);
 }
 
-aes_desc_t AES_C_Methods[] = {{"AES128-ECB"  , 128, 10, 11*16, AES_C_KeySetup_128_Enc, AES_C_KeySetup_128_Dec,
-							NULL, AES_C_ECB_Encrypt, AES_C_ECB_Decrypt},
-			      {"AES128-CBC"  , 128, 10, 11*16, AES_C_KeySetup_128_Enc, AES_C_KeySetup_128_Dec,
-							NULL, AES_C_CBC_Encrypt, AES_C_CBC_Decrypt},
-			      {"AES128-CTR"  , 128, 10, 11*16, AES_C_KeySetup_128_Enc, AES_C_KeySetup_128_Enc,
-						AES_Gen_CTR_Prep, AES_C_CTR_Crypt, AES_C_CTR_Crypt},
-			      {"AES192-ECB"  , 192, 12, 13*16, AES_C_KeySetup_192_Enc, AES_C_KeySetup_192_Dec,
-							NULL, AES_C_ECB_Encrypt, AES_C_ECB_Decrypt},
-			      {"AES192-CBC"  , 192, 12, 13*16, AES_C_KeySetup_192_Enc, AES_C_KeySetup_192_Dec,
-							NULL, AES_C_CBC_Encrypt, AES_C_CBC_Decrypt},
-			      {"AES192-CTR"  , 192, 12, 13*16, AES_C_KeySetup_192_Enc, AES_C_KeySetup_192_Enc,
-						AES_Gen_CTR_Prep, AES_C_CTR_Crypt, AES_C_CTR_Crypt},
-			      {"AES256-ECB"  , 256, 14, 15*16, AES_C_KeySetup_256_Enc, AES_C_KeySetup_256_Dec,
-							NULL, AES_C_ECB_Encrypt, AES_C_ECB_Decrypt},
-			      {"AES256-CBC"  , 256, 14, 15*16, AES_C_KeySetup_256_Enc, AES_C_KeySetup_256_Dec,
-							NULL, AES_C_CBC_Encrypt, AES_C_CBC_Decrypt},
-			      {"AES256-CTR"  , 256, 14, 15*16, AES_C_KeySetup_256_Enc, AES_C_KeySetup_256_Enc,
-						AES_Gen_CTR_Prep, AES_C_CTR_Crypt, AES_C_CTR_Crypt},
-			      {"AES128+-ECB" , 128, 12, 13*16, AES_C_KeySetup_128_Enc, AES_C_KeySetup_128_Dec,
-							NULL, AES_C_ECB_Encrypt, AES_C_ECB_Decrypt},
-			      {"AES128+-CBC" , 128, 12, 13*16, AES_C_KeySetup_128_Enc, AES_C_KeySetup_128_Dec,
-							NULL, AES_C_CBC_Encrypt, AES_C_CBC_Decrypt},
-			      {"AES128+-CTR" , 128, 12, 13*16, AES_C_KeySetup_128_Enc, AES_C_KeySetup_128_Enc,
-						AES_Gen_CTR_Prep, AES_C_CTR_Crypt, AES_C_CTR_Crypt},
-			      {"AES192+-ECB" , 192, 15, 16*16, AES_C_KeySetup_192_Enc, AES_C_KeySetup_192_Dec,
-							NULL, AES_C_ECB_Encrypt, AES_C_ECB_Decrypt},
-			      {"AES192+-CBC" , 192, 15, 16*16, AES_C_KeySetup_192_Enc, AES_C_KeySetup_192_Dec,
-							NULL, AES_C_CBC_Encrypt, AES_C_CBC_Decrypt},
-			      {"AES192+-CTR" , 192, 15, 16*16, AES_C_KeySetup_192_Enc, AES_C_KeySetup_192_Enc,
-						AES_Gen_CTR_Prep, AES_C_CTR_Crypt, AES_C_CTR_Crypt},
-			      {"AES256+-ECB" , 256, 18, 19*16, AES_C_KeySetup_256_Enc, AES_C_KeySetup_256_Dec,
-							NULL, AES_C_ECB_Encrypt, AES_C_ECB_Decrypt},
-			      {"AES256+-CBC" , 256, 18, 19*16, AES_C_KeySetup_256_Enc, AES_C_KeySetup_256_Dec,
-							NULL, AES_C_CBC_Encrypt, AES_C_CBC_Decrypt},
-			      {"AES256+-CTR" , 256, 18, 19*16, AES_C_KeySetup_256_Enc, AES_C_KeySetup_256_Enc,
-						AES_Gen_CTR_Prep, AES_C_CTR_Crypt, AES_C_CTR_Crypt},
-};
+/* Double de/encryption methods */
 
 #include "sha256.h"
 
@@ -1245,5 +1209,90 @@ void AES_C_Decrypt_BlkX2(const uchar* rkeys, uint rounds, const uchar in[16], uc
 	rijndaelDecrypt((const u32*)rkeys, rounds/2, in, buf);
 	rijndaelDecrypt((const u32*)(rkeys+16+8*rounds), rounds/2, buf, out);
 }
+
+
+void AES_C_ECB_EncryptX2(const uchar* rkeys, uint rounds, uchar *iv, const uchar *in, uchar *out, ssize_t len)
+{
+	rijndaelEncryptPF();
+	AES_Gen_ECB_Enc(AES_C_Encrypt_BlkX2, rkeys, rounds, NULL, in, out, len);
+}
+void AES_C_ECB_DecryptX2(const uchar* rkeys, uint rounds, uchar *iv, const uchar *in, uchar *out, ssize_t len)
+{
+	rijndaelDecryptPF();
+	AES_Gen_ECB_Dec(AES_C_Encrypt_BlkX2, rkeys, rounds, NULL, in, out, len);
+}
+
+void AES_C_CBC_EncryptX2(const uchar* rkeys, uint rounds, uchar *iv, const uchar *in, uchar *out, ssize_t len)
+{
+	rijndaelEncryptPF();
+	AES_Gen_CBC_Enc(AES_C_Encrypt_BlkX2, rkeys, rounds, iv, in, out, len);
+}
+void AES_C_CBC_DecryptX2(const uchar* rkeys, uint rounds, uchar *iv, const uchar *in, uchar *out, ssize_t len)
+{
+	rijndaelDecryptPF();
+	AES_Gen_CBC_Dec(AES_C_Encrypt_BlkX2, rkeys, rounds, iv, in, out, len);
+}
+
+void AES_C_CTR_CryptX2(const uchar* rkeys, uint rounds, uchar *ctr, const uchar *in, uchar *out, ssize_t len)
+{
+	rijndaelEncryptPF();
+	AES_Gen_CTR_Crypt(AES_C_Encrypt_BlkX2, rkeys, rounds, ctr, in, out, len);
+}
+
+aes_desc_t AES_C_Methods[] = {{"AES128-ECB"  , 128, 10, 11*16, AES_C_KeySetup_128_Enc, AES_C_KeySetup_128_Dec,
+							NULL, AES_C_ECB_Encrypt, AES_C_ECB_Decrypt},
+			      {"AES128-CBC"  , 128, 10, 11*16, AES_C_KeySetup_128_Enc, AES_C_KeySetup_128_Dec,
+							NULL, AES_C_CBC_Encrypt, AES_C_CBC_Decrypt},
+			      {"AES128-CTR"  , 128, 10, 11*16, AES_C_KeySetup_128_Enc, AES_C_KeySetup_128_Enc,
+						AES_Gen_CTR_Prep, AES_C_CTR_Crypt, AES_C_CTR_Crypt},
+			      {"AES192-ECB"  , 192, 12, 13*16, AES_C_KeySetup_192_Enc, AES_C_KeySetup_192_Dec,
+							NULL, AES_C_ECB_Encrypt, AES_C_ECB_Decrypt},
+			      {"AES192-CBC"  , 192, 12, 13*16, AES_C_KeySetup_192_Enc, AES_C_KeySetup_192_Dec,
+							NULL, AES_C_CBC_Encrypt, AES_C_CBC_Decrypt},
+			      {"AES192-CTR"  , 192, 12, 13*16, AES_C_KeySetup_192_Enc, AES_C_KeySetup_192_Enc,
+						AES_Gen_CTR_Prep, AES_C_CTR_Crypt, AES_C_CTR_Crypt},
+			      {"AES256-ECB"  , 256, 14, 15*16, AES_C_KeySetup_256_Enc, AES_C_KeySetup_256_Dec,
+							NULL, AES_C_ECB_Encrypt, AES_C_ECB_Decrypt},
+			      {"AES256-CBC"  , 256, 14, 15*16, AES_C_KeySetup_256_Enc, AES_C_KeySetup_256_Dec,
+							NULL, AES_C_CBC_Encrypt, AES_C_CBC_Decrypt},
+			      {"AES256-CTR"  , 256, 14, 15*16, AES_C_KeySetup_256_Enc, AES_C_KeySetup_256_Enc,
+						AES_Gen_CTR_Prep, AES_C_CTR_Crypt, AES_C_CTR_Crypt},
+			      {"AES128+-ECB" , 128, 12, 13*16, AES_C_KeySetup_128_Enc, AES_C_KeySetup_128_Dec,
+							NULL, AES_C_ECB_Encrypt, AES_C_ECB_Decrypt},
+			      {"AES128+-CBC" , 128, 12, 13*16, AES_C_KeySetup_128_Enc, AES_C_KeySetup_128_Dec,
+							NULL, AES_C_CBC_Encrypt, AES_C_CBC_Decrypt},
+			      {"AES128+-CTR" , 128, 12, 13*16, AES_C_KeySetup_128_Enc, AES_C_KeySetup_128_Enc,
+						AES_Gen_CTR_Prep, AES_C_CTR_Crypt, AES_C_CTR_Crypt},
+			      {"AES192+-ECB" , 192, 15, 16*16, AES_C_KeySetup_192_Enc, AES_C_KeySetup_192_Dec,
+							NULL, AES_C_ECB_Encrypt, AES_C_ECB_Decrypt},
+			      {"AES192+-CBC" , 192, 15, 16*16, AES_C_KeySetup_192_Enc, AES_C_KeySetup_192_Dec,
+							NULL, AES_C_CBC_Encrypt, AES_C_CBC_Decrypt},
+			      {"AES192+-CTR" , 192, 15, 16*16, AES_C_KeySetup_192_Enc, AES_C_KeySetup_192_Enc,
+						AES_Gen_CTR_Prep, AES_C_CTR_Crypt, AES_C_CTR_Crypt},
+			      {"AES256+-ECB" , 256, 18, 19*16, AES_C_KeySetup_256_Enc, AES_C_KeySetup_256_Dec,
+							NULL, AES_C_ECB_Encrypt, AES_C_ECB_Decrypt},
+			      {"AES256+-CBC" , 256, 18, 19*16, AES_C_KeySetup_256_Enc, AES_C_KeySetup_256_Dec,
+							NULL, AES_C_CBC_Encrypt, AES_C_CBC_Decrypt},
+			      {"AES256+-CTR" , 256, 18, 19*16, AES_C_KeySetup_256_Enc, AES_C_KeySetup_256_Enc,
+						AES_Gen_CTR_Prep, AES_C_CTR_Crypt, AES_C_CTR_Crypt},
+			      {"AES128x2-ECB" , 128, 20, 22*16, AES_C_KeySetupX2_128_Enc, AES_C_KeySetupX2_128_Dec,
+							NULL, AES_C_ECB_EncryptX2, AES_C_ECB_DecryptX2},
+			      {"AES128x2-CBC" , 128, 20, 22*16, AES_C_KeySetupX2_128_Enc, AES_C_KeySetupX2_128_Dec,
+							NULL, AES_C_CBC_EncryptX2, AES_C_CBC_DecryptX2},
+			      {"AES128x2-CTR" , 128, 20, 22*16, AES_C_KeySetupX2_128_Enc, AES_C_KeySetupX2_128_Enc,
+						AES_Gen_CTR_Prep, AES_C_CTR_CryptX2, AES_C_CTR_CryptX2},
+			      {"AES192x2-ECB" , 192, 24, 26*16, AES_C_KeySetupX2_192_Enc, AES_C_KeySetupX2_192_Dec,
+							NULL, AES_C_ECB_EncryptX2, AES_C_ECB_DecryptX2},
+			      {"AES192x2-CBC" , 192, 24, 26*16, AES_C_KeySetupX2_192_Enc, AES_C_KeySetupX2_192_Dec,
+							NULL, AES_C_CBC_EncryptX2, AES_C_CBC_DecryptX2},
+			      {"AES192x2-CTR" , 192, 24, 26*16, AES_C_KeySetupX2_192_Enc, AES_C_KeySetupX2_192_Enc,
+						AES_Gen_CTR_Prep, AES_C_CTR_CryptX2, AES_C_CTR_CryptX2},
+			      {"AES256x2-ECB" , 256, 28, 30*16, AES_C_KeySetupX2_256_Enc, AES_C_KeySetupX2_256_Dec,
+							NULL, AES_C_ECB_EncryptX2, AES_C_ECB_DecryptX2},
+			      {"AES256x2-CBC" , 256, 28, 30*16, AES_C_KeySetupX2_256_Enc, AES_C_KeySetupX2_256_Dec,
+							NULL, AES_C_CBC_EncryptX2, AES_C_CBC_DecryptX2},
+			      {"AES256x2-CTR" , 256, 28, 30*16, AES_C_KeySetupX2_256_Enc, AES_C_KeySetupX2_256_Enc,
+						AES_Gen_CTR_Prep, AES_C_CTR_CryptX2, AES_C_CTR_CryptX2},
+};
 
 
