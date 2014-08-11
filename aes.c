@@ -28,6 +28,7 @@ void fill_blk(const uchar *in, uchar bf[16], ssize_t len)
 
 void AES_Gen_ECB_Enc(AES_Crypt_Blk_fn *cryptfn,
 		     const uchar* rkeys, uint rounds,
+		     uchar* iv,
 		     const uchar *input, uchar *output,
 		     ssize_t len)
 {
@@ -44,6 +45,7 @@ void AES_Gen_ECB_Enc(AES_Crypt_Blk_fn *cryptfn,
 
 void AES_Gen_ECB_Dec(AES_Crypt_Blk_fn *cryptfn,
 		     const uchar* rkeys, uint rounds,
+		     uchar* iv,
 		     const uchar *input, uchar *output,
 		     ssize_t len)
 {
@@ -61,7 +63,7 @@ void AES_Gen_ECB_Dec(AES_Crypt_Blk_fn *cryptfn,
 
 void AES_Gen_CBC_Enc(AES_Crypt_Blk_fn *cryptfn,
 		     const uchar* rkeys, uint rounds,
-		     uchar iv[16],
+		     uchar *iv,
 		     const uchar *input, uchar *output,
 		     ssize_t len)
 {
@@ -82,7 +84,7 @@ void AES_Gen_CBC_Enc(AES_Crypt_Blk_fn *cryptfn,
 
 void AES_Gen_CBC_Dec(AES_Crypt_Blk_fn *cryptfn,
 		     const uchar* rkeys, uint rounds,
-		     uchar iv[16],
+		     uchar *iv,
 		     const uchar *input, uchar *output,
 		     ssize_t len)
 {
@@ -121,7 +123,7 @@ void be_inc(uchar ctr[8])
 
 void AES_Gen_CTR_Crypt(AES_Crypt_Blk_fn *cryptfn,
 			const uchar *rkeys, uint rounds,
-			uchar ctr[16],
+			uchar *ctr,
 			const uchar *input, uchar *output,
 			ssize_t len)
 {

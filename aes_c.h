@@ -44,11 +44,11 @@ DECL_KEYSETUP(Dec, 256);
 
 void AES_C_Encrypt_Blk(const uchar* rkeys, uint rounds, const uchar in[16], uchar out[16]);
 void AES_C_Decrypt_Blk(const uchar* rkeys, uint rounds, const uchar in[16], uchar out[16]);
-void AES_C_ECB_Encrypt(const uchar* rkeys, uint rounds, const uchar *in, uchar *out, ssize_t len);
-void AES_C_ECB_Decrypt(const uchar* rkeys, uint rounds, const uchar *in, uchar *out, ssize_t len);
-void AES_C_CBC_Encrypt(const uchar* rkeys, uint rounds, uchar iv[16], const uchar *in, uchar *out, ssize_t len);
-void AES_C_CBC_Decrypt(const uchar* rkeys, uint rounds, uchar iv[16], const uchar *in, uchar *out, ssize_t len);
-void AES_C_CTR_Crypt  (const uchar* rkeys, uint rounds, uchar ctr[16], const uchar *in, uchar *out, ssize_t len);
+void AES_C_ECB_Encrypt(const uchar* rkeys, uint rounds, uchar *iv,  const uchar *in, uchar *out, ssize_t len);
+void AES_C_ECB_Decrypt(const uchar* rkeys, uint rounds, uchar *iv,  const uchar *in, uchar *out, ssize_t len);
+void AES_C_CBC_Encrypt(const uchar* rkeys, uint rounds, uchar *iv,  const uchar *in, uchar *out, ssize_t len);
+void AES_C_CBC_Decrypt(const uchar* rkeys, uint rounds, uchar *iv,  const uchar *in, uchar *out, ssize_t len);
+void AES_C_CTR_Crypt  (const uchar* rkeys, uint rounds, uchar *ctr, const uchar *in, uchar *out, ssize_t len);
 
 
 #endif
