@@ -1291,6 +1291,7 @@ aes_desc_t AESNI_Methods[] = {{"AES128-ECB"  , 128, 10, 11*16, AESNI_128_EKey_Ex
 							NULL, AESNI_CBC_EncryptX2, AESNI_CBC_DecryptX2},
 			      {"AES256x2-CTR" , 256, 28, 30*16, AESNI_256_EKey_ExpansionX2_r, AESNI_256_EKey_ExpansionX2_r,
 						AESNI_CTR_Prep, AESNI_CTR_CryptX2, AESNI_CTR_CryptX2},
+			      NULL,
 };
 
 

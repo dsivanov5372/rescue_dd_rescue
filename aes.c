@@ -135,6 +135,8 @@ void AES_Gen_CTR_Crypt(AES_Crypt_Blk_fn *cryptfn,
 		cryptfn(rkeys, rounds, ctr, eblk);
 		xor16(eblk, input, output);
 		be_inc(ctr+8);	
+		len -= 16;
+		input += 16; output += 16;
 	}
 	if (len) {
 		uchar in[16];

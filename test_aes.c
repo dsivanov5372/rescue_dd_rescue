@@ -4,6 +4,7 @@
 #include <sys/time.h>
 #include <string.h>
 #include "secmem.h"
+#include "aes.h"
 
 sec_fields *crypto;
 
@@ -44,39 +45,8 @@ void fillval(unsigned char* bf, ssize_t ln, unsigned int val)
 #include "aesni.h"
 #endif
 
-/* openssl */
-#include <openssl/crypto.h>
-#include <openssl/aes.h>
-#include <openssl/evp.h>
-
-AES_KEY aesenc, aesdec;
-EVP_CIPHER_CTX evpcctx, evpdctx;
-
-
-void AES_encrypt_ecb(const unsigned char *in, unsigned char *out,
-		     ssize_t len, AES_KEY *ekey)
-{
-	while (len > 0) {
-		AES_ecb_encrypt(in, out, ekey, AES_ENCRYPT);
-		len -= 16;
-		in += 16;
-		out += 16;
-	}
-};
-
-void AES_decrypt_ecb(const unsigned char *in, unsigned char *out,
-		     ssize_t len, AES_KEY *dkey)
-{
-	while (len > 0) {
-		AES_ecb_encrypt(in, out, dkey, AES_DECRYPT);
-		len -= 16;
-		in += 16;
-		out += 16;
-	}
-};
-
-
 #include "aes_c.h"
+#include "aes_ossl.h"
 
 /* Defaults */
 
@@ -97,6 +67,25 @@ void AES_decrypt_ecb(const unsigned char *in, unsigned char *out,
 	printf("(%6.3fGB/s) ", (double)rep*LN/(1e9*tdiff))
 
 
+void setup_iv(aes_desc_t *alg, uchar iv[16])
+{
+	if (alg->iv_prep)
+		alg->iv_prep((const uchar*)"Halleluja 12345", iv, 1);
+	else
+		memcpy(iv, "Halleluja 12345", 16);
+}
+
+aes_desc_t *findalg(aes_desc_t* list, const char* nm)
+{
+	aes_desc_t* alg = list;
+	while (alg) {
+		if (!strcmp(alg->name, nm))
+			return alg;
+		alg += 1;
+	}
+	return NULL;
+}
+
 int main(int argc, char *argv[])
 {
 	int rep = REP;
@@ -105,59 +94,94 @@ int main(int argc, char *argv[])
         struct timeval t1, t2;
 	double tdiff; int i;
 	int dbg = 0;
+	char* testalg;
 	crypto = secmem_init();
 	if (argc > 1 && !strcmp("-d", argv[1])) {
 		dbg = 1; --argc; ++argv;
 	}
 	if (argc > 1)
-		rep = atol(argv[1]);
+		testalg = argv[1];
+	else
+		testalg = "AES128-CTR";
 	if (argc > 2)
-		srand(atol(argv[2]));
+		rep = atol(argv[2]);
+	if (argc > 3)
+		srand(atol(argv[3]));
 	else
 		srand(time(NULL));
-	if (argc > 3)
-		fillval(in, LN, atol(argv[3]));
+	if (argc > 4)
+		fillval(in, LN, atol(argv[4]));
 	else
 		fillrand(in, LN);
-	printf("AES tests/benchmark\n==> ECB 128\n");
+
+
+	printf("AES tests/benchmark\n");
+	uchar iv[16];
+	aes_desc_t *alg = NULL;
 
 #ifdef HAVE_AESNI
-	unsigned char ekeys[19*16], dkeys[19*16];
-	printf("AES-NI: Key: ");
-
-	printblk(key, 16);
-	printf("Clear : ");
-	BENCH(AESNI_128_EKey_Expansion(key, ekeys), rep);
-	printblk(in, LN);
-
-	printf("CiphOl: ");
-	BENCH(AESNI_ECB_encrypt_old( in, out, LN-SHIFT, ekeys, 10), rep/2);
-	printblk(out, LN);
-
-	printf("Cipher: ");
-	BENCH(AESNI_ECB_encrypt( in, out, LN-SHIFT, ekeys, 10), rep/2);
-
-	printblk(out, LN);
-	printf("Cihper: ");
-	memcpy(in2, in, LN);
-	memset(in+LN-SHIFT, 0, SHIFT);
-	BENCH(AESNI_ECB_encrypt(in, out2, LN, ekeys, 10), rep/2);
-	printblk(out2, LN);
-	if (memcmp(out, out2, LN))
-		return 6;
-
-	BENCH(AESNI_EKey_DKey(ekeys, dkeys, 10), rep);
-	BENCH(AESNI_128_DKey_Expansion(key, dkeys), rep);
-
-	printf("\nDeciph: ");
-	BENCH(AESNI_ECB_decrypt(out, vfy, LN, dkeys, 10), rep/2);
-	printblk(vfy, LN);
-
-	if (memcmp(in, vfy, 16))
-		return 1;
+	printf("AESNI:\n");
+	alg = findalg(AESNI_Methods, testalg);
+	if (alg) {
+		printf("%s (%i, %i, %i)\n", alg->name, alg->keylen, alg->rounds, alg->ctx_size);
+		printf("Key setup: ");
+		uchar *rkeys = (uchar*)malloc(alg->ctx_size);
+		BENCH(alg->enc_key_setup(key, rkeys, alg->rounds), rep);
+		printf("\nEncrypt  : ");
+		BENCH(setup_iv(alg, iv); alg->encrypt(rkeys, alg->rounds, iv, in, out, LN), rep/2);
+		printf("\nKey setup: ");
+		BENCH(alg->dec_key_setup(key, rkeys, alg->rounds), rep);
+		printf("\nDecrypt  : ");
+		BENCH(setup_iv(alg, iv); alg->decrypt(rkeys, alg->rounds, iv, out, vfy, LN), rep/2);
+		if (memcmp(vfy, in, LN))
+			abort();
+		free(rkeys);
+	}
 #endif
-	printf("OpenSSL ");
-	OPENSSL_init();
+	printf("\nAES_C:\n");
+	alg = findalg(AES_C_Methods, testalg);
+	if (alg) {
+		printf("%s (%i, %i, %i)\n", alg->name, alg->keylen, alg->rounds, alg->ctx_size);
+		printf("Key setup: ");
+		uchar *rkeys = (uchar*)malloc(alg->ctx_size);
+		BENCH(alg->enc_key_setup(key, rkeys, alg->rounds), rep);
+		printf("\nEncrypt  : ");
+		BENCH(setup_iv(alg, iv); alg->encrypt(rkeys, alg->rounds, iv, in, out2, LN), rep/2);
+#ifdef HAVE_AESNI
+		if (memcmp(out, out2, LN))
+			abort();
+#endif
+		printf("\nKey setup: ");
+		BENCH(alg->dec_key_setup(key, rkeys, alg->rounds), rep);
+		printf("\nDecrypt  : ");
+		BENCH(setup_iv(alg, iv); alg->decrypt(rkeys, alg->rounds, iv, out2, vfy, LN), rep/2);
+		if (memcmp(vfy, in, LN))
+			abort();
+		free(rkeys);
+	}
+
+	printf("\nOpenSSL ");
+	//OPENSSL_init();
+	alg = findalg(AES_OSSL_Methods, testalg);
+	if (alg) {
+		printf("%s (%i, %i, %i)\n", alg->name, alg->keylen, alg->rounds, alg->ctx_size);
+		printf("Key setup: ");
+		uchar *rkeys = (uchar*)malloc(alg->ctx_size);
+		BENCH(alg->enc_key_setup(key, rkeys, alg->rounds), rep);
+		printf("\nEncrypt  : ");
+		BENCH(setup_iv(alg, iv); alg->encrypt(rkeys, alg->rounds, iv, in, out, LN), rep/2);
+		if (memcmp(out, out2, LN))
+			abort();
+		printf("\nKey setup: ");
+		BENCH(alg->dec_key_setup(key, rkeys, alg->rounds), rep);
+		printf("\nDecrypt  : ");
+		BENCH(setup_iv(alg, iv); alg->decrypt(rkeys, alg->rounds, iv, out, vfy, LN), rep/2);
+		if (memcmp(vfy, in, LN))
+			abort();
+		free(rkeys);
+	}
+
+#if 0
 	BENCH(AES_set_encrypt_key(key, 128, &aesenc), rep);
 	printf("\nCipher: ");
 	BENCH(AES_encrypt_ecb(in, out2, LN, &aesenc), rep/2);
@@ -561,7 +585,7 @@ int main(int argc, char *argv[])
 
 	EVP_CIPHER_CTX_cleanup(&evpcctx);
 	EVP_CIPHER_CTX_cleanup(&evpdctx);
-
+#endif
 	secmem_release(crypto);
 	return 0;
 }

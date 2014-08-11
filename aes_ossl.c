@@ -1,6 +1,7 @@
 #include <openssl/evp.h>
 #include <assert.h>
 #include "aes.h"
+#include "aes_ossl.h"
 #include <string.h>
 
 #include <netinet/in.h>
@@ -99,4 +100,5 @@ aes_desc_t AES_OSSL_Methods[] = {{"AES128-ECB"  , 128, 10, EVP_CTX_SZ, AES_OSSL_
 							NULL, AES_OSSL_128_CBC_Encrypt, AES_OSSL_128_CBC_Decrypt},
 			      {"AES128-CTR"  , 128, 10, EVP_CTX_SZ, AES_OSSL_128_EKey_Expand, AES_OSSL_128_EKey_Expand,
 						AES_Gen_CTR_Prep, AES_OSSL_128_CTR_Crypt, AES_OSSL_128_CTR_Crypt},
+			      NULL,
 };
