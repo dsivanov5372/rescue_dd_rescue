@@ -32,7 +32,7 @@ typedef void (AES_Crypt_CBC_fn)(const uchar* rkeys, uint rounds,
 				      uchar iv[16],
 				const uchar* input, uchar* output,
 				ssize_t len);
-typedef void (AES_Crypt_CTR_Prep_fn)(const uchar nonce[16], uchar ctr[16], ulong ival);
+typedef void (AES_Crypt_CTR_Prep_fn)(const uchar nonce[16], uchar ctr[16], uint ival);
 typedef void (AES_Crypt_CTR_fn)(const uchar* rkeys, uint rounds,
 				      uchar ctr[16],
 				const uchar* input, uchar* output,
@@ -52,7 +52,7 @@ typedef struct _aes_desc {
 	AES_Crypt_CTR_fn *crypt_ctr;
 } aes_desc_t;
 
-typedef void (xor_blk)(uchar i1[16], const uchar i2[16]);
+typedef void (xor_blk)(const uchar i1[16], const uchar i2[16], uchar out[16]);
 
 
 
