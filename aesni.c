@@ -800,10 +800,12 @@ void AESNI_CTR_Prep(const unsigned char* iv, unsigned char* ctr, unsigned long l
 #endif
 }
 
-void AESNI_CTR_Crypt(const unsigned char* key, unsigned int rounds,
-		     unsigned char* ctr,
-		     const unsigned char* in, unsigned char* out,
-		     ssize_t len)
+inline
+void AESNI_CTR_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt,
+			const unsigned char* key, unsigned int rounds,
+		 	unsigned char* ctr,
+		 	const unsigned char* in, unsigned char* out,
+			ssize_t len)
 {
 	__m128i ONE = _mm_set_epi32(0, 1, 0, 0);
 	__m128i BSWAP_EPI64 = _mm_setr_epi8(7,6,5,4,3,2,1,0,15,14,13,12,11,10,9,8); 
@@ -825,7 +827,7 @@ void AESNI_CTR_Crypt(const unsigned char* key, unsigned int rounds,
 		cblk = _mm_add_epi64(cblk, ONE);
 		__m128i tmp7 = _mm_shuffle_epi8(cblk, BSWAP_EPI64);
 		cblk = _mm_add_epi64(cblk, ONE);
-		Encrypt_8Blocks(&tmp0, &tmp1, &tmp2, &tmp3, &tmp4, &tmp5, &tmp6, &tmp7, key, rounds);
+		crypt8(&tmp0, &tmp1, &tmp2, &tmp3, &tmp4, &tmp5, &tmp6, &tmp7, key, rounds);
 		tmp0 = _mm_xor_si128(tmp0, _mm_loadu_si128((__m128i*)in));
 		tmp1 = _mm_xor_si128(tmp1, _mm_loadu_si128((__m128i*)in+1));
 		tmp2 = _mm_xor_si128(tmp2, _mm_loadu_si128((__m128i*)in+2));
@@ -849,7 +851,7 @@ void AESNI_CTR_Crypt(const unsigned char* key, unsigned int rounds,
 	while (len > 0) {
 		register __m128i tmp = _mm_shuffle_epi8(cblk, BSWAP_EPI64);
 		cblk = _mm_add_epi64(cblk, ONE);
-		tmp = Encrypt_Block(tmp, key, rounds);
+		tmp = crypt(tmp, key, rounds);
 		if (len < sizeof(__m128i)) {
 			__m128i mask = _mkmask(len);
 			mask = _mm_and_si128(mask, _mm_loadu_si128((__m128i*)in));
@@ -863,6 +865,16 @@ void AESNI_CTR_Crypt(const unsigned char* key, unsigned int rounds,
 	}
 	_mm_storeu_si128((__m128i*)ctr, cblk);
 }
+
+void AESNI_CTR_Crypt(const unsigned char* key, unsigned int rounds,
+		     unsigned char* ctr,
+		     const unsigned char* in, unsigned char* out,
+		     ssize_t len)
+{
+	AESNI_CTR_Crypt_Tmpl(Encrypt_8Blocks, Encrypt_Block,
+			     key, rounds, ctr, in, out, len);
+}
+
 
 void AESNI_CTR_Crypt4(const unsigned char* in, unsigned char* out,
 		     unsigned char* ctr,
