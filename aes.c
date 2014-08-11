@@ -26,14 +26,47 @@ void fill_blk(const uchar *in, uchar bf[16], ssize_t len)
 		bf[i] = 0;
 }
 
-void AES_Gen_CBC_Enc(AES_Crypt_Blk_fn *cryptfn, xor_blk *xorfn,
+void AES_Gen_ECB_Enc(AES_Crypt_Blk_fn *cryptfn,
+		     const uchar* rkeys, uint rounds,
+		     const uchar *input, uchar *output,
+		     ssize_t len)
+{
+	while (len >= 16) {
+		cryptfn(rkeys, rounds, input, output);
+		len -= 16; input += 16; output += 16;
+	}
+	if (len) {
+		uchar in[16];
+		fill_blk(input, in, len);
+		cryptfn(rkeys, rounds, in, output);
+	}
+}
+
+void AES_Gen_ECB_Dec(AES_Crypt_Blk_fn *cryptfn,
+		     const uchar* rkeys, uint rounds,
+		     const uchar *input, uchar *output,
+		     ssize_t len)
+{
+	while (len >= 16) {
+		cryptfn(rkeys, rounds, input, output);
+		len -= 16; input += 16; output += 16;
+	}
+	if (len) {
+		uchar out[16];
+		cryptfn(rkeys, rounds, input, out);
+		memcpy(output, out, len);
+	}
+}
+
+
+void AES_Gen_CBC_Enc(AES_Crypt_Blk_fn *cryptfn,
 		     const uchar* rkeys, uint rounds,
 		     uchar iv[16],
 		     const uchar *input, uchar *output,
 		     ssize_t len)
 {
 	while (len >= 16) {
-		xorfn(iv, input, iv);
+		xor16(iv, input, iv);
 		cryptfn(rkeys, rounds, iv, iv);
 		memcpy(output, iv, 16);
 		len -= 16; input += 16; output += 16;
@@ -41,28 +74,52 @@ void AES_Gen_CBC_Enc(AES_Crypt_Blk_fn *cryptfn, xor_blk *xorfn,
 	if (len) {
 		uchar in[16];
 		fill_blk(input, in, len);
-		xorfn(iv, in, iv);
+		xor16(iv, in, iv);
 		cryptfn(rkeys, rounds, iv, iv);
 		memcpy(output, iv, 16);
 	}
 }
 
-void AES_Gen_Crypt_CTR_Prep(const uchar nonce[16], uchar ctr[16], uint ival)
+void AES_Gen_CBC_Dec(AES_Crypt_Blk_fn *cryptfn,
+		     const uchar* rkeys, uint rounds,
+		     uchar iv[16],
+		     const uchar *input, uchar *output,
+		     ssize_t len)
+{
+	uchar ebf[16];
+	while (len >= 16) {
+		cryptfn(rkeys, rounds, input, ebf);
+		xor16(iv, ebf, output);
+		memcpy(iv, input, 16);
+		len -= 16; input += 16; output += 16;
+	}
+	if (len) {
+		cryptfn(rkeys, rounds, input, ebf);
+		int i;
+		for (i = 0; i < len; ++i)
+			output[i] = iv[i] ^ ebf[i];
+		memcpy(iv, input, 16);
+	}
+}
+
+/* Use 12 bits from nonce, initialize rest with counter */
+void AES_Gen_CTR_Prep(const uchar nonce[16], uchar ctr[16], uint ival)
 {
 	memcpy(ctr, nonce, 12);
 	*(uint*)(ctr+12) = htonl(ival);	
 }
 
+/* Consider counter to be 8 bytes ... this avoids wrap around after 4G blocks (64GB) */
 static inline 
-void be_inc(uchar ctr[4])
+void be_inc(uchar ctr[8])
 {
-	int i = 4;
+	int i = 8;
 	do {
 		++ctr[--i];
 	} while (i && !ctr[i]);
 }
 
-void AES_Gen_Crypt_CTR(AES_Crypt_Blk_fn *cryptfn, xor_blk *xorfn,
+void AES_Gen_CTR_Crypt(AES_Crypt_Blk_fn *cryptfn,
 			const uchar *rkeys, uint rounds,
 			uchar ctr[16],
 			const uchar *input, uchar *output,
@@ -71,15 +128,15 @@ void AES_Gen_Crypt_CTR(AES_Crypt_Blk_fn *cryptfn, xor_blk *xorfn,
 	uchar eblk[16];
 	while (len >= 16) {
 		cryptfn(rkeys, rounds, ctr, eblk);
-		xorfn(eblk, input, output);
-		be_inc(ctr+12);	
+		xor16(eblk, input, output);
+		be_inc(ctr+8);	
 	}
 	if (len) {
 		uchar in[16];
 		fill_blk(input, in, len);
 		cryptfn(rkeys, rounds, ctr, eblk);
-		xorfn(eblk, in, output);
-		be_inc(ctr+12);	
+		xor16(eblk, in, output);
+		be_inc(ctr+8);	
 	}
 }
 

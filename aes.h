@@ -28,6 +28,9 @@ typedef unsigned long ulong;
 typedef void (AES_Key_Setup_fn)(const uchar* usrkey, uchar* rkeys, uint rounds); 
 typedef void (AES_Crypt_Blk_fn)(const uchar* rkeys, uint rounds, 
 				const uchar* input, uchar* output);
+typedef void (AES_Crypt_ECB_fn)(const uchar* rkeys, uint rounds,
+				const uchar* input, uchar* output,
+				ssize_t len);
 typedef void (AES_Crypt_CBC_fn)(const uchar* rkeys, uint rounds,
 				      uchar iv[16],
 				const uchar* input, uchar* output,
@@ -39,7 +42,7 @@ typedef void (AES_Crypt_CTR_fn)(const uchar* rkeys, uint rounds,
 				ssize_t len);
 
 
-typedef struct _aes_desc {
+typedef struct _aes_coll_desc {
 	const char* name;
 	uint keylen;	/* bits */
 	uint rounds;
@@ -47,13 +50,47 @@ typedef struct _aes_desc {
 	/* blocksize is always 16 as is rkey size */
 	AES_Key_Setup_fn *enc_key_setup, *dec_key_setup;
 	AES_Crypt_Blk_fn *enc_block, *dec_block;
+	AES_Crypt_ECB_fn *enc_ecb, *dec_ecb;
 	AES_Crypt_CBC_fn *enc_cbc, *dec_cbc;
 	AES_Crypt_CTR_Prep_fn *ctr_prep;
 	AES_Crypt_CTR_fn *crypt_ctr;
+} aes_coll_desc_t;
+
+typedef struct _aes_desc {
+	const char *name;
+	uint keylen;	/* bits */
+	uint rounds;	/* bits */
+	uint ctx_size;	/* Size for all round keys (and potentially addtl context in bytes) */
+	AES_Key_Setup_fn *enc_key_setup, *dec_key_setup;
+	AES_Crypt_CTR_Prep_fn *iv_prep;
+	AES_Crypt_CBC_fn *encrypt, *decrypt;
 } aes_desc_t;
 
-typedef void (xor_blk)(const uchar i1[16], const uchar i2[16], uchar out[16]);
 
-
+/* Generic functions */
+void AES_Gen_ECB_Enc(AES_Crypt_Blk_fn *cryptfn,
+		     const uchar* rkeys, uint rounds,
+		     const uchar *input, uchar *output,
+		     ssize_t len);
+void AES_Gen_ECB_Dec(AES_Crypt_Blk_fn *cryptfn,
+		     const uchar* rkeys, uint rounds,
+		     const uchar *input, uchar *output,
+		     ssize_t len);
+void AES_Gen_CBC_Enc(AES_Crypt_Blk_fn *cryptfn,
+		     const uchar* rkeys, uint rounds,
+		     uchar iv[16],
+		     const uchar *input, uchar *output,
+		     ssize_t len);
+void AES_Gen_CBC_Dec(AES_Crypt_Blk_fn *cryptfn,
+		     const uchar* rkeys, uint rounds,
+		     uchar iv[16],
+		     const uchar *input, uchar *output,
+		     ssize_t len);
+void AES_Gen_CTR_Prep(const uchar nonce[16], uchar ctr[16], uint ival);
+void AES_Gen_CTR_Crypt(AES_Crypt_Blk_fn *cryptfn,
+			const uchar *rkeys, uint rounds,
+			uchar ctr[16],
+			const uchar *input, uchar *output,
+			ssize_t len);
 
 #endif
