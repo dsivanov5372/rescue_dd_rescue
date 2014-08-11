@@ -26,7 +26,7 @@ typedef unsigned long ulong;
 
 /* Both Enc and Dec */
 typedef void (AES_Key_Setup_fn)(const uchar* usrkey, uchar* rkeys, uint rounds); 
-typedef void (AES_Crypt_IV_Prep_fn)(const uchar nonce[16], uchar ctr[16], uint ival);
+typedef void (AES_Crypt_IV_Prep_fn)(const uchar nonce[16], uchar ctr[16], unsigned long long ival);
 typedef void (AES_Crypt_Blk_fn)(const uchar* rkeys, uint rounds, 
 				const uchar* input, uchar* output);
 typedef void (AES_Crypt_IV_fn) (const uchar* rkeys, uint rounds,
@@ -67,7 +67,7 @@ void AES_Gen_CBC_Dec(AES_Crypt_Blk_fn *cryptfn,
 		     uchar *iv,
 		     const uchar *input, uchar *output,
 		     ssize_t len);
-void AES_Gen_CTR_Prep(const uchar nonce[16], uchar ctr[16], uint ival);
+void AES_Gen_CTR_Prep(const uchar nonce[16], uchar ctr[16], unsigned long long ival);
 void AES_Gen_CTR_Crypt(AES_Crypt_Blk_fn *cryptfn,
 			const uchar *rkeys, uint rounds,
 			uchar *ctr,

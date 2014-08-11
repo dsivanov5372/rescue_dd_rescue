@@ -105,10 +105,13 @@ void AES_Gen_CBC_Dec(AES_Crypt_Blk_fn *cryptfn,
 }
 
 /* Use 12 bits from nonce, initialize rest with counter */
-void AES_Gen_CTR_Prep(const uchar nonce[16], uchar ctr[16], uint ival)
+void AES_Gen_CTR_Prep(const uchar nonce[16], uchar ctr[16], unsigned long long ival)
 {
 	memcpy(ctr, nonce, 12);
-	*(uint*)(ctr+12) = htonl(ival);	
+	unsigned int low = (unsigned int)ival;
+	*(uint*)(ctr+12) = htonl(low);
+	unsigned int high = (unsigned int)(ival>>32);
+	*(uint*)(ctr+8) += htonl(high);
 }
 
 /* Consider counter to be 8 bytes ... this avoids wrap around after 4G blocks (64GB) */
