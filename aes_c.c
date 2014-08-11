@@ -23,8 +23,6 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef __RIJNDAEL_ALG_FST_H
-#define __RIJNDAEL_ALG_FST_H
 
 #include "aes_c.h"
 #include "secmem.h"
@@ -42,17 +40,9 @@ typedef unsigned int u32;
 
 int rijndaelKeySetupEnc(u32 rk[/*4*(Nr + 1)*/], const u8 cipherKey[], int keyBits, int rounds);
 int rijndaelKeySetupDec(u32 rk[/*4*(Nr + 1)*/], const u8 cipherKey[], int keyBits, int rounds);
-void rijndaelEncrypt(const u32 rk[/*4*(Nr + 1)*/], int Nr, const u8 pt[16], u8 ct[16]);
-void rijndaelDecrypt(const u32 rk[/*4*(Nr + 1)*/], int Nr, const u8 ct[16], u8 pt[16]);
+void rijndaelEncrypt(const u8 *rkeys/*[16*(Nr + 1)]*/, uint Nr, const u8 pt[16], u8 ct[16]);
+void rijndaelDecrypt(const u8 *rkeys/*[16*(Nr + 1)]*/, uint Nr, const u8 ct[16], u8 pt[16]);
 
-#ifdef INTERMEDIATE_VALUE_KAT
-void rijndaelEncryptRound(const u32 rk[/*4*(Nr + 1)*/], int Nr, u8 block[16], int rounds);
-void rijndaelDecryptRound(const u32 rk[/*4*(Nr + 1)*/], int Nr, u8 block[16], int rounds);
-#endif /* INTERMEDIATE_VALUE_KAT */
-
-//void AES_128(unsigned char *key, unsigned char *plainText, unsigned char *cipherText);
-
-#endif /* __RIJNDAEL_ALG_FST_H */
 
 /*	$NetBSD: rijndael-alg-fst.c,v 1.6 2003/07/15 11:00:40 itojun Exp $
  */
@@ -621,13 +611,13 @@ void rijndaelEncryptPF()
 		__builtin_prefetch(Te4+k, 0, 3);
 }
 
-void rijndaelEncrypt(const u32 rk[/*4*(Nr + 1)*/], int Nr, const u8 pt[16], u8 ct[16])
+void rijndaelEncrypt(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 pt[16], u8 ct[16])
 {
 	register u32 s0, s1, s2, s3, t0, t1, t2, t3;
 #ifndef FULL_UNROLL
 	int r;
 #endif /* ?FULL_UNROLL */
-
+	const u32 *rk = (u32*)rkeys;
 	
 	/*
 	     * map byte array block to cipher state
@@ -802,12 +792,13 @@ void rijndaelDecryptPF()
 }
 
 
-void rijndaelDecrypt(const u32 rk[/*4*(Nr + 1)*/], int Nr, const u8 ct[16], u8 pt[16])
+void rijndaelDecrypt(const u8 *rkeys /*const u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 ct[16], u8 pt[16])
 {
 	register u32 s0, s1, s2, s3, t0, t1, t2, t3;
 #ifndef FULL_UNROLL
 	int r;
 #endif /* ?FULL_UNROLL */
+	const u32 *rk = (u32*)rkeys;
 	/*
 	     * map byte array block to cipher state
 	     * and add initial round key:
@@ -962,140 +953,12 @@ done:
 	PUTU32(pt + 12, s3);
 }
 
-#if 0
-#define AES_128_ROUNDS 10
-
-void aes_decrypt_128(const unsigned char *cipherText, unsigned char *plainText, unsigned char *key)
-{
-
-	//u32 rk[4 * (AES_128_ROUNDS + 1)];
-	u32* rk = (u32*)crypto->dkeys;
-	int i;
-
-	rijndaelKeySetupDec(rk, key, 128, AES_128_ROUNDS);
-	rijndaelDecrypt(rk, AES_128_ROUNDS, cipherText, plainText);
-
-	for (i = 0; i < (4 * (AES_128_ROUNDS + 1)); i++)
-		rk[i] = 0;
-}
-
-void aes_encrypt_128(const unsigned char *plainText, unsigned char *cipherText, unsigned char *key)
-{
-
-	//u32 rk[4 * (AES_128_ROUNDS + 1)];
-	u32* rk = (u32*)crypto->ekeys;
-	int i;
-
-	rijndaelKeySetupEnc(rk, key, 128, AES_128_ROUNDS);
-	rijndaelEncrypt(rk, AES_128_ROUNDS, plainText, cipherText);
-
-	for (i = 0; i < (4 * (AES_128_ROUNDS + 1)); i++)
-		rk[i] = 0;
-}
-
-void aes_c_encrypt_ecb(const unsigned char *plainText, unsigned char *cipherText, ssize_t len, const u32 *ekey, int rounds)
-{
-	while (len > 0) {
-		rijndaelEncrypt(ekey, rounds, plainText, cipherText);
-		len -= 16;
-		plainText += 16;
-		cipherText += 16;
-	}
-}
-
-void aes_c_decrypt_ecb(const unsigned char *cipherText, unsigned char *plainText, ssize_t len, const u32 *dkey, int rounds)
-{
-	while (len > 0) {
-		rijndaelDecrypt(dkey, rounds, cipherText, plainText);
-		len -= 16;
-		plainText += 16;
-		cipherText += 16;
-	}
-}
-
-void aes_c_encrypt_cbc(const unsigned char *plainText, unsigned char *cipherText, const unsigned char* iv, 
-			ssize_t len, const u32 *ekey, int rounds)
-{
-	//unsigned long ivl[16/sizeof(long)];
-	unsigned long *ivl = (unsigned long*)crypto->iv2.data;
-	memcpy(ivl, iv, 16);
-	while (len > 0) {
-		unsigned int i;
-		for (i = 0; i < 16/sizeof(long); ++i)
-			ivl[i] ^= ((unsigned long*)plainText)[i];
-		rijndaelEncrypt(ekey, rounds, (unsigned char*)ivl, cipherText);
-		len -= 16;
-		plainText += 16;
-		memcpy(ivl, cipherText, 16);
-		cipherText += 16;
-	}
-}
-
-
-void aes_c_decrypt_cbc(const unsigned char *cipherText, unsigned char *plainText, const unsigned char* iv, 
-			ssize_t len, const u32 *dkey, int rounds)
-{
-	//unsigned long ivl[16/sizeof(long)];
-	unsigned long *ivl = (unsigned long*)crypto->iv2.data;
-	memcpy(ivl, iv, 16);
-	while (len > 0) {
-		unsigned int i;
-		rijndaelDecrypt(dkey, rounds, cipherText, plainText);
-		for (i = 0; i < 16/sizeof(long); ++i) 
-			((unsigned long*)plainText)[i] ^= ivl[i];
-		memcpy(ivl, cipherText, 16);
-		len -= 16;
-		plainText += 16;
-		cipherText += 16;
-	}
-}
-
-#include <netinet/in.h>
-void aes_c_crypt_ctr(const unsigned char* plainText, unsigned char *cipherText, const unsigned char *iv,
-		     unsigned int *ctr, size_t len, const u32 *ekey, int rounds)
-{
-	unsigned char eblk[16];
-	typedef union { 
-		unsigned char cblk[16];
-		unsigned int ctr[4];
-	} cb_t;
-	cb_t *cb = (cb_t*)crypto->iv2.data;
-	memcpy(cb->cblk, iv, 12);
-	cb->ctr[3] = htonl(*ctr);
-	while (len > 0) {
-		unsigned int i;
-		rijndaelEncrypt(ekey, rounds, cb->cblk, eblk);
-		for (i = 0; i < 16/sizeof(long); ++i) 
-			((unsigned long*)cipherText)[i] = ((unsigned long*)eblk)[i] ^ ((unsigned long*)plainText)[i];
-		++*ctr;
-		if (!*ctr)
-			cb->ctr[2] = htonl(ntohl(cb->ctr[2]+1));
-		cb->ctr[3] = htonl(*ctr);
-		len -= 16;
-		plainText += 16;
-		cipherText += 16;
-	}
-}
-#endif
-
-static inline
-void AES_C_KeySetup_Bits_Enc(const uchar *usrkey, uchar *rkeys, uint rounds, uint bits)
-{
-	rijndaelKeySetupEncPF();
-	rijndaelKeySetupEnc((u32*)rkeys, usrkey, bits, rounds);
-}
-
-static inline
-void AES_C_KeySetup_Bits_Dec(const uchar* usrkey, uchar *rkeys, uint rounds, uint bits)
-{
-	rijndaelKeySetupDecPF();
-	rijndaelKeySetupDec((u32*)rkeys, usrkey, bits, rounds);
-}
 
 #define DECL_KEYSETUP(MODE, BITS)	\
 void AES_C_KeySetup_##BITS##_##MODE(const uchar *usrkey, uchar *rkeys, uint rounds)	\
 {											\
-	AES_C_KeySetup_Bits_##MODE(usrkey, rkeys, rounds, BITS);			\
+	rijndaelKeySetup##MODE##PF();							\
+	rijndaelKeySetup##MODE((u32*)rkeys, usrkey, BITS, rounds);			\
 }
 
 DECL_KEYSETUP(Enc, 128);
@@ -1105,16 +968,8 @@ DECL_KEYSETUP(Dec, 192);
 DECL_KEYSETUP(Enc, 256);
 DECL_KEYSETUP(Dec, 256);
 
-inline
-void AES_C_Encrypt_Blk(const uchar* rkeys, uint rounds, const uchar in[16], uchar out[16])
-{
-	rijndaelEncrypt((const u32*)rkeys, rounds, in, out);
-}
-inline
-void AES_C_Decrypt_Blk(const uchar* rkeys, uint rounds, const uchar in[16], uchar out[16])
-{
-	rijndaelDecrypt((const u32*)rkeys, rounds, in, out);
-}
+#define AES_C_Encrypt_Blk rijndaelEncrypt
+#define AES_C_Decrypt_Blk rijndaelDecrypt
 
 void AES_C_ECB_Encrypt(const uchar* rkeys, uint rounds, uchar *iv, const uchar *in, uchar *out, ssize_t len)
 {
@@ -1199,15 +1054,15 @@ inline
 void AES_C_Encrypt_BlkX2(const uchar* rkeys, uint rounds, const uchar in[16], uchar out[16])
 {
 	uchar buf[16];
-	rijndaelEncrypt((const u32*)rkeys, rounds/2, in, buf);
-	rijndaelEncrypt((const u32*)(rkeys+16+8*rounds), rounds/2, buf, out);
+	rijndaelEncrypt(rkeys, rounds/2, in, buf);
+	rijndaelEncrypt(rkeys+16+8*rounds, rounds/2, buf, out);
 }
 inline
 void AES_C_Decrypt_BlkX2(const uchar* rkeys, uint rounds, const uchar in[16], uchar out[16])
 {
 	uchar buf[16];
-	rijndaelDecrypt((const u32*)rkeys, rounds/2, in, buf);
-	rijndaelDecrypt((const u32*)(rkeys+16+8*rounds), rounds/2, buf, out);
+	rijndaelDecrypt(rkeys, rounds/2, in, buf);
+	rijndaelDecrypt(rkeys+16+8*rounds, rounds/2, buf, out);
 }
 
 
