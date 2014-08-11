@@ -1061,10 +1061,9 @@ inline
 void AES_C_Decrypt_BlkX2(const uchar* rkeys, uint rounds, const uchar in[16], uchar out[16])
 {
 	uchar buf[16];
-	rijndaelDecrypt(rkeys, rounds/2, in, buf);
-	rijndaelDecrypt(rkeys+16+8*rounds, rounds/2, buf, out);
+	rijndaelDecrypt(rkeys+16+8*rounds, rounds/2, in, buf);
+	rijndaelDecrypt(rkeys, rounds/2, buf, out);
 }
-
 
 void AES_C_ECB_EncryptX2(const uchar* rkeys, uint rounds, uchar *iv, const uchar *in, uchar *out, ssize_t len)
 {
