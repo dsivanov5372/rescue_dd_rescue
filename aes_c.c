@@ -1182,3 +1182,68 @@ aes_desc_t AES_C_Methods[] = {{"AES128-ECB"  , 128, 10, 11*16, AES_C_KeySetup_12
 						AES_Gen_CTR_Prep, AES_C_CTR_Crypt, AES_C_CTR_Crypt},
 };
 
+#include "sha256.h"
+
+static inline
+void AES_C_KeySetupX2_Bits_Enc(const uchar *usrkey, uchar *rkeys, uint rounds, uint bits)
+{
+	rijndaelKeySetupEncPF();
+	assert(0 == rounds%2);
+	rijndaelKeySetupEnc((u32*)rkeys, usrkey, bits, rounds/2);
+	/* Second half: Calc sha256 from usrkey and expand */
+	hash_t hv;
+	sha256_init(&hv);
+	sha256_calc(usrkey, bits/8, bits/8, &hv);
+	uchar usrkey2[32];
+	sha256_beout(usrkey2, &hv);
+	rijndaelKeySetupEnc((u32*)(rkeys+16+8*rounds), usrkey2, bits, rounds/2);
+	memset(usrkey2, 0, 32);
+	asm("":::"memory");
+}
+
+static inline
+void AES_C_KeySetupX2_Bits_Dec(const uchar* usrkey, uchar *rkeys, uint rounds, uint bits)
+{
+	rijndaelKeySetupDecPF();
+	assert(0 == rounds%2);
+	rijndaelKeySetupDec((u32*)rkeys, usrkey, bits, rounds/2);
+	/* Second half: Calc sha256 from usrkey and expand */
+	hash_t hv;
+	sha256_init(&hv);
+	sha256_calc(usrkey, bits/8, bits/8, &hv);
+	uchar usrkey2[32];
+	sha256_beout(usrkey2, &hv);
+	rijndaelKeySetupDec((u32*)(rkeys+16+8*rounds), usrkey2, bits, rounds/2);
+	memset(usrkey2, 0, 32);
+	asm("":::"memory");
+}
+
+#define DECL_KEYSETUP2(MODE, BITS)	\
+void AES_C_KeySetupX2_##BITS##_##MODE(const uchar *usrkey, uchar *rkeys, uint rounds)	\
+{											\
+	AES_C_KeySetupX2_Bits_##MODE(usrkey, rkeys, rounds, BITS);			\
+}
+
+DECL_KEYSETUP2(Enc, 128);
+DECL_KEYSETUP2(Dec, 128);
+DECL_KEYSETUP2(Enc, 192);
+DECL_KEYSETUP2(Dec, 192);
+DECL_KEYSETUP2(Enc, 256);
+DECL_KEYSETUP2(Dec, 256);
+
+inline
+void AES_C_Encrypt_BlkX2(const uchar* rkeys, uint rounds, const uchar in[16], uchar out[16])
+{
+	uchar buf[16];
+	rijndaelEncrypt((const u32*)rkeys, rounds/2, in, buf);
+	rijndaelEncrypt((const u32*)(rkeys+16+8*rounds), rounds/2, buf, out);
+}
+inline
+void AES_C_Decrypt_BlkX2(const uchar* rkeys, uint rounds, const uchar in[16], uchar out[16])
+{
+	uchar buf[16];
+	rijndaelDecrypt((const u32*)rkeys, rounds/2, in, buf);
+	rijndaelDecrypt((const u32*)(rkeys+16+8*rounds), rounds/2, buf, out);
+}
+
+
