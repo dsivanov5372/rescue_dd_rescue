@@ -1202,6 +1202,40 @@ void Decrypt_4BlocksX2(__m128i *i0, __m128i *i1, __m128i *i2, __m128i *i3,
 	//asm volatile("pxor %%xmm0, %%xmm0\n" :::"xmm0");
 }
 
+void AESNI_ECB_EncryptX2(const uchar* rkeys, unsigned int rounds,
+			 uchar *iv, const uchar *in, uchar *out, ssize_t len)
+{
+	return AESNI_ECB_Crypt_Tmpl(Encrypt_8BlocksX2, Encrypt_BlockX2, 1,
+				    rkeys, rounds, iv, in, out, len);
+}
+
+void AESNI_ECB_DecryptX2(const uchar* rkeys, unsigned int rounds,
+			 uchar *iv, const uchar *in, uchar *out, ssize_t len)
+{
+	return AESNI_ECB_Crypt_Tmpl(Decrypt_8BlocksX2, Decrypt_BlockX2, 0,
+				    rkeys, rounds, iv, in, out, len);
+}
+
+void AESNI_CBC_EncryptX2(const uchar* rkeys, unsigned int rounds,
+			 uchar *iv, const uchar *in, uchar *out, ssize_t len)
+{
+	return AESNI_CBC_Encrypt_Tmpl(Encrypt_Block, rkeys, rounds, iv, in, out, len);
+}
+
+void AESNI_CBC_DecryptX2(const uchar* rkeys, unsigned int rounds,
+			 uchar *iv, const uchar *in, uchar *out, ssize_t len)
+{
+	return AESNI_CBC_Decrypt_Tmpl(Decrypt_4BlocksX2, Decrypt_BlockX2,
+				    rkeys, rounds, iv, in, out, len);
+}
+void AESNI_CTR_CryptX2(const uchar* rkeys, unsigned int rounds,
+			uchar *iv, const uchar *in, uchar *out, ssize_t len)
+{
+	return AESNI_CTR_Crypt_Tmpl(Encrypt_8BlocksX2, Encrypt_BlockX2,
+				    rkeys, rounds, iv, in, out, len);
+}
+
+
 
 aes_desc_t AESNI_Methods[] = {{"AES128-ECB"  , 128, 10, 11*16, AESNI_128_EKey_Expansion_r, AESNI_128_DKey_Expansion_r,
 							NULL, AESNI_ECB_Encrypt, AESNI_ECB_Decrypt},
@@ -1239,7 +1273,6 @@ aes_desc_t AESNI_Methods[] = {{"AES128-ECB"  , 128, 10, 11*16, AESNI_128_EKey_Ex
 							NULL, AESNI_CBC_Encrypt, AESNI_CBC_Decrypt},
 			      {"AES256+-CTR" , 256, 18, 19*16, AESNI_256_EKey_Expansion_r, AESNI_256_EKey_Expansion_r,
 						AESNI_CTR_Prep, AESNI_CTR_Crypt, AESNI_CTR_Crypt},
-/*
 			      {"AES128x2-ECB" , 128, 20, 22*16, AESNI_128_EKey_ExpansionX2_r, AESNI_128_DKey_ExpansionX2_r,
 							NULL, AESNI_ECB_EncryptX2, AESNI_ECB_DecryptX2},
 			      {"AES128x2-CBC" , 128, 20, 22*16, AESNI_128_EKey_ExpansionX2_r, AESNI_128_DKey_ExpansionX2_r,
@@ -1258,7 +1291,6 @@ aes_desc_t AESNI_Methods[] = {{"AES128-ECB"  , 128, 10, 11*16, AESNI_128_EKey_Ex
 							NULL, AESNI_CBC_EncryptX2, AESNI_CBC_DecryptX2},
 			      {"AES256x2-CTR" , 256, 28, 30*16, AESNI_256_EKey_ExpansionX2_r, AESNI_256_EKey_ExpansionX2_r,
 						AESNI_CTR_Prep, AESNI_CTR_CryptX2, AESNI_CTR_CryptX2},
-*/
 };
 
 
