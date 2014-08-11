@@ -1105,10 +1105,12 @@ DECL_KEYSETUP(Dec, 192);
 DECL_KEYSETUP(Enc, 256);
 DECL_KEYSETUP(Dec, 256);
 
+inline
 void AES_C_Encrypt_Blk(const uchar* rkeys, uint rounds, const uchar in[16], uchar out[16])
 {
 	rijndaelEncrypt((const u32*)rkeys, rounds, in, out);
 }
+inline
 void AES_C_Decrypt_Blk(const uchar* rkeys, uint rounds, const uchar in[16], uchar out[16])
 {
 	rijndaelDecrypt((const u32*)rkeys, rounds, in, out);
@@ -1141,3 +1143,12 @@ void AES_C_CTR_Crypt(const uchar* rkeys, uint rounds, uchar *ctr, const uchar *i
 	rijndaelEncryptPF();
 	AES_Gen_CTR_Crypt(AES_C_Encrypt_Blk, rkeys, rounds, ctr, in, out, len);
 }
+
+aes_desc_t AES_C_Methods[] = {{"AES128-ECB"  , 128, 10, 11*16, AES_C_KeySetup_128_Enc, AES_C_KeySetup_128_Dec,
+							NULL, AES_C_ECB_Encrypt, AES_C_ECB_Decrypt},
+			      {"AES128-CBC"  , 128, 10, 11*16, AES_C_KeySetup_128_Enc, AES_C_KeySetup_128_Dec,
+							NULL, AES_C_CBC_Encrypt, AES_C_CBC_Decrypt},
+			      {"AES128-CTR"  , 128, 10, 11*16, AES_C_KeySetup_128_Enc, AES_C_KeySetup_128_Enc,
+						AES_Gen_CTR_Prep, AES_C_CTR_Crypt, AES_C_CTR_Crypt},
+};
+
