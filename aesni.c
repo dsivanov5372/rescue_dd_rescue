@@ -338,7 +338,7 @@ void AESNI_256_DKey_Expansion_r(const unsigned char *userkey,
 
 
 static inline
-__m128i Encrypt_Block(const __m128i in, const unsigned char *ekey, int rounds)
+__m128i Encrypt_Block(const __m128i in, const unsigned char *ekey, unsigned int rounds)
 {
 	int r;
 	const __m128i *rkeys = (__m128i*)ekey;
@@ -349,7 +349,7 @@ __m128i Encrypt_Block(const __m128i in, const unsigned char *ekey, int rounds)
 }
 
 static inline
-__m128i Decrypt_Block(const __m128i in, const unsigned char *dkey, int rounds)
+__m128i Decrypt_Block(const __m128i in, const unsigned char *dkey, unsigned int rounds)
 {
 	int r;
 	const __m128i *rkeys = (__m128i*)dkey;
@@ -361,7 +361,7 @@ __m128i Decrypt_Block(const __m128i in, const unsigned char *dkey, int rounds)
 
 static inline
 void Encrypt_4Blocks(__m128i *i0, __m128i *i1, __m128i *i2, __m128i *i3,
-		     const unsigned char *ekey, int rounds)
+		     const unsigned char *ekey, unsigned int rounds)
 {
 	int r;
 	const __m128i *rkeys = (__m128i*)ekey;
@@ -389,7 +389,7 @@ void Encrypt_4Blocks(__m128i *i0, __m128i *i1, __m128i *i2, __m128i *i3,
 
 static inline
 void Decrypt_4Blocks(__m128i *i0, __m128i *i1, __m128i *i2, __m128i *i3,
-		     const unsigned char *dkey, int rounds)
+		     const unsigned char *dkey, unsigned int rounds)
 {
 	int r;
 	const __m128i *rkeys = (__m128i*)dkey;
@@ -418,7 +418,7 @@ void Decrypt_4Blocks(__m128i *i0, __m128i *i1, __m128i *i2, __m128i *i3,
 static inline
 void Encrypt_8Blocks(__m128i *i0, __m128i *i1, __m128i *i2, __m128i *i3,
 		     __m128i *i4, __m128i *i5, __m128i *i6, __m128i *i7,
-		     const unsigned char *ekey, int rounds)
+		     const unsigned char *ekey, unsigned int rounds)
 {
 	int r;
 	const __m128i *rkeys = (__m128i*)ekey;
@@ -460,7 +460,7 @@ void Encrypt_8Blocks(__m128i *i0, __m128i *i1, __m128i *i2, __m128i *i3,
 static inline
 void Decrypt_8Blocks(__m128i *i0, __m128i *i1, __m128i *i2, __m128i *i3,
 		     __m128i *i4, __m128i *i5, __m128i *i6, __m128i *i7,
-		     const unsigned char *dkey, int rounds)
+		     const unsigned char *dkey, unsigned int rounds)
 {
 	int r;
 	const __m128i *rkeys = (__m128i*)dkey;
@@ -511,7 +511,7 @@ __m128i _mkmask(char ln)
 }
 
 void AESNI_ECB_Encrypt_old(const unsigned char* in, unsigned char* out,
-			   ssize_t len, const unsigned char* key, int rounds)
+			   ssize_t len, const unsigned char* key, unsigned int rounds)
 {
 	while (len >= sizeof(__m128i)) {
 		register __m128i blk = _mm_loadu_si128((const __m128i*)in);
@@ -564,7 +564,7 @@ void AESNI_ECB_Encrypt(const unsigned char* key, unsigned int rounds,
 }
 
 void AESNI_ECB_Decrypt_old(const unsigned char* in, unsigned char* out,
-			   ssize_t len, const unsigned char* key, int rounds)
+			   ssize_t len, const unsigned char* key, unsigned int rounds)
 {
 	while (len > 0) {
 		register __m128i blk = _mm_loadu_si128((const __m128i*)in);
@@ -631,7 +631,7 @@ void AESNI_CBC_Encrypt(const unsigned char* key, unsigned int rounds,
 	_mm_storeu_si128((__m128i*)iv, ivb);
 }
 
-void AESNI_CBC_Decrypt(const unsigned char* key, int rounds,
+void AESNI_CBC_Decrypt(const unsigned char* key, unsigned int rounds,
 			unsigned char* iv,
 			const unsigned char* in, unsigned char* out,
 			ssize_t len)
@@ -743,7 +743,7 @@ void AESNI_CTR_Prep(const unsigned char* iv, unsigned char* ctr, unsigned long l
 #endif
 }
 
-void AESNI_CTR_Crypt(const unsigned char* key, int rounds,
+void AESNI_CTR_Crypt(const unsigned char* key, unsigned int rounds,
 		     unsigned char* ctr,
 		     const unsigned char* in, unsigned char* out,
 		     ssize_t len)
@@ -809,7 +809,7 @@ void AESNI_CTR_Crypt(const unsigned char* key, int rounds,
 
 void AESNI_CTR_Crypt4(const unsigned char* in, unsigned char* out,
 		     unsigned char* ctr,
-		     ssize_t len, const unsigned char* key, int rounds)
+		     ssize_t len, const unsigned char* key, unsigned int rounds)
 {
 	__m128i ONE = _mm_set_epi32(0, 1, 0, 0);
 	__m128i BSWAP_EPI64 = _mm_setr_epi8(7,6,5,4,3,2,1,0,15,14,13,12,11,10,9,8); 
@@ -856,7 +856,7 @@ void AESNI_CTR_Crypt4(const unsigned char* in, unsigned char* out,
 
 void AESNI_CTR_Crypt_old(const unsigned char* in, unsigned char* out,
 		         unsigned char* ctr,
-		         ssize_t len, const unsigned char* key, int rounds)
+		         ssize_t len, const unsigned char* key, unsigned int rounds)
 {
 	__m128i ONE = _mm_set_epi32(0, 1, 0, 0);
 	__m128i BSWAP_EPI64 = _mm_setr_epi8(7,6,5,4,3,2,1,0,15,14,13,12,11,10,9,8); 
