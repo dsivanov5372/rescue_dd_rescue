@@ -260,13 +260,13 @@ fiemap: fiemap.c fiemap.h fstrim.h config.h fstrim.o
 pbkdf2: ossl_pbkdf2.c
 	$(CC) $(CFLAGS) -fpie -o $@ $< -lcrypto 
 
-test_aes: test_aes.c $(AESNI_O) aes_c.o secmem.o aesni.h
+test_aes: test_aes.c $(AESNI_O) aes_c.o secmem.o aesni.h config.h
 	$(CC) $(CFLAGS) -fpie $(DEF) -o $@ $< $(AESNI_O) aes_c.o secmem.o -lcrypto
 
-aesni.o: aesni.c aesni.h aes.h
+aesni.o: aesni.c aesni.h aes.h sha256.h config.h
 	$(CC) $(CFLAGS) -fpie -O3 -maes -msse4.1 -c $<
 
-aes_c.o: aes_c.c aes_c.h aes.h
+aes_c.o: aes_c.c aes_c.h aes.h sha256.h config.h
 	$(CC) $(CFLAGS) -fpie $(FULL_UNROLL) -O3 -c $<
 
 distclean: clean

@@ -39,5 +39,6 @@ void AES_C_CBC_EncryptX2(const uchar* rkeys, uint rounds, uchar *iv,  const ucha
 void AES_C_CBC_DecryptX2(const uchar* rkeys, uint rounds, uchar *iv,  const uchar *in, uchar *out, ssize_t len);
 void AES_C_CTR_CryptX2  (const uchar* rkeys, uint rounds, uchar *ctr, const uchar *in, uchar *out, ssize_t len);
 
+aes_desc_t AES_C_Methods[];
 
 #endif
