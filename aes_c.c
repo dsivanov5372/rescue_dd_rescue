@@ -1147,7 +1147,7 @@ aes_desc_t AES_C_Methods[] = {{"AES128-ECB"  , 128, 10, 11*16, AES_C_KeySetup_12
 							NULL, AES_C_CBC_EncryptX2, AES_C_CBC_DecryptX2},
 			      {"AES256x2-CTR" , 256, 28, 30*16, AES_C_KeySetupX2_256_Enc, AES_C_KeySetupX2_256_Enc,
 						AES_Gen_CTR_Prep, AES_C_CTR_CryptX2, AES_C_CTR_CryptX2},
-			      NULL,
+			      {NULL, /* ... */}
 };
 
 

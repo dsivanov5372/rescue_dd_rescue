@@ -78,12 +78,24 @@ void setup_iv(aes_desc_t *alg, uchar iv[16])
 aes_desc_t *findalg(aes_desc_t* list, const char* nm)
 {
 	aes_desc_t* alg = list;
-	while (alg) {
+	while (alg->name) {
 		if (!strcmp(alg->name, nm))
 			return alg;
 		alg += 1;
 	}
 	return NULL;
+}
+
+int compare(uchar* p1, uchar* p2, size_t ln, const char* msg)
+{
+	uint i;
+	for (i = 0; i < ln; ++i) 
+		if (p1[i] != p2[i]) {
+			printf("Miscompare (%s) @ %i: %02x <-> %02x",
+				msg, i, p1[i], p2[i]);
+			return 1;
+		}
+	return 0;
 }
 
 int main(int argc, char *argv[])
@@ -94,6 +106,7 @@ int main(int argc, char *argv[])
         struct timeval t1, t2;
 	double tdiff; int i;
 	int dbg = 0;
+	int err = 0;
 	char* testalg;
 	crypto = secmem_init();
 	if (argc > 1 && !strcmp("-d", argv[1])) {
@@ -133,8 +146,7 @@ int main(int argc, char *argv[])
 		BENCH(alg->dec_key_setup(key, rkeys, alg->rounds), rep);
 		printf("\nDecrypt  : ");
 		BENCH(setup_iv(alg, iv); alg->decrypt(rkeys, alg->rounds, iv, out, vfy, LN), rep/2);
-		if (memcmp(vfy, in, LN))
-			abort();
+		err += compare(vfy, in, LN, "AESNI plain");
 		free(rkeys);
 	}
 #endif
@@ -587,6 +599,6 @@ int main(int argc, char *argv[])
 	EVP_CIPHER_CTX_cleanup(&evpdctx);
 #endif
 	secmem_release(crypto);
-	return 0;
+	return err;
 }
 
