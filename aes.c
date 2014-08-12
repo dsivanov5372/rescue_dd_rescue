@@ -9,11 +9,12 @@
 
 #include <string.h>
 #include <netinet/in.h>
+#include <stdlib.h>
 
 void xor16(const uchar x1[16], const uchar x2[16], uchar xout[16])
 {
 	uint i;
-	for (i = 0; i < 16; ++i)
+	for (i = 0; i < 16; i+=sizeof(ulong))
 		*(ulong*)(xout+i) = *(ulong*)(x1+i) ^ *(ulong*)(x2+i);
 }
 
@@ -21,7 +22,7 @@ void fill_blk(const uchar *in, uchar bf[16], ssize_t len)
 {
 	int i;
 	for (i = 0; i < len; ++i)
-		bf[i] = in[1];
+		bf[i] = in[i];
 	for (; i < 16; ++i)
 		bf[i] = 0;
 }
@@ -145,5 +146,12 @@ void AES_Gen_CTR_Crypt(AES_Crypt_Blk_fn *cryptfn,
 		xor16(eblk, in, output);
 		be_inc(ctr+8);	
 	}
+}
+
+void AES_Gen_Release(uchar *rkeys, uint rounds)
+{
+	memset(rkeys, 0, 16*(rounds+1));
+	asm("":::"memory");
+	free(rkeys);
 }
 

@@ -33,6 +33,7 @@ typedef void (AES_Crypt_IV_fn) (const uchar* rkeys, uint rounds,
 				      uchar *iv,	/* [16] */
 				const uchar* input, uchar* output,
 				ssize_t len);
+typedef void (AES_Key_Release_fn)(uchar* rkeys, uint rounds);
 
 
 typedef struct _aes_desc {
@@ -43,6 +44,7 @@ typedef struct _aes_desc {
 	AES_Key_Setup_fn *enc_key_setup, *dec_key_setup;
 	AES_Crypt_IV_Prep_fn *iv_prep;
 	AES_Crypt_IV_fn *encrypt, *decrypt;
+	AES_Key_Release_fn *release;
 } aes_desc_t;
 
 
@@ -73,5 +75,5 @@ void AES_Gen_CTR_Crypt(AES_Crypt_Blk_fn *cryptfn,
 			uchar *ctr,
 			const uchar *input, uchar *output,
 			ssize_t len);
-
+void AES_Gen_Release(uchar *rkeys, uint rounds);
 #endif

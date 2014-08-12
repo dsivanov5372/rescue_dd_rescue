@@ -129,16 +129,15 @@ int main(int argc, char *argv[])
 		fillrand(in, LN);
 
 
-	printf("AES tests/benchmark\n");
+	printf("AES tests/benchmark");
 	uchar iv[16];
 	aes_desc_t *alg = NULL;
 
 #ifdef HAVE_AESNI
-	printf("AESNI:\n");
 	alg = findalg(AESNI_Methods, testalg);
 	if (alg) {
 		++tested;
-		printf("%s (%i, %i, %i)\n", alg->name, alg->keylen, alg->rounds, alg->ctx_size);
+		printf("\nAESNI %s (%i, %i, %i)\n", alg->name, alg->keylen, alg->rounds, alg->ctx_size);
 		printf("Key setup: ");
 		uchar *rkeys = (uchar*)malloc(alg->ctx_size);
 		BENCH(alg->enc_key_setup(key, rkeys, alg->rounds), rep);
@@ -149,14 +148,16 @@ int main(int argc, char *argv[])
 		printf("\nDecrypt  : ");
 		BENCH(setup_iv(alg, iv); alg->decrypt(rkeys, alg->rounds, iv, out, vfy, LN), rep/2);
 		err += compare(vfy, in, LN, "AESNI plain");
-		free(rkeys);
+		if (alg->release)
+			alg->release(rkeys, alg->rounds);
+		else
+			free(rkeys);
 	}
 #endif
-	printf("\nAES_C:\n");
 	alg = findalg(AES_C_Methods, testalg);
 	if (alg) {
 		++tested;
-		printf("%s (%i, %i, %i)\n", alg->name, alg->keylen, alg->rounds, alg->ctx_size);
+		printf("\nAES_C %s (%i, %i, %i)\n", alg->name, alg->keylen, alg->rounds, alg->ctx_size);
 		printf("Key setup: ");
 		uchar *rkeys = (uchar*)malloc(alg->ctx_size);
 		BENCH(alg->enc_key_setup(key, rkeys, alg->rounds), rep);
@@ -170,27 +171,32 @@ int main(int argc, char *argv[])
 		printf("\nDecrypt  : ");
 		BENCH(setup_iv(alg, iv); alg->decrypt(rkeys, alg->rounds, iv, out2, vfy, LN), rep/2);
 		err += compare(vfy, in, LN, "AES_C plain");
-		free(rkeys);
+		if (alg->release)
+			alg->release(rkeys, alg->rounds);
+		else
+			free(rkeys);
 	}
 
-	printf("\nOpenSSL ");
 	//OPENSSL_init();
 	alg = findalg(AES_OSSL_Methods, testalg);
 	if (alg) {
 		++tested;
-		printf("%s (%i, %i, %i)\n", alg->name, alg->keylen, alg->rounds, alg->ctx_size);
+		printf("\nOpenSSL %s (%i, %i, %i)\n", alg->name, alg->keylen, alg->rounds, alg->ctx_size);
 		printf("Key setup: ");
 		uchar *rkeys = (uchar*)malloc(alg->ctx_size);
 		BENCH(alg->enc_key_setup(key, rkeys, alg->rounds), rep);
 		printf("\nEncrypt  : ");
 		BENCH(setup_iv(alg, iv); alg->encrypt(rkeys, alg->rounds, iv, in, out, LN), rep/2);
-		err += compare(out, out2, LN, "AES_C vs OSSL");
+		err += compare(out2, out, LN, "AES_C vs OSSL");
 		printf("\nKey setup: ");
 		BENCH(alg->dec_key_setup(key, rkeys, alg->rounds), rep);
 		printf("\nDecrypt  : ");
 		BENCH(setup_iv(alg, iv); alg->decrypt(rkeys, alg->rounds, iv, out, vfy, LN), rep/2);
 		err += compare(vfy, in, LN, "OSSL plain");
-		free(rkeys);
+		if (alg->release)
+			alg->release(rkeys, alg->rounds);
+		else
+			free(rkeys);
 	}
 
 	printf("\n");

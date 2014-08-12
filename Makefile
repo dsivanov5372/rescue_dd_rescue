@@ -261,7 +261,7 @@ fiemap: fiemap.c fiemap.h fstrim.h config.h fstrim.o
 pbkdf2: ossl_pbkdf2.c
 	$(CC) $(CFLAGS) -fpie -o $@ $< -lcrypto 
 
-test_aes: test_aes.c $(AESNI_O) aes_c.o secmem.o sha256.o aes.o aesni.h config.h
+test_aes: test_aes.c $(AESNI_O) aes_c.o secmem.o sha256.o aes_ossl.o aes.o aesni.h config.h
 	$(CC) $(CFLAGS) -fpie $(DEF) -o $@ $< $(AESNI_O) aes_c.o secmem.o sha256.o aes_ossl.o aes.o -lcrypto
 
 aesni.o: aesni.c aesni.h aes.h sha256.h config.h
