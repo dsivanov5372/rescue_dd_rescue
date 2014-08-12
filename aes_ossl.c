@@ -50,7 +50,7 @@ void AES_OSSL_128_DKey_Expand_CBC(const unsigned char *userkey,
 	EVP_CIPHER_CTX_set_padding(evpctx, 0);
 }
 
-void AES_OSSL_128_EKey_Expand_CTR(const unsigned char *userkey,
+void AES_OSSL_128_Key_Expand_CTR(const unsigned char *userkey,
 			  	 unsigned char *ctx,
 				 unsigned int rounds)
 {
