@@ -153,7 +153,7 @@ aes_desc_t AES_OSSL_Methods[] = {{"AES128-ECB"  , 128, 10, EVP_CTX_SZ, AES_OSSL_
 							NULL, AES_OSSL_128_ECB_Encrypt, AES_OSSL_128_ECB_Decrypt, AES_OSSL_Release},
 			      {"AES128-CBC"  , 128, 10, EVP_CTX_SZ, AES_OSSL_128_EKey_Expand_CBC, AES_OSSL_128_DKey_Expand_CBC,
 							NULL, AES_OSSL_128_CBC_Encrypt, AES_OSSL_128_CBC_Decrypt, AES_OSSL_Release},
-			      {"AES128-CTR"  , 128, 10, EVP_CTX_SZ, AES_OSSL_128_EKey_Expand_CTR, AES_OSSL_128_EKey_Expand_CTR,
+			      {"AES128-CTR"  , 128, 10, EVP_CTX_SZ, AES_OSSL_128_Key_Expand_CTR, AES_OSSL_128_Key_Expand_CTR,
 						AES_Gen_CTR_Prep, AES_OSSL_128_CTR_Crypt, AES_OSSL_128_CTR_Crypt, AES_OSSL_Release},
 			      {NULL, /* ... */}
 };
