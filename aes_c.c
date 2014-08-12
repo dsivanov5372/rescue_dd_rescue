@@ -979,7 +979,7 @@ void AES_C_ECB_Encrypt(const uchar* rkeys, uint rounds, uchar *iv, const uchar *
 void AES_C_ECB_Decrypt(const uchar* rkeys, uint rounds, uchar *iv, const uchar *in, uchar *out, ssize_t len)
 {
 	rijndaelDecryptPF();
-	AES_Gen_ECB_Dec(AES_C_Encrypt_Blk, rkeys, rounds, NULL, in, out, len);
+	AES_Gen_ECB_Dec(AES_C_Decrypt_Blk, rkeys, rounds, NULL, in, out, len);
 }
 
 void AES_C_CBC_Encrypt(const uchar* rkeys, uint rounds, uchar *iv, const uchar *in, uchar *out, ssize_t len)
@@ -990,7 +990,7 @@ void AES_C_CBC_Encrypt(const uchar* rkeys, uint rounds, uchar *iv, const uchar *
 void AES_C_CBC_Decrypt(const uchar* rkeys, uint rounds, uchar *iv, const uchar *in, uchar *out, ssize_t len)
 {
 	rijndaelDecryptPF();
-	AES_Gen_CBC_Dec(AES_C_Encrypt_Blk, rkeys, rounds, iv, in, out, len);
+	AES_Gen_CBC_Dec(AES_C_Decrypt_Blk, rkeys, rounds, iv, in, out, len);
 }
 
 void AES_C_CTR_Crypt(const uchar* rkeys, uint rounds, uchar *ctr, const uchar *in, uchar *out, ssize_t len)
@@ -1073,7 +1073,7 @@ void AES_C_ECB_EncryptX2(const uchar* rkeys, uint rounds, uchar *iv, const uchar
 void AES_C_ECB_DecryptX2(const uchar* rkeys, uint rounds, uchar *iv, const uchar *in, uchar *out, ssize_t len)
 {
 	rijndaelDecryptPF();
-	AES_Gen_ECB_Dec(AES_C_Encrypt_BlkX2, rkeys, rounds, NULL, in, out, len);
+	AES_Gen_ECB_Dec(AES_C_Decrypt_BlkX2, rkeys, rounds, NULL, in, out, len);
 }
 
 void AES_C_CBC_EncryptX2(const uchar* rkeys, uint rounds, uchar *iv, const uchar *in, uchar *out, ssize_t len)
@@ -1084,7 +1084,7 @@ void AES_C_CBC_EncryptX2(const uchar* rkeys, uint rounds, uchar *iv, const uchar
 void AES_C_CBC_DecryptX2(const uchar* rkeys, uint rounds, uchar *iv, const uchar *in, uchar *out, ssize_t len)
 {
 	rijndaelDecryptPF();
-	AES_Gen_CBC_Dec(AES_C_Encrypt_BlkX2, rkeys, rounds, iv, in, out, len);
+	AES_Gen_CBC_Dec(AES_C_Decrypt_BlkX2, rkeys, rounds, iv, in, out, len);
 }
 
 void AES_C_CTR_CryptX2(const uchar* rkeys, uint rounds, uchar *ctr, const uchar *in, uchar *out, ssize_t len)

@@ -20,7 +20,7 @@ void xor16(const uchar x1[16], const uchar x2[16], uchar xout[16])
 
 void fill_blk(const uchar *in, uchar bf[16], ssize_t len)
 {
-	int i;
+	uint i;
 	for (i = 0; i < len; ++i)
 		bf[i] = in[i];
 	for (; i < 16; ++i)
