@@ -1223,7 +1223,7 @@ void AESNI_ECB_DecryptX2(const uchar* rkeys, unsigned int rounds,
 void AESNI_CBC_EncryptX2(const uchar* rkeys, unsigned int rounds,
 			 uchar *iv, const uchar *in, uchar *out, ssize_t len)
 {
-	return AESNI_CBC_Encrypt_Tmpl(Encrypt_Block, rkeys, rounds, iv, in, out, len);
+	return AESNI_CBC_Encrypt_Tmpl(Encrypt_BlockX2, rkeys, rounds, iv, in, out, len);
 }
 
 void AESNI_CBC_DecryptX2(const uchar* rkeys, unsigned int rounds,
