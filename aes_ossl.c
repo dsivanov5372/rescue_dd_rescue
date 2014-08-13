@@ -87,9 +87,98 @@ AES_OSSL_CRYPT(256_ECB, 0);
 AES_OSSL_CRYPT(256_CBC, 1);
 AES_OSSL_CRYPT(256_CTR, 1);
 
-#define EVP_CTX_SZ sizeof(EVP_CIPHER_CTX)
+/* Double encryption */
 
-aes_desc_t AES_OSSL_Methods[] = {{"AES128-ECB"  , 128, 10, EVP_CTX_SZ, AES_OSSL_128_EKey_Expand_ecb, AES_OSSL_128_DKey_Expand_ecb,
+#include "sha256.h"
+
+void AES_OSSL_Bits_EKey_ExpandX2(const EVP_CIPHER *cipher, const unsigned char* userkey, unsigned char *ctx, unsigned int bits)
+{
+	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;
+	EVP_CIPHER_CTX_init(evpctx);
+	EVP_EncryptInit_ex(evpctx, cipher, NULL, userkey, NULL);
+	EVP_CIPHER_CTX_set_padding(evpctx, 0);
+	hash_t hv;
+	sha256_init(&hv);
+	sha256_calc(userkey, bits/8, bits/8, &hv);
+	uchar usrkey2[32];
+	sha256_beout(usrkey2, &hv);
+	sha256_init(&hv);
+	EVP_CIPHER_CTX *evpctx2 = evpctx+1;
+	EVP_CIPHER_CTX_init(evpctx2);
+	EVP_EncryptInit_ex(evpctx2, cipher, NULL, usrkey2, NULL);
+	EVP_CIPHER_CTX_set_padding(evpctx2, 0);
+	memset(usrkey2, 0, 32);
+	asm("":::"memory");
+}
+void AES_OSSL_Bits_DKey_ExpandX2(const EVP_CIPHER *cipher, const unsigned char* userkey, unsigned char *ctx, unsigned int bits)
+{
+	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;
+	EVP_CIPHER_CTX_init(evpctx);
+	EVP_DecryptInit_ex(evpctx, cipher, NULL, userkey, NULL);
+	EVP_CIPHER_CTX_set_padding(evpctx, 0);
+	hash_t hv;
+	sha256_init(&hv);
+	sha256_calc(userkey, bits/8, bits/8, &hv);
+	uchar usrkey2[32];
+	sha256_beout(usrkey2, &hv);
+	sha256_init(&hv);
+	EVP_CIPHER_CTX *evpctx2 = evpctx+1;
+	EVP_CIPHER_CTX_init(evpctx2);
+	EVP_DecryptInit_ex(evpctx2, cipher, NULL, usrkey2, NULL);
+	EVP_CIPHER_CTX_set_padding(evpctx2, 0);
+	memset(usrkey2, 0, 32);
+	asm("":::"memory");
+}
+
+#define AES_OSSL_KEY_EX2(BITS, ROUNDS, CHAIN)	\
+void AES_OSSL_##BITS##_EKey_Expand_##CHAIN (const unsigned char *userkey, unsigned char *ctx, unsigned int rounds)	\
+{							\
+	assert(rounds == ROUNDS);			\
+	AES_OSSL_Bits_EKey_ExpandX2(EVP_aes_##BITS##_##CHAIN (), userkey, ctx, BITS);	\
+};							\
+void AES_OSSL_##BITS##_DKey_Expand_##CHAIN (const unsigned char *userkey, unsigned char *ctx, unsigned int rounds)	\
+{							\
+	assert(rounds == ROUNDS);			\
+	AES_OSSL_Bits_DKey_ExpandX2(EVP_aes_##BITS##_##CHAIN (), userkey, ctx, BITS);	\
+}
+
+#define AES_OSSL_CRYPTX2(BITCHAIN, IV)	\
+void AES_OSSL_##BITCHAIN##_EncryptX2(const unsigned char* ctx, unsigned int rounds,	\
+			        unsigned char* iv, const unsigned char* in, 		\
+				unsigned char* out, ssize_t len)			\
+{								\
+	int olen;						\
+	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;		\
+	if (IV) {						\
+		memcpy(evpctx->oiv, iv, 16); memcpy(evpctx->iv, iv, 16);		\
+	}							\
+	EVP_EncryptUpdate(evpctx, out, &olen, in, len);		\
+	EVP_EncryptUpdate(evpctx+1, out, &olen, out, olen);	\
+};								\
+void AES_OSSL_##BITCHAIN##_DecryptX2(const unsigned char* ctx, unsigned int rounds,	\
+			        unsigned char* iv, const unsigned char* in, 		\
+				unsigned char* out, ssize_t len)			\
+{								\
+	int olen;						\
+	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;		\
+	if (IV) {						\
+		memcpy(evpctx->oiv, iv, 16); memcpy(evpctx->iv, iv, 16);		\
+	}							\
+	EVP_DecryptUpdate(evpctx+1, out, &olen, in, len);	\
+	EVP_DecryptUpdate(evpctx, out, &olen, out, olen);	\
+}
+
+void AES_OSSL_ReleaseX2(unsigned char *ctx, unsigned int rounds)
+{
+	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;
+	EVP_CIPHER_CTX_cleanup(evpctx);
+	EVP_CIPHER_CTX_cleanup(evpctx+1);
+}
+#define EVP_CTX_SZ sizeof(EVP_CIPHER_CTX)
+#define EVP_CTX_SZX2 2*sizeof(EVP_CIPHER_CTX)
+
+aes_desc_t AES_OSSL_Methods[] = {
+				{"AES128-ECB"  , 128, 10, EVP_CTX_SZ, AES_OSSL_128_EKey_Expand_ecb, AES_OSSL_128_DKey_Expand_ecb,
 							NULL, AES_OSSL_128_ECB_Encrypt, AES_OSSL_128_ECB_Decrypt, AES_OSSL_Release},
 				{"AES128-CBC"  , 128, 10, EVP_CTX_SZ, AES_OSSL_128_EKey_Expand_cbc, AES_OSSL_128_DKey_Expand_cbc,
 							NULL, AES_OSSL_128_CBC_Encrypt, AES_OSSL_128_CBC_Decrypt, AES_OSSL_Release},
@@ -106,6 +195,25 @@ aes_desc_t AES_OSSL_Methods[] = {{"AES128-ECB"  , 128, 10, EVP_CTX_SZ, AES_OSSL_
 				{"AES256-CBC"  , 256, 14, EVP_CTX_SZ, AES_OSSL_256_EKey_Expand_cbc, AES_OSSL_256_DKey_Expand_cbc,
 							NULL, AES_OSSL_256_CBC_Encrypt, AES_OSSL_256_CBC_Decrypt, AES_OSSL_Release},
 				{"AES256-CTR"  , 256, 14, EVP_CTX_SZ, AES_OSSL_256_EKey_Expand_ctr, AES_OSSL_256_EKey_Expand_ctr,
+						AES_Gen_CTR_Prep, AES_OSSL_256_CTR_Encrypt, AES_OSSL_256_CTR_Encrypt, AES_OSSL_Release},
+				/* TODO */
+				{"AES128X2-ECB"  , 128, 20, EVP_CTX_SZX2, AES_OSSL_128_EKey_Expand_ecb, AES_OSSL_128_DKey_Expand_ecb,
+							NULL, AES_OSSL_128_ECB_Encrypt, AES_OSSL_128_ECB_Decrypt, AES_OSSL_Release},
+				{"AES128X2-CBC"  , 128, 20, EVP_CTX_SZX2, AES_OSSL_128_EKey_Expand_cbc, AES_OSSL_128_DKey_Expand_cbc,
+							NULL, AES_OSSL_128_CBC_Encrypt, AES_OSSL_128_CBC_Decrypt, AES_OSSL_Release},
+				{"AES128X2-CTR"  , 128, 20, EVP_CTX_SZX2, AES_OSSL_128_EKey_Expand_ctr, AES_OSSL_128_EKey_Expand_ctr,
+						AES_Gen_CTR_Prep, AES_OSSL_128_CTR_Encrypt, AES_OSSL_128_CTR_Encrypt, AES_OSSL_Release},
+				{"AES192X2-ECB"  , 192, 24, EVP_CTX_SZX2, AES_OSSL_192_EKey_Expand_ecb, AES_OSSL_192_DKey_Expand_ecb,
+							NULL, AES_OSSL_192_ECB_Encrypt, AES_OSSL_192_ECB_Decrypt, AES_OSSL_Release},
+				{"AES192X2-CBC"  , 192, 24, EVP_CTX_SZX2, AES_OSSL_192_EKey_Expand_cbc, AES_OSSL_192_DKey_Expand_cbc,
+							NULL, AES_OSSL_192_CBC_Encrypt, AES_OSSL_192_CBC_Decrypt, AES_OSSL_Release},
+				{"AES192X2-CTR"  , 192, 24, EVP_CTX_SZX2, AES_OSSL_192_EKey_Expand_ctr, AES_OSSL_192_EKey_Expand_ctr,
+						AES_Gen_CTR_Prep, AES_OSSL_192_CTR_Encrypt, AES_OSSL_192_CTR_Encrypt, AES_OSSL_Release},
+				{"AES256X2-ECB"  , 256, 28, EVP_CTX_SZX2, AES_OSSL_256_EKey_Expand_ecb, AES_OSSL_256_DKey_Expand_ecb,
+							NULL, AES_OSSL_256_ECB_Encrypt, AES_OSSL_256_ECB_Decrypt, AES_OSSL_Release},
+				{"AES256X2-CBC"  , 256, 28, EVP_CTX_SZX2, AES_OSSL_256_EKey_Expand_cbc, AES_OSSL_256_DKey_Expand_cbc,
+							NULL, AES_OSSL_256_CBC_Encrypt, AES_OSSL_256_CBC_Decrypt, AES_OSSL_Release},
+				{"AES256X2-CTR"  , 256, 28, EVP_CTX_SZX2, AES_OSSL_256_EKey_Expand_ctr, AES_OSSL_256_EKey_Expand_ctr,
 						AES_Gen_CTR_Prep, AES_OSSL_256_CTR_Encrypt, AES_OSSL_256_CTR_Encrypt, AES_OSSL_Release},
 				{NULL, /* ... */}
 };
