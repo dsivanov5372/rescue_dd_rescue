@@ -22,10 +22,11 @@ void xor16(const uchar x1[16], const uchar x2[16], uchar xout[16])
 void fill_blk(const uchar *in, uchar bf[16], ssize_t len)
 {
 	uint i;
+	uchar by = 16-(len&0x0f);
 	for (i = 0; i < len; ++i)
 		bf[i] = in[i];
 	for (; i < 16; ++i)
-		bf[i] = (16-len%16);
+		bf[i] = by;
 }
 
 void AES_Gen_ECB_Enc(AES_Crypt_Blk_fn *cryptfn,
@@ -56,9 +57,9 @@ void AES_Gen_ECB_Dec(AES_Crypt_Blk_fn *cryptfn,
 		len -= 16; input += 16; output += 16;
 	}
 	if (len) {
-		uchar out[16];
-		cryptfn(rkeys, rounds, input, out);
-		memcpy(output, out, len);
+		//uchar out[16];
+		cryptfn(rkeys, rounds, input, output);
+		//memcpy(output, out, len);
 	}
 }
 
@@ -99,9 +100,10 @@ void AES_Gen_CBC_Dec(AES_Crypt_Blk_fn *cryptfn,
 	}
 	if (len) {
 		cryptfn(rkeys, rounds, input, ebf);
-		int i;
-		for (i = 0; i < len; ++i)
-			output[i] = iv[i] ^ ebf[i];
+		//int i;
+		//for (i = 0; i < len; ++i)
+		//	output[i] = iv[i] ^ ebf[i];
+		xor16(iv, ebf, output);
 		memcpy(iv, input, 16);
 	}
 }

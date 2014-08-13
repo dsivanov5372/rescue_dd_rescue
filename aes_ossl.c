@@ -18,7 +18,7 @@ void AES_OSSL_Bits_DKey_Expand(const EVP_CIPHER *cipher, const unsigned char* us
 	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;
 	EVP_CIPHER_CTX_init(evpctx);
 	EVP_DecryptInit_ex(evpctx, cipher, NULL, userkey, NULL);
-	//EVP_CIPHER_CTX_set_padding(evpctx, 0);
+	EVP_CIPHER_CTX_set_padding(evpctx, 0);
 }
 
 #define CHECK_ERR(x)		\
