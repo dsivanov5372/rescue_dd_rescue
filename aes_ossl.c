@@ -131,18 +131,18 @@ void AES_OSSL_Bits_DKey_ExpandX2(const EVP_CIPHER *cipher, const unsigned char* 
 }
 
 #define AES_OSSL_KEY_EX2(BITS, ROUNDS, CHAIN)	\
-void AES_OSSL_##BITS##_EKey_Expand_##CHAIN (const unsigned char *userkey, unsigned char *ctx, unsigned int rounds)	\
+void AES_OSSL_##BITS##_EKey_ExpandX2_##CHAIN (const unsigned char *userkey, unsigned char *ctx, unsigned int rounds)	\
 {							\
 	assert(rounds == ROUNDS);			\
 	AES_OSSL_Bits_EKey_ExpandX2(EVP_aes_##BITS##_##CHAIN (), userkey, ctx, BITS);	\
 };							\
-void AES_OSSL_##BITS##_DKey_Expand_##CHAIN (const unsigned char *userkey, unsigned char *ctx, unsigned int rounds)	\
+void AES_OSSL_##BITS##_DKey_ExpandX2_##CHAIN (const unsigned char *userkey, unsigned char *ctx, unsigned int rounds)	\
 {							\
 	assert(rounds == ROUNDS);			\
 	AES_OSSL_Bits_DKey_ExpandX2(EVP_aes_##BITS##_##CHAIN (), userkey, ctx, BITS);	\
 }
 
-#define AES_OSSL_CRYPTX2(BITCHAIN, IV)	\
+#define AES_OSSL_CRYPT2(BITCHAIN, IV)	\
 void AES_OSSL_##BITCHAIN##_EncryptX2(const unsigned char* ctx, unsigned int rounds,	\
 			        unsigned char* iv, const unsigned char* in, 		\
 				unsigned char* out, ssize_t len)			\
@@ -151,6 +151,7 @@ void AES_OSSL_##BITCHAIN##_EncryptX2(const unsigned char* ctx, unsigned int roun
 	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;		\
 	if (IV) {						\
 		memcpy(evpctx->oiv, iv, 16); memcpy(evpctx->iv, iv, 16);		\
+		memcpy((evpctx+1)->oiv, iv, 16); memcpy((evpctx+1)->iv, iv, 16);	\
 	}							\
 	EVP_EncryptUpdate(evpctx, out, &olen, in, len);		\
 	EVP_EncryptUpdate(evpctx+1, out, &olen, out, olen);	\
@@ -163,6 +164,7 @@ void AES_OSSL_##BITCHAIN##_DecryptX2(const unsigned char* ctx, unsigned int roun
 	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;		\
 	if (IV) {						\
 		memcpy(evpctx->oiv, iv, 16); memcpy(evpctx->iv, iv, 16);		\
+		memcpy((evpctx+1)->oiv, iv, 16); memcpy((evpctx+1)->iv, iv, 16);	\
 	}							\
 	EVP_DecryptUpdate(evpctx+1, out, &olen, in, len);	\
 	EVP_DecryptUpdate(evpctx, out, &olen, out, olen);	\
@@ -174,6 +176,32 @@ void AES_OSSL_ReleaseX2(unsigned char *ctx, unsigned int rounds)
 	EVP_CIPHER_CTX_cleanup(evpctx);
 	EVP_CIPHER_CTX_cleanup(evpctx+1);
 }
+
+AES_OSSL_KEY_EX2(128, AES_128_ROUNDS, ecb);
+AES_OSSL_KEY_EX2(128, AES_128_ROUNDS, cbc);
+AES_OSSL_KEY_EX2(128, AES_128_ROUNDS, ctr);
+
+AES_OSSL_CRYPT2(128_ECB, 0);
+AES_OSSL_CRYPT2(128_CBC, 1);
+AES_OSSL_CRYPT2(128_CTR, 1);
+
+AES_OSSL_KEY_EX2(192, AES_192_ROUNDS, ecb);
+AES_OSSL_KEY_EX2(192, AES_192_ROUNDS, cbc);
+AES_OSSL_KEY_EX2(192, AES_192_ROUNDS, ctr);
+
+AES_OSSL_CRYPT2(192_ECB, 0);
+AES_OSSL_CRYPT2(192_CBC, 1);
+AES_OSSL_CRYPT2(192_CTR, 1);
+
+AES_OSSL_KEY_EX2(256, AES_256_ROUNDS, ecb);
+AES_OSSL_KEY_EX2(256, AES_256_ROUNDS, cbc);
+AES_OSSL_KEY_EX2(256, AES_256_ROUNDS, ctr);
+
+AES_OSSL_CRYPT2(256_ECB, 0);
+AES_OSSL_CRYPT2(256_CBC, 1);
+AES_OSSL_CRYPT2(256_CTR, 1);
+
+
 #define EVP_CTX_SZ sizeof(EVP_CIPHER_CTX)
 #define EVP_CTX_SZX2 2*sizeof(EVP_CIPHER_CTX)
 
@@ -197,23 +225,23 @@ aes_desc_t AES_OSSL_Methods[] = {
 				{"AES256-CTR"  , 256, 14, EVP_CTX_SZ, AES_OSSL_256_EKey_Expand_ctr, AES_OSSL_256_EKey_Expand_ctr,
 						AES_Gen_CTR_Prep, AES_OSSL_256_CTR_Encrypt, AES_OSSL_256_CTR_Encrypt, AES_OSSL_Release},
 				/* TODO */
-				{"AES128X2-ECB"  , 128, 20, EVP_CTX_SZX2, AES_OSSL_128_EKey_Expand_ecb, AES_OSSL_128_DKey_Expand_ecb,
-							NULL, AES_OSSL_128_ECB_Encrypt, AES_OSSL_128_ECB_Decrypt, AES_OSSL_Release},
-				{"AES128X2-CBC"  , 128, 20, EVP_CTX_SZX2, AES_OSSL_128_EKey_Expand_cbc, AES_OSSL_128_DKey_Expand_cbc,
-							NULL, AES_OSSL_128_CBC_Encrypt, AES_OSSL_128_CBC_Decrypt, AES_OSSL_Release},
-				{"AES128X2-CTR"  , 128, 20, EVP_CTX_SZX2, AES_OSSL_128_EKey_Expand_ctr, AES_OSSL_128_EKey_Expand_ctr,
-						AES_Gen_CTR_Prep, AES_OSSL_128_CTR_Encrypt, AES_OSSL_128_CTR_Encrypt, AES_OSSL_Release},
-				{"AES192X2-ECB"  , 192, 24, EVP_CTX_SZX2, AES_OSSL_192_EKey_Expand_ecb, AES_OSSL_192_DKey_Expand_ecb,
-							NULL, AES_OSSL_192_ECB_Encrypt, AES_OSSL_192_ECB_Decrypt, AES_OSSL_Release},
-				{"AES192X2-CBC"  , 192, 24, EVP_CTX_SZX2, AES_OSSL_192_EKey_Expand_cbc, AES_OSSL_192_DKey_Expand_cbc,
-							NULL, AES_OSSL_192_CBC_Encrypt, AES_OSSL_192_CBC_Decrypt, AES_OSSL_Release},
-				{"AES192X2-CTR"  , 192, 24, EVP_CTX_SZX2, AES_OSSL_192_EKey_Expand_ctr, AES_OSSL_192_EKey_Expand_ctr,
-						AES_Gen_CTR_Prep, AES_OSSL_192_CTR_Encrypt, AES_OSSL_192_CTR_Encrypt, AES_OSSL_Release},
-				{"AES256X2-ECB"  , 256, 28, EVP_CTX_SZX2, AES_OSSL_256_EKey_Expand_ecb, AES_OSSL_256_DKey_Expand_ecb,
-							NULL, AES_OSSL_256_ECB_Encrypt, AES_OSSL_256_ECB_Decrypt, AES_OSSL_Release},
-				{"AES256X2-CBC"  , 256, 28, EVP_CTX_SZX2, AES_OSSL_256_EKey_Expand_cbc, AES_OSSL_256_DKey_Expand_cbc,
-							NULL, AES_OSSL_256_CBC_Encrypt, AES_OSSL_256_CBC_Decrypt, AES_OSSL_Release},
-				{"AES256X2-CTR"  , 256, 28, EVP_CTX_SZX2, AES_OSSL_256_EKey_Expand_ctr, AES_OSSL_256_EKey_Expand_ctr,
-						AES_Gen_CTR_Prep, AES_OSSL_256_CTR_Encrypt, AES_OSSL_256_CTR_Encrypt, AES_OSSL_Release},
+				{"AES128X2-ECB"  , 128, 20, EVP_CTX_SZX2, AES_OSSL_128_EKey_ExpandX2_ecb, AES_OSSL_128_DKey_ExpandX2_ecb,
+							NULL, AES_OSSL_128_ECB_EncryptX2, AES_OSSL_128_ECB_DecryptX2, AES_OSSL_ReleaseX2},
+				{"AES128X2-CBC"  , 128, 20, EVP_CTX_SZX2, AES_OSSL_128_EKey_ExpandX2_cbc, AES_OSSL_128_DKey_ExpandX2_cbc,
+							NULL, AES_OSSL_128_CBC_EncryptX2, AES_OSSL_128_CBC_DecryptX2, AES_OSSL_ReleaseX2},
+				{"AES128X2-CTR"  , 128, 20, EVP_CTX_SZX2, AES_OSSL_128_EKey_ExpandX2_ctr, AES_OSSL_128_EKey_ExpandX2_ctr,
+						AES_Gen_CTR_Prep, AES_OSSL_128_CTR_EncryptX2, AES_OSSL_128_CTR_EncryptX2, AES_OSSL_ReleaseX2},
+				{"AES192X2-ECB"  , 192, 24, EVP_CTX_SZX2, AES_OSSL_192_EKey_ExpandX2_ecb, AES_OSSL_192_DKey_ExpandX2_ecb,
+							NULL, AES_OSSL_192_ECB_EncryptX2, AES_OSSL_192_ECB_DecryptX2, AES_OSSL_ReleaseX2},
+				{"AES192X2-CBC"  , 192, 24, EVP_CTX_SZX2, AES_OSSL_192_EKey_ExpandX2_cbc, AES_OSSL_192_DKey_ExpandX2_cbc,
+							NULL, AES_OSSL_192_CBC_EncryptX2, AES_OSSL_192_CBC_DecryptX2, AES_OSSL_ReleaseX2},
+				{"AES192X2-CTR"  , 192, 24, EVP_CTX_SZX2, AES_OSSL_192_EKey_ExpandX2_ctr, AES_OSSL_192_EKey_ExpandX2_ctr,
+						AES_Gen_CTR_Prep, AES_OSSL_192_CTR_EncryptX2, AES_OSSL_192_CTR_EncryptX2, AES_OSSL_ReleaseX2},
+				{"AES256X2-ECB"  , 256, 28, EVP_CTX_SZX2, AES_OSSL_256_EKey_ExpandX2_ecb, AES_OSSL_256_DKey_ExpandX2_ecb,
+							NULL, AES_OSSL_256_ECB_EncryptX2, AES_OSSL_256_ECB_DecryptX2, AES_OSSL_ReleaseX2},
+				{"AES256X2-CBC"  , 256, 28, EVP_CTX_SZX2, AES_OSSL_256_EKey_ExpandX2_cbc, AES_OSSL_256_DKey_ExpandX2_cbc,
+							NULL, AES_OSSL_256_CBC_EncryptX2, AES_OSSL_256_CBC_DecryptX2, AES_OSSL_ReleaseX2},
+				{"AES256X2-CTR"  , 256, 28, EVP_CTX_SZX2, AES_OSSL_256_EKey_ExpandX2_ctr, AES_OSSL_256_EKey_ExpandX2_ctr,
+						AES_Gen_CTR_Prep, AES_OSSL_256_CTR_EncryptX2, AES_OSSL_256_CTR_EncryptX2, AES_OSSL_ReleaseX2},
 				{NULL, /* ... */}
 };
