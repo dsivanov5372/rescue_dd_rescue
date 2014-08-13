@@ -152,6 +152,5 @@ void AES_Gen_Release(uchar *rkeys, uint rounds)
 {
 	memset(rkeys, 0, 16*(rounds+1));
 	asm("":::"memory");
-	free(rkeys);
 }
 

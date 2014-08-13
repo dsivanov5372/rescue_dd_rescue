@@ -61,7 +61,6 @@ void AES_OSSL_Release(unsigned char *ctx, unsigned int rounds)
 {
 	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;
 	EVP_CIPHER_CTX_cleanup(evpctx);
-	free(ctx);
 }
 
 AES_OSSL_KEY_EX(128, AES_128_ROUNDS, ecb);

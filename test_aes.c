@@ -145,6 +145,7 @@ int main(int argc, char *argv[])
 		++tested;
 		printf("\nAESNI %s (%i, %i, %i)\n", alg->name, alg->keylen, alg->rounds, alg->ctx_size);
 		printf("Key setup: ");
+		/* TODO: Use secmem ... */
 		uchar *rkeys = (uchar*)malloc(alg->ctx_size);
 		BENCH(alg->enc_key_setup(key, rkeys, alg->rounds), rep, 16*(1+alg->rounds));
 		printf("\nEncrypt  : ");
@@ -156,8 +157,7 @@ int main(int argc, char *argv[])
 		err += compare(vfy, in, LN, "AESNI plain");
 		if (alg->release)
 			alg->release(rkeys, alg->rounds);
-		else
-			free(rkeys);
+		free(rkeys);
 	}
 #endif
 	alg = findalg(AES_C_Methods, testalg);
@@ -179,8 +179,7 @@ int main(int argc, char *argv[])
 		err += compare(vfy, in, LN, "AES_C plain");
 		if (alg->release)
 			alg->release(rkeys, alg->rounds);
-		else
-			free(rkeys);
+		free(rkeys);
 	}
 
 	//OPENSSL_init();
@@ -190,7 +189,7 @@ int main(int argc, char *argv[])
 		printf("\nOpenSSL %s (%i, %i, %i)\n", alg->name, alg->keylen, alg->rounds, alg->ctx_size);
 		printf("Key setup: ");
 		uchar *rkeys = (uchar*)malloc(alg->ctx_size);
-		BENCH(alg->enc_key_setup(key, rkeys, alg->rounds); EVP_CIPHER_CTX_cleanup(rkeys), rep, 16*(1+alg->rounds));
+		BENCH(alg->enc_key_setup(key, rkeys, alg->rounds); alg->release(rkeys, alg->rounds), rep, 16*(1+alg->rounds));
 		alg->enc_key_setup(key, rkeys, alg->rounds);
  		printf("\nEncrypt  : ");
 		BENCH(setup_iv(alg, iv); alg->encrypt(rkeys, alg->rounds, iv, in, out, LN), rep/2+1, LN);
@@ -203,8 +202,7 @@ int main(int argc, char *argv[])
 		err += compare(vfy, in, LN, "OSSL plain");
 		if (alg->release)
 			alg->release(rkeys, alg->rounds);
-		else
-			free(rkeys);
+		free(rkeys);
 	}
 
 	printf("\n");
