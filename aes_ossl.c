@@ -128,7 +128,7 @@ void AES_OSSL_128_CTR_Crypt(const unsigned char* ctx, unsigned int rounds,
 	int olen;
 	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;
 	/* Only works for 32bit ctr values */
-	evpctx->num = ntohl(*(int*)(iv+12));
+	//evpctx->num = ntohl(*(int*)(iv+12));
 #if 1
 	memcpy(evpctx->oiv, iv, 16); memcpy(evpctx->iv, iv, 16);
 	/* FIXME */

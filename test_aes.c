@@ -72,7 +72,7 @@ void fillval(unsigned char* bf, ssize_t ln, unsigned int val)
 void setup_iv(aes_desc_t *alg, uchar iv[16])
 {
 	if (alg->iv_prep)
-		alg->iv_prep((const uchar*)"Halleluja 12345", iv, 1);
+		alg->iv_prep((const uchar*)"Halleluja 12345", iv, 0);
 	else
 		memcpy(iv, "Halleluja 12345", 16);
 }
@@ -99,6 +99,9 @@ int compare(uchar* p1, uchar* p2, size_t ln, const char* msg)
 		}
 	return 0;
 }
+
+/* Hack to prevent OpenSSL memleak */
+void EVP_CIPHER_CTX_cleanup(void*);
 
 int main(int argc, char *argv[])
 {
