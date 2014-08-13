@@ -101,8 +101,6 @@ int compare(uchar* p1, uchar* p2, size_t ln, const char* msg)
 	return 0;
 }
 
-/* Hack to prevent OpenSSL memleak */
-void EVP_CIPHER_CTX_cleanup(void*);
 
 int main(int argc, char *argv[])
 {
@@ -153,6 +151,7 @@ int main(int argc, char *argv[])
 		printf("\nKey setup: ");
 		BENCH(alg->dec_key_setup(key, rkeys, alg->rounds), rep, 16*(1+alg->rounds));
 		printf("\nDecrypt  : ");
+		memset(vfy, 0, LN);
 		BENCH(setup_iv(alg, iv); alg->decrypt(rkeys, alg->rounds, iv, out, vfy, LN), rep/2+1, LN);
 		err += compare(vfy, in, LN, "AESNI plain");
 		if (alg->release)
@@ -175,6 +174,7 @@ int main(int argc, char *argv[])
 		printf("\nKey setup: ");
 		BENCH(alg->dec_key_setup(key, rkeys, alg->rounds), rep, 16*(1+alg->rounds));
 		printf("\nDecrypt  : ");
+		memset(vfy, 0, LN);
 		BENCH(setup_iv(alg, iv); alg->decrypt(rkeys, alg->rounds, iv, out2, vfy, LN), rep/2+1, LN);
 		err += compare(vfy, in, LN, "AES_C plain");
 		if (alg->release)
@@ -197,9 +197,10 @@ int main(int argc, char *argv[])
 		if (alg->release)
 			alg->release(rkeys, alg->rounds);
 		printf("\nKey setup: ");
-		BENCH(alg->dec_key_setup(key, rkeys, alg->rounds); EVP_CIPHER_CTX_cleanup(rkeys), rep, 16*(1+alg->rounds));
+		BENCH(alg->dec_key_setup(key, rkeys, alg->rounds); alg->release(rkeys, alg->rounds), rep, 16*(1+alg->rounds));
 		alg->dec_key_setup(key, rkeys, alg->rounds);
 		printf("\nDecrypt  : ");
+		memset(vfy, 0, LN);
 		BENCH(setup_iv(alg, iv); alg->decrypt(rkeys, alg->rounds, iv, out, vfy, LN), rep/2+1, LN);
 		err += compare(vfy, in, LN, "OSSL plain");
 		if (alg->release)
