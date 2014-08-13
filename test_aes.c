@@ -194,6 +194,8 @@ int main(int argc, char *argv[])
  		printf("\nEncrypt  : ");
 		BENCH(setup_iv(alg, iv); alg->encrypt(rkeys, alg->rounds, iv, in, out, LN), rep/2+1, LN);
 		err += compare(out2, out, LN, "AES_C vs OSSL");
+		if (alg->release)
+			alg->release(rkeys, alg->rounds);
 		printf("\nKey setup: ");
 		BENCH(alg->dec_key_setup(key, rkeys, alg->rounds); EVP_CIPHER_CTX_cleanup(rkeys), rep, 16*(1+alg->rounds));
 		alg->dec_key_setup(key, rkeys, alg->rounds);

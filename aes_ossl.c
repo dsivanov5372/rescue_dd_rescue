@@ -109,10 +109,9 @@ void AES_OSSL_Bits_EKey_ExpandX2(const EVP_CIPHER *cipher, const unsigned char* 
 	uchar usrkey2[32];
 	sha256_beout(usrkey2, &hv);
 	sha256_init(&hv);
-	EVP_CIPHER_CTX *evpctx2 = evpctx+1;
-	EVP_CIPHER_CTX_init(evpctx2);
-	EVP_EncryptInit_ex(evpctx2, cipher, NULL, usrkey2, NULL);
-	EVP_CIPHER_CTX_set_padding(evpctx2, 0);
+	EVP_CIPHER_CTX_init(evpctx+1);
+	EVP_EncryptInit_ex(evpctx+1, cipher, NULL, usrkey2, NULL);
+	EVP_CIPHER_CTX_set_padding(evpctx+1, 0);
 	memset(usrkey2, 0, 32);
 	asm("":::"memory");
 }
@@ -128,10 +127,9 @@ void AES_OSSL_Bits_DKey_ExpandX2(const EVP_CIPHER *cipher, const unsigned char* 
 	uchar usrkey2[32];
 	sha256_beout(usrkey2, &hv);
 	sha256_init(&hv);
-	EVP_CIPHER_CTX *evpctx2 = evpctx+1;
-	EVP_CIPHER_CTX_init(evpctx2);
-	EVP_DecryptInit_ex(evpctx2, cipher, NULL, usrkey2, NULL);
-	EVP_CIPHER_CTX_set_padding(evpctx2, 0);
+	EVP_CIPHER_CTX_init(evpctx+1);
+	EVP_DecryptInit_ex(evpctx+1, cipher, NULL, usrkey2, NULL);
+	EVP_CIPHER_CTX_set_padding(evpctx+1, 0);
 	memset(usrkey2, 0, 32);
 	asm("":::"memory");
 }
