@@ -6,138 +6,55 @@
 
 #include <netinet/in.h>
 
-void AES_OSSL_128_EKey_Expand(const unsigned char *userkey,
-			  	 unsigned char *ctx,
-				 unsigned int rounds)
+void AES_OSSL_Bits_EKey_Expand(const EVP_CIPHER *cipher, const unsigned char* userkey, unsigned char *ctx)
 {
 	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;
 	EVP_CIPHER_CTX_init(evpctx);
-	assert(rounds == AES_128_ROUNDS);
-	EVP_EncryptInit_ex(evpctx, EVP_aes_128_ecb(), NULL, userkey, NULL);
+	EVP_EncryptInit_ex(evpctx, cipher, NULL, userkey, NULL);
 	EVP_CIPHER_CTX_set_padding(evpctx, 0);
 }
-
-void AES_OSSL_128_DKey_Expand(const unsigned char *userkey,
-			  	 unsigned char *ctx,
-				 unsigned int rounds)
+void AES_OSSL_Bits_DKey_Expand(const EVP_CIPHER *cipher, const unsigned char* userkey, unsigned char *ctx)
 {
 	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;
 	EVP_CIPHER_CTX_init(evpctx);
-	assert(rounds == AES_128_ROUNDS);
-	EVP_DecryptInit_ex(evpctx, EVP_aes_128_ecb(), NULL, userkey, NULL);
+	EVP_DecryptInit_ex(evpctx, cipher, NULL, userkey, NULL);
 	EVP_CIPHER_CTX_set_padding(evpctx, 0);
 }
 
-void AES_OSSL_128_EKey_Expand_CBC(const unsigned char *userkey,
-			  	 unsigned char *ctx,
-				 unsigned int rounds)
-{
-	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;
-	EVP_CIPHER_CTX_init(evpctx);
-	assert(rounds == AES_128_ROUNDS);
-	EVP_EncryptInit_ex(evpctx, EVP_aes_128_cbc(), NULL, userkey, NULL);
-	EVP_CIPHER_CTX_set_padding(evpctx, 0);
+#define AES_OSSL_KEY_EX(BITS, ROUNDS, CHAIN)	\
+void AES_OSSL_##BITS##_EKey_Expand_##CHAIN (const unsigned char *userkey, unsigned char *ctx, unsigned int rounds)	\
+{							\
+	assert(rounds == ROUNDS);			\
+	AES_OSSL_Bits_EKey_Expand(EVP_aes_##BITS##_##CHAIN (), userkey, ctx);	\
+};							\
+void AES_OSSL_##BITS##_DKey_Expand_##CHAIN (const unsigned char *userkey, unsigned char *ctx, unsigned int rounds)	\
+{							\
+	assert(rounds == ROUNDS);			\
+	AES_OSSL_Bits_DKey_Expand(EVP_aes_##BITS##_##CHAIN (), userkey, ctx);	\
 }
 
-void AES_OSSL_128_DKey_Expand_CBC(const unsigned char *userkey,
-			  	 unsigned char *ctx,
-				 unsigned int rounds)
-{
-	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;
-	EVP_CIPHER_CTX_init(evpctx);
-	assert(rounds == AES_128_ROUNDS);
-	EVP_DecryptInit_ex(evpctx, EVP_aes_128_cbc(), NULL, userkey, NULL);
-	EVP_CIPHER_CTX_set_padding(evpctx, 0);
-}
-
-void AES_OSSL_128_Key_Expand_CTR(const unsigned char *userkey,
-			  	 unsigned char *ctx,
-				 unsigned int rounds)
-{
-	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;
-	EVP_CIPHER_CTX_init(evpctx);
-	assert(rounds == AES_128_ROUNDS);
-	EVP_EncryptInit_ex(evpctx, EVP_aes_128_ctr(), NULL, userkey, NULL);
-	EVP_CIPHER_CTX_set_padding(evpctx, 0);
-}
-
-void AES_OSSL_128_ECB_Encrypt(const unsigned char* ctx, unsigned int rounds,
-			         unsigned char* iv,
-			         const unsigned char* in, unsigned char* out,
-			         ssize_t len)
-{
-	int olen;
-	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;
-	EVP_EncryptUpdate(evpctx, out, &olen, in, len); 
-	/*; EVP_EncryptFinal(evpcctx, out+olen, &flen)*/
-}
-
-void AES_OSSL_128_ECB_Decrypt(const unsigned char* ctx, unsigned int rounds,
-			         unsigned char* iv,
-			         const unsigned char* in, unsigned char* out,
-			         ssize_t len)
-{
-	int olen;
-	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;
-	EVP_DecryptUpdate(evpctx, out, &olen, in, len); 
-	/*; EVP_DecryptFinal(evpcctx, out+olen, &flen)*/
-}
-
-void AES_OSSL_128_CBC_Encrypt(const unsigned char* ctx, unsigned int rounds,
-			         unsigned char* iv,
-			         const unsigned char* in, unsigned char* out,
-			         ssize_t len)
-{
-	int olen;
-	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;
-#if 1
-	memcpy(evpctx->oiv, iv, 16); memcpy(evpctx->iv, iv, 16);
-	/* FIXME */
-	//evpctx->cipher = EVP_aes_128_cbc();
-#else
-	EVP_EncryptInit_ex(evpctx, EVP_aes_128_cbc(), NULL, NULL, iv);
-#endif
-	EVP_EncryptUpdate(evpctx, out, &olen, in, len); 
-	/*; EVP_EncryptFinal(evpcctx, out+olen, &flen)*/
-}
-
-void AES_OSSL_128_CBC_Decrypt(const unsigned char* ctx, unsigned int rounds,
-			         unsigned char* iv,
-			         const unsigned char* in, unsigned char* out,
-			         ssize_t len)
-{
-	int olen;
-	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;
-#if 1
-	memcpy(evpctx->oiv, iv, 16); memcpy(evpctx->iv, iv, 16);
-	/* FIXME */
-	//evpctx->cipher = EVP_aes_128_cbc();
-#else
-	EVP_DecryptInit_ex(evpctx, EVP_aes_128_cbc(), NULL, NULL, iv);
-#endif
-	EVP_DecryptUpdate(evpctx, out, &olen, in, len); 
-	/*; EVP_DecryptFinal(evpcctx, out+olen, &flen)*/
-}
-
-
-void AES_OSSL_128_CTR_Crypt(const unsigned char* ctx, unsigned int rounds,
-			         unsigned char* iv,
-			         const unsigned char* in, unsigned char* out,
-			         ssize_t len)
-{
-	int olen;
-	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;
-	/* Only works for 32bit ctr values */
-	//evpctx->num = ntohl(*(int*)(iv+12));
-#if 1
-	memcpy(evpctx->oiv, iv, 16); memcpy(evpctx->iv, iv, 16);
-	/* FIXME */
-	//evpctx->cipher = EVP_aes_128_ctr();
-#else
-	EVP_EncryptInit_ex(evpctx, EVP_aes_128_ctr(), NULL, NULL, iv);
-#endif
-	EVP_EncryptUpdate(evpctx, out, &olen, in, len); 
-	/*; EVP_EncryptFinal(evpcctx, out+olen, &flen)*/
+#define AES_OSSL_CRYPT(BITCHAIN, IV)	\
+void AES_OSSL_##BITCHAIN##_Encrypt(const unsigned char* ctx, unsigned int rounds,	\
+			        unsigned char* iv, const unsigned char* in, 		\
+				unsigned char* out, ssize_t len)			\
+{								\
+	int olen;						\
+	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;		\
+	if (IV) {						\
+		memcpy(evpctx->oiv, iv, 16); memcpy(evpctx->iv, iv, 16);		\
+	}							\
+	EVP_EncryptUpdate(evpctx, out, &olen, in, len);		\
+};								\
+void AES_OSSL_##BITCHAIN##_Decrypt(const unsigned char* ctx, unsigned int rounds,	\
+			        unsigned char* iv, const unsigned char* in, 		\
+				unsigned char* out, ssize_t len)			\
+{								\
+	int olen;						\
+	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;		\
+	if (IV) {						\
+		memcpy(evpctx->oiv, iv, 16); memcpy(evpctx->iv, iv, 16);		\
+	}							\
+	EVP_DecryptUpdate(evpctx, out, &olen, in, len);		\
 }
 
 void AES_OSSL_Release(unsigned char *ctx, unsigned int rounds)
@@ -147,13 +64,49 @@ void AES_OSSL_Release(unsigned char *ctx, unsigned int rounds)
 	free(ctx);
 }
 
+AES_OSSL_KEY_EX(128, AES_128_ROUNDS, ecb);
+AES_OSSL_KEY_EX(128, AES_128_ROUNDS, cbc);
+AES_OSSL_KEY_EX(128, AES_128_ROUNDS, ctr);
+
+AES_OSSL_CRYPT(128_ECB, 0);
+AES_OSSL_CRYPT(128_CBC, 1);
+AES_OSSL_CRYPT(128_CTR, 1);
+
+AES_OSSL_KEY_EX(192, AES_192_ROUNDS, ecb);
+AES_OSSL_KEY_EX(192, AES_192_ROUNDS, cbc);
+AES_OSSL_KEY_EX(192, AES_192_ROUNDS, ctr);
+
+AES_OSSL_CRYPT(192_ECB, 0);
+AES_OSSL_CRYPT(192_CBC, 1);
+AES_OSSL_CRYPT(192_CTR, 1);
+
+AES_OSSL_KEY_EX(256, AES_256_ROUNDS, ecb);
+AES_OSSL_KEY_EX(256, AES_256_ROUNDS, cbc);
+AES_OSSL_KEY_EX(256, AES_256_ROUNDS, ctr);
+
+AES_OSSL_CRYPT(256_ECB, 0);
+AES_OSSL_CRYPT(256_CBC, 1);
+AES_OSSL_CRYPT(256_CTR, 1);
+
 #define EVP_CTX_SZ sizeof(EVP_CIPHER_CTX)
 
-aes_desc_t AES_OSSL_Methods[] = {{"AES128-ECB"  , 128, 10, EVP_CTX_SZ, AES_OSSL_128_EKey_Expand, AES_OSSL_128_DKey_Expand,
+aes_desc_t AES_OSSL_Methods[] = {{"AES128-ECB"  , 128, 10, EVP_CTX_SZ, AES_OSSL_128_EKey_Expand_ecb, AES_OSSL_128_DKey_Expand_ecb,
 							NULL, AES_OSSL_128_ECB_Encrypt, AES_OSSL_128_ECB_Decrypt, AES_OSSL_Release},
-			      {"AES128-CBC"  , 128, 10, EVP_CTX_SZ, AES_OSSL_128_EKey_Expand_CBC, AES_OSSL_128_DKey_Expand_CBC,
+				{"AES128-CBC"  , 128, 10, EVP_CTX_SZ, AES_OSSL_128_EKey_Expand_cbc, AES_OSSL_128_DKey_Expand_cbc,
 							NULL, AES_OSSL_128_CBC_Encrypt, AES_OSSL_128_CBC_Decrypt, AES_OSSL_Release},
-			      {"AES128-CTR"  , 128, 10, EVP_CTX_SZ, AES_OSSL_128_Key_Expand_CTR, AES_OSSL_128_Key_Expand_CTR,
-						AES_Gen_CTR_Prep, AES_OSSL_128_CTR_Crypt, AES_OSSL_128_CTR_Crypt, AES_OSSL_Release},
-			      {NULL, /* ... */}
+				{"AES128-CTR"  , 128, 10, EVP_CTX_SZ, AES_OSSL_128_EKey_Expand_ctr, AES_OSSL_128_EKey_Expand_ctr,
+						AES_Gen_CTR_Prep, AES_OSSL_128_CTR_Encrypt, AES_OSSL_128_CTR_Encrypt, AES_OSSL_Release},
+				{"AES192-ECB"  , 192, 12, EVP_CTX_SZ, AES_OSSL_192_EKey_Expand_ecb, AES_OSSL_192_DKey_Expand_ecb,
+							NULL, AES_OSSL_192_ECB_Encrypt, AES_OSSL_192_ECB_Decrypt, AES_OSSL_Release},
+				{"AES192-CBC"  , 192, 12, EVP_CTX_SZ, AES_OSSL_192_EKey_Expand_cbc, AES_OSSL_192_DKey_Expand_cbc,
+							NULL, AES_OSSL_192_CBC_Encrypt, AES_OSSL_192_CBC_Decrypt, AES_OSSL_Release},
+				{"AES192-CTR"  , 192, 12, EVP_CTX_SZ, AES_OSSL_192_EKey_Expand_ctr, AES_OSSL_192_EKey_Expand_ctr,
+						AES_Gen_CTR_Prep, AES_OSSL_192_CTR_Encrypt, AES_OSSL_192_CTR_Encrypt, AES_OSSL_Release},
+				{"AES256-ECB"  , 256, 14, EVP_CTX_SZ, AES_OSSL_256_EKey_Expand_ecb, AES_OSSL_256_DKey_Expand_ecb,
+							NULL, AES_OSSL_256_ECB_Encrypt, AES_OSSL_256_ECB_Decrypt, AES_OSSL_Release},
+				{"AES256-CBC"  , 256, 14, EVP_CTX_SZ, AES_OSSL_256_EKey_Expand_cbc, AES_OSSL_256_DKey_Expand_cbc,
+							NULL, AES_OSSL_256_CBC_Encrypt, AES_OSSL_256_CBC_Decrypt, AES_OSSL_Release},
+				{"AES256-CTR"  , 256, 14, EVP_CTX_SZ, AES_OSSL_256_EKey_Expand_ctr, AES_OSSL_256_EKey_Expand_ctr,
+						AES_Gen_CTR_Prep, AES_OSSL_256_CTR_Encrypt, AES_OSSL_256_CTR_Encrypt, AES_OSSL_Release},
+				{NULL, /* ... */}
 };
