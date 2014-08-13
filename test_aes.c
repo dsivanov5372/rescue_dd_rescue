@@ -269,7 +269,7 @@ int main(int argc, char *argv[])
 		BENCH(setup_iv(alg, iv); alg->encrypt(rkeys, alg->rounds, iv, in, out, LN), rep/2+1, LN);
 		err += compare(out2, out, LN, "AES_C vs OSSL");
 		printf("\nKey setup: ");
-		BENCH(alg->dec_key_setup(key, rkeys, alg->rounds); EVP_CIPHER_CTX_cleanup(rkeys), rep, 16*(1+alg->rounds));
+		BENCH(alg->dec_key_setup(key, rkeys, alg->rounds); alg->release(rkeys, alg->rounds), rep, 16*(1+alg->rounds));
 		alg->dec_key_setup(key, rkeys, alg->rounds);
 		printf("\nDecrypt  : ");
 		BENCH(setup_iv(alg, iv); alg->decrypt(rkeys, alg->rounds, iv, out, vfy, LN), rep/2+1, LN);
