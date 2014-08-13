@@ -364,6 +364,7 @@ check: $(TARGETS) find_nonzero md5 sha1 sha256 sha512
 	./dd_rescue -L ./libddr_hash.so=md5:hmacpwd=Jefe:chknm= TEST /dev/null
 	rm -f /tmp/dd_rescue CHECKSUMS.sha512 TEST HMACS.md5
 	if ./calchmac.py sha1 pass dd_rescue; then make check_hmac; else echo "Sorry, no more HMAC test due to missing python-hashlib support"; true; fi
+	make check_aes
 
 check_hmac: $(TARGETS)
 	FILES="*.c *.h *.po dd_rescue *.so"; \
@@ -457,3 +458,11 @@ check_lzo_fuzz: $(TARGETS) fuzz_lzo
 	# Intelligent fuzzing means starting from valid .lzo, and adding
 	#  distortions, with and without fixing checksums ...
 	./test_lzo_fuzz.sh
+
+
+ALGS = AES128-ECB AES128-CBC AES128-CTR AES128+-ECB AES128+-CBC AES128+-CTR AES128x2-ECB AES128x2-CBC AES128x2-CTR \
+	AES192-ECB AES192-CBC AES192-CTR AES192+-ECB AES192+-CBC AES192+-CTR AES192x2-ECB AES192x2-CBC AES192x2-CTR \
+	AES256-ECB AES256-CBC AES256-CTR AES256+-ECB AES256+-CBC AES256+-CTR AES256x2-ECB AES256x2-CBC AES256x2-CTR 
+
+check_aes: $(TARGETS) test_aes
+	for alg in $(ALGS); do ./test_aes $$alg 100000 || exit $$?; done
