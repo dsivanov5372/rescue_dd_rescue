@@ -87,7 +87,13 @@ AES_OSSL_CRYPT(256_ECB, 0);
 AES_OSSL_CRYPT(256_CBC, 1);
 AES_OSSL_CRYPT(256_CTR, 1);
 
-/* Double encryption */
+/* Double encryption 
+ * This only works in a straightforward way for ECB ...
+ * For the others we need to break up the loop:
+ * ECB: AES2(AES1(p)) == AESx2(p)
+ * CBC: AES2(IV2^AES1(IV1^p)) != AESx2(IV^p)
+ * CTR: AES2(CTR)^AES1(CTR)^p != AES2(AES1(CTR))^p == AESx2(CTR)^p
+ * */
 
 #include "sha256.h"
 

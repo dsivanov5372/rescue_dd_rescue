@@ -747,6 +747,7 @@ void static _debug_print(const __m128i m)
 #include <emmintrin.h>
 #include <smmintrin.h>
 
+#if 0
 /* CTR is big-endian */
 void AESNI_CTR_Prep_2(const unsigned char* iv, const unsigned char* nonce,
 		      unsigned char* ctr, unsigned long long val)
@@ -774,6 +775,7 @@ void AESNI_CTR_Prep_2(const unsigned char* iv, const unsigned char* nonce,
 	}
 #endif
 }
+#endif
 
 /* CTR is big-endian */
 void AESNI_CTR_Prep(const unsigned char* iv, unsigned char* ctr, unsigned long long val)
@@ -876,6 +878,7 @@ void AESNI_CTR_Crypt(const unsigned char* key, unsigned int rounds,
 }
 
 
+#if 0
 void AESNI_CTR_Crypt4(const unsigned char* in, unsigned char* out,
 		     unsigned char* ctr,
 		     ssize_t len, const unsigned char* key, unsigned int rounds)
@@ -952,7 +955,7 @@ void AESNI_CTR_Crypt_old(const unsigned char* in, unsigned char* out,
 	}
 	_mm_storeu_si128((__m128i*)ctr, cblk);
 }
-
+#endif
 
 #include "sha256.h"
 #include <assert.h>
@@ -992,7 +995,7 @@ __m128i Encrypt_BlockX2(const __m128i in, const unsigned char *ekey, unsigned in
 		tmp = _mm_aesenc_si128(tmp, rkeys[r]);
 	tmp = _mm_aesenclast_si128(tmp, rkeys[r]);
 	tmp = _mm_xor_si128(tmp, rkeys[++r]);
-	for (++r; r < rounds; ++r)
+	for (++r; r < rounds+1; ++r)
 		tmp = _mm_aesenc_si128(tmp, rkeys[r]);
 	return _mm_aesenclast_si128(tmp, rkeys[r]);
 }
@@ -1003,7 +1006,7 @@ __m128i Decrypt_BlockX2(const __m128i in, const unsigned char *dkey, unsigned in
 	int r;
 	const __m128i *rkeys = (__m128i*)dkey;
 	register __m128i tmp = _mm_xor_si128(in, rkeys[rounds/2+1]);
-	for (r = rounds/2+2; r < rounds; ++r)
+	for (r = rounds/2+2; r < rounds+1; ++r)
 		tmp = _mm_aesdec_si128(tmp, rkeys[r]);
 	tmp = _mm_aesdeclast_si128(tmp, rkeys[r]);
 	tmp = _mm_xor_si128(tmp, rkeys[0]);
@@ -1059,7 +1062,7 @@ void Encrypt_8BlocksX2(__m128i *i0, __m128i *i1, __m128i *i2, __m128i *i3,
 	*i5 = _mm_xor_si128(*i5, rk);
 	*i6 = _mm_xor_si128(*i6, rk);
 	*i7 = _mm_xor_si128(*i7, rk);
-	for (; r < rounds; ++r) {
+	for (; r < rounds+1; ++r) {
 		rk = _mm_loadu_si128(rkeys+r);
 		*i0 = _mm_aesenc_si128(*i0, rk);
 		*i1 = _mm_aesenc_si128(*i1, rk);
@@ -1100,7 +1103,7 @@ void Decrypt_8BlocksX2(__m128i *i0, __m128i *i1, __m128i *i2, __m128i *i3,
 	*i5 = _mm_xor_si128(*i5, rk);
 	*i6 = _mm_xor_si128(*i6, rk);
 	*i7 = _mm_xor_si128(*i7, rk);
-	for (r = rounds/2+2; r < rounds; ++r) {
+	for (r = rounds/2+2; r < rounds+1; ++r) {
 		rk = _mm_loadu_si128(rkeys+r);
 		*i0 = _mm_aesdec_si128(*i0, rk);
 		*i1 = _mm_aesdec_si128(*i1, rk);
@@ -1167,7 +1170,7 @@ void Decrypt_4BlocksX2(__m128i *i0, __m128i *i1, __m128i *i2, __m128i *i3,
 	*i1 = _mm_xor_si128(*i1, rk);
 	*i2 = _mm_xor_si128(*i2, rk);
 	*i3 = _mm_xor_si128(*i3, rk);
-	for (r = rounds/2+2; r < rounds; ++r) {
+	for (r = rounds/2+2; r < rounds+1; ++r) {
 		rk = _mm_loadu_si128(rkeys+r);
 		*i0 = _mm_aesdec_si128(*i0, rk);
 		*i1 = _mm_aesdec_si128(*i1, rk);
