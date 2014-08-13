@@ -18,13 +18,14 @@ void xor16(const uchar x1[16], const uchar x2[16], uchar xout[16])
 		*(ulong*)(xout+i) = *(ulong*)(x1+i) ^ *(ulong*)(x2+i);
 }
 
+/* PKCS padding */
 void fill_blk(const uchar *in, uchar bf[16], ssize_t len)
 {
 	uint i;
 	for (i = 0; i < len; ++i)
 		bf[i] = in[i];
 	for (; i < 16; ++i)
-		bf[i] = 0;
+		bf[i] = (16-len%16);
 }
 
 void AES_Gen_ECB_Enc(AES_Crypt_Blk_fn *cryptfn,
