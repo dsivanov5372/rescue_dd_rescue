@@ -1005,7 +1005,7 @@ __m128i Decrypt_BlockX2(const __m128i in, const unsigned char *dkey, unsigned in
 	register __m128i tmp = _mm_xor_si128(in, rkeys[rounds/2+1]);
 	for (r = rounds/2+2; r < rounds; ++r)
 		tmp = _mm_aesdec_si128(tmp, rkeys[r]);
-	tmp = _mm_aesdeclast_si128(tmp, rkeys[rounds]);
+	tmp = _mm_aesdeclast_si128(tmp, rkeys[r]);
 	tmp = _mm_xor_si128(tmp, rkeys[0]);
 	for (r = 1; r < rounds/2; ++r)
 		tmp = _mm_aesdec_si128(tmp, rkeys[r]);
