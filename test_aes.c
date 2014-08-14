@@ -59,9 +59,9 @@ void fillval(unsigned char* bf, ssize_t ln, unsigned int val)
 /* TIMING */
 #define BENCH(_routine, _rep, _ln)	\
 	fflush(stdout);			\
-	_routine;			\
+	/* _routine; */			\
 	gettimeofday(&t1, NULL);	\
-	for (i = 0; i < _rep; ++i) {	\
+	for (i = 0; i < (_rep); ++i) {	\
 		_routine; 		\
 		asm("":::"memory");	\
 	}				\
@@ -101,12 +101,14 @@ int compare(uchar* p1, uchar* p2, size_t ln, const char* msg)
 	return 0;
 }
 
+// Hack
+void EVP_CIPHER_CTX_set_padding(void* ctx, int pad);
 
 int main(int argc, char *argv[])
 {
 	int rep = REP;
 	unsigned int LN = DEF_LN;
-	unsigned char in[DEF_LN], out[DEF_LN], vfy[DEF_LN], out2[DEF_LN];
+	unsigned char in[DEF_LN+16], out[DEF_LN+16], vfy[DEF_LN+16], out2[DEF_LN+16];
 	unsigned char *key = (unsigned char*)"Test Key_123 is long enough even for AES-256";
         struct timeval t1, t2;
 	double tdiff; int i;
@@ -206,6 +208,13 @@ int main(int argc, char *argv[])
 		memset(vfy, 0, LN);
 		BENCH(setup_iv(alg, iv); alg->decrypt(rkeys, alg->rounds, iv, out, vfy, LN), rep/2+1, LN);
 		err += compare(vfy, in, LN, "OSSL plain");
+		/* Hack: Without padding */
+		alg->release(rkeys, alg->rounds);
+		alg->dec_key_setup(key, rkeys, alg->rounds);
+		memset(out+LN, 0, 16); EVP_CIPHER_CTX_set_padding(rkeys, 0);
+		setup_iv(alg, iv); alg->decrypt(rkeys, alg->rounds, iv, out, vfy, LN);
+		err += compare(vfy, in, LN, "OSSL plain");
+		/* End of Hack */
 		if (alg->release)
 			alg->release(rkeys, alg->rounds);
 		free(rkeys);
