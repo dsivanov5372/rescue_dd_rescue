@@ -54,12 +54,12 @@ typedef struct _aes_desc {
 /* Generic functions */
 void AES_Gen_ECB_Enc(AES_Crypt_Blk_fn *cryptfn,
 		     const uchar* rkeys, uint rounds,
-		     /* uchar *iv,*/ uint pad,
+		     uchar *iv /* unused */, uint pad,
 		     const uchar *input, uchar *output,
 		     ssize_t len, ssize_t *olen);
 void AES_Gen_ECB_Dec(AES_Crypt_Blk_fn *cryptfn,
 		     const uchar* rkeys, uint rounds,
-		     /*uchar *iv,*/ uint pad,
+		     char *iv /* unused */, uint pad,
 		     const uchar *input, uchar *output,
 		     ssize_t len, ssize_t *olen);
 void AES_Gen_CBC_Enc(AES_Crypt_Blk_fn *cryptfn,
@@ -72,11 +72,12 @@ void AES_Gen_CBC_Dec(AES_Crypt_Blk_fn *cryptfn,
 		     uchar *iv, uint pad,
 		     const uchar *input, uchar *output,
 		     ssize_t len, ssize_t *olen);
-void AES_Gen_CTR_Prep(const uchar nonce[16], uchar ctr[16], unsigned long long ival);
 void AES_Gen_CTR_Crypt(AES_Crypt_Blk_fn *cryptfn,
 			const uchar *rkeys, uint rounds,
-			uchar *ctr, /*uint pad,*/
+			uchar *ctr, uint pad /* unused */,
 			const uchar *input, uchar *output,
-			ssize_t len/*, ssize_t *olen*/);
+			ssize_t len, ssize_t *olen /* unused */);
+void AES_Gen_CTR_Prep(const uchar nonce[16], uchar ctr[16], unsigned long long ival);
 void AES_Gen_Release(uchar *rkeys, uint rounds);
+void dec_fix_olen_pad(ssize_t *olen, uint pad, const uchar *output);
 #endif
