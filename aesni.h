@@ -70,13 +70,13 @@ void AESNI_ECB_Decrypt_old(const unsigned char* in, unsigned char* out,
 			   ssize_t len, const unsigned char* key, unsigned int rounds);
 /* ECB, 8 16byte blocks at a time */
 void AESNI_ECB_Encrypt(const unsigned char* key, unsigned int rounds,
-			unsigned char *iv,	/* unused */
+			unsigned char *iv /* unused */, unsigned int pad,
 			const unsigned char* in, unsigned char* out,
-			ssize_t len);
+			ssize_t len, ssize_t *olen);
 void AESNI_ECB_Decrypt(const unsigned char* key, unsigned int rounds,
-			unsigned char *iv,	/* unused */
+			unsigned char *iv /* unused */, unsigned int pad,
 			const unsigned char* in, unsigned char* out,
-			ssize_t len);
+			ssize_t len, ssize_t *olen);
 /* CBC */
 void AESNI_CBC_Encrypt(const unsigned char* key, unsigned int rounds,
 			unsigned char *iv,
@@ -101,13 +101,13 @@ void AESNI_CTR_Crypt_old(const unsigned char* in, unsigned char* out,
 /* Double encrpytion */
 /* ECB */
 void AESNI_ECB_EncryptX2(const unsigned char* key, unsigned int rounds,
-			unsigned char *iv,	/* unused */
+			unsigned char *iv /* unused */, unsigned int pad,
 			const unsigned char* in, unsigned char* out,
-			ssize_t len);
+			ssize_t len, ssize_t *olen);
 void AESNI_ECB_DecryptX2(const unsigned char* key, unsigned int rounds,
-			unsigned char *iv,	/* unused */
+			unsigned char *iv /* unused */, unsigned int pad,
 			const unsigned char* in, unsigned char* out,
-			ssize_t len);
+			ssize_t len, ssize_t *olen);
 /* CBC */
 void AESNI_CBC_EncryptX2(const unsigned char* key, unsigned int rounds,
 			unsigned char *iv,

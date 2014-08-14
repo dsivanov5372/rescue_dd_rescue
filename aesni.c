@@ -565,9 +565,9 @@ void AESNI_ECB_Decrypt_old(const unsigned char* in, unsigned char* out,
 inline
 void AESNI_ECB_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt, int enc,
 			  const unsigned char* key, unsigned int rounds,
-			  unsigned char *iv,
+			  unsigned char *iv, unsigned int pad,
 			  const unsigned char* in, unsigned char* out,
-			  ssize_t len)
+			  ssize_t len, ssize_t *olen)
 {
 	while (len >= 8*sizeof(__m128i)) {
 		__m128i blk0 = _mm_loadu_si128((const __m128i*)in);
@@ -591,18 +591,19 @@ void AESNI_ECB_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt, int enc,
 		in  += 8*sizeof(__m128i);
 		out += 8*sizeof(__m128i);
 	}
-	while (len > 0) {
+	while (len > 0 || (len == 0 && pad == PAD_ALWAYS)) {
 		register __m128i blk = _mm_loadu_si128((const __m128i*)in);
-		if (len < sizeof(__m128) && enc) {
+		if (enc && len < sizeof(__m128i)) {
 			__m128i mask = _mkmask(len);
 			blk = _mm_and_si128(blk, mask);
-			if (pkcs7_pad) {
+			if (pad) {
 				__m128i pad = _mkpad(len);
 				__m128i imask = _mm_set_epi64x(0xffffffffffffffffULL, 0xffffffffffffffffULL);
 				imask = _mm_xor_si128(imask, mask);
 				pad = _mm_and_si128(pad, imask);
 				blk = _mm_or_si128(blk, pad);
 			}
+			*olen += 16-(len&15);
 		}
 		blk = crypt(blk, key, rounds);
 		_mm_storeu_si128((__m128i*)out, blk);
@@ -610,32 +611,26 @@ void AESNI_ECB_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt, int enc,
 		in  += sizeof(__m128i);
 		out += sizeof(__m128i);
 	}
-	if (pkcs7_pad && always_pad && !len) {
-		if (enc) {
-			/* TODO: Add 0x10 - filled block */
-			abort();
-		} else {
-			/* TODO: Remove trailing pad */
-		}
-	}
+	if (!enc && pad) 
+		dec_fix_olen_pad(olen, pad, out);
 }
 
 void AESNI_ECB_Encrypt(const unsigned char* key, unsigned int rounds,
-			unsigned char *iv,
+			unsigned char *iv, unsigned int pad,
 			const unsigned char* in, unsigned char* out,
-			ssize_t len)
+			ssize_t len, ssize_t *olen)
 {
 	AESNI_ECB_Crypt_Tmpl(Encrypt_8Blocks, Encrypt_Block, 1,
-			     key, rounds, iv, in, out, len);
+			     key, rounds, iv, pad, in, out, len, olen);
 }
 
 void AESNI_ECB_Decrypt(const unsigned char* key, unsigned int rounds,
-			unsigned char *iv,
+			unsigned char *iv, unsigned int pad,
 			const unsigned char* in, unsigned char* out,
-			ssize_t len)
+			ssize_t len, ssize_t *olen)
 {
 	AESNI_ECB_Crypt_Tmpl(Decrypt_8Blocks, Decrypt_Block, 0,
-			     key, rounds, iv, in, out, len);
+			     key, rounds, iv, pad, in, out, len, olen);
 }
 
 #if 0
@@ -1238,17 +1233,19 @@ void Decrypt_4BlocksX2(__m128i *i0, __m128i *i1, __m128i *i2, __m128i *i3,
 }
 
 void AESNI_ECB_EncryptX2(const uchar* rkeys, unsigned int rounds,
-			 uchar *iv, const uchar *in, uchar *out, ssize_t len)
+			 uchar *iv, uint pad, const uchar *in, uchar *out, 
+			 ssize_t len, ssize_t *olen)
 {
 	return AESNI_ECB_Crypt_Tmpl(Encrypt_8BlocksX2, Encrypt_BlockX2, 1,
-				    rkeys, rounds, iv, in, out, len);
+				    rkeys, rounds, iv, pad, in, out, len, olen);
 }
 
 void AESNI_ECB_DecryptX2(const uchar* rkeys, unsigned int rounds,
-			 uchar *iv, const uchar *in, uchar *out, ssize_t len)
+			 uchar *iv, uint pad, const uchar *in, uchar *out, 
+			 ssize_t len, ssize_t *olen)
 {
 	return AESNI_ECB_Crypt_Tmpl(Decrypt_8BlocksX2, Decrypt_BlockX2, 0,
-				    rkeys, rounds, iv, in, out, len);
+				    rkeys, rounds, iv, pad, in, out, len, olen);
 }
 
 void AESNI_CBC_EncryptX2(const uchar* rkeys, unsigned int rounds,

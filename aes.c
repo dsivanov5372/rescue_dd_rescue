@@ -45,7 +45,7 @@ void AES_Gen_ECB_Enc(AES_Crypt_Blk_fn *cryptfn,
 		uchar in[16];
 		fill_blk(input, in, len, pad);
 		cryptfn(rkeys, rounds, in, output);
-		*olen += (16-len&15);
+		*olen += 16-(len&15);
 	}
 }
 
