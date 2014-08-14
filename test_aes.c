@@ -295,7 +295,7 @@ int main(int argc, char *argv[])
 		BENCH(setup_iv(alg, iv); alg->decrypt(rkeys, alg->rounds, iv, PAD_ZERO, out, vfy, LN+1, &OLN), rep/2+1, LN);
 		assert(OLN == LN+1);
 		err += compare(vfy, in, LN, "OSSL plain");
-		if (vfy[LN] != 0 /*SHIFT*/)
+		if (vfy[LN] != 0 /*SHIFT*/ && !alg->iv_prep)
 			printf("\n Padding broken! %02x\n", vfy[LN]);
 		if (alg->release)
 			alg->release(rkeys, alg->rounds);
