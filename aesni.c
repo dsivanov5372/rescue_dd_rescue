@@ -563,7 +563,7 @@ void AESNI_ECB_Decrypt_old(const unsigned char* in, unsigned char* out,
 
 
 inline
-void AESNI_ECB_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt, int prezero,
+void AESNI_ECB_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt, int enc,
 			  const unsigned char* key, unsigned int rounds,
 			  unsigned char *iv,
 			  const unsigned char* in, unsigned char* out,
@@ -593,7 +593,7 @@ void AESNI_ECB_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt, int preze
 	}
 	while (len > 0) {
 		register __m128i blk = _mm_loadu_si128((const __m128i*)in);
-		if (len < sizeof(__m128) && prezero) {
+		if (len < sizeof(__m128) && enc) {
 			__m128i mask = _mkmask(len);
 			blk = _mm_and_si128(blk, mask);
 			if (pkcs7_pad) {
@@ -609,6 +609,14 @@ void AESNI_ECB_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt, int preze
 		len -= sizeof(__m128i);
 		in  += sizeof(__m128i);
 		out += sizeof(__m128i);
+	}
+	if (pkcs7_pad && always_pad && !len) {
+		if (enc) {
+			/* TODO: Add 0x10 - filled block */
+			abort();
+		} else {
+			/* TODO: Remove trailing pad */
+		}
 	}
 }
 

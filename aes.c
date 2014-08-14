@@ -11,8 +11,6 @@
 #include <netinet/in.h>
 #include <stdlib.h>
 
-int pkcs7_pad = 1;
-
 void xor16(const uchar x1[16], const uchar x2[16], uchar xout[16])
 {
 	uint i;
@@ -21,10 +19,10 @@ void xor16(const uchar x1[16], const uchar x2[16], uchar xout[16])
 }
 
 /* PKCS padding */
-void fill_blk(const uchar *in, uchar bf[16], ssize_t len)
+void fill_blk(const uchar *in, uchar bf[16], ssize_t len, uint pad)
 {
 	uint i;
-	uchar by = pkcs7_pad? 16-(len&0x0f) : 0;
+	uchar by = pad? 16-(len&0x0f) : 0;
 	for (i = 0; i < len; ++i)
 		bf[i] = in[i];
 	for (; i < 16; ++i)
@@ -33,35 +31,59 @@ void fill_blk(const uchar *in, uchar bf[16], ssize_t len)
 
 void AES_Gen_ECB_Enc(AES_Crypt_Blk_fn *cryptfn,
 		     const uchar* rkeys, uint rounds,
-		     uchar* iv,
+		     /*uchar *iv,*/ uint pad,
 		     const uchar *input, uchar *output,
-		     ssize_t len)
+		     ssize_t len, ssize_t *olen)
 {
+	*olen = len;
 	while (len >= 16) {
 		cryptfn(rkeys, rounds, input, output);
 		len -= 16; input += 16; output += 16;
 	}
-	if (len) {
+	if (len || pad == PAD_ALWAYS) {
 		uchar in[16];
-		fill_blk(input, in, len);
+		fill_blk(input, in, len, pad);
 		cryptfn(rkeys, rounds, in, output);
+		*olen += (16-len&15);
 	}
 }
 
 void AES_Gen_ECB_Dec(AES_Crypt_Blk_fn *cryptfn,
 		     const uchar* rkeys, uint rounds,
-		     uchar* iv,
+		     /*uchar* iv,*/ uint pad,
 		     const uchar *input, uchar *output,
-		     ssize_t len)
+		     ssize_t len, ssize_t *olen)
 {
+	*olen = len;
 	while (len >= 16) {
 		cryptfn(rkeys, rounds, input, output);
 		len -= 16; input += 16; output += 16;
 	}
 	if (len) {
-		//uchar out[16];
 		cryptfn(rkeys, rounds, input, output);
-		//memcpy(output, out, len);
+		len -= 16; input += 16; output += 16;
+	}
+	if (pad) {
+		uchar last = *(output-1);
+		if (last > 0x10)
+			fprintf(stderr, "Illegal padding! (%02x)\n", last);
+		else {
+			int i;
+			for (i = 1; i < last; ++i) {
+				if (*(output-1-i) != last) {
+					fprintf(stderr, "Inconsistent padding! (%02x@-%i vs. %02x)\n",
+						*(output-1-i), i, last);
+					i = 0;
+					break;
+				}
+				if (!i)
+					return;
+				if (last == 1 && pad != PAD_ALWAYS)
+					fprintf(stderr, "Warn: 1/256 chance of misdetecting padding!\n");
+				if (*olen & 0x0f)
+					*olen += 16-(*olen&0x0f);
+				*olen -= last;
+		}
 	}
 }
 
