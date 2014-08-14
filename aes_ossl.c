@@ -18,7 +18,7 @@ void AES_OSSL_Bits_DKey_Expand(const EVP_CIPHER *cipher, const unsigned char* us
 	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;
 	EVP_CIPHER_CTX_init(evpctx);
 	EVP_DecryptInit_ex(evpctx, cipher, NULL, userkey, NULL);
-	EVP_CIPHER_CTX_set_padding(evpctx, 0);
+	//EVP_CIPHER_CTX_set_padding(evpctx, 0);
 }
 
 #define CHECK_ERR(x)		\
@@ -55,7 +55,7 @@ void AES_OSSL_##BITCHAIN##_Encrypt(const unsigned char* ctx, unsigned int rounds
 	CHECK_ERR(EVP_EncryptUpdate(evpctx, out, &olen, in, len));			\
 	CHECK_ERR2(EVP_EncryptFinal, out, olen, elen);		\
 	if (olen+elen < len)					\
-		fprintf(stderr, "Short encryption %i+%i < %zi\n",\
+		fprintf(stderr, "Encryption length mismatch %i+%i != %zi\n",\
 			olen, elen, len);			\
 };								\
 void AES_OSSL_##BITCHAIN##_Decrypt(const unsigned char* ctx, unsigned int rounds,	\
@@ -67,10 +67,10 @@ void AES_OSSL_##BITCHAIN##_Decrypt(const unsigned char* ctx, unsigned int rounds
 	if (IV) {						\
 		memcpy(evpctx->oiv, iv, 16); memcpy(evpctx->iv, iv, 16);		\
 	}							\
-	CHECK_ERR(EVP_DecryptUpdate(evpctx, out, &olen, in, len));			\
+	CHECK_ERR(EVP_DecryptUpdate(evpctx, out, &olen, in, len+16-(len&0x0f)));	\
 	CHECK_ERR2(EVP_DecryptFinal, out, olen, elen);		\
-	if (olen+elen < len)					\
-		fprintf(stderr, "Short decryption %i+%i < %zi\n",\
+	if (olen+elen != len)					\
+		fprintf(stderr, "Decryption length mismatch %i+%i != %zi\n",\
 			olen, elen, len);			\
 }
 
