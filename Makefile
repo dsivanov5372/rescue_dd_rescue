@@ -270,6 +270,9 @@ aesni.o: aesni.c aesni.h aes.h sha256.h config.h
 aes_c.o: aes_c.c aes_c.h aes.h sha256.h config.h
 	$(CC) $(CFLAGS) -fpie $(FULL_UNROLL) -O3 -c $<
 
+aes_ossl.o: aes_ossl.c aes_ossl.h aes.h sha256.h config.h
+	$(CC) $(CFLAGS) -fpie -O3 -c $<
+
 distclean: clean
 	rm -f *~ config.h config.h.in config.status config.log configure
 	rm -rf autom4te.cache

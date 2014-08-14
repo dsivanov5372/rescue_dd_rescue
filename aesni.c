@@ -569,6 +569,7 @@ void AESNI_ECB_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt, int enc,
 			  const unsigned char* in, unsigned char* out,
 			  ssize_t len, ssize_t *olen)
 {
+	*olen = len;
 	while (len >= 8*sizeof(__m128i)) {
 		__m128i blk0 = _mm_loadu_si128((const __m128i*)in);
 		__m128i blk1 = _mm_loadu_si128((const __m128i*)(in+sizeof(__m128i)));
@@ -597,11 +598,11 @@ void AESNI_ECB_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt, int enc,
 			__m128i mask = _mkmask(len);
 			blk = _mm_and_si128(blk, mask);
 			if (pad) {
-				__m128i pad = _mkpad(len);
+				__m128i padv = _mkpad(len);
 				__m128i imask = _mm_set_epi64x(0xffffffffffffffffULL, 0xffffffffffffffffULL);
 				imask = _mm_xor_si128(imask, mask);
-				pad = _mm_and_si128(pad, imask);
-				blk = _mm_or_si128(blk, pad);
+				padv = _mm_and_si128(padv, imask);
+				blk = _mm_or_si128(blk, padv);
 			}
 			*olen += 16-(len&15);
 		}
@@ -687,8 +688,15 @@ void AESNI_CBC_Encrypt_Tmpl(crypt_blk_fn *encrypt,
 		register __m128i dat = _mm_loadu_si128((const __m128i*)in);
 		__m128i mask = _mkmask(len);
 		dat = _mm_and_si128(dat, mask);
+		if (pad) {
+			__m128i padv = _mkpad(len);
+			__m128i imask = _mm_set_epi64x(0xffffffffffffffffULL, 0xffffffffffffffffULL);
+			imask = _mm_xor_si128(imask, mask);
+			padv = _mm_and_si128(padv, imask);
+			dat = _mm_or_si128(dat, padv);
+		}
 		ivb = _mm_xor_si128(ivb, dat);
-		ivb = Encrypt_Block(ivb, key, rounds);
+		ivb = encrypt(ivb, key, rounds);
 		_mm_storeu_si128((__m128i*)out, ivb);
 		*olen += 16-(*olen&15);
 	}

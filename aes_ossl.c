@@ -11,14 +11,12 @@ void AES_OSSL_Bits_EKey_Expand(const EVP_CIPHER *cipher, const unsigned char* us
 	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;
 	EVP_CIPHER_CTX_init(evpctx);
 	EVP_EncryptInit_ex(evpctx, cipher, NULL, userkey, NULL);
-	//EVP_CIPHER_CTX_set_padding(evpctx, 0);
 }
 void AES_OSSL_Bits_DKey_Expand(const EVP_CIPHER *cipher, const unsigned char* userkey, unsigned char *ctx)
 {
 	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;
 	EVP_CIPHER_CTX_init(evpctx);
 	EVP_DecryptInit_ex(evpctx, cipher, NULL, userkey, NULL);
-	//EVP_CIPHER_CTX_set_padding(evpctx, 0);
 }
 
 #define CHECK_ERR(x)		\
@@ -42,36 +40,59 @@ void AES_OSSL_##BITS##_DKey_Expand_##CHAIN (const unsigned char *userkey, unsign
 	AES_OSSL_Bits_DKey_Expand(EVP_aes_##BITS##_##CHAIN (), userkey, ctx);	\
 }
 
-#define AES_OSSL_CRYPT(BITCHAIN, IV)	\
+#define AES_OSSL_CRYPT(BITCHAIN, IV, DOPAD)	\
 void AES_OSSL_##BITCHAIN##_Encrypt(const unsigned char* ctx, unsigned int rounds,	\
-			        unsigned char* iv, const unsigned char* in, 		\
-				unsigned char* out, ssize_t len)			\
+			        unsigned char* iv, unsigned int pad, 			\
+				const unsigned char* in, unsigned char* out, 		\
+				ssize_t len, ssize_t *flen)				\
 {								\
 	int olen, elen, oerr;					\
 	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;		\
+	EVP_CIPHER_CTX_set_padding(evpctx, DOPAD? pad: 0);	\
 	if (IV) {						\
 		memcpy(evpctx->oiv, iv, 16); memcpy(evpctx->iv, iv, 16);		\
 	}							\
-	CHECK_ERR(EVP_EncryptUpdate(evpctx, out, &olen, in, len));			\
-	CHECK_ERR2(EVP_EncryptFinal, out, olen, elen);		\
+       	if (DOPAD && !pad && (len&15)) {			\
+		CHECK_ERR(EVP_EncryptUpdate(evpctx, out, &olen, in, len-(len&15)));	\
+		uchar ibf[16];					\
+		memcpy(ibf, in+olen, len&15);			\
+		memset(ibf+(len&15), 0, 16-(len&15));		\
+		CHECK_ERR(EVP_EncryptUpdate(evpctx, out+olen, &elen, ibf, 16));		\
+	} else {									\
+		CHECK_ERR(EVP_EncryptUpdate(evpctx, out, &olen, in, len));		\
+		CHECK_ERR2(EVP_EncryptFinal, out, olen, elen);				\
+	}							\
+	*flen = olen+elen;					\
+	if (DOPAD && pad == PAD_ASNEEDED && !(len&15))		\
+		*flen -= 16;					\
 	if (olen+elen < len)					\
 		fprintf(stderr, "Encryption length mismatch %i+%i != %zi\n",\
 			olen, elen, len);			\
 };								\
 void AES_OSSL_##BITCHAIN##_Decrypt(const unsigned char* ctx, unsigned int rounds,	\
-			        unsigned char* iv, const unsigned char* in, 		\
-				unsigned char* out, ssize_t len)			\
+			        unsigned char* iv, unsigned int pad,			\
+				const unsigned char* in, unsigned char* out,		\
+	       			ssize_t len, ssize_t *flen)				\
 {								\
-	int olen, elen, oerr;					\
+	int olen, elen = 0, oerr;				\
 	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;		\
+	EVP_CIPHER_CTX_set_padding(evpctx, DOPAD?pad:0);	\
 	if (IV) {						\
 		memcpy(evpctx->oiv, iv, 16); memcpy(evpctx->iv, iv, 16);		\
 	}							\
-	CHECK_ERR(EVP_DecryptUpdate(evpctx, out, &olen, in, len+16-(len&0x0f)));	\
+	if (DOPAD && pad == PAD_ALWAYS)	{			\
+		CHECK_ERR(EVP_DecryptUpdate(evpctx, out, &olen, in, len+16-(len&0x0f)));\
+	} else {						\
+		CHECK_ERR(EVP_DecryptUpdate(evpctx, out, &olen, in, (len&15)? len+16-(len&0x0f): len));\
+	}							\
 	CHECK_ERR2(EVP_DecryptFinal, out, olen, elen);		\
-	if (olen+elen != len)					\
-		fprintf(stderr, "Decryption length mismatch %i+%i != %zi\n",\
-			olen, elen, len);			\
+	if (DOPAD && pad) {					\
+		*flen = olen + elen;				\
+		if (olen+elen != len)				\
+			fprintf(stderr, "Decryption length mismatch %i+%i != %zi\n",\
+				olen, elen, len);		\
+	} else							\
+		*flen = len;					\
 }
 
 void AES_OSSL_Release(unsigned char *ctx, unsigned int rounds)
@@ -84,25 +105,25 @@ AES_OSSL_KEY_EX(128, AES_128_ROUNDS, ecb);
 AES_OSSL_KEY_EX(128, AES_128_ROUNDS, cbc);
 AES_OSSL_KEY_EX(128, AES_128_ROUNDS, ctr);
 
-AES_OSSL_CRYPT(128_ECB, 0);
-AES_OSSL_CRYPT(128_CBC, 1);
-AES_OSSL_CRYPT(128_CTR, 1);
+AES_OSSL_CRYPT(128_ECB, 0, 1);
+AES_OSSL_CRYPT(128_CBC, 1, 1);
+AES_OSSL_CRYPT(128_CTR, 1, 0);
 
 AES_OSSL_KEY_EX(192, AES_192_ROUNDS, ecb);
 AES_OSSL_KEY_EX(192, AES_192_ROUNDS, cbc);
 AES_OSSL_KEY_EX(192, AES_192_ROUNDS, ctr);
 
-AES_OSSL_CRYPT(192_ECB, 0);
-AES_OSSL_CRYPT(192_CBC, 1);
-AES_OSSL_CRYPT(192_CTR, 1);
+AES_OSSL_CRYPT(192_ECB, 0, 1);
+AES_OSSL_CRYPT(192_CBC, 1, 1);
+AES_OSSL_CRYPT(192_CTR, 1, 0);
 
 AES_OSSL_KEY_EX(256, AES_256_ROUNDS, ecb);
 AES_OSSL_KEY_EX(256, AES_256_ROUNDS, cbc);
 AES_OSSL_KEY_EX(256, AES_256_ROUNDS, ctr);
 
-AES_OSSL_CRYPT(256_ECB, 0);
-AES_OSSL_CRYPT(256_CBC, 1);
-AES_OSSL_CRYPT(256_CTR, 1);
+AES_OSSL_CRYPT(256_ECB, 0, 1);
+AES_OSSL_CRYPT(256_CBC, 1, 1);
+AES_OSSL_CRYPT(256_CTR, 1, 0);
 
 /* Double encryption 
  * This only works in a straightforward way for ECB ...
@@ -166,34 +187,59 @@ void AES_OSSL_##BITS##_DKey_ExpandX2_##CHAIN (const unsigned char *userkey, unsi
 
 #define AES_OSSL_CRYPT2(BITCHAIN, IV)	\
 void AES_OSSL_##BITCHAIN##_EncryptX2(const unsigned char* ctx, unsigned int rounds,	\
-			        unsigned char* iv, const unsigned char* in, 		\
-				unsigned char* out, ssize_t len)			\
+			        unsigned char* iv, unsigned int pad,			\
+				const unsigned char* in, unsigned char* out,		\
+	       			ssize_t len, ssize_t *flen)				\
 {								\
 	int olen, elen;						\
 	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;		\
+	EVP_CIPHER_CTX_set_padding(evpctx, pad);		\
+	EVP_CIPHER_CTX_set_padding(evpctx+1, pad);		\
 	if (IV) {						\
 		memcpy(evpctx->oiv, iv, 16); memcpy(evpctx->iv, iv, 16);		\
 		memcpy((evpctx+1)->oiv, iv, 16); memcpy((evpctx+1)->iv, iv, 16);	\
 	}							\
-	EVP_EncryptUpdate(evpctx, out, &olen, in, len);		\
-	EVP_EncryptFinal(evpctx, out+olen, &elen);		\
+       	if (!pad && (len&15)) {					\
+		EVP_EncryptUpdate(evpctx, out, &olen, in, len-(len&15));		\
+		uchar ibf[16];					\
+		memcpy(ibf, in+olen, len&15);			\
+		memset(ibf+(len&15), 0, 16-(len&15));		\
+		EVP_EncryptUpdate(evpctx, out+olen, &elen, ibf, 16);			\
+	} else {						\
+		EVP_EncryptUpdate(evpctx, out, &olen, in, len);	\
+		EVP_EncryptFinal(evpctx, out+olen, &elen);	\
+	}							\
 	EVP_EncryptUpdate(evpctx+1, out, &olen, out, olen+elen);\
 	EVP_EncryptFinal(evpctx+1, out+olen, &elen);		\
+	*flen = olen+elen;					\
+	if (pad == PAD_ASNEEDED && !(len&15))			\
+		*flen -= 16;					\
 };								\
 void AES_OSSL_##BITCHAIN##_DecryptX2(const unsigned char* ctx, unsigned int rounds,	\
-			        unsigned char* iv, const unsigned char* in, 		\
-				unsigned char* out, ssize_t len)			\
+			        unsigned char* iv, unsigned int pad,			\
+				const unsigned char* in, unsigned char* out,		\
+	       			ssize_t len, ssize_t *flen)				\
 {								\
 	int olen, elen;						\
 	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;		\
+	EVP_CIPHER_CTX_set_padding(evpctx+1, pad);		\
+	EVP_CIPHER_CTX_set_padding(evpctx, pad);		\
 	if (IV) {						\
-		memcpy(evpctx->oiv, iv, 16); memcpy(evpctx->iv, iv, 16);		\
 		memcpy((evpctx+1)->oiv, iv, 16); memcpy((evpctx+1)->iv, iv, 16);	\
+		memcpy(evpctx->oiv, iv, 16); memcpy(evpctx->iv, iv, 16);		\
 	}							\
-	EVP_DecryptUpdate(evpctx+1, out, &olen, in, len);	\
+	if (pad == PAD_ALWAYS)	{				\
+		CHECK_ERR(EVP_DecryptUpdate(evpctx+1, out, &olen, in, len+16-(len&0x0f)));\
+	} else {						\
+		CHECK_ERR(EVP_DecryptUpdate(evpctx+1, out, &olen, in, (len&15)? len+16-(len&0x0f): len));\
+	}							\
 	EVP_DecryptFinal(evpctx+1, out+olen, &elen);		\
 	EVP_DecryptUpdate(evpctx, out, &olen, out, olen+elen);	\
 	EVP_DecryptFinal(evpctx, out+olen, &elen);		\
+	if (pad)						\
+		*flen = olen+elen;				\
+	else							\
+		*flen = len;					\
 }
 
 void AES_OSSL_ReleaseX2(unsigned char *ctx, unsigned int rounds)
@@ -253,16 +299,24 @@ void AES_OSSL_Blk_DecryptX2(const unsigned char *ctx, unsigned int rounds,
 
 #define AES_OSSL_DECL_CBC_X2(BITS)							\
 void AES_OSSL_##BITS##_CBC_EncryptX2(const unsigned char *ctx, unsigned int rounds,	\
-				     unsigned char *iv, const unsigned char* in,	\
-				     unsigned char *out, ssize_t len)			\
+				     unsigned char *iv, unsigned int pad,		\
+				     const unsigned char* in, unsigned char *out,	\
+	       			     ssize_t len, ssize_t *olen)			\
 {											\
-	AES_Gen_CBC_Enc(AES_OSSL_Blk_EncryptX2, ctx, rounds, iv, in, out, len);		\
+	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;					\
+	EVP_CIPHER_CTX_set_padding(evpctx, 0);						\
+	EVP_CIPHER_CTX_set_padding(evpctx+1, 0);					\
+	AES_Gen_CBC_Enc(AES_OSSL_Blk_EncryptX2, ctx, rounds, iv, pad, in, out, len, olen);	\
 };											\
 void AES_OSSL_##BITS##_CBC_DecryptX2(const unsigned char *ctx, unsigned int rounds,	\
-				     unsigned char *iv, const unsigned char* in,	\
-				     unsigned char *out, ssize_t len)			\
+				     unsigned char *iv, unsigned int pad,		\
+				     const unsigned char* in, unsigned char *out,	\
+	       			     ssize_t len, ssize_t *olen)			\
 {											\
-	AES_Gen_CBC_Dec(AES_OSSL_Blk_DecryptX2, ctx, rounds, iv, in, out, len);		\
+	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;					\
+	EVP_CIPHER_CTX_set_padding(evpctx+1, 0);					\
+	EVP_CIPHER_CTX_set_padding(evpctx, 0);						\
+	AES_Gen_CBC_Dec(AES_OSSL_Blk_DecryptX2, ctx, rounds, iv, pad, in, out, len, olen);	\
 }
 
 AES_OSSL_DECL_CBC_X2(128);
@@ -272,9 +326,14 @@ AES_OSSL_DECL_CBC_X2(256);
 
 #define AES_OSSL_DECL_CTR_X2(BITS)							\
 void AES_OSSL_##BITS##_CTR_CryptX2(const unsigned char *ctx, unsigned int rounds,	\
-				     unsigned char *iv, const unsigned char* in,	\
-				     unsigned char *out, ssize_t len)			\
+				     unsigned char *iv, unsigned int pad,		\
+				     const unsigned char* in, unsigned char *out,	\
+	       			     ssize_t len, ssize_t *olen)			\
 {											\
+	*olen = len;									\
+	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;					\
+	EVP_CIPHER_CTX_set_padding(evpctx, 0);						\
+	EVP_CIPHER_CTX_set_padding(evpctx+1, 0);					\
 	AES_Gen_CTR_Crypt(AES_OSSL_Blk_EncryptX2, ctx, rounds, iv, in, out, len);	\
 }
 
