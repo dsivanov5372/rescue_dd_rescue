@@ -11,6 +11,8 @@
 #include <netinet/in.h>
 #include <stdlib.h>
 
+int pkcs7_pad = 1;
+
 void xor16(const uchar x1[16], const uchar x2[16], uchar xout[16])
 {
 	uint i;
@@ -22,7 +24,7 @@ void xor16(const uchar x1[16], const uchar x2[16], uchar xout[16])
 void fill_blk(const uchar *in, uchar bf[16], ssize_t len)
 {
 	uint i;
-	uchar by = 16-(len&0x0f);
+	uchar by = pkcs7_pad? 16-(len&0x0f) : 0;
 	for (i = 0; i < len; ++i)
 		bf[i] = in[i];
 	for (; i < 16; ++i)

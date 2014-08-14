@@ -19,6 +19,7 @@ typedef struct _aes_rkeys {
 }
 #endif
 
+extern int pkcs7_pad;
 
 typedef unsigned char uchar;
 typedef unsigned int uint;
