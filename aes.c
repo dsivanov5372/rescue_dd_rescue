@@ -82,8 +82,7 @@ void AES_Gen_CBC_Enc(AES_Crypt_Blk_fn *cryptfn,
 		uchar in[16];
 		fill_blk(input, in, len);
 		xor16(iv, in, iv);
-		cryptfn(rkeys, rounds, iv, iv);
-		memcpy(output, iv, 16);
+		cryptfn(rkeys, rounds, iv, output);
 	}
 }
 
@@ -106,7 +105,7 @@ void AES_Gen_CBC_Dec(AES_Crypt_Blk_fn *cryptfn,
 		//for (i = 0; i < len; ++i)
 		//	output[i] = iv[i] ^ ebf[i];
 		xor16(iv, ebf, output);
-		memcpy(iv, input, 16);
+		//memcpy(iv, input, 16);
 	}
 }
 
@@ -149,7 +148,7 @@ void AES_Gen_CTR_Crypt(AES_Crypt_Blk_fn *cryptfn,
 		fill_blk(input, in, len);
 		cryptfn(rkeys, rounds, ctr, eblk);
 		xor16(eblk, in, output);
-		be_inc(ctr+8);	
+		//be_inc(ctr+8);	
 	}
 }
 
