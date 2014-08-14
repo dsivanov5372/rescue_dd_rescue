@@ -31,11 +31,10 @@ void fill_blk(const uchar *in, uchar bf[16], ssize_t len, uint pad)
 
 void AES_Gen_ECB_Enc(AES_Crypt_Blk_fn *cryptfn,
 		     const uchar* rkeys, uint rounds,
-		     uchar *iv, uint pad,
+		     /* uchar *iv,*/ uint pad,
 		     const uchar *input, uchar *output,
 		     ssize_t len, ssize_t *olen)
 {
-	assert(iv == NULL);
 	*olen = len;
 	while (len >= 16) {
 		cryptfn(rkeys, rounds, input, output);
@@ -49,6 +48,7 @@ void AES_Gen_ECB_Enc(AES_Crypt_Blk_fn *cryptfn,
 	}
 }
 
+#include <stdio.h>
 /** Decrypt padding:
  * We expect all blocks have been decoded fully and
  * the output pointer points to the first byte beyond
@@ -98,11 +98,10 @@ void dec_fix_olen_pad(ssize_t *olen, uint pad, const uchar *output)
 
 void AES_Gen_ECB_Dec(AES_Crypt_Blk_fn *cryptfn,
 		     const uchar* rkeys, uint rounds,
-		     uchar* iv, uint pad,
+		     /* uchar* iv,*/ uint pad,
 		     const uchar *input, uchar *output,
 		     ssize_t len, ssize_t *olen)
 {
-	assert(iv == NULL);
 	*olen = len;
 	while (len > 0) {
 		cryptfn(rkeys, rounds, input, output);
@@ -132,7 +131,7 @@ void AES_Gen_CBC_Enc(AES_Crypt_Blk_fn *cryptfn,
 		xor16(iv, in, iv);
 		cryptfn(rkeys, rounds, iv, output);
 		//memcpy(iv, output, 16);
-		*olen += (16-len&15);
+		*olen += 16-(len&15);
 	}
 }
 
@@ -177,12 +176,12 @@ void be_inc(uchar ctr[8])
 
 void AES_Gen_CTR_Crypt(AES_Crypt_Blk_fn *cryptfn,
 			const uchar *rkeys, uint rounds,
-			uchar *ctr, uint pad,
+			uchar *ctr, /* uint pad, */
 			const uchar *input, uchar *output,
-			ssize_t len, ssize_t *olen)
+			ssize_t len/*, ssize_t *olen */)
 {
 	//assert(pad == 0);
-	*olen = len;
+	//*olen = len;
 	uchar eblk[16];
 	while (len >= 16) {
 		cryptfn(rkeys, rounds, ctr, eblk);
