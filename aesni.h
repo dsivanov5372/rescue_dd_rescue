@@ -79,21 +79,21 @@ void AESNI_ECB_Decrypt(const unsigned char* key, unsigned int rounds,
 			ssize_t len, ssize_t *olen);
 /* CBC */
 void AESNI_CBC_Encrypt(const unsigned char* key, unsigned int rounds,
-			unsigned char *iv,
+			unsigned char *iv, unsigned int pad,
 			const unsigned char* in, unsigned char* out,
-			ssize_t len);
+			ssize_t len, ssize_t *olen);
 void AESNI_CBC_Decrypt(const unsigned char* key, unsigned int rounds,
-			unsigned char *iv,
+			unsigned char *iv, unsigned int pad,
 			const unsigned char* in, unsigned char* out,
-			ssize_t len);
+			ssize_t len, ssize_t *olen);
 /* CTR */
 void AESNI_CTR_Prep_2(const unsigned char* iv, const unsigned char* nonce,
 		      unsigned char* ctr, unsigned long long val);
 void AESNI_CTR_Prep(const unsigned char* iv, unsigned char* ctr, unsigned long long val);
 void AESNI_CTR_Crypt(const unsigned char* key, unsigned int rounds,
-			unsigned char *ctr,
+			unsigned char *ctr, unsigned int pad /* unused */,
 			const unsigned char* in, unsigned char* out,
-			ssize_t len);
+			ssize_t len, ssize_t *olen /* unneeded */);
 void AESNI_CTR_Crypt_old(const unsigned char* in, unsigned char* out,
 		     unsigned char* ctr,
 		     ssize_t len, const unsigned char* key, unsigned int rounds);
@@ -110,18 +110,18 @@ void AESNI_ECB_DecryptX2(const unsigned char* key, unsigned int rounds,
 			ssize_t len, ssize_t *olen);
 /* CBC */
 void AESNI_CBC_EncryptX2(const unsigned char* key, unsigned int rounds,
-			unsigned char *iv,
+			unsigned char *iv, unsigned int pad,
 			const unsigned char* in, unsigned char* out,
-			ssize_t len);
+			ssize_t len, ssize_t *olen);
 void AESNI_CBC_DecryptX2(const unsigned char* key, unsigned int rounds,
-			unsigned char *iv,
+			unsigned char *iv, unsigned int pad,
 			const unsigned char* in, unsigned char* out,
-			ssize_t len);
+			ssize_t len, ssize_t *olen);
 /* CTR */
 void AESNI_CTR_CryptX2(const unsigned char* key, unsigned int rounds,
-			unsigned char *ctr,
+			unsigned char *ctr, unsigned int pad /* unused */,
 			const unsigned char* in, unsigned char* out,
-			ssize_t len);
+			ssize_t len, ssize_t *olen /* unneeded */);
 
 extern aes_desc_t AESNI_Methods[];
 

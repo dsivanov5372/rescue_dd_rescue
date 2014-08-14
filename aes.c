@@ -104,11 +104,7 @@ void AES_Gen_ECB_Dec(AES_Crypt_Blk_fn *cryptfn,
 {
 	assert(iv == NULL);
 	*olen = len;
-	while (len >= 16) {
-		cryptfn(rkeys, rounds, input, output);
-		len -= 16; input += 16; output += 16;
-	}
-	if (len) {
+	while (len > 0) {
 		cryptfn(rkeys, rounds, input, output);
 		len -= 16; input += 16; output += 16;
 	}
@@ -148,16 +144,10 @@ void AES_Gen_CBC_Dec(AES_Crypt_Blk_fn *cryptfn,
 {
 	uchar ebf[16];
 	*olen = len;
-	while (len >= 16) {
+	while (len > 0) {
 		cryptfn(rkeys, rounds, input, ebf);
 		xor16(iv, ebf, output);
 		memcpy(iv, input, 16);
-		len -= 16; input += 16; output += 16;
-	}
-	if (len) {
-		cryptfn(rkeys, rounds, input, ebf);
-		xor16(iv, ebf, output);
-		//memcpy(iv, input, 16);
 		len -= 16; input += 16; output += 16;
 	}
 	if (pad)
@@ -203,7 +193,7 @@ void AES_Gen_CTR_Crypt(AES_Crypt_Blk_fn *cryptfn,
 	}
 	if (len) {
 		uchar in[16];
-		fill_blk(input, in, len, pad);
+		fill_blk(input, in, len, 0 /*pad*/);
 		cryptfn(rkeys, rounds, ctr, eblk);
 		//be_inc(ctr+8);	
 		xor16(eblk, in, output);
