@@ -58,6 +58,8 @@ void AES_OSSL_##BITCHAIN##_Encrypt(const unsigned char* ctx, unsigned int rounds
 		memcpy(ibf, in+olen, len&15);			\
 		memset(ibf+(len&15), 0, 16-(len&15));		\
 		CHECK_ERR(EVP_EncryptUpdate(evpctx, out+olen, &elen, ibf, 16));		\
+		memset(ibf, 0, len&15);				\
+		asm("":::"memory");				\
 	} else {									\
 		CHECK_ERR(EVP_EncryptUpdate(evpctx, out, &olen, in, len));		\
 		CHECK_ERR2(EVP_EncryptFinal, out, olen, elen);				\
@@ -205,6 +207,8 @@ void AES_OSSL_##BITCHAIN##_EncryptX2(const unsigned char* ctx, unsigned int roun
 		memcpy(ibf, in+olen, len&15);			\
 		memset(ibf+(len&15), 0, 16-(len&15));		\
 		EVP_EncryptUpdate(evpctx, out+olen, &elen, ibf, 16);			\
+		memset(ibf, 0, len&15);				\
+		asm("":::"memory");				\
 	} else {						\
 		EVP_EncryptUpdate(evpctx, out, &olen, in, len);	\
 		EVP_EncryptFinal(evpctx, out+olen, &elen);	\

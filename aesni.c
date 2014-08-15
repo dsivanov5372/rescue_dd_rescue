@@ -10,6 +10,7 @@
 #include "aes.h"
 #include "aesni.h"
 #include "secmem.h"
+#include <string.h>
 #include <wmmintrin.h>
 
 #ifdef DONTMASK
@@ -563,7 +564,7 @@ void AESNI_ECB_Decrypt_old(const unsigned char* in, unsigned char* out,
 
 
 inline
-void AESNI_ECB_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt, int enc,
+int  AESNI_ECB_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt, int enc,
 			  const unsigned char* key, unsigned int rounds,
 			  unsigned int pad,
 			  const unsigned char* in, unsigned char* out,
@@ -612,25 +613,29 @@ void AESNI_ECB_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt, int enc,
 		in  += sizeof(__m128i);
 		out += sizeof(__m128i);
 	}
-	if (!enc && pad) 
-		dec_fix_olen_pad(olen, pad, out);
+	if (enc)
+		return (pad == PAD_ALWAYS || (len&15))? 16-(len&15): 0;
+	if (pad) 
+		return dec_fix_olen_pad(olen, pad, out);
+	else
+		return 0;
 }
 
-void AESNI_ECB_Encrypt(const unsigned char* key, unsigned int rounds,
+int  AESNI_ECB_Encrypt(const unsigned char* key, unsigned int rounds,
 			unsigned char *iv, unsigned int pad,
 			const unsigned char* in, unsigned char* out,
 			ssize_t len, ssize_t *olen)
 {
-	AESNI_ECB_Crypt_Tmpl(Encrypt_8Blocks, Encrypt_Block, 1,
+	return AESNI_ECB_Crypt_Tmpl(Encrypt_8Blocks, Encrypt_Block, 1,
 			     key, rounds, pad, in, out, len, olen);
 }
 
-void AESNI_ECB_Decrypt(const unsigned char* key, unsigned int rounds,
+int  AESNI_ECB_Decrypt(const unsigned char* key, unsigned int rounds,
 			unsigned char *iv, unsigned int pad,
 			const unsigned char* in, unsigned char* out,
 			ssize_t len, ssize_t *olen)
 {
-	AESNI_ECB_Crypt_Tmpl(Decrypt_8Blocks, Decrypt_Block, 0,
+	return AESNI_ECB_Crypt_Tmpl(Decrypt_8Blocks, Decrypt_Block, 0,
 			     key, rounds, pad, in, out, len, olen);
 }
 
@@ -666,7 +671,7 @@ void AESNI_ECB_Decrypt(const unsigned char* key, unsigned int rounds,
 #endif
 
 inline
-void AESNI_CBC_Encrypt_Tmpl(crypt_blk_fn *encrypt,
+int AESNI_CBC_Encrypt_Tmpl(crypt_blk_fn *encrypt,
 			const unsigned char* key, unsigned int rounds,
 			unsigned char* iv, unsigned int pad,
 			const unsigned char* in, unsigned char* out,
@@ -701,18 +706,19 @@ void AESNI_CBC_Encrypt_Tmpl(crypt_blk_fn *encrypt,
 		*olen += 16-(*olen&15);
 	}
 	//_mm_storeu_si128((__m128i*)iv, ivb);
+	return (pad == PAD_ALWAYS || (len&15))? 16-(len&15): 0;
 }
 
-void AESNI_CBC_Encrypt(	const unsigned char* key, unsigned int rounds,
+int AESNI_CBC_Encrypt(	const unsigned char* key, unsigned int rounds,
 			unsigned char* iv, unsigned int pad,
 			const unsigned char* in, unsigned char* out,
 			ssize_t len, ssize_t *olen) 
 {
-	AESNI_CBC_Encrypt_Tmpl(Encrypt_Block, key, rounds, iv, pad, in, out, len, olen);
+	return AESNI_CBC_Encrypt_Tmpl(Encrypt_Block, key, rounds, iv, pad, in, out, len, olen);
 }
 
 inline
-void AESNI_CBC_Decrypt_Tmpl(crypt_4blks_fn *decrypt4, crypt_blk_fn *decrypt,
+int  AESNI_CBC_Decrypt_Tmpl(crypt_4blks_fn *decrypt4, crypt_blk_fn *decrypt,
 			const unsigned char* key, unsigned int rounds,
 			unsigned char* iv, unsigned int pad,
 			const unsigned char* in, unsigned char* out,
@@ -749,15 +755,17 @@ void AESNI_CBC_Decrypt_Tmpl(crypt_4blks_fn *decrypt4, crypt_blk_fn *decrypt,
 	}
 	_mm_storeu_si128((__m128i*)iv, ivb);
 	if (pad)
-		dec_fix_olen_pad(olen, pad, out);
+		return dec_fix_olen_pad(olen, pad, out);
+	else
+		return 0;
 }
 
-void AESNI_CBC_Decrypt( const unsigned char* key, unsigned int rounds,
+int  AESNI_CBC_Decrypt( const unsigned char* key, unsigned int rounds,
 			unsigned char* iv, unsigned int pad,
 			const unsigned char* in, unsigned char* out,
 			ssize_t len, ssize_t *olen)
 {
-	AESNI_CBC_Decrypt_Tmpl(Decrypt_4Blocks, Decrypt_Block,
+	return AESNI_CBC_Decrypt_Tmpl(Decrypt_4Blocks, Decrypt_Block,
 			key, rounds, iv, pad, in, out, len, olen);
 }
 #ifdef DEBUG_CBLK_SETUP
@@ -840,11 +848,11 @@ void AESNI_CTR_Prep(const unsigned char* iv, unsigned char* ctr, unsigned long l
 }
 
 inline
-void AESNI_CTR_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt,
-			const unsigned char* key, unsigned int rounds,
-		 	unsigned char* ctr,
-		 	const unsigned char* in, unsigned char* out,
-			ssize_t len)
+int AESNI_CTR_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt,
+			 const unsigned char* key, unsigned int rounds,
+		 	 unsigned char* ctr,
+		 	 const unsigned char* in, unsigned char* out,
+			 ssize_t len)
 {
 	__m128i ONE = _mm_set_epi32(0, 1, 0, 0);
 	__m128i BSWAP_EPI64 = _mm_setr_epi8(7,6,5,4,3,2,1,0,15,14,13,12,11,10,9,8); 
@@ -891,29 +899,33 @@ void AESNI_CTR_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt,
 		register __m128i tmp = _mm_shuffle_epi8(cblk, BSWAP_EPI64);
 		tmp = crypt(tmp, key, rounds);
 		if (len < sizeof(__m128i)) {
+			uchar obuf[16];
 			__m128i mask = _mkmask(len);
 			mask = _mm_and_si128(mask, _mm_loadu_si128((__m128i*)in));
 			tmp = _mm_xor_si128(tmp, mask);
+			_mm_storeu_si128((__m128i*)obuf, tmp);
+			memcpy(out, obuf, len);
 		} else {
 			cblk = _mm_add_epi64(cblk, ONE);
 			tmp = _mm_xor_si128(tmp, _mm_loadu_si128((__m128i*)in));
+			_mm_storeu_si128((__m128i*)out, tmp);
 		}
-		_mm_storeu_si128((__m128i*)out, tmp);
 		len -= sizeof(__m128i);
 		in  += sizeof(__m128i);
 		out += sizeof(__m128i);
 	}
 	_mm_storeu_si128((__m128i*)ctr, cblk);
+	return 0;
 }
 
-void AESNI_CTR_Crypt(const unsigned char* key, unsigned int rounds,
+int AESNI_CTR_Crypt(const unsigned char* key, unsigned int rounds,
 		     unsigned char* ctr, unsigned int pad,
 		     const unsigned char* in, unsigned char* out,
 		     ssize_t len, ssize_t *olen)
 {
 	*olen = len;
-	AESNI_CTR_Crypt_Tmpl(Encrypt_8Blocks, Encrypt_Block,
-			     key, rounds, ctr, in, out, len);
+	return AESNI_CTR_Crypt_Tmpl(Encrypt_8Blocks, Encrypt_Block,
+				    key, rounds, ctr, in, out, len);
 }
 
 
@@ -1246,7 +1258,7 @@ void Decrypt_4BlocksX2(__m128i *i0, __m128i *i1, __m128i *i2, __m128i *i3,
 	//asm volatile("pxor %%xmm0, %%xmm0\n" :::"xmm0");
 }
 
-void AESNI_ECB_EncryptX2(const uchar* rkeys, unsigned int rounds,
+int  AESNI_ECB_EncryptX2(const uchar* rkeys, unsigned int rounds,
 			 uchar *iv, uint pad, const uchar *in, uchar *out, 
 			 ssize_t len, ssize_t *olen)
 {
@@ -1254,7 +1266,7 @@ void AESNI_ECB_EncryptX2(const uchar* rkeys, unsigned int rounds,
 				    rkeys, rounds, pad, in, out, len, olen);
 }
 
-void AESNI_ECB_DecryptX2(const uchar* rkeys, unsigned int rounds,
+int  AESNI_ECB_DecryptX2(const uchar* rkeys, unsigned int rounds,
 			 uchar *iv, uint pad, const uchar *in, uchar *out, 
 			 ssize_t len, ssize_t *olen)
 {
@@ -1262,7 +1274,7 @@ void AESNI_ECB_DecryptX2(const uchar* rkeys, unsigned int rounds,
 				    rkeys, rounds, pad, in, out, len, olen);
 }
 
-void AESNI_CBC_EncryptX2(const uchar* rkeys, unsigned int rounds,
+int  AESNI_CBC_EncryptX2(const uchar* rkeys, unsigned int rounds,
 			 uchar *iv, uint pad, const uchar *in, uchar *out, 
 			 ssize_t len, ssize_t *olen)
 {
@@ -1270,14 +1282,14 @@ void AESNI_CBC_EncryptX2(const uchar* rkeys, unsigned int rounds,
 				iv, pad, in, out, len, olen);
 }
 
-void AESNI_CBC_DecryptX2(const uchar* rkeys, unsigned int rounds,
+int  AESNI_CBC_DecryptX2(const uchar* rkeys, unsigned int rounds,
 			 uchar *iv, uint pad, const uchar *in, uchar *out, 
 			 ssize_t len, ssize_t *olen)
 {
 	return AESNI_CBC_Decrypt_Tmpl(Decrypt_4BlocksX2, Decrypt_BlockX2, rkeys, rounds, 
 				iv, pad, in, out, len, olen);
 }
-void AESNI_CTR_CryptX2(const uchar* rkeys, unsigned int rounds,
+int  AESNI_CTR_CryptX2(const uchar* rkeys, unsigned int rounds,
 			uchar *iv, uint pad, const uchar *in, uchar *out, 
 			ssize_t len, ssize_t *olen)
 {
@@ -1288,59 +1300,59 @@ void AESNI_CTR_CryptX2(const uchar* rkeys, unsigned int rounds,
 
 
 
-aes_desc_t AESNI_Methods[] = {{"AES128-ECB"  , 128, 10, 11*16, AESNI_128_EKey_Expansion_r, AESNI_128_DKey_Expansion_r,
+aes_desc_t AESNI_Methods[] = {{"AES128-ECB"  , 128, 10, 16, 11*16, AESNI_128_EKey_Expansion_r, AESNI_128_DKey_Expansion_r,
 							NULL, AESNI_ECB_Encrypt, AESNI_ECB_Decrypt, AES_Gen_Release},
-			      {"AES128-CBC"  , 128, 10, 11*16, AESNI_128_EKey_Expansion_r, AESNI_128_DKey_Expansion_r,
+			      {"AES128-CBC"  , 128, 10, 16, 11*16, AESNI_128_EKey_Expansion_r, AESNI_128_DKey_Expansion_r,
 							NULL, AESNI_CBC_Encrypt, AESNI_CBC_Decrypt, AES_Gen_Release},
-			      {"AES128-CTR"  , 128, 10, 11*16, AESNI_128_EKey_Expansion_r, AESNI_128_EKey_Expansion_r,
+			      {"AES128-CTR"  , 128, 10,  1, 11*16, AESNI_128_EKey_Expansion_r, AESNI_128_EKey_Expansion_r,
 						AESNI_CTR_Prep, AESNI_CTR_Crypt, AESNI_CTR_Crypt, AES_Gen_Release},
-			      {"AES192-ECB"  , 192, 12, 13*16, AESNI_192_EKey_Expansion_r, AESNI_192_DKey_Expansion_r,
+			      {"AES192-ECB"  , 192, 12, 16, 13*16, AESNI_192_EKey_Expansion_r, AESNI_192_DKey_Expansion_r,
 							NULL, AESNI_ECB_Encrypt, AESNI_ECB_Decrypt, AES_Gen_Release},
-			      {"AES192-CBC"  , 192, 12, 13*16, AESNI_192_EKey_Expansion_r, AESNI_192_DKey_Expansion_r,
+			      {"AES192-CBC"  , 192, 12, 16, 13*16, AESNI_192_EKey_Expansion_r, AESNI_192_DKey_Expansion_r,
 							NULL, AESNI_CBC_Encrypt, AESNI_CBC_Decrypt, AES_Gen_Release},
-			      {"AES192-CTR"  , 192, 12, 13*16, AESNI_192_EKey_Expansion_r, AESNI_192_EKey_Expansion_r,
+			      {"AES192-CTR"  , 192, 12,  1, 13*16, AESNI_192_EKey_Expansion_r, AESNI_192_EKey_Expansion_r,
 						AESNI_CTR_Prep, AESNI_CTR_Crypt, AESNI_CTR_Crypt, AES_Gen_Release},
-			      {"AES256-ECB"  , 256, 14, 15*16, AESNI_256_EKey_Expansion_r, AESNI_256_DKey_Expansion_r,
+			      {"AES256-ECB"  , 256, 14, 16, 15*16, AESNI_256_EKey_Expansion_r, AESNI_256_DKey_Expansion_r,
 							NULL, AESNI_ECB_Encrypt, AESNI_ECB_Decrypt, AES_Gen_Release},
-			      {"AES256-CBC"  , 256, 14, 15*16, AESNI_256_EKey_Expansion_r, AESNI_256_DKey_Expansion_r,
+			      {"AES256-CBC"  , 256, 14, 16, 15*16, AESNI_256_EKey_Expansion_r, AESNI_256_DKey_Expansion_r,
 							NULL, AESNI_CBC_Encrypt, AESNI_CBC_Decrypt, AES_Gen_Release},
-			      {"AES256-CTR"  , 256, 14, 15*16, AESNI_256_EKey_Expansion_r, AESNI_256_EKey_Expansion_r,
+			      {"AES256-CTR"  , 256, 14,  1, 15*16, AESNI_256_EKey_Expansion_r, AESNI_256_EKey_Expansion_r,
 						AESNI_CTR_Prep, AESNI_CTR_Crypt, AESNI_CTR_Crypt, AES_Gen_Release},
-			      {"AES128+-ECB" , 128, 12, 13*16, AESNI_128_EKey_Expansion_r, AESNI_128_DKey_Expansion_r,
+			      {"AES128+-ECB" , 128, 12, 16, 13*16, AESNI_128_EKey_Expansion_r, AESNI_128_DKey_Expansion_r,
 							NULL, AESNI_ECB_Encrypt, AESNI_ECB_Decrypt, AES_Gen_Release},
-			      {"AES128+-CBC" , 128, 12, 13*16, AESNI_128_EKey_Expansion_r, AESNI_128_DKey_Expansion_r,
+			      {"AES128+-CBC" , 128, 12, 16, 13*16, AESNI_128_EKey_Expansion_r, AESNI_128_DKey_Expansion_r,
 							NULL, AESNI_CBC_Encrypt, AESNI_CBC_Decrypt, AES_Gen_Release},
-			      {"AES128+-CTR" , 128, 12, 13*16, AESNI_128_EKey_Expansion_r, AESNI_128_EKey_Expansion_r,
+			      {"AES128+-CTR" , 128, 12,  1, 13*16, AESNI_128_EKey_Expansion_r, AESNI_128_EKey_Expansion_r,
 						AESNI_CTR_Prep, AESNI_CTR_Crypt, AESNI_CTR_Crypt, AES_Gen_Release},
-			      {"AES192+-ECB" , 192, 15, 16*16, AESNI_192_EKey_Expansion_r, AESNI_192_DKey_Expansion_r,
+			      {"AES192+-ECB" , 192, 15, 16, 16*16, AESNI_192_EKey_Expansion_r, AESNI_192_DKey_Expansion_r,
 							NULL, AESNI_ECB_Encrypt, AESNI_ECB_Decrypt, AES_Gen_Release},
-			      {"AES192+-CBC" , 192, 15, 16*16, AESNI_192_EKey_Expansion_r, AESNI_192_DKey_Expansion_r,
+			      {"AES192+-CBC" , 192, 15, 16, 16*16, AESNI_192_EKey_Expansion_r, AESNI_192_DKey_Expansion_r,
 							NULL, AESNI_CBC_Encrypt, AESNI_CBC_Decrypt, AES_Gen_Release},
-			      {"AES192+-CTR" , 192, 15, 16*16, AESNI_192_EKey_Expansion_r, AESNI_192_EKey_Expansion_r,
+			      {"AES192+-CTR" , 192, 15,  1, 16*16, AESNI_192_EKey_Expansion_r, AESNI_192_EKey_Expansion_r,
 						AESNI_CTR_Prep, AESNI_CTR_Crypt, AESNI_CTR_Crypt, AES_Gen_Release},
-			      {"AES256+-ECB" , 256, 18, 19*16, AESNI_256_EKey_Expansion_r, AESNI_256_DKey_Expansion_r,
+			      {"AES256+-ECB" , 256, 18, 16, 19*16, AESNI_256_EKey_Expansion_r, AESNI_256_DKey_Expansion_r,
 							NULL, AESNI_ECB_Encrypt, AESNI_ECB_Decrypt, AES_Gen_Release},
-			      {"AES256+-CBC" , 256, 18, 19*16, AESNI_256_EKey_Expansion_r, AESNI_256_DKey_Expansion_r,
+			      {"AES256+-CBC" , 256, 18, 16, 19*16, AESNI_256_EKey_Expansion_r, AESNI_256_DKey_Expansion_r,
 							NULL, AESNI_CBC_Encrypt, AESNI_CBC_Decrypt, AES_Gen_Release},
-			      {"AES256+-CTR" , 256, 18, 19*16, AESNI_256_EKey_Expansion_r, AESNI_256_EKey_Expansion_r,
+			      {"AES256+-CTR" , 256, 18,  1, 19*16, AESNI_256_EKey_Expansion_r, AESNI_256_EKey_Expansion_r,
 						AESNI_CTR_Prep, AESNI_CTR_Crypt, AESNI_CTR_Crypt, AES_Gen_Release},
-			      {"AES128x2-ECB" , 128, 20, 22*16, AESNI_128_EKey_ExpansionX2_r, AESNI_128_DKey_ExpansionX2_r,
+			      {"AES128x2-ECB" , 128, 20, 16, 22*16, AESNI_128_EKey_ExpansionX2_r, AESNI_128_DKey_ExpansionX2_r,
 							NULL, AESNI_ECB_EncryptX2, AESNI_ECB_DecryptX2, AES_Gen_Release},
-			      {"AES128x2-CBC" , 128, 20, 22*16, AESNI_128_EKey_ExpansionX2_r, AESNI_128_DKey_ExpansionX2_r,
+			      {"AES128x2-CBC" , 128, 20, 16, 22*16, AESNI_128_EKey_ExpansionX2_r, AESNI_128_DKey_ExpansionX2_r,
 							NULL, AESNI_CBC_EncryptX2, AESNI_CBC_DecryptX2, AES_Gen_Release},
-			      {"AES128x2-CTR" , 128, 20, 22*16, AESNI_128_EKey_ExpansionX2_r, AESNI_128_EKey_ExpansionX2_r,
+			      {"AES128x2-CTR" , 128, 20,  1, 22*16, AESNI_128_EKey_ExpansionX2_r, AESNI_128_EKey_ExpansionX2_r,
 						AESNI_CTR_Prep, AESNI_CTR_CryptX2, AESNI_CTR_CryptX2, AES_Gen_Release},
-			      {"AES192x2-ECB" , 192, 24, 26*16, AESNI_192_EKey_ExpansionX2_r, AESNI_192_DKey_ExpansionX2_r,
+			      {"AES192x2-ECB" , 192, 24, 16, 26*16, AESNI_192_EKey_ExpansionX2_r, AESNI_192_DKey_ExpansionX2_r,
 							NULL, AESNI_ECB_EncryptX2, AESNI_ECB_DecryptX2, AES_Gen_Release},
-			      {"AES192x2-CBC" , 192, 24, 26*16, AESNI_192_EKey_ExpansionX2_r, AESNI_192_DKey_ExpansionX2_r,
+			      {"AES192x2-CBC" , 192, 24, 16, 26*16, AESNI_192_EKey_ExpansionX2_r, AESNI_192_DKey_ExpansionX2_r,
 							NULL, AESNI_CBC_EncryptX2, AESNI_CBC_DecryptX2, AES_Gen_Release},
-			      {"AES192x2-CTR" , 192, 24, 26*16, AESNI_192_EKey_ExpansionX2_r, AESNI_192_EKey_ExpansionX2_r,
+			      {"AES192x2-CTR" , 192, 24,  1, 26*16, AESNI_192_EKey_ExpansionX2_r, AESNI_192_EKey_ExpansionX2_r,
 						AESNI_CTR_Prep, AESNI_CTR_CryptX2, AESNI_CTR_CryptX2, AES_Gen_Release},
-			      {"AES256x2-ECB" , 256, 28, 30*16, AESNI_256_EKey_ExpansionX2_r, AESNI_256_DKey_ExpansionX2_r,
+			      {"AES256x2-ECB" , 256, 28, 16, 30*16, AESNI_256_EKey_ExpansionX2_r, AESNI_256_DKey_ExpansionX2_r,
 							NULL, AESNI_ECB_EncryptX2, AESNI_ECB_DecryptX2, AES_Gen_Release},
-			      {"AES256x2-CBC" , 256, 28, 30*16, AESNI_256_EKey_ExpansionX2_r, AESNI_256_DKey_ExpansionX2_r,
+			      {"AES256x2-CBC" , 256, 28, 16, 30*16, AESNI_256_EKey_ExpansionX2_r, AESNI_256_DKey_ExpansionX2_r,
 							NULL, AESNI_CBC_EncryptX2, AESNI_CBC_DecryptX2, AES_Gen_Release},
-			      {"AES256x2-CTR" , 256, 28, 30*16, AESNI_256_EKey_ExpansionX2_r, AESNI_256_EKey_ExpansionX2_r,
+			      {"AES256x2-CTR" , 256, 28,  1, 30*16, AESNI_256_EKey_ExpansionX2_r, AESNI_256_EKey_ExpansionX2_r,
 						AESNI_CTR_Prep, AESNI_CTR_CryptX2, AESNI_CTR_CryptX2, AES_Gen_Release},
 			      {NULL, /* ... */}
 };

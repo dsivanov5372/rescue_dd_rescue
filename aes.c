@@ -29,7 +29,7 @@ void fill_blk(const uchar *in, uchar bf[16], ssize_t len, uint pad)
 		bf[i] = by;
 }
 
-void AES_Gen_ECB_Enc(AES_Crypt_Blk_fn *cryptfn,
+int  AES_Gen_ECB_Enc(AES_Crypt_Blk_fn *cryptfn,
 		     const uchar* rkeys, uint rounds,
 		     /* uchar *iv,*/ uint pad,
 		     const uchar *input, uchar *output,
@@ -46,6 +46,7 @@ void AES_Gen_ECB_Enc(AES_Crypt_Blk_fn *cryptfn,
 		cryptfn(rkeys, rounds, in, output);
 		*olen += 16-(len&15);
 	}
+	return (pad == PAD_ALWAYS || (len&15)): 16-(len&15): 0;
 }
 
 #include <stdio.h>
@@ -63,40 +64,36 @@ void AES_Gen_ECB_Enc(AES_Crypt_Blk_fn *cryptfn,
  * misinterpretation with PAD_ASNEEDED (if the last byte of the
  * inupt happens to be a 0x01, or -- less likely -- the last two
  * bytes being 0x02 0x02 or ...).
+ * Return value: 0 => Success
+ * Negative: Error: -ILLEGAL_PADDING, -INCONSISTENT_PADDING
+ * 	(no unpadding happens then)
+ * Positive: Success, but a not insignificant chance for wrongly
+ * 	unpadded data (1: 1/256 chance, 2: 1/256^2, ...)
  */
-void dec_fix_olen_pad(ssize_t *olen, uint pad, const uchar *output)
+int dec_fix_olen_pad(ssize_t *olen, uint pad, const uchar *output)
 {
 	if (!pad)
-		return;
+		return 0;
 	uchar last = output[-1];
-	if (last > 0x10) {
-		fprintf(stderr, "Illegal padding! (%02x)\n", last);
-		return;
-	}
+	if (last > 0x10)
+		return ILLEGAL_PADDING;
 	uint i;
 	for (i = 1; i < last; ++i) {
-		if (*(output-1-i) != last) {
-			fprintf(stderr, "Inconsistent padding! (%02x@-%i vs. %02x)\n",
-				*(output-1-i), i, last);
-			i = 0;
-			break;
-		}
+		if (*(output-1-i) != last) 
+			return INCONSISTENT_PADDING;
 	}
-	if (!i)
-		return;
+	int err = 0;
 	if (pad != PAD_ALWAYS) {
-		if (last == 1)
-			fprintf(stderr, "Warn: 1/256 chance of misdetecting padding!\n");
-		else if (last == 2)
-			fprintf(stderr, "Warn: 1/65536 chance of misdetecting padding!\n");
-		// ...
+		if (last < 8)
+			err = -last;
 	}
 	if (*olen & 0x0f)
 		*olen += 16-(*olen&0x0f);
 	*olen -= last;
+	return err;
 }
 
-void AES_Gen_ECB_Dec(AES_Crypt_Blk_fn *cryptfn,
+int  AES_Gen_ECB_Dec(AES_Crypt_Blk_fn *cryptfn,
 		     const uchar* rkeys, uint rounds,
 		     /* uchar* iv,*/ uint pad,
 		     const uchar *input, uchar *output,
@@ -108,11 +105,12 @@ void AES_Gen_ECB_Dec(AES_Crypt_Blk_fn *cryptfn,
 		len -= 16; input += 16; output += 16;
 	}
 	if (pad) 
-		dec_fix_olen_pad(olen, pad, output);
-}
+		return dec_fix_olen_pad(olen, pad, output);
+}	else
+		return 0;
 
 
-void AES_Gen_CBC_Enc(AES_Crypt_Blk_fn *cryptfn,
+int  AES_Gen_CBC_Enc(AES_Crypt_Blk_fn *cryptfn,
 		     const uchar* rkeys, uint rounds,
 		     uchar *iv, uint pad,
 		     const uchar *input, uchar *output,
@@ -133,9 +131,10 @@ void AES_Gen_CBC_Enc(AES_Crypt_Blk_fn *cryptfn,
 		//memcpy(iv, output, 16);
 		*olen += 16-(len&15);
 	}
+	return (pad == PAD_ALWAYS || (len&15)): 16-(len&15): 0;
 }
 
-void AES_Gen_CBC_Dec(AES_Crypt_Blk_fn *cryptfn,
+int  AES_Gen_CBC_Dec(AES_Crypt_Blk_fn *cryptfn,
 		     const uchar* rkeys, uint rounds,
 		     uchar *iv, uint pad,
 		     const uchar *input, uchar *output,
@@ -150,7 +149,9 @@ void AES_Gen_CBC_Dec(AES_Crypt_Blk_fn *cryptfn,
 		len -= 16; input += 16; output += 16;
 	}
 	if (pad)
-		dec_fix_olen_pad(olen, pad, output);
+		return dec_fix_olen_pad(olen, pad, output);
+	else
+		return 0;
 }
 
 
@@ -174,7 +175,7 @@ void be_inc(uchar ctr[8])
 	} while (i && !ctr[i]);
 }
 
-void AES_Gen_CTR_Crypt(AES_Crypt_Blk_fn *cryptfn,
+int  AES_Gen_CTR_Crypt(AES_Crypt_Blk_fn *cryptfn,
 			const uchar *rkeys, uint rounds,
 			uchar *ctr, /* uint pad, */
 			const uchar *input, uchar *output,
@@ -195,8 +196,12 @@ void AES_Gen_CTR_Crypt(AES_Crypt_Blk_fn *cryptfn,
 		fill_blk(input, in, len, 0 /*pad*/);
 		cryptfn(rkeys, rounds, ctr, eblk);
 		//be_inc(ctr+8);	
-		xor16(eblk, in, output);
+		xor16(eblk, in, in);
+		memcpy(output, in, len&15);
 	}
+	memset(eblk, 0, 16);
+	asm("":::"memory");
+	return 0;
 }
 
 void AES_Gen_Release(uchar *rkeys, uint rounds)
