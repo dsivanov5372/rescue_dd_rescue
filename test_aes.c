@@ -144,6 +144,9 @@ int main(int argc, char *argv[])
 	aes_desc_t *alg = NULL;
 	ssize_t OLN;
 
+	/* TODO: Refactor what follows ... */
+	/* TODO: Check return codes */
+
 #ifdef HAVE_AESNI
 	alg = findalg(AESNI_Methods, testalg);
 	if (alg) {
