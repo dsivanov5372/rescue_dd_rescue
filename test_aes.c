@@ -235,14 +235,14 @@ int main(int argc, char *argv[])
 		printf("\nEncrypt  : ");
 		BENCH(setup_iv(alg, iv); alg->encrypt(rkeys, alg->rounds, iv, PAD_ZERO, in, out, LN, &OLN), rep/2+1, LN);
 		/* FIXME: CTR modes are the only ones with iv_prep, these are streaming and not block oriented */
-		assert(OLN == (alg->iv_prep? LN: DEF_LN));
+		assert(OLN == (alg->blksize == 1? LN: DEF_LN));
 		printf("\nKey setup: ");
 		BENCH(alg->dec_key_setup(key, rkeys, alg->rounds), rep, 16*(1+alg->rounds));
 		printf("\nDecrypt  : ");
-		BENCH(setup_iv(alg, iv); alg->decrypt(rkeys, alg->rounds, iv, PAD_ZERO, out, vfy, LN+1, &OLN), rep/2+1, LN);
-		assert(OLN == LN+1);
+		BENCH(setup_iv(alg, iv); alg->decrypt(rkeys, alg->rounds, iv, PAD_ZERO, out, vfy, LN-1, &OLN), rep/2+1, LN);
+		assert(OLN == LN-1);
 		err += compare(vfy, in, LN, "AESNI plain");
-		if (vfy[LN] != 0 /*SHIFT*/)
+		if (vfy[LN] != 0 /*SHIFT*/ && alg->blksize != 1)
 			printf("\n Padding broken! %02x\n", vfy[LN]);
 		if (alg->release)
 			alg->release(rkeys, alg->rounds);
@@ -258,17 +258,17 @@ int main(int argc, char *argv[])
 		BENCH(alg->enc_key_setup(key, rkeys, alg->rounds), rep, 16*(1+alg->rounds));
 		printf("\nEncrypt  : ");
 		BENCH(setup_iv(alg, iv); alg->encrypt(rkeys, alg->rounds, iv, PAD_ZERO, in, out2, LN, &OLN), rep/2+1, LN);
-		assert(OLN == (alg->iv_prep? LN: DEF_LN));
+		assert(OLN == (alg->blksize == 1? LN: DEF_LN));
 #ifdef HAVE_AESNI
 		err += compare(out, out2, LN, "AESNI vs AES_C");;
 #endif
 		printf("\nKey setup: ");
 		BENCH(alg->dec_key_setup(key, rkeys, alg->rounds), rep, 16*(1+alg->rounds));
 		printf("\nDecrypt  : ");
-		BENCH(setup_iv(alg, iv); alg->decrypt(rkeys, alg->rounds, iv, PAD_ZERO, out2, vfy, LN+1, &OLN), rep/2+1, LN);
-		assert(OLN == LN+1);
+		BENCH(setup_iv(alg, iv); alg->decrypt(rkeys, alg->rounds, iv, PAD_ZERO, out2, vfy, LN-1, &OLN), rep/2+1, LN);
+		assert(OLN == LN-1);
 		err += compare(vfy, in, LN, "AES_C plain");
-		if (vfy[LN] != 0 /*SHIFT*/)
+		if (vfy[LN] != 0 /*SHIFT*/ && alg->blksize != 1)
 			printf("\n Padding broken! %02x\n", vfy[LN]);
 		if (alg->release)
 			alg->release(rkeys, alg->rounds);
@@ -286,16 +286,16 @@ int main(int argc, char *argv[])
 		alg->enc_key_setup(key, rkeys, alg->rounds);
  		printf("\nEncrypt  : ");
 		BENCH(setup_iv(alg, iv); alg->encrypt(rkeys, alg->rounds, iv, PAD_ZERO, in, out, LN, &OLN), rep/2+1, LN);
-		assert(OLN == (alg->iv_prep? LN: DEF_LN));
+		assert(OLN == (alg->blksize == 1? LN: DEF_LN));
 		err += compare(out2, out, LN, "AES_C vs OSSL");
 		printf("\nKey setup: ");
 		BENCH(alg->dec_key_setup(key, rkeys, alg->rounds); alg->release(rkeys, alg->rounds), rep, 16*(1+alg->rounds));
 		alg->dec_key_setup(key, rkeys, alg->rounds);
 		printf("\nDecrypt  : ");
-		BENCH(setup_iv(alg, iv); alg->decrypt(rkeys, alg->rounds, iv, PAD_ZERO, out, vfy, LN+1, &OLN), rep/2+1, LN);
-		assert(OLN == LN+1);
+		BENCH(setup_iv(alg, iv); alg->decrypt(rkeys, alg->rounds, iv, PAD_ZERO, out, vfy, LN-1, &OLN), rep/2+1, LN);
+		assert(OLN == LN-1);
 		err += compare(vfy, in, LN, "OSSL plain");
-		if (vfy[LN] != 0 /*SHIFT*/ && !alg->iv_prep)
+		if (vfy[LN] != 0 /*SHIFT*/ && alg->blksize != 1)
 			printf("\n Padding broken! %02x\n", vfy[LN]);
 		if (alg->release)
 			alg->release(rkeys, alg->rounds);

@@ -25,19 +25,19 @@ DECL_KEYSETUP2(Dec, 256);
 
 void AES_C_Encrypt_Blk(const uchar* rkeys, uint rounds, const uchar in[16], uchar out[16]);
 void AES_C_Decrypt_Blk(const uchar* rkeys, uint rounds, const uchar in[16], uchar out[16]);
-void AES_C_ECB_Encrypt(const uchar* rkeys, uint rounds, uchar *iv,  uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen);
-void AES_C_ECB_Decrypt(const uchar* rkeys, uint rounds, uchar *iv,  uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen);
-void AES_C_CBC_Encrypt(const uchar* rkeys, uint rounds, uchar *iv,  uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen);
-void AES_C_CBC_Decrypt(const uchar* rkeys, uint rounds, uchar *iv,  uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen);
-void AES_C_CTR_Crypt  (const uchar* rkeys, uint rounds, uchar *ctr, uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen);
+int  AES_C_ECB_Encrypt(const uchar* rkeys, uint rounds, uchar *iv,  uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen);
+int  AES_C_ECB_Decrypt(const uchar* rkeys, uint rounds, uchar *iv,  uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen);
+int  AES_C_CBC_Encrypt(const uchar* rkeys, uint rounds, uchar *iv,  uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen);
+int  AES_C_CBC_Decrypt(const uchar* rkeys, uint rounds, uchar *iv,  uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen);
+int  AES_C_CTR_Crypt  (const uchar* rkeys, uint rounds, uchar *ctr, uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen);
 
 void AES_C_Encrypt_BlkX2(const uchar* rkeys, uint rounds, const uchar in[16], uchar out[16]);
 void AES_C_Decrypt_BlkX2(const uchar* rkeys, uint rounds, const uchar in[16], uchar out[16]);
-void AES_C_ECB_EncryptX2(const uchar* rkeys, uint rounds, uchar *iv,  uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen);
-void AES_C_ECB_DecryptX2(const uchar* rkeys, uint rounds, uchar *iv,  uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen);
-void AES_C_CBC_EncryptX2(const uchar* rkeys, uint rounds, uchar *iv,  uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen);
-void AES_C_CBC_DecryptX2(const uchar* rkeys, uint rounds, uchar *iv,  uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen);
-void AES_C_CTR_CryptX2  (const uchar* rkeys, uint rounds, uchar *ctr, uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen);
+int  AES_C_ECB_EncryptX2(const uchar* rkeys, uint rounds, uchar *iv,  uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen);
+int  AES_C_ECB_DecryptX2(const uchar* rkeys, uint rounds, uchar *iv,  uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen);
+int  AES_C_CBC_EncryptX2(const uchar* rkeys, uint rounds, uchar *iv,  uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen);
+int  AES_C_CBC_DecryptX2(const uchar* rkeys, uint rounds, uchar *iv,  uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen);
+int  AES_C_CTR_CryptX2  (const uchar* rkeys, uint rounds, uchar *ctr, uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen);
 
 extern aes_desc_t AES_C_Methods[];
 

@@ -46,7 +46,7 @@ int  AES_Gen_ECB_Enc(AES_Crypt_Blk_fn *cryptfn,
 		cryptfn(rkeys, rounds, in, output);
 		*olen += 16-(len&15);
 	}
-	return (pad == PAD_ALWAYS || (len&15)): 16-(len&15): 0;
+	return (pad == PAD_ALWAYS || (len&15))? 16-(len&15): 0;
 }
 
 #include <stdio.h>
@@ -76,11 +76,11 @@ int dec_fix_olen_pad(ssize_t *olen, uint pad, const uchar *output)
 		return 0;
 	uchar last = output[-1];
 	if (last > 0x10)
-		return ILLEGAL_PADDING;
+		return -ILLEGAL_PADDING;
 	uint i;
 	for (i = 1; i < last; ++i) {
 		if (*(output-1-i) != last) 
-			return INCONSISTENT_PADDING;
+			return -INCONSISTENT_PADDING;
 	}
 	int err = 0;
 	if (pad != PAD_ALWAYS) {
@@ -106,8 +106,9 @@ int  AES_Gen_ECB_Dec(AES_Crypt_Blk_fn *cryptfn,
 	}
 	if (pad) 
 		return dec_fix_olen_pad(olen, pad, output);
-}	else
+	else
 		return 0;
+}
 
 
 int  AES_Gen_CBC_Enc(AES_Crypt_Blk_fn *cryptfn,
@@ -131,7 +132,7 @@ int  AES_Gen_CBC_Enc(AES_Crypt_Blk_fn *cryptfn,
 		//memcpy(iv, output, 16);
 		*olen += 16-(len&15);
 	}
-	return (pad == PAD_ALWAYS || (len&15)): 16-(len&15): 0;
+	return (pad == PAD_ALWAYS || (len&15))? 16-(len&15): 0;
 }
 
 int  AES_Gen_CBC_Dec(AES_Crypt_Blk_fn *cryptfn,

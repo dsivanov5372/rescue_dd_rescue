@@ -23,6 +23,10 @@ typedef struct _aes_rkeys {
 #define PAD_ALWAYS 1
 #define PAD_ASNEEDED 2
 
+/* Returned as negative vals from crypt fns */
+#define ILLEGAL_PADDING 1
+#define INCONSISTENT_PADDING 2
+
 typedef unsigned char uchar;
 typedef unsigned int uint;
 typedef unsigned long ulong;
