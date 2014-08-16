@@ -61,13 +61,16 @@ int AES_OSSL_##BITCHAIN##_Encrypt(const unsigned char* ctx, unsigned int rounds,
 		memset(ibf, 0, len&15);				\
 		asm("":::"memory");				\
 	} else {									\
+		if (DOPAD && !(len%15) && pad == PAD_ASNEEDED)	\
+			EVP_CIPHER_CTX_set_padding(evpctx, 0);	\
 		CHECK_ERR(EVP_EncryptUpdate(evpctx, out, &olen, in, len));		\
 		CHECK_ERR2(EVP_EncryptFinal, out, olen, elen);				\
+		if (elen && (len&15)) olen -= 16;		\
 	}							\
 	*flen = olen+elen;					\
 	if (DOPAD && pad == PAD_ASNEEDED && !(len&15))		\
 		*flen -= 16;					\
-	if (olen+elen < len)					\
+	if (0 && olen+elen < len)				\
 		fprintf(stderr, "Encryption length mismatch %i+%i != %zi\n",		\
 			olen, elen, len);			\
 	return (DOPAD && (pad == PAD_ALWAYS || (len&15)))? 16-(len&15): 0;	\
@@ -91,7 +94,7 @@ int  AES_OSSL_##BITCHAIN##_Decrypt(const unsigned char* ctx, unsigned int rounds
 	CHECK_ERR2(EVP_DecryptFinal, out, olen, elen);		\
 	if (DOPAD && pad) {					\
 		*flen = olen + elen;				\
-		if (olen+elen != len)				\
+		if ( 0 && olen+elen != len)				\
 			fprintf(stderr, "Decryption length mismatch %i+%i != %zi\n",\
 				olen, elen, len);		\
 	} else							\

@@ -153,6 +153,8 @@ int test_alg(const char* prefix, aes_desc_t *alg, uchar *key, uchar *in, ssize_t
 	printf("\nEncrypt   : ");
 	BENCH(setup_iv(alg, iv); eerr = alg->encrypt(rkeys, alg->rounds, iv, epad, in, ctxt, ln, &eln), rep/2+1, ln);
 	printf("%zi->%zi: %i ", ln, eln, eerr);
+	if (eerr < 0)
+		++err;
 	err += cmp_ln(eln, exp_eln, "encr vs exp");
 	if (last_ln == ln && last_epad == epad) {
 		err += compare(ctxt, last_ct, eln, "encr vs prev");
@@ -167,6 +169,8 @@ int test_alg(const char* prefix, aes_desc_t *alg, uchar *key, uchar *in, ssize_t
 	memset(vfy, 0xff, DEF_LN+16);
 	BENCH(setup_iv(alg, iv); derr = alg->decrypt(rkeys, alg->rounds, iv, dpad, ctxt, vfy, eln, &dln), rep/2+1, eln);
 	printf("%zi->%zi: %i ", eln, dln, derr);
+	if (derr < 0)
+		++err;
 	ssize_t exp_dln = alg->blksize <= 1? eln: (dpad? ln: eln);
 	// TODO: We should try with shorter ln as well? Seeing what dln is returned then ...	
 	err += compare(vfy, in, ln, prefix);

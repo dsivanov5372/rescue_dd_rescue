@@ -85,7 +85,7 @@ int dec_fix_olen_pad(ssize_t *olen, uint pad, const uchar *output)
 	int err = 0;
 	if (pad != PAD_ALWAYS) {
 		if (last < 8)
-			err = -last;
+			err = last;
 	}
 	if (*olen & 0x0f)
 		*olen += 16-(*olen&0x0f);
