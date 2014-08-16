@@ -95,11 +95,32 @@ int compare(uchar* p1, uchar* p2, size_t ln, const char* msg)
 	uint i;
 	for (i = 0; i < ln; ++i) 
 		if (p1[i] != p2[i]) {
-			printf("Miscompare (%s) @ %i: %02x <-> %02x",
+			printf("Miscompare (%s) @ %i: %02x <-> %02x ",
 				msg, i, p1[i], p2[i]);
 			return 1;
 		}
 	return 0;
+}
+
+int cmp_ln(ssize_t l1, ssize_t l2, const char* msg)
+{
+	if (l1 == l2)
+		return 0;
+	printf("Inconsistent length: %zi vs %zi (%s) ",
+			l1, l2, msg);
+	return 1;
+}
+
+int cmp_rv(int r1, int r2, const char* msg)
+{
+	if (r1 == r2)
+		return 0;
+	printf("Diff rval: %i vs %i (%s) ",
+			r1, r2, msg);
+	if ((r1 < 0 && r2 >= 0) || (r1 >= 0 && r2 < 0))
+		return 1;
+	else
+		return 0;
 }
 
 int tested = 0;
@@ -113,7 +134,7 @@ uchar last_ct[DEF_LN+16];
 
 int test_alg(const char* prefix, aes_desc_t *alg, uchar *key, uchar *in, ssize_t ln, int epad, int dpad, int rep)
 {
-	uchar ctxt[DEF_LN], vfy[DEF_LN];
+	uchar ctxt[DEF_LN+16], vfy[DEF_LN+16];
 	uchar iv[16];
         struct timeval t1, t2;
 	double tdiff; 
@@ -135,27 +156,36 @@ int test_alg(const char* prefix, aes_desc_t *alg, uchar *key, uchar *in, ssize_t
 	assert(eln == exp_eln);
 	if (last_ln == ln && last_epad == epad) {
 		err += compare(ctxt, last_ct, eln, "encr vs prev");
-		// TODO: Compare elen against last
-		// TODO: Compare retval
+		err += cmp_ln(eln, last_eln, "enc len");
+		err += cmp_rv(eerr, last_eres, "enc retval");
 	}
 	printf("\nDKey setup: ");
 	BENCH(alg->dec_key_setup(key, rkeys, alg->rounds); alg->release(rkeys, alg->rounds), rep, 16*(1+alg->rounds));
 	alg->dec_key_setup(key, rkeys, alg->rounds);
 	printf("\nDecrypt   : ");
-	memset(vfy, 0xff, DEF_LN);
+	memset(vfy, 0xff, DEF_LN+16);
 	BENCH(setup_iv(alg, iv); derr = alg->decrypt(rkeys, alg->rounds, iv, dpad, ctxt, vfy, eln, &dln), rep/2+1, eln);
 	printf("%zi->%zi: %i ", eln, dln, derr);
 	ssize_t exp_dln = alg->blksize <= 1? eln: (dpad? ln: eln);
-	// TODO: We should try with short ln as well? Seeing what dln is returned then ...	
+	// TODO: We should try with shorter ln as well? Seeing what dln is returned then ...	
 	err += compare(vfy, in, ln, prefix);
 	assert(dln == exp_dln);
 	if (last_ln == ln && last_dpad == dpad) {
-		// TODO: Compare dlen against last
-		// TODO: Compare retval
+		err += cmp_ln(dln, last_dln, "dec len");
+		err += cmp_rv(derr, last_dres, "dec retval");
 	}
 	/* TODO: Check for overwrite(CTR) and padding(Others) */
-	//if (vfy[LN] != 0 /*SHIFT*/ && alg->blksize != 1)
-	//	printf("\n Padding broken! %02x\n", vfy[LN]);
+	if (alg->blksize <= 1 && vfy[dln] != 0xff) {
+		printf("overrun detected "); ++err;
+	}
+	if (alg->blksize > 1 && (ln&15)) {
+		if (epad == PAD_ZERO && vfy[ln] != 0) {
+			printf("no zero pad "); ++err;
+		}
+		if (epad != PAD_ZERO && vfy[ln] != (ln&15)) {
+			printf("no %i pad ", (int)(ln&15)); ++err;
+		}
+	}
 	/* Update cache */	
 	last_ln = ln; last_epad = epad; last_dpad = dpad;
 	memcpy(last_ct, ctxt, eln);

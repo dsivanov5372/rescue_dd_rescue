@@ -70,7 +70,7 @@ int AES_OSSL_##BITCHAIN##_Encrypt(const unsigned char* ctx, unsigned int rounds,
 	if (olen+elen < len)					\
 		fprintf(stderr, "Encryption length mismatch %i+%i != %zi\n",		\
 			olen, elen, len);			\
-	return (pad == PAD_ALWAYS || (len&15))? 16-(len&15): 0;	\
+	return (DOPAD && (pad == PAD_ALWAYS || (len&15)))? 16-(len&15): 0;	\
 };								\
 int  AES_OSSL_##BITCHAIN##_Decrypt(const unsigned char* ctx, unsigned int rounds,	\
 			        unsigned char* iv, unsigned int pad,			\
