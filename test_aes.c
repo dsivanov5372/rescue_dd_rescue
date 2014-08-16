@@ -111,7 +111,7 @@ uint last_eln, last_dln;
 int last_eres, last_dres;
 uchar last_ct[DEF_LN+16];
 
-int test_alg(const char* prefix, aes_desc_t *alg, uchar *key, uchar *in, uint ln, int epad, int dpad, int rep)
+int test_alg(const char* prefix, aes_desc_t *alg, uchar *key, uchar *in, ssize_t ln, int epad, int dpad, int rep)
 {
 	uchar ctxt[DEF_LN], vfy[DEF_LN];
 	uchar iv[16];
@@ -132,9 +132,9 @@ int test_alg(const char* prefix, aes_desc_t *alg, uchar *key, uchar *in, uint ln
 	printf("\nEncrypt   : ");
 	BENCH(setup_iv(alg, iv); eerr = alg->encrypt(rkeys, alg->rounds, iv, epad, in, ctxt, ln, &eln), rep/2+1, ln);
 	printf("%zi->%zi: %i ", ln, eln, eerr);
+	assert(eln == exp_eln);
 	if (last_ln == ln && last_epad == epad) {
 		err += compare(ctxt, last_ct, eln, "encr vs prev");
-		assert(eln == exp_eln);
 		// TODO: Compare elen against last
 		// TODO: Compare retval
 	}
@@ -148,8 +148,8 @@ int test_alg(const char* prefix, aes_desc_t *alg, uchar *key, uchar *in, uint ln
 	ssize_t exp_dln = alg->blksize <= 1? eln: (dpad? ln: eln);
 	// TODO: We should try with short ln as well? Seeing what dln is returned then ...	
 	err += compare(vfy, in, ln, prefix);
+	assert(dln == exp_dln);
 	if (last_ln == ln && last_dpad == dpad) {
-		assert(dln == exp_dln);
 		// TODO: Compare dlen against last
 		// TODO: Compare retval
 	}
