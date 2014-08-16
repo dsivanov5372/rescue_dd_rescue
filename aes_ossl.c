@@ -65,7 +65,7 @@ int AES_OSSL_##BITCHAIN##_Encrypt(const unsigned char* ctx, unsigned int rounds,
 			EVP_CIPHER_CTX_set_padding(evpctx, 0);	\
 		CHECK_ERR(EVP_EncryptUpdate(evpctx, out, &olen, in, len));		\
 		CHECK_ERR2(EVP_EncryptFinal, out, olen, elen);				\
-		if (elen && (len&15)) olen -= 16;		\
+		if (0 && elen && (len&15)) olen -= 16;		\
 	}							\
 	*flen = olen+elen;					\
 	if (DOPAD && pad == PAD_ASNEEDED && !(len&15))		\

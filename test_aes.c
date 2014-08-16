@@ -144,7 +144,7 @@ int test_alg(const char* prefix, aes_desc_t *alg, uchar *key, uchar *in, ssize_t
 	ssize_t eln, dln;
 	ssize_t exp_eln = alg->blksize <= 1? ln: ((epad == PAD_ALWAYS || (ln&15))? ln+16-(ln&15): ln);
 	++tested;
-	printf("\n* %s %s (%i, %i, %i) pad %i/%i", prefix, alg->name, alg->keylen, alg->rounds, alg->ctx_size, epad, dpad);
+	printf("* %s %s (%i, %i, %i) pad %i/%i", prefix, alg->name, alg->keylen, alg->rounds, alg->ctx_size, epad, dpad);
 	printf("\nEKey setup: ");
 	/* TODO: Use secmem ... */
 	uchar *rkeys = (uchar*)malloc(alg->ctx_size);
@@ -198,6 +198,9 @@ int test_alg(const char* prefix, aes_desc_t *alg, uchar *key, uchar *in, ssize_t
 	memcpy(last_ct, ctxt, eln);
 	last_eln = eln; last_dln = dln;
 	last_eres = eerr; last_dres = derr;
+	printf("\n");
+	if (0 && err)
+		abort();
 	if (alg->release)
 		alg->release(rkeys, alg->rounds);
 	free(rkeys);
@@ -257,17 +260,17 @@ int main(int argc, char *argv[])
 
 	aes_desc_t *alg = NULL;
 	//OPENSSL_init();
-	printf("===> AES tests/benchmark (%i) PAD_ZERO <===", DEF_LN);
+	printf("===> AES tests/benchmark (%i) PAD_ZERO <===\n", DEF_LN);
 	TEST_ENGINES(DEF_LN, PAD_ZERO, PAD_ZERO);
-	printf("\n===> AES tests/benchmark (%i) PAD_ZERO <===", DEF_LN-SHIFT);
+	printf("===> AES tests/benchmark (%i) PAD_ZERO <===\n", DEF_LN-SHIFT);
 	TEST_ENGINES(DEF_LN-SHIFT, PAD_ZERO, PAD_ZERO);
-	printf("\n===> AES tests/benchmark (%i) PAD_ALWAYS <===", DEF_LN);
+	printf("\n===> AES tests/benchmark (%i) PAD_ALWAYS <===\n", DEF_LN);
 	TEST_ENGINES(DEF_LN, PAD_ALWAYS, PAD_ALWAYS);
-	printf("\n===> AES tests/benchmark (%i) PAD_ALWAYS <===", DEF_LN-SHIFT);
+	printf("===> AES tests/benchmark (%i) PAD_ALWAYS <===\n", DEF_LN-SHIFT);
 	TEST_ENGINES(DEF_LN-SHIFT, PAD_ALWAYS, PAD_ALWAYS);
-	printf("\n===> AES tests/benchmark (%i) PAD_ASNEEDED <===", DEF_LN);
+	printf("\n===> AES tests/benchmark (%i) PAD_ASNEEDED <===\n", DEF_LN);
 	TEST_ENGINES(DEF_LN, PAD_ASNEEDED, PAD_ASNEEDED);
-	printf("\n===> AES tests/benchmark (%i) PAD_ASNEEDED <===", DEF_LN-SHIFT);
+	printf("===> AES tests/benchmark (%i) PAD_ASNEEDED <===\n", DEF_LN-SHIFT);
 	TEST_ENGINES(DEF_LN-SHIFT, PAD_ASNEEDED, PAD_ASNEEDED);
 
 
