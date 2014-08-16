@@ -197,12 +197,30 @@ int test_alg(const char* prefix, aes_desc_t *alg, uchar *key, uchar *in, ssize_t
 	return err;
 }
 
-
+#ifdef HAVE_AESNI
+#define TEST_ENGINES(LN, EPAD, DPAD)			\
+	alg = findalg(AESNI_Methods, testalg);		\
+	if (alg) 					\
+		err += test_alg("AESNI", alg, key, in, LN, EPAD, DPAD, rep);	\
+	alg = findalg(AES_C_Methods, testalg);		\
+	if (alg) 					\
+		err += test_alg("AES_C", alg, key, in, LN, EPAD, DPAD, rep);	\
+	alg = findalg(AES_OSSL_Methods, testalg);	\
+	if (alg)					\
+		err += test_alg("OSSL ", alg, key, in, LN, EPAD, DPAD, rep)
+#else
+#define TEST_ENGINES(LN, EPAD, DPAD)			\
+	alg = findalg(AES_C_Methods, testalg);		\
+	if (alg) 					\
+		err += test_alg("AES_C", alg, key, in, LN, EPAD, DPAD, rep);	\
+	alg = findalg(AES_OSSL_Methods, testalg);	\
+	if (alg)					\
+		err += test_alg("OSSL ", alg, key, in, LN, EPAD, DPAD, rep)
+#endif
 
 int main(int argc, char *argv[])
 {
 	int rep = REP;
-	unsigned int LN = DEF_LN;
 	unsigned char in[DEF_LN+16];
 	unsigned char *key = (unsigned char*)"Test Key_123 is long enough even for AES-256";
 	//int dbg = 0;
@@ -225,42 +243,19 @@ int main(int argc, char *argv[])
 	else
 		srand(time(NULL));
 	if (argc > 4)
-		fillval(in, LN, atol(argv[4]));
+		fillval(in, DEF_LN, atol(argv[4]));
 	else
-		fillrand(in, LN);
+		fillrand(in, DEF_LN);
 
 
 	aes_desc_t *alg = NULL;
-	printf("===> AES tests/benchmark (%i) <===", LN);
-
 	//OPENSSL_init();
-#ifdef HAVE_AESNI
-	alg = findalg(AESNI_Methods, testalg);
-	if (alg) 
-		err += test_alg("AESNI", alg, key, in, LN, PAD_ZERO, PAD_ZERO, rep);
-#endif
-	alg = findalg(AES_C_Methods, testalg);
-	if (alg) 
-		err += test_alg("AES_C", alg, key, in, LN, PAD_ZERO, PAD_ZERO, rep);
-	alg = findalg(AES_OSSL_Methods, testalg);
-	if (alg)
-		err += test_alg("OSSL ", alg, key, in, LN, PAD_ZERO, PAD_ZERO, rep);
-	
-	LN -= SHIFT;
-	printf("\n===> AES tests/benchmark (%i) <===", LN);
-#ifdef HAVE_AESNI
-	alg = findalg(AESNI_Methods, testalg);
-	if (alg) 
-		err += test_alg("AESNI", alg, key, in, LN, PAD_ZERO, PAD_ZERO, rep);
-#endif
-	alg = findalg(AES_C_Methods, testalg);
-	if (alg) 
-		err += test_alg("AES_C", alg, key, in, LN, PAD_ZERO, PAD_ZERO, rep);
-	alg = findalg(AES_OSSL_Methods, testalg);
-	if (alg)
-		err += test_alg("OSSL ", alg, key, in, LN, PAD_ZERO, PAD_ZERO, rep);
-
+	printf("===> AES tests/benchmark (%i) <===", DEF_LN);
+	TEST_ENGINES(DEF_LN, PAD_ZERO, PAD_ZERO);
+	printf("\n===> AES tests/benchmark (%i) <===", DEF_LN-SHIFT);
+	TEST_ENGINES(DEF_LN-SHIFT, PAD_ZERO, PAD_ZERO);
 	/* TODO: Test with different padding values */
+
 
 	printf("\n");
 	secmem_release(crypto);
