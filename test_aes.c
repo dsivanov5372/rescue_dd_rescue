@@ -261,6 +261,10 @@ int main(int argc, char *argv[])
 	TEST_ENGINES(DEF_LN, PAD_ALWAYS, PAD_ALWAYS);
 	printf("\n===> AES tests/benchmark (%i) PAD_ALWAYS <===", DEF_LN-SHIFT);
 	TEST_ENGINES(DEF_LN-SHIFT, PAD_ALWAYS, PAD_ALWAYS);
+	printf("\n===> AES tests/benchmark (%i) PAD_ASNEEDED <===", DEF_LN);
+	TEST_ENGINES(DEF_LN, PAD_ASNEEDED, PAD_ASNEEDED);
+	printf("\n===> AES tests/benchmark (%i) PAD_ASNEEDED <===", DEF_LN-SHIFT);
+	TEST_ENGINES(DEF_LN-SHIFT, PAD_ASNEEDED, PAD_ASNEEDED);
 
 
 	printf("\n");
