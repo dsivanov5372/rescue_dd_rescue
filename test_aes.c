@@ -134,7 +134,7 @@ uchar last_ct[DEF_LN+16];
 
 int test_alg(const char* prefix, aes_desc_t *alg, uchar *key, uchar *in, ssize_t ln, int epad, int dpad, int rep)
 {
-	uchar ctxt[DEF_LN+16], vfy[DEF_LN+16];
+	uchar ctxt[DEF_LN+16], vfy[DEF_LN+2*16];	/* OpenSSL may need +2*16, sigh */
 	uchar iv[16];
         struct timeval t1, t2;
 	double tdiff; 
@@ -159,6 +159,7 @@ int test_alg(const char* prefix, aes_desc_t *alg, uchar *key, uchar *in, ssize_t
 		err += cmp_ln(eln, last_eln, "enc len");
 		err += cmp_rv(eerr, last_eres, "enc retval");
 	}
+	//if (err) printf("%i ", err);
 	printf("\nDKey setup: ");
 	BENCH(alg->dec_key_setup(key, rkeys, alg->rounds); if (alg->release) alg->release(rkeys, alg->rounds), rep, 16*(1+alg->rounds));
 	alg->dec_key_setup(key, rkeys, alg->rounds);
@@ -174,7 +175,8 @@ int test_alg(const char* prefix, aes_desc_t *alg, uchar *key, uchar *in, ssize_t
 		err += cmp_ln(dln, last_dln, "dec len");
 		err += cmp_rv(derr, last_dres, "dec retval");
 	}
-	/* TODO: Check for overwrite(CTR) and padding(Others) */
+	//if (err) printf("%i ", err);
+	/* Check for overwrite(CTR) and padding(Others) */
 	if (alg->blksize <= 1 && vfy[dln] != 0xff) {
 		printf("overrun detected "); ++err;
 	}
@@ -186,6 +188,7 @@ int test_alg(const char* prefix, aes_desc_t *alg, uchar *key, uchar *in, ssize_t
 			printf("no %i pad ", 16-(int)(ln&15)); ++err;
 		}
 	}
+	//if (err) printf("%i ", err);
 	/* Update cache */	
 	last_ln = ln; last_epad = epad; last_dpad = dpad;
 	memcpy(last_ct, ctxt, eln);
@@ -201,30 +204,30 @@ int test_alg(const char* prefix, aes_desc_t *alg, uchar *key, uchar *in, ssize_t
 #define TEST_ENGINES(LN, EPAD, DPAD)			\
 	alg = findalg(AESNI_Methods, testalg);		\
 	if (alg) 					\
-		err += test_alg("AESNI", alg, key, in, LN, EPAD, DPAD, rep);	\
+		ret += test_alg("AESNI", alg, key, in, LN, EPAD, DPAD, rep);	\
 	alg = findalg(AES_C_Methods, testalg);		\
 	if (alg) 					\
-		err += test_alg("AES_C", alg, key, in, LN, EPAD, DPAD, rep);	\
+		ret += test_alg("AES_C", alg, key, in, LN, EPAD, DPAD, rep);	\
 	alg = findalg(AES_OSSL_Methods, testalg);	\
 	if (alg)					\
-		err += test_alg("OSSL ", alg, key, in, LN, EPAD, DPAD, rep)
+		ret += test_alg("OSSL ", alg, key, in, LN, EPAD, DPAD, rep)
 #else
 #define TEST_ENGINES(LN, EPAD, DPAD)			\
 	alg = findalg(AES_C_Methods, testalg);		\
 	if (alg) 					\
-		err += test_alg("AES_C", alg, key, in, LN, EPAD, DPAD, rep);	\
+		ret += test_alg("AES_C", alg, key, in, LN, EPAD, DPAD, rep);	\
 	alg = findalg(AES_OSSL_Methods, testalg);	\
 	if (alg)					\
-		err += test_alg("OSSL ", alg, key, in, LN, EPAD, DPAD, rep)
+		ret += test_alg("OSSL ", alg, key, in, LN, EPAD, DPAD, rep)
 #endif
 
+int ret = 0;
 int main(int argc, char *argv[])
 {
 	int rep = REP;
 	unsigned char in[DEF_LN+16];
 	unsigned char *key = (unsigned char*)"Test Key_123 is long enough even for AES-256";
 	//int dbg = 0;
-	int err = 0;
 	char* testalg;
 	crypto = secmem_init();
 	/*
@@ -262,6 +265,6 @@ int main(int argc, char *argv[])
 
 	printf("\n");
 	secmem_release(crypto);
-	return tested? err: -1;
+	return (tested? ret: -1);
 }
 

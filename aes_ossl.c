@@ -40,7 +40,7 @@ void AES_OSSL_##BITS##_DKey_Expand_##CHAIN (const unsigned char *userkey, unsign
 	AES_OSSL_Bits_DKey_Expand(EVP_aes_##BITS##_##CHAIN (), userkey, ctx);	\
 }
 
-#define AES_OSSL_CRYPT(BITCHAIN, IV, DOPAD)	\
+#define AES_OSSL_CRYPT(BITCHAIN, IV, DOPAD)			\
 int AES_OSSL_##BITCHAIN##_Encrypt(const unsigned char* ctx, unsigned int rounds,	\
 			        unsigned char* iv, unsigned int pad, 			\
 				const unsigned char* in, unsigned char* out, 		\
@@ -83,7 +83,7 @@ int  AES_OSSL_##BITCHAIN##_Decrypt(const unsigned char* ctx, unsigned int rounds
 	if (IV) {						\
 		memcpy(evpctx->oiv, iv, 16); memcpy(evpctx->iv, iv, 16);		\
 	}							\
-	if (DOPAD && pad == PAD_ALWAYS)	{			\
+	if (0 && DOPAD && pad == PAD_ALWAYS)	{		\
 		CHECK_ERR(EVP_DecryptUpdate(evpctx, out, &olen, in, len+16-(len&0x0f)));\
 	} else {						\
 		CHECK_ERR(EVP_DecryptUpdate(evpctx, out, &olen, in, (len&15)? len+16-(len&0x0f): len));\
@@ -235,7 +235,7 @@ int  AES_OSSL_##BITCHAIN##_DecryptX2(const unsigned char* ctx, unsigned int roun
 		memcpy((evpctx+1)->oiv, iv, 16); memcpy((evpctx+1)->iv, iv, 16);	\
 		memcpy(evpctx->oiv, iv, 16); memcpy(evpctx->iv, iv, 16);		\
 	}							\
-	if (pad == PAD_ALWAYS)	{				\
+	if (0 && pad == PAD_ALWAYS) {				\
 		CHECK_ERR(EVP_DecryptUpdate(evpctx+1, out, &olen, in, len+16-(len&0x0f)));\
 	} else {						\
 		CHECK_ERR(EVP_DecryptUpdate(evpctx+1, out, &olen, in, (len&15)? len+16-(len&0x0f): len));\
