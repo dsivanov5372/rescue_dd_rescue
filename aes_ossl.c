@@ -198,7 +198,7 @@ int  AES_OSSL_##BITCHAIN##_EncryptX2(const unsigned char* ctx, unsigned int roun
 	int olen, elen;						\
 	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;		\
 	EVP_CIPHER_CTX_set_padding(evpctx, pad);		\
-	EVP_CIPHER_CTX_set_padding(evpctx+1, pad);		\
+	EVP_CIPHER_CTX_set_padding(evpctx+1, 0);		\
 	if (IV) {						\
 		memcpy(evpctx->oiv, iv, 16); memcpy(evpctx->iv, iv, 16);		\
 		memcpy((evpctx+1)->oiv, iv, 16); memcpy((evpctx+1)->iv, iv, 16);	\
@@ -229,7 +229,7 @@ int  AES_OSSL_##BITCHAIN##_DecryptX2(const unsigned char* ctx, unsigned int roun
 {								\
 	int olen, elen;						\
 	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;		\
-	EVP_CIPHER_CTX_set_padding(evpctx+1, pad);		\
+	EVP_CIPHER_CTX_set_padding(evpctx+1, 0);		\
 	EVP_CIPHER_CTX_set_padding(evpctx, pad);		\
 	if (IV) {						\
 		memcpy((evpctx+1)->oiv, iv, 16); memcpy((evpctx+1)->iv, iv, 16);	\

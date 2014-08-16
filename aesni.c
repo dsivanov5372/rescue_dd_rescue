@@ -337,6 +337,26 @@ void AESNI_256_DKey_Expansion_r(const unsigned char *userkey,
 	AESNI_EKey_DKey((unsigned char*)crypto->xkeys, dkey, rounds);
 }
 
+#ifdef DEBUG
+#include <stdio.h>
+void static _debug_print(const __m128i m, const char* msg)
+{
+	union { 
+		unsigned char a[16];
+		unsigned int b[4];
+	} val;
+	_mm_storeu_si128((__m128i*)&val, m);
+	int i;
+	printf("%s 0x", msg);
+	for (i = 15; i >= 0; --i)
+		printf("%02x ", val.a[i]);
+	printf(" %08x %08x %08x %08x ", val.b[3], val.b[2], val.b[1], val.b[0]);
+	for (i = 0; i < 16; ++i)
+		printf(" %02x", val.a[i]);
+	printf("\n");
+}
+#endif
+
 typedef __m128i (crypt_blk_fn)(const __m128i in, const unsigned char *rkeys, unsigned int rounds);
 typedef void (crypt_4blks_fn)(__m128i *i0, __m128i *i1, __m128i *i2, __m128i *i3,
 			      const unsigned char *rkeys, unsigned int rounds);
@@ -593,7 +613,7 @@ int  AESNI_ECB_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt, int enc,
 		in  += 8*sizeof(__m128i);
 		out += 8*sizeof(__m128i);
 	}
-	while (len > 0 || (len == 0 && pad == PAD_ALWAYS)) {
+	while (len > 0 || (enc && len == 0 && pad == PAD_ALWAYS)) {
 		register __m128i blk = _mm_loadu_si128((const __m128i*)in);
 		if (enc && len < sizeof(__m128i)) {
 			__m128i mask = _mkmask(len);
@@ -604,6 +624,13 @@ int  AESNI_ECB_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt, int enc,
 				imask = _mm_xor_si128(imask, mask);
 				padv = _mm_and_si128(padv, imask);
 				blk = _mm_or_si128(blk, padv);
+#ifdef DEBUG
+				if (!len) {
+					_debug_print(mask, "mask");
+					_debug_print(imask, "imask");
+					_debug_print(padv, "padv");
+				}
+#endif
 			}
 			*olen += 16-(len&15);
 		}
@@ -768,26 +795,6 @@ int  AESNI_CBC_Decrypt( const unsigned char* key, unsigned int rounds,
 	return AESNI_CBC_Decrypt_Tmpl(Decrypt_4Blocks, Decrypt_Block,
 			key, rounds, iv, pad, in, out, len, olen);
 }
-#ifdef DEBUG_CBLK_SETUP
-#include <stdio.h>
-void static _debug_print(const __m128i m)
-{
-	union { 
-		unsigned char a[16];
-		unsigned int b[4];
-	} val;
-	_mm_storeu_si128((__m128i*)&val, m);
-	int i;
-	printf("0x");
-	for (i = 15; i >= 0; --i)
-		printf("%02x ", val.a[i]);
-	printf(" %08x %08x %08x %08x ", val.b[3], val.b[2], val.b[1], val.b[0]);
-	for (i = 0; i < 16; ++i)
-		printf(" %02x", val.a[i]);
-	printf("\n");
-}
-#endif
-
 
 #include <emmintrin.h>
 #include <smmintrin.h>

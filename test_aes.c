@@ -148,19 +148,19 @@ int test_alg(const char* prefix, aes_desc_t *alg, uchar *key, uchar *in, ssize_t
 	printf("\nEKey setup: ");
 	/* TODO: Use secmem ... */
 	uchar *rkeys = (uchar*)malloc(alg->ctx_size);
-	BENCH(alg->enc_key_setup(key, rkeys, alg->rounds); alg->release(rkeys, alg->rounds), rep, 16*(1+alg->rounds));
+	BENCH(alg->enc_key_setup(key, rkeys, alg->rounds); if (alg->release) alg->release(rkeys, alg->rounds), rep, 16*(1+alg->rounds));
 	alg->enc_key_setup(key, rkeys, alg->rounds);
 	printf("\nEncrypt   : ");
 	BENCH(setup_iv(alg, iv); eerr = alg->encrypt(rkeys, alg->rounds, iv, epad, in, ctxt, ln, &eln), rep/2+1, ln);
 	printf("%zi->%zi: %i ", ln, eln, eerr);
-	assert(eln == exp_eln);
+	err += cmp_ln(eln, exp_eln, "encr vs exp");
 	if (last_ln == ln && last_epad == epad) {
 		err += compare(ctxt, last_ct, eln, "encr vs prev");
 		err += cmp_ln(eln, last_eln, "enc len");
 		err += cmp_rv(eerr, last_eres, "enc retval");
 	}
 	printf("\nDKey setup: ");
-	BENCH(alg->dec_key_setup(key, rkeys, alg->rounds); alg->release(rkeys, alg->rounds), rep, 16*(1+alg->rounds));
+	BENCH(alg->dec_key_setup(key, rkeys, alg->rounds); if (alg->release) alg->release(rkeys, alg->rounds), rep, 16*(1+alg->rounds));
 	alg->dec_key_setup(key, rkeys, alg->rounds);
 	printf("\nDecrypt   : ");
 	memset(vfy, 0xff, DEF_LN+16);
@@ -169,7 +169,7 @@ int test_alg(const char* prefix, aes_desc_t *alg, uchar *key, uchar *in, ssize_t
 	ssize_t exp_dln = alg->blksize <= 1? eln: (dpad? ln: eln);
 	// TODO: We should try with shorter ln as well? Seeing what dln is returned then ...	
 	err += compare(vfy, in, ln, prefix);
-	assert(dln == exp_dln);
+	err += cmp_ln(dln, exp_dln, "decr vs exp");
 	if (last_ln == ln && last_dpad == dpad) {
 		err += cmp_ln(dln, last_dln, "dec len");
 		err += cmp_rv(derr, last_dres, "dec retval");
@@ -182,8 +182,8 @@ int test_alg(const char* prefix, aes_desc_t *alg, uchar *key, uchar *in, ssize_t
 		if (epad == PAD_ZERO && vfy[ln] != 0) {
 			printf("no zero pad "); ++err;
 		}
-		if (epad != PAD_ZERO && vfy[ln] != (ln&15)) {
-			printf("no %i pad ", (int)(ln&15)); ++err;
+		if (epad != PAD_ZERO && vfy[ln] != 16-(ln&15)) {
+			printf("no %i pad ", 16-(int)(ln&15)); ++err;
 		}
 	}
 	/* Update cache */	
@@ -250,11 +250,14 @@ int main(int argc, char *argv[])
 
 	aes_desc_t *alg = NULL;
 	//OPENSSL_init();
-	printf("===> AES tests/benchmark (%i) <===", DEF_LN);
+	printf("===> AES tests/benchmark (%i) PAD_ZERO <===", DEF_LN);
 	TEST_ENGINES(DEF_LN, PAD_ZERO, PAD_ZERO);
-	printf("\n===> AES tests/benchmark (%i) <===", DEF_LN-SHIFT);
+	printf("\n===> AES tests/benchmark (%i) PAD_ZERO <===", DEF_LN-SHIFT);
 	TEST_ENGINES(DEF_LN-SHIFT, PAD_ZERO, PAD_ZERO);
-	/* TODO: Test with different padding values */
+	printf("\n===> AES tests/benchmark (%i) PAD_ALWAYS <===", DEF_LN);
+	TEST_ENGINES(DEF_LN, PAD_ALWAYS, PAD_ALWAYS);
+	printf("\n===> AES tests/benchmark (%i) PAD_ALWAYS <===", DEF_LN-SHIFT);
+	TEST_ENGINES(DEF_LN-SHIFT, PAD_ALWAYS, PAD_ALWAYS);
 
 
 	printf("\n");
