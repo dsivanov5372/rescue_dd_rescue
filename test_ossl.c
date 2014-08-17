@@ -69,33 +69,39 @@ int encrypt_padasneeded(EVP_CIPHER_CTX *ctx, const uchar* in, uint iln, uchar* o
 
 int decrypt_padasneeded(EVP_CIPHER_CTX *ctx, const uchar* in, uint iln, uchar* out, uint exp)
 {
-	int oln, o2ln;
+	int oln, o1ln, o2ln;
 	EVP_DecryptInit(ctx, NULL, NULL, NULL);
-	EVP_CIPHER_CTX_set_padding(ctx, 1);
-	EVP_CIPHER_CTX ctx2;
-	memcpy(&ctx2, ctx, sizeof(*ctx));
-	int res = EVP_DecryptUpdate(ctx, out, &oln, in, iln);
-	printf("Decrypt: %i (%i -> %i", res, iln, oln);
+	EVP_CIPHER_CTX_set_padding(ctx, 0);
+	int res = EVP_DecryptUpdate(ctx, out, &oln, in, iln-16);
+	printf("Decrypt: %i -> %i(%i)", iln, oln, res);
 	assert(res > 0);
 	assert(oln == iln-16);
-	res = EVP_DecryptFinal(ctx, out+oln, &o2ln);
-	printf("+%i) %i\n", o2ln, res);
+	EVP_CIPHER_CTX ctx2;
+	memcpy(&ctx2, ctx, sizeof(*ctx));
+	/* TODO: May need to buffer out if in == out ...*/
+	EVP_CIPHER_CTX_set_padding(ctx, 1);
+	res = EVP_DecryptUpdate(ctx, out+oln, &o1ln, in+iln-16, 16);
+	printf("+%i(%i)", o1ln, res);
+	assert(res > 0);
+	res = EVP_DecryptFinal(ctx, out+oln+o1ln, &o2ln);
+	printf("+%i(%i)\n", o2ln, res);
 	if (res) {
-		assert(oln+o2ln == exp);
-		return oln+o2ln;
+		assert(oln+o1ln+o2ln == exp);
+		return oln+o1ln+o2ln;
 	}
 	/* Rewind and retry without padding */
 	memcpy(ctx, &ctx2, sizeof(*ctx));
 	EVP_CIPHER_CTX_set_padding(ctx, 0);
-	res = EVP_DecryptUpdate(ctx, out, &oln, in, iln);
-	printf("\t %i (%i -> %i", res, iln, oln);
-	assert(res > 0);
-	assert(oln == iln);
-	res = EVP_DecryptFinal(ctx, out+oln, &o2ln);
-	printf("+%i) %i\n", o2ln, res);
+	res = EVP_DecryptUpdate(ctx, out+oln, &o1ln, in+iln-16, 16);
 	assert(res);
-	assert(oln+o2ln == exp);
-	return oln+o2ln;
+	printf("\t %i -> %i( )+%i(%i)", iln, oln, o1ln, res);
+	assert(res > 0);
+	assert(oln+o1ln == iln);
+	res = EVP_DecryptFinal(ctx, out+oln+o1ln, &o2ln);
+	printf("+%i(%i)\n", o2ln, res);
+	assert(res);
+	assert(oln+o1ln+o2ln == exp);
+	return oln+o1ln+o2ln;
 }
 
 
