@@ -78,7 +78,10 @@ int decrypt_padasneeded(EVP_CIPHER_CTX *ctx, const uchar* in, uint iln, uchar* o
 	assert(oln == iln-16);
 	EVP_CIPHER_CTX ctx2;
 	memcpy(&ctx2, ctx, sizeof(*ctx));
-	/* TODO: May need to buffer out if in == out ...*/
+	/* No need to buffer out if in == out, as we do zero writes from here on in failure case ...*/
+	uchar obuf[16];
+	if (in == out)
+		memcpy(obuf, out+oln, 16);
 	EVP_CIPHER_CTX_set_padding(ctx, 1);
 	res = EVP_DecryptUpdate(ctx, out+oln, &o1ln, in+iln-16, 16);
 	printf("+%i(%i)", o1ln, res);
@@ -91,6 +94,8 @@ int decrypt_padasneeded(EVP_CIPHER_CTX *ctx, const uchar* in, uint iln, uchar* o
 	}
 	/* Rewind and retry without padding */
 	memcpy(ctx, &ctx2, sizeof(*ctx));
+	if (in == out)
+		memcpy(out+oln, obuf, 16);
 	EVP_CIPHER_CTX_set_padding(ctx, 0);
 	res = EVP_DecryptUpdate(ctx, out+oln, &o1ln, in+iln-16, 16);
 	assert(res);

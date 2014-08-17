@@ -78,36 +78,50 @@ int AES_OSSL_##BITCHAIN##_Decrypt(const unsigned char* ctx, unsigned int rounds,
 	       			ssize_t len, ssize_t *flen)			\
 {								\
 	int olen, elen = 0, ores;				\
+	int ilen = (len&15)? len+15-(len&15): len;		\
 	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;		\
 	EVP_DecryptInit(evpctx, NULL, NULL, NULL);		\
-	EVP_CIPHER_CTX_set_padding(evpctx, DOPAD?pad:0);	\
+	EVP_CIPHER_CTX_set_padding(evpctx, DOPAD && pad != PAD_ASNEEDED?pad:0);	\
 	if (IV) {						\
 		memcpy(evpctx->oiv, iv, 16); memcpy(evpctx->iv, iv, 16);	\
 	}							\
-	if (0 && DOPAD && pad == PAD_ALWAYS)	{		\
-		ores = EVP_DecryptUpdate(evpctx, out, &olen, in, len+16-(len&0x0f));	\
+	if (DOPAD && pad == PAD_ASNEEDED) {			\
+		int olen1;					\
+		uchar buf[16];					\
+		ores = EVP_DecryptUpdate(evpctx, out, &olen, in, ilen-16);	\
 		assert(ores);					\
+		EVP_CIPHER_CTX ctx2;				\
+		memcpy(&ctx2, evpctx, sizeof(ctx2));		\
+		/* Save piece that gets overwritten */		\
+		if (in == out)					\
+			memcpy(buf, out+olen, 16);		\
+		EVP_CIPHER_CTX_set_padding(evpctx, 1);		\
+		ores = EVP_DecryptUpdate(evpctx, out+olen, &olen1, in+ilen-16, 16);	\
+		assert(ores); assert(!olen1);			\
+		ores = EVP_DecryptFinal(evpctx, out+olen, &elen);		\
+		if (!ores) {					\
+			memcpy(evpctx, &ctx2, sizeof(ctx2));	\
+			if (in == out)				\
+				memcpy(out+olen, buf, 16);	\
+			ores = EVP_DecryptUpdate(evpctx, out+olen, &olen1, in+ilen-16, 16);	\
+			assert(ores); assert(olen1 == 16);	\
+			olen += olen1;				\
+			ores = EVP_DecryptFinal(evpctx, out+olen, &elen);	\
+			assert(ores);				\
+		}						\
+		memset(&ctx2, 0, sizeof(ctx2));			\
+		asm("":::"memory");				\
 	} else {						\
-		ores = EVP_DecryptUpdate(evpctx, out, &olen, in, (len&15)? len+16-(len&0x0f): len);	\
+		ores = EVP_DecryptUpdate(evpctx, out, &olen, in, ilen);	\
 		assert(ores);					\
-	}							\
-	ores = EVP_DecryptFinal(evpctx, out+olen, &elen);	\
-	if (!ores && DOPAD && pad == PAD_ASNEEDED) {		\
-		EVP_CIPHER_CTX_set_padding(evpctx, 0);		\
-		/* Works for ECB, not CBC, sigh! */		\
-		ores = EVP_DecryptUpdate(evpctx, out+olen, &elen, in+len, 0);	\
-		assert(ores); assert(elen == 0);		\
-		ores = EVP_DecryptFinal(evpctx, out+olen+elen, &elen);	\
-		printf("%i ", ores);				\
-		if (ores)					\
-			ores++;					\
+		ores = EVP_DecryptFinal(evpctx, out+olen, &elen);	\
 	}							\
 	if (DOPAD && pad) {					\
 		*flen = olen + elen;				\
 	} else							\
 		*flen = len;					\
-	if (DOPAD && pad == PAD_ASNEEDED && elen != 16)		\
-		return 16-elen;					\
+	if (DOPAD && pad == PAD_ASNEEDED)			\
+		return (elen? 16-elen: 1);			\
 	return ores - 1;					\
 }
 
@@ -248,39 +262,55 @@ int  AES_OSSL_##BITCHAIN##_DecryptX2(const unsigned char* ctx, unsigned int roun
 	       			ssize_t len, ssize_t *flen)				\
 {								\
 	int olen, elen, ores;					\
+	int rlen = (len&15)? len+16-(len&15): len;		\
 	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;		\
 	EVP_DecryptInit(evpctx+1, NULL, NULL, NULL);		\
 	EVP_DecryptInit(evpctx, NULL, NULL, NULL);		\
 	EVP_CIPHER_CTX_set_padding(evpctx+1, 0);		\
-	EVP_CIPHER_CTX_set_padding(evpctx, pad);		\
+	EVP_CIPHER_CTX_set_padding(evpctx, pad==PAD_ASNEEDED? 0: pad);	\
 	if (IV) {						\
 		memcpy((evpctx+1)->oiv, iv, 16); memcpy((evpctx+1)->iv, iv, 16);	\
 		memcpy(evpctx->oiv, iv, 16); memcpy(evpctx->iv, iv, 16);		\
 	}							\
-	if (0 && pad == PAD_ALWAYS) {				\
-		ores = EVP_DecryptUpdate(evpctx+1, out, &olen, in, len+16-(len&0x0f));	\
-	} else {						\
-		ores = EVP_DecryptUpdate(evpctx+1, out, &olen, in, (len&15)? len+16-(len&0x0f): len);	\
-	}							\
+	ores = EVP_DecryptUpdate(evpctx+1, out, &olen, in, rlen);		\
 	assert(ores);						\
 	ores = EVP_DecryptFinal(evpctx+1, out+olen, &elen);	\
 	assert(ores);						\
-	ores = EVP_DecryptUpdate(evpctx, out, &olen, out, olen+elen);	\
-	assert(ores);						\
-	ores = EVP_DecryptFinal(evpctx, out+olen, &elen);	\
-	if (!ores && pad == PAD_ASNEEDED) {			\
-		EVP_CIPHER_CTX_set_padding(evpctx, 0);		\
-		/* Fails for some reason ... */			\
-		ores = EVP_DecryptUpdate(evpctx, out+olen, &elen, out+olen, 16);	\
-		if (ores)					\
-			ores++;					\
+	if (pad == PAD_ASNEEDED) {				\
+		int ilen = olen, olen1;				\
+		uchar buf[16];					\
+		ores = EVP_DecryptUpdate(evpctx, out, &olen, out, ilen-16);	\
+		assert(ores); assert(olen == ilen-16);		\
+		/* Save piece that gets overwritten */		\
+		memcpy(buf, out+olen, 16);			\
+		EVP_CIPHER_CTX ctx2;				\
+		memcpy(&ctx2, evpctx, sizeof(ctx2));		\
+		EVP_CIPHER_CTX_set_padding(evpctx, 1);		\
+		ores = EVP_DecryptUpdate(evpctx, out+olen, &olen1, out+ilen-16, 16);	\
+		assert(ores); assert(!olen1);			\
+		ores = EVP_DecryptFinal(evpctx, out+olen, &elen);		\
+		if (!ores) {					\
+			memcpy(evpctx, &ctx2, sizeof(ctx2));	\
+			memcpy(out+olen, buf, 16);		\
+			ores = EVP_DecryptUpdate(evpctx, out+olen, &olen1, out+ilen-16, 16);	\
+			assert(ores); assert(olen1 == 16);	\
+			olen += olen1;				\
+			ores = EVP_DecryptFinal(evpctx, out+olen, &elen);	\
+			assert(ores);				\
+		}						\
+		memset(&ctx2, 0, sizeof(ctx2));			\
+		asm("":::"memory");				\
+	} else {						\
+		ores = EVP_DecryptUpdate(evpctx, out, &olen, out, olen+elen);	\
+		assert(ores);						\
+		ores = EVP_DecryptFinal(evpctx, out+olen, &elen);	\
 	}							\
 	if (pad)						\
 		*flen = olen+elen;				\
 	else							\
 		*flen = len;					\
-	if (pad == PAD_ASNEEDED && elen != 16)			\
-		return 16-elen;					\
+	if (pad == PAD_ASNEEDED)				\
+		return (elen? 16-elen: 1);			\
 	return ores - 1;					\
 }
 
