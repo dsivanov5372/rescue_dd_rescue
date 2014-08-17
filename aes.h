@@ -85,4 +85,7 @@ int  AES_Gen_CTR_Crypt(AES_Crypt_Blk_fn *cryptfn,
 void AES_Gen_CTR_Prep(const uchar nonce[16], uchar ctr[16], unsigned long long ival);
 void AES_Gen_Release(uchar *rkeys, uint rounds);
 int  dec_fix_olen_pad(ssize_t *olen, uint pad, const uchar *output);
+
+aes_desc_t *findalg(aes_desc_t* list, const char* nm);
+
 #endif

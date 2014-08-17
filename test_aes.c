@@ -79,17 +79,6 @@ void setup_iv(aes_desc_t *alg, uchar iv[16])
 		memcpy(iv, "Halleluja 12345", 16);
 }
 
-aes_desc_t *findalg(aes_desc_t* list, const char* nm)
-{
-	aes_desc_t* alg = list;
-	while (alg->name) {
-		if (!strcmp(alg->name, nm))
-			return alg;
-		alg += 1;
-	}
-	return NULL;
-}
-
 int compare(uchar* p1, uchar* p2, size_t ln, const char* msg)
 {
 	uint i;

@@ -211,3 +211,15 @@ void AES_Gen_Release(uchar *rkeys, uint rounds)
 	asm("":::"memory");
 }
 
+aes_desc_t *findalg(aes_desc_t* list, const char* nm)
+{
+	aes_desc_t* alg = list;
+	while (alg->name) {
+		if (!strcmp(alg->name, nm))
+			return alg;
+		alg += 1;
+	}
+	return NULL;
+}
+
+
