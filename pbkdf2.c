@@ -125,11 +125,15 @@ int pbkdf2(hashalg_t *hash,   unsigned char* pwd,  int plen,
 #include "sha256.h"
 
 void gensalt(unsigned char* salt, unsigned int slen, const char* fn, const char* ext, size_t flen)
-{
-	char* hashnm = malloc(strlen(fn)+strlen(ext)+20);
-	sprintf(hashnm, "%s%ss:%16zx", fn, ext, flen);
+{	
+	const int ln = strlen(fn) + (ext? strlen(ext): 0) + 18;
+	char hashnm[ln+2];
+	sprintf(hashnm, "%s%s:%016zx", fn, ext, flen);
 	hash_t hv;
 	sha256_init(&hv);
-	/* ... */
+	sha256_calc((unsigned char*)hashnm, ln, ln, &hv);
+	int i;
+	for (i = 0; i < slen/4; ++i)
+		*((unsigned int*)salt+i) = htonl(hv.sha256_h[i%8]);
 }
 
