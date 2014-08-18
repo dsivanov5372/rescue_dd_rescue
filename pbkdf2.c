@@ -1,6 +1,18 @@
+/** pbkdf2.c
+ * 
+ * memxor helper
+ * calculate hmac of data
+ * use it to stretch a password-phrase with salt into
+ * a key (using pbkdf2 (pkcs5))
+ * gen a salt from a file and a size
+ *
+ * (c) Kurt Garloff <kurt@garloff.de>, 9/2014
+ * License: GPLv2 or v3, at your option
+ */
+
+#include "pbkdf2.h"
 #include <string.h>
 #include <stdlib.h>
-#include "hash.h"
 #include <assert.h>
 #include <netinet/in.h>
 

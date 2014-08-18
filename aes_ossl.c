@@ -1,3 +1,12 @@
+/** aes_ossl.c
+ *
+ * Wrapper for openSSL to fit into dd_rescue's crypt
+ * structures. Mainly useful for testing
+ *
+ * (c) Kurt Garloff <kurt@garloff.de>, 8/2014
+ * License: GPLv2 or v3 or BSD (3-clause)
+ */
+
 #include <openssl/evp.h>
 #include <assert.h>
 #include "aes.h"
