@@ -121,4 +121,15 @@ int pbkdf2(hashalg_t *hash,   unsigned char* pwd,  int plen,
 	return 0;
 }
 
+#include <stdio.h>
+#include "sha256.h"
+
+void gensalt(unsigned char* salt, unsigned int slen, const char* fn, const char* ext, size_t flen)
+{
+	char* hashnm = malloc(strlen(fn)+strlen(ext)+20);
+	sprintf(hashnm, "%s%ss:%16zx", fn, ext, flen);
+	hash_t hv;
+	sha256_init(&hv);
+	/* ... */
+}
 
