@@ -163,7 +163,7 @@ sha512.po: sha512.c sha512.h hash.h config.h
 sha1.po: sha1.c sha1.h hash.h config.h
 	$(CC) $(CFLAGS_OPT) -fPIC -o $@ -c $<
 
-libddr_hash.so: libddr_MD5.po md5.po sha256.po sha512.po sha1.po
+libddr_hash.so: libddr_MD5.po md5.po sha256.po sha512.po sha1.po pbkdf2.po
 	$(CC) -shared -o $@ $^
 
 libddr_MD5.so: libddr_hash.so
