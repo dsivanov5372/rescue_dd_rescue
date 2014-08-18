@@ -21,6 +21,7 @@
 #include "sha256.h"
 #include "sha512.h"
 #include "sha1.h"
+#include "pbkdf2.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -107,8 +108,6 @@ hashalg_t *get_hashalg(hash_state *state, const char* nm)
 	return NULL;
 }
 
-int do_pbkdf2(hash_state*, char*);
-
 int hidden_input(hash_state* state, const char* prompt, int fd,
 		 unsigned char *buf, int bufln, int stripcrlf)
 {
@@ -131,6 +130,7 @@ int hidden_input(hash_state* state, const char* prompt, int fd,
 }
 
 #define MAX_HMACPWDLN 2048
+int do_pbkdf2(hash_state *state, char* param);
 
 int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 {
@@ -278,7 +278,6 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	return err;
 }
 
-void memxor(unsigned char* p1, const unsigned char *p2, ssize_t ln);
 
 #define MIN(a,b) ((a)<(b)? (a): (b))
 #define MAX(a,b) ((a)<(b)? (b): (a))
@@ -796,10 +795,6 @@ int hash_close(loff_t ooff, void **stat)
 	free(*stat);
 	return err;
 }
-
-int pbkdf2(hashalg_t *hash,   unsigned char* pwd,  int plen,
-			      unsigned char* salt, int slen,
-	   unsigned int iter, unsigned char* key,  int klen);
 
 static char _kout_buf[2049];
 char* kout(unsigned char* key, int klen)
