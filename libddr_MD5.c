@@ -75,10 +75,6 @@ typedef struct _hash_state {
 #endif
 } hash_state;
 
-/* TO DO: Add updating and reading MD5SUMS style files, optionally
- * as fallback for unavailable xattrs
- */
-
 const char *hash_help = "The HASH plugin for dd_rescue calculates a cryptographic checksum on the fly.\n"
 		" It supports unaligned blocks (arbitrary offsets) and holes(sparse writing).\n"
 		" Parameters: output:outfd=FNO:outnm=FILE:check:chknm=FILE:debug:[alg[o[rithm]=]ALG\n"
