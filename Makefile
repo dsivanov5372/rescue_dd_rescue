@@ -274,6 +274,9 @@ test_aes: test_aes.c $(AESNI_O) aes_c.o secmem.o sha256.o aes_ossl.o aes.o aesni
 aesni.o: aesni.c aesni.h aes.h sha256.h config.h
 	$(CC) $(CFLAGS) -fpie -O3 -maes -msse4.1 -c $<
 
+aesni.po: aesni.c aesni.h aes.h sha256.h config.h
+	$(CC) $(CFLAGS) -fPIC -O3 -maes -msse4.1 -c $< -o $@
+
 aes_c.o: aes_c.c aes_c.h aes.h sha256.h config.h
 	$(CC) $(CFLAGS) -fpie $(FULL_UNROLL) -O3 -c $<
 
