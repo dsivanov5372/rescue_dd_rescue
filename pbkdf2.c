@@ -15,6 +15,9 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <netinet/in.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <termios.h>
 
 #define MIN(a,b) ((a)<(b)? (a): (b))
 #define MAX(a,b) ((a)<(b)? (b): (a))
@@ -28,6 +31,25 @@ void memxor(unsigned char* p1, const unsigned char *p2, ssize_t ln)
 	}
 	while (ln-- > 0) 
 		*p1++ ^= *p2++;
+}
+
+int hidden_input(int fd, unsigned char *buf, int bufln, int stripcrlf)
+{
+	struct termios tcflags, tcflags2;
+	tcgetattr(fd, &tcflags);
+	memcpy(&tcflags2, &tcflags, sizeof(struct termios));
+	tcflags2.c_lflag |= ICANON | ECHONL;
+	tcflags2.c_lflag &= ~ECHO;
+	tcsetattr(fd, TCSANOW, &tcflags2);
+	int ln = read(fd, buf, bufln);
+	tcsetattr(fd, TCSANOW, &tcflags);
+	if (ln <= 0 || !stripcrlf)
+		return ln;
+	if (buf[ln-1] == '\n')
+		--ln;
+	if (buf[ln-1] == '\r')
+		--ln;
+	return ln;
 }
 
 
@@ -133,7 +155,6 @@ int pbkdf2(hashalg_t *hash,   unsigned char* pwd,  int plen,
 	return 0;
 }
 
-#include <stdio.h>
 #include "sha256.h"
 
 void gensalt(unsigned char* salt, unsigned int slen, const char* fn, const char* ext, size_t flen)

@@ -31,7 +31,6 @@
 #include <errno.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <termios.h>
 #ifdef HAVE_ATTR_XATTR_H
 # include <attr/xattr.h>
 #endif
@@ -108,27 +107,6 @@ hashalg_t *get_hashalg(hash_state *state, const char* nm)
 	return NULL;
 }
 
-int hidden_input(hash_state* state, const char* prompt, int fd,
-		 unsigned char *buf, int bufln, int stripcrlf)
-{
-	struct termios tcflags, tcflags2;
-	FPLOG(INPUT, "%s", prompt);
-	tcgetattr(fd, &tcflags);
-	memcpy(&tcflags2, &tcflags, sizeof(struct termios));
-	tcflags2.c_lflag |= ICANON | ECHONL;
-	tcflags2.c_lflag &= ~ECHO;
-	tcsetattr(fd, TCSANOW, &tcflags2);
-	int ln = read(fd, buf, bufln);
-	tcsetattr(fd, TCSANOW, &tcflags);
-	if (ln <= 0 || !stripcrlf)
-		return ln;
-	if (buf[ln-1] == '\n')
-		--ln;
-	if (buf[ln-1] == '\r')
-		--ln;
-	return ln;
-}
-
 #define MAX_HMACPWDLN 2048
 int do_pbkdf2(hash_state *state, char* param);
 
@@ -196,10 +174,10 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		else if (!memcmp(param, "hmacpwdfd=", 10)) {
 			int hfd = atol(param+10);
 			state->hmacpwd = (unsigned char*)malloc(MAX_HMACPWDLN);
-			if (hfd == 0 && isatty(hfd))
-				state->hmacpln = hidden_input(state, "Enter HMAC password: ",
-							      hfd, state->hmacpwd, MAX_HMACPWDLN, 1);
-			else
+			if (hfd == 0 && isatty(hfd)) {
+				FPLOG(INPUT, "%s", "Enter HMAC password: ");
+				state->hmacpln = hidden_input(hfd, state->hmacpwd, MAX_HMACPWDLN, 1);
+			} else
 				state->hmacpln = read(hfd, state->hmacpwd, MAX_HMACPWDLN);
 			if (state->hmacpln <= 0) {
 				FPLOG(FATAL, "No HMAC password entered!\n");

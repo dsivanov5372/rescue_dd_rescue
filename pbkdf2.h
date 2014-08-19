@@ -4,6 +4,7 @@
 #include "hash.h"
 
 void memxor(unsigned char* p1, const unsigned char *p2, ssize_t ln);
+int hidden_input(int fd, unsigned char *buf, int bufln, int stripcrlf);
 int hmac(hashalg_t* hash, unsigned char* pwd, int plen,
 			  unsigned char* msg, ssize_t mlen,
 			  hash_t *hval);
