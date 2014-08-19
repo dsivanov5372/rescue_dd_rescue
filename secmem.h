@@ -30,6 +30,9 @@ typedef struct _sec_fields {
 	/* IVs */
 	ciphblk iv1;
 	ciphblk iv2;
+	/* Salt + Password for pbkdf2 ... */
+	unsigned char salt[64];
+	unsigned char passphr[128];
 } sec_fields;
 
 sec_fields* secmem_init();

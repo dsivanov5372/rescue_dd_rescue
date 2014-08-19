@@ -82,6 +82,9 @@ else
 endif
 ifeq ($(HAVE_RDRNDAES),1)
 	OBJECTS2 += rdrand.o
+	AESNI_O = aesni.o
+	AESNI_PO = aesni.po
+	CFLAGS += -DHAVE_AESNI
 else
 	CFLAGS += -DNO_RDRND -DNO_AES
 endif
@@ -103,6 +106,7 @@ endif
 ifeq ($(HAVE_RDRNDAES),1)
 	OBJECTS2 += rdrand.o
 	AESNI_O = aesni.o
+	AESNI_PO = aesni.po
 	CFLAGS += -DHAVE_AESNI
 else
 	CFLAGS += -DNO_RDRND -DNO_AES
@@ -174,6 +178,9 @@ libddr_lzo.so: libddr_lzo.po
 
 libddr_null.so: libddr_null.po
 	$(CC) -shared -o $@ $^
+
+libddr_crypt.so: libddr_crypt.po aes.po aes_c.po $(AESNI_PO) aes_ossl.po pbkdf2.po sha256.po
+	$(CC) -shared -o $@ $^ -lcrypto
 
 find_nonzero.o: find_nonzero.c $(FNZ_HEADERS) config.h
 	$(CC) $(CFLAGS_OPT) -fpie -c $< $(SSE)
