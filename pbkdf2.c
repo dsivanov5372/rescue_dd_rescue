@@ -1,6 +1,7 @@
 /** pbkdf2.c
  * 
  * memxor helper
+ * hidden input helper
  * calculate hmac of data
  * use it to stretch a password-phrase with salt into
  * a key (using pbkdf2 (pkcs5))
