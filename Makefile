@@ -478,4 +478,4 @@ ALGS = AES128-ECB AES128-CBC AES128-CTR AES128+-ECB AES128+-CBC AES128+-CTR AES1
 	AES256-ECB AES256-CBC AES256-CTR AES256+-ECB AES256+-CBC AES256+-CTR AES256x2-ECB AES256x2-CBC AES256x2-CTR 
 
 check_aes: $(TARGETS) test_aes
-	for alg in $(ALGS); do ./test_aes $$alg 100000 || exit $$?; done
+	for alg in $(ALGS); do ./test_aes $$alg 50000 || exit $$?; done

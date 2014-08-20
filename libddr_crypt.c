@@ -85,10 +85,11 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	assert(state->sec);
 	state->pad = PAD_ALWAYS;
 #ifdef HAVE_AESNI
-	state->engine = AESNI_Methods;
-#else
-	state->engine = AES_C_Methods;
+	if (have_aesni)
+		state->engine = AESNI_Methods;
+	else
 #endif
+		state->engine = AES_C_Methods;
 	char* algnm = NULL;
 	while (param) {
 		char* next = strchr(param, ':');
