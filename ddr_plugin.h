@@ -59,11 +59,12 @@ typedef int (_close_callback)(loff_t ooff, void **stat);
 
 enum ddrlog_t { NOHDR=0, DEBUG, INFO, WARN, FATAL, GOOD, INPUT };
 typedef int (_fplog_upcall)(FILE* const f, enum ddrlog_t logpre, 
-			    const char* const fmt, ...);
+			    const char* const prefix, const char* const fmt, 
+			    va_list va);
+
 typedef struct _plug_logger {
-	_fplog_upcall *fplog;
-	const char* name;
-	int seq;
+	_fplog_upcall *vfplog;
+	char prefix[24];
 } plug_logger_t;
 
 
@@ -73,10 +74,7 @@ int plug_log(plug_logger_t *logger, FILE* const f, enum ddrlog_t logpre,
 {
 	va_list vag;
 	va_start(vag, fmt);
-	char* efmt = (char*)malloc(8+strlen(fmt));
-	strcpy(efmt, "%s(%i): "); strcat(efmt, fmt);
-	int ret = logger->fplog(f, logpre, efmt, logger->name, logger->seq, vag);
-	free(efmt);
+	int ret = logger->vfplog(f, logpre, logger->prefix, fmt, vag);
 	va_end(vag);
 	return ret;
 }

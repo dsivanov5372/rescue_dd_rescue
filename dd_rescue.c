@@ -347,6 +347,31 @@ int fplog(FILE* const file, enum ddrlog_t logpre, const char * const fmt, ...)
 	return ret;
 }
 
+/** Write to file and simultaneously log to logfdile, if existing */
+int vfplog(FILE* const file, enum ddrlog_t logpre, const char* const prefix, const char * const fmt, va_list va)
+{
+	int ret = 0;
+	va_list v2 = va;
+	if (file) {
+		if (logpre) {
+			if ((file == stdout || file == stderr) && !nocol)
+				fprintf(file, "%s", ddrlogpre_c[logpre]);
+			else
+				fprintf(file, "%s", ddrlogpre[logpre]);
+		}
+		fprintf(file, "%s", prefix);
+		ret = vfprintf(file, fmt, va);
+	}
+	if (logfd) {
+		if (logpre)
+			fprintf(logfd, "%s", ddrlogpre[logpre]);
+		fprintf(logfd, "%s", prefix);
+		ret = vfprintf(logfd, fmt, v2);
+	}
+	scrollup = 0;
+	return ret;
+}
+
 
 /** Plugin infrastructure */
 unsigned int plug_max_slack_pre = 0;
@@ -483,9 +508,8 @@ ddr_plugin_t* insert_plugin(void* hdl, const char* nm, char* param, opt_t *op)
 	}
 
 	plug->logger = (plug_logger_t*)malloc(sizeof(plug_logger_t));
-	plug->logger->fplog = fplog;
-	plug->logger->name = plug->name;
-	plug->logger->seq = plugins_loaded;
+	snprintf(plug->logger->prefix, 24, "%s(%i): ", plug->name, plugins_loaded);
+	plug->logger->vfplog = vfplog;
 
 	if (plug->init_callback) {
 		int ret = plug->init_callback(&plug->state, param, plugins_loaded, op);
@@ -2447,7 +2471,10 @@ char* parse_opts(int argc, char* argv[], opt_t *op, dpopt_t *dop)
 			case 'y': syncsz = readint(optarg); break;
 			case 's': op->init_ipos = readint(optarg); break;
 			case 'S': op->init_opos = readint(optarg); break;
-			case 'l': op->lname = optarg; break;
+			case 'l': op->lname = optarg;
+				int lfd = openfile(op->lname, O_WRONLY | O_CREAT | O_APPEND /* O_EXCL */);
+				logfd = fdopen(lfd, "a");
+				break;
 			case 'L': plugins = optarg; break;
 			case 'o': op->bbname = optarg; break;
 			case 'x': op->extend = 1; break;
@@ -2469,7 +2496,6 @@ char* parse_opts(int argc, char* argv[], opt_t *op, dpopt_t *dop)
 		}
 	}
  
-
 	if (dop->prng_libc)
 		op->iname = "PRNG_libc";
 	else if (dop->prng_frnd)
@@ -2482,6 +2508,8 @@ char* parse_opts(int argc, char* argv[], opt_t *op, dpopt_t *dop)
 	if (optind < argc) {
 		fplog(stderr, FATAL, "spurious options: %s ...\n", argv[optind]);
 		shortusage();
+		if (logfd)
+			fclose(logfd);
 		exit(12);
 	}
 	/* Defaults for blocksizes */
@@ -2497,6 +2525,7 @@ char* parse_opts(int argc, char* argv[], opt_t *op, dpopt_t *dop)
 		else
 			op->hardbs = BUF_HARDBLOCKSIZE;
 	}
+
 	if (!op->quiet)
 		fplog(stderr, INFO, "Using softbs=%skiB, hardbs=%skiB\n", 
 			fmt_kiB(op->softbs, !nocol), fmt_kiB(op->hardbs, !nocol));
@@ -2857,11 +2886,6 @@ int main(int argc, char* argv[])
 		fplog(stderr, FATAL, "both input and output files have to be specified!\n");
 		shortusage();
 		exit(12);
-	}
-
-	if (opts->lname) {
-		int fd = openfile(opts->lname, O_WRONLY | O_CREAT /*| O_EXCL*/);
-		logfd = fdopen(fd, "a");
 	}
 
 	sanitize_and_prepare(opts, dpopts, fstate, dpstate, progress);
