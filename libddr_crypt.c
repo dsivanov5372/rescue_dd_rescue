@@ -68,7 +68,7 @@ const char *crypt_help = "The crypt plugin for dd_rescue de/encrypts data copied
  */
 
 int parse_hex(unsigned char*, const char*, int maxlen);
-int read_fd(unsigned char*, const char*, int maxlen);
+int read_fd(unsigned char*, const char*, int maxlen, const char*);
 int read_file(unsigned char*, const char*, int maxlen);
 char* mystrncpy(unsigned char*, const char*, int maxlen);
 
@@ -140,21 +140,21 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			}
 		}
 		else if (!memcmp(param, "keyhex=", 7))
-			err -= parse_hex(state->sec->userkey1, param+7, 32);
+			err += parse_hex(state->sec->userkey1, param+7, 32);
 		else if (!memcmp(param, "keyfd=", 6))
-			err -= read_fd(state->sec->userkey1, param+6, 32);
+			err += read_fd(state->sec->userkey1, param+6, 32, "key");
 		else if (!memcmp(param, "keyfile=", 8))
-			err -= read_file(state->sec->userkey1, param+8, 32);
+			err += read_file(state->sec->userkey1, param+8, 32);
 		else if (!strcmp(param, "keygen"))
 			state->kgen = 1;
 		else if (!strcmp(param, "keysfile"))
 			state->keyf = 1;
 		else if (!memcmp(param, "ivhex=", 6))
-			err -= parse_hex(state->sec->iv1.data, param+6, 16);
+			err += parse_hex(state->sec->iv1.data, param+6, 16);
 		else if (!memcmp(param, "ivfd=", 5))
-			err -= read_fd(state->sec->iv1.data, param+5, 16);
+			err += read_fd(state->sec->iv1.data, param+5, 16, "iv");
 		else if (!memcmp(param, "ivfile=", 7))
-			err -= read_file(state->sec->iv1.data, param+7, 16);
+			err += read_file(state->sec->iv1.data, param+7, 16);
 		else if (!strcmp(param, "ivgen"))
 			state->igen = 1;
 		else if (!strcmp(param, "ivsfile"))
@@ -162,19 +162,19 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		else if (!memcmp(param, "pass=", 5))
 			mystrncpy(state->sec->passphr, param+5, 128);
 		else if (!memcmp(param, "passhex=", 8))
-			err -= parse_hex(state->sec->passphr, param+8, 128);
+			err += parse_hex(state->sec->passphr, param+8, 128);
 		else if (!memcmp(param, "passfd=", 7))
-			err -= read_fd(state->sec->passphr, param+7, 128);
+			err += read_fd(state->sec->passphr, param+7, 128, "passphrase");
 		else if (!memcmp(param, "passfile=", 9))
-			err -= read_file(state->sec->passphr, param+9, 128);
+			err += read_file(state->sec->passphr, param+9, 128);
 		else if (!memcmp(param, "salt=", 5))
 			mystrncpy(state->sec->salt, param+5, 64);
 		else if (!memcmp(param, "salthex=", 8))
-			err -= parse_hex(state->sec->salt, param+8, 64);
+			err += parse_hex(state->sec->salt, param+8, 64);
 		else if (!memcmp(param, "saltfd=", 7))
-			err -= read_fd(state->sec->salt, param+7, 64);
+			err += read_fd(state->sec->salt, param+7, 64, "salt");
 		else if (!memcmp(param, "saltfile=", 9))
-			err -= read_file(state->sec->salt, param+9, 64);
+			err += read_file(state->sec->salt, param+9, 64);
 
 		/* Hmmm, ok, let's support algname without alg= */
 		else
@@ -237,9 +237,50 @@ int parse_hex(unsigned char* res, const char* str, int maxlen)
 		memset(res+i, 0, maxlen-i);
 	return (i < 4? -1: 0);
 }
-		
 
-int read_fd(unsigned char*, const char*, int maxlen);
+void get_offs_len(const char* str, off_t *off, size_t *len)
+{
+	char* ptr = strrchr(str, '@');
+	char* pt2 = ptr? strrchr(ptr, '@'): NULL;
+	/* FIXME */
+	*off = 0;
+	*len = 0;
+}
+
+#define MIN(a,b) ((a)<(b)? (a): (b))
+int read_fd(unsigned char* res, const char* param, int maxlen, const char* what)
+{
+	char ibuf[2*maxlen+3];
+	int hex = 0;	
+	if (*param == 'x') {
+		++param;
+		++hex;
+	}
+	int fd = atol(param);
+	int ln = -1;
+	if (fd == 0 && isatty(fd)) {
+		FPLOG(INPUT, "Enter %s : ", what);
+		if (hex) {
+			ln = hidden_input(fd, ibuf, 2*maxlen+2, 1);
+			ibuf[ln] = 0;
+			ln = parse_hex(res, ibuf, maxlen);
+		} else {
+			ln = hidden_input(fd, (char*)res, maxlen, 1);
+		}
+	} else {
+		off_t off = 0;
+		size_t sz = 0;
+		get_offs_len(param, &off, &sz);
+		if (hex) {
+			ln = pread(fd, ibuf, MIN(2*maxlen+2, (sz? sz: 4096)), off);
+			ibuf[ln] = 0;
+			ln = parse_hex(res, ibuf, maxlen);
+		} else
+			ln = pread(fd, res, MIN(maxlen, (sz? sz: 4096)), off);
+	}
+	return ln<0? ln: 0;
+}
+
 int read_file(unsigned char*, const char*, int maxlen);
 char* mystrncpy(unsigned char*, const char*, int maxlen);
 

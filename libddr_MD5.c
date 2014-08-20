@@ -171,7 +171,7 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			state->hmacpwd = (unsigned char*)malloc(MAX_HMACPWDLN);
 			if (hfd == 0 && isatty(hfd)) {
 				FPLOG(INPUT, "%s", "Enter HMAC password: ");
-				state->hmacpln = hidden_input(hfd, state->hmacpwd, MAX_HMACPWDLN, 1);
+				state->hmacpln = hidden_input(hfd, (char*)state->hmacpwd, MAX_HMACPWDLN, 1);
 			} else
 				state->hmacpln = read(hfd, state->hmacpwd, MAX_HMACPWDLN);
 			if (state->hmacpln <= 0) {

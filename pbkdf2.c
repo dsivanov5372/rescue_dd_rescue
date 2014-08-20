@@ -34,7 +34,7 @@ void memxor(unsigned char* p1, const unsigned char *p2, ssize_t ln)
 		*p1++ ^= *p2++;
 }
 
-int hidden_input(int fd, unsigned char *buf, int bufln, int stripcrlf)
+int hidden_input(int fd, char *buf, int bufln, int stripcrlf)
 {
 	struct termios tcflags, tcflags2;
 	tcgetattr(fd, &tcflags);

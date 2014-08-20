@@ -42,4 +42,11 @@ typedef struct {
 	unsigned int hashln; /* in bytes */
 } hashalg_t;
 
+#include <string.h>
+static inline 
+int cmp_hash(const hash_t *h1, const hash_t *h2, int bits)
+{	
+	return memcmp((unsigned char*)(h1->sha512_h), (unsigned char*)(h2->sha512_h), bits/8);
+}
+
 #endif
