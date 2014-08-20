@@ -20,7 +20,7 @@ typedef struct _null_state {
 } null_state;
 
 #define FPLOG(lvl, fmt, args...) \
-	ddr_plug.fplog(stderr, lvl, "%s(%i): " fmt, ddr_plug.name, state->seq, ##args)
+	plug_log(ddr_plug.logger, stderr, lvl, fmt, ##args)
 
 const char* null_help = "The null plugin does nothing ...\n"
 			"Options: debug:[no]lnchange:[no]change. [no]lnchange indicates that the length\n"

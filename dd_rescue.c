@@ -472,7 +472,7 @@ ddr_plugin_t* insert_plugin(void* hdl, const char* nm, char* param, opt_t *op)
 	}
 	if (!plug->name)
 		plug->name = nm;
-	plug->fplog = fplog;
+	
 	/* Call init after dd_rescue-filled fields have been set; this allows the
 	 * init_callback to adjust fiels like slack, align_needs, output_chg
 	 * depending on parameters and options ... */
@@ -481,6 +481,12 @@ ddr_plugin_t* insert_plugin(void* hdl, const char* nm, char* param, opt_t *op)
 			nm, param);
 		exit(13);
 	}
+
+	plug->logger = (plug_logger_t*)malloc(sizeof(plug_logger_t));
+	plug->logger->fplog = fplog;
+	plug->logger->name = plug->name;
+	plug->logger->seq = plugins_loaded;
+
 	if (plug->init_callback) {
 		int ret = plug->init_callback(&plug->state, param, plugins_loaded, op);
 		if (ret)
@@ -569,8 +575,11 @@ void load_plugins(char* plugs, opt_t *op)
 void unload_plugins()
 {
 	LISTTYPE(VOIDP) *plug_hdl;
+	LISTTYPE(ddr_plugin_t) *ddrplug;
 	/* FIXME: Freeing in reverse order would be better ... */
-	LISTFOREACH(ddr_plug_handles, plug_hdl)
+	LISTFOREACH(ddr_plugins, ddrplug)
+		free(LISTDATA(ddrplug).logger);
+	LISTFOREACH(ddr_plug_handles, plug_hdl) 
 		dlclose(LISTDATA(plug_hdl));
 	LISTTREEDEL(ddr_plug_handles, VOIDP);
 	LISTTREEDEL(ddr_plugins, ddr_plugin_t);

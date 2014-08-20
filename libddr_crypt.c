@@ -34,11 +34,9 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-// TODO: pass at runtime rather than compile time
-#define HASH_DEBUG(x) if (state->debug) x
 
 #define FPLOG(lvl, fmt, args...) \
-	ddr_plug.fplog(stderr, lvl, "%s(%i): " fmt, ddr_plug.name, state->seq, ##args)
+	plug_log(ddr_plug.logger, stderr, lvl, fmt, ##args)
 
 /* fwd decl */
 extern ddr_plugin_t ddr_plug;

@@ -12,6 +12,9 @@
 
 #include <sys/types.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <stdarg.h>
+#include <string.h>
 
 #if 0
 typedef struct _opt_t opt_t;
@@ -57,6 +60,26 @@ typedef int (_close_callback)(loff_t ooff, void **stat);
 enum ddrlog_t { NOHDR=0, DEBUG, INFO, WARN, FATAL, GOOD, INPUT };
 typedef int (_fplog_upcall)(FILE* const f, enum ddrlog_t logpre, 
 			    const char* const fmt, ...);
+typedef struct _plug_logger {
+	_fplog_upcall *fplog;
+	const char* name;
+	int seq;
+} plug_logger_t;
+
+
+static inline 
+int plug_log(plug_logger_t *logger, FILE* const f, enum ddrlog_t logpre,
+		const char* const fmt, ...)
+{
+	va_list vag;
+	va_start(vag, fmt);
+	char* efmt = (char*)malloc(8+strlen(fmt));
+	strcpy(efmt, "%s(%i): "); strcat(efmt, fmt);
+	int ret = logger->fplog(f, logpre, efmt, logger->name, logger->seq, vag);
+	free(efmt);
+	va_end(vag);
+	return ret;
+}
 
 typedef struct _ddr_plugin {
 	/* Will be filled by loader */
@@ -83,7 +106,8 @@ typedef struct _ddr_plugin {
 	/* Will be called before fsyncing and closing the output file */
 	_close_callback *close_callback;
 	/* Callback filled by the loader: Logging */
-	_fplog_upcall *fplog;
+	//_fplog_upcall *fplog;
+	plug_logger_t *logger;
 	/* Filled by loader: Parameters */
 	char* param;
 } ddr_plugin_t;
