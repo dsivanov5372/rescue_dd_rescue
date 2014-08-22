@@ -182,7 +182,7 @@ libddr_lzo.so: libddr_lzo.po
 libddr_null.so: libddr_null.po
 	$(CC) -shared -o $@ $^
 
-libddr_crypt.so: libddr_crypt.po aes.po aes_c.po $(AESNI_PO) $(AES_OSSL_PO) pbkdf2.po sha256.po checksum_file.po
+libddr_crypt.so: libddr_crypt.po aes.po aes_c.po $(AESNI_PO) $(AES_OSSL_PO) pbkdf2.po sha256.po checksum_file.po secmem.po
 	$(CC) -shared -o $@ $^ $(CRYPTOLIB)
 
 find_nonzero.o: find_nonzero.c $(FNZ_HEADERS) config.h

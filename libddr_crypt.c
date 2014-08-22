@@ -179,6 +179,7 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		/* Hmmm, ok, let's support algname without alg= */
 		else
 			algnm = param;
+		param = next;
 	}
 	/* Now process params ... */
 	/* 1st: Set engine: Default: aesni/aes_c: Done */
