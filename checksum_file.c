@@ -26,6 +26,10 @@
 
 #include "hash.h"
 
+#ifdef __BIONIC__
+#include <libgen.h>
+#endif
+
 #ifndef HAVE_FEOF_UNLOCKED
 #define feof_unlocked(x) feof(x)
 #endif

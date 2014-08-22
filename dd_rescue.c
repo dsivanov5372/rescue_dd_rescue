@@ -351,7 +351,12 @@ int fplog(FILE* const file, enum ddrlog_t logpre, const char * const fmt, ...)
 int vfplog(FILE* const file, enum ddrlog_t logpre, const char* const prefix, const char * const fmt, va_list va)
 {
 	int ret = 0;
-	va_list v2 = va;
+	va_list v2;
+#ifdef va_copy
+       	va_copy(v2, va);
+#else
+	v2 = va;
+#endif
 	if (file) {
 		if (logpre) {
 			if ((file == stdout || file == stderr) && !nocol)

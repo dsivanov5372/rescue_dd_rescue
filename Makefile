@@ -48,6 +48,9 @@ endif
 
 ifeq ($(shell grep 'HAVE_OPENSSL_EVP_H 1' config.h >/dev/null 2>&1 && echo 1), 1)
   OTHTARGETS += pbkdf2
+  AES_OSSL_PO = aes_ossl.po
+  AES_OSSL_O = aes_ossl.o
+  CRYPTOLIB = -lcrypto
   HAVE_OPENSSL=1
 else
   HAVE_OPENSSL=0
@@ -179,8 +182,8 @@ libddr_lzo.so: libddr_lzo.po
 libddr_null.so: libddr_null.po
 	$(CC) -shared -o $@ $^
 
-libddr_crypt.so: libddr_crypt.po aes.po aes_c.po $(AESNI_PO) aes_ossl.po pbkdf2.po sha256.po checksum_file.po
-	$(CC) -shared -o $@ $^ -lcrypto
+libddr_crypt.so: libddr_crypt.po aes.po aes_c.po $(AESNI_PO) $(AES_OSSL_PO) pbkdf2.po sha256.po checksum_file.po
+	$(CC) -shared -o $@ $^ $(CRYPTOLIB)
 
 find_nonzero.o: find_nonzero.c $(FNZ_HEADERS) config.h
 	$(CC) $(CFLAGS_OPT) -fpie -c $< $(SSE)
@@ -266,10 +269,10 @@ fiemap: fiemap.c fiemap.h fstrim.h config.h fstrim.o
 	$(CC) $(CFLAGS) -fpie -DTEST_FIEMAP -o $@ $< fstrim.o
 
 pbkdf2: ossl_pbkdf2.c
-	$(CC) $(CFLAGS) -fpie -o $@ $< -lcrypto 
+	$(CC) $(CFLAGS) -fpie -o $@ $< $(CRYPTOLIB)
 
-test_aes: test_aes.c $(AESNI_O) aes_c.o secmem.o sha256.o aes_ossl.o aes.o aesni.h config.h
-	$(CC) $(CFLAGS) -fpie $(DEF) -o $@ $< $(AESNI_O) aes_c.o secmem.o sha256.o aes_ossl.o aes.o -lcrypto
+test_aes: test_aes.c $(AESNI_O) aes_c.o secmem.o sha256.o $(AES_OSSL_O) aes.o aesni.h config.h
+	$(CC) $(CFLAGS) -fpie $(DEF) -o $@ $< $(AESNI_O) aes_c.o secmem.o sha256.o $(AES_OSSL_O) aes.o $(CRYPTOLIB)
 
 aesni.o: aesni.c aesni.h aes.h sha256.h config.h
 	$(CC) $(CFLAGS) -fpie -O3 -maes -msse4.1 -c $<

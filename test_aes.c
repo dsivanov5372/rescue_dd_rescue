@@ -7,6 +7,10 @@
 #include "secmem.h"
 #include "aes.h"
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
 sec_fields *crypto;
 
 void _printblk(unsigned char* blk, ssize_t ln)
@@ -47,7 +51,10 @@ void fillval(unsigned char* bf, ssize_t ln, unsigned int val)
 #endif
 
 #include "aes_c.h"
+
+#ifdef HAVE_OPENSSL_EVP_H
 #include "aes_ossl.h"
+#endif
 
 /* Defaults */
 
@@ -196,26 +203,31 @@ int test_alg(const char* prefix, aes_desc_t *alg, uchar *key, uchar *in, ssize_t
 	return err;
 }
 
-#ifdef HAVE_AESNI
-#define TEST_ENGINES(LN, EPAD, DPAD)			\
-	alg = findalg(AESNI_Methods, testalg);		\
-	if (alg) 					\
-		ret += test_alg("AESNI", alg, key, in, LN, EPAD, DPAD, rep);	\
-	alg = findalg(AES_C_Methods, testalg);		\
-	if (alg) 					\
-		ret += test_alg("AES_C", alg, key, in, LN, EPAD, DPAD, rep);	\
+#ifdef HAVE_OPENSSL_EVP_H
+#define TEST_OSSL(LN, EPAD, DPAD)			\
 	alg = findalg(AES_OSSL_Methods, testalg);	\
 	if (alg)					\
 		ret += test_alg("OSSL ", alg, key, in, LN, EPAD, DPAD, rep)
 #else
+#define TEST_OSSL(LN, EPAD, DPAD) do {} while(0)
+#endif
+
+#ifdef HAVE_AESNI
+#define TEST_AESNI(LN, EPAD, DPAD)			\
+	alg = findalg(AESNI_Methods, testalg);	\
+	if (alg)					\
+		ret += test_alg("AESNI", alg, key, in, LN, EPAD, DPAD, rep)
+#else
+#define TEST_AESNI(LN, EPAD, DPAD) do {} while(0)
+#endif
+
+
 #define TEST_ENGINES(LN, EPAD, DPAD)			\
+	TEST_AESNI(LN, EPAD, DPAD);			\
 	alg = findalg(AES_C_Methods, testalg);		\
 	if (alg) 					\
 		ret += test_alg("AES_C", alg, key, in, LN, EPAD, DPAD, rep);	\
-	alg = findalg(AES_OSSL_Methods, testalg);	\
-	if (alg)					\
-		ret += test_alg("OSSL ", alg, key, in, LN, EPAD, DPAD, rep)
-#endif
+	TEST_OSSL(LN, EPAD, DPAD)
 
 int ret = 0;
 int main(int argc, char *argv[])
