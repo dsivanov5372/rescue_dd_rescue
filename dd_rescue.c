@@ -577,7 +577,8 @@ void load_plugins(char* plugs, opt_t *op)
 			}
 		}
 		if (!hdl) {
-			fplog(stderr, FATAL, "Could not load plugin %s\n", plugs);
+			fplog(stderr, FATAL, "Could not load plugin %s (%s)\n", 
+				plugs, strerror(errno));
 			++errs;
 		} else {
 			ddr_plugin_t *plug = insert_plugin(hdl, plugs, param, op);

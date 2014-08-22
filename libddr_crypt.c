@@ -242,9 +242,16 @@ void get_offs_len(const char* str, off_t *off, size_t *len)
 {
 	char* ptr = strrchr(str, '@');
 	char* pt2 = ptr? strrchr(ptr, '@'): NULL;
-	/* FIXME */
 	*off = 0;
 	*len = 0;
+	if (!pt2 && !ptr)
+		return;
+	if (pt2) {
+		*off = atol(ptr+1);
+		*len = atol(pt2+1);
+		return;
+	}
+	*len = atol(ptr+1);
 }
 
 #define MIN(a,b) ((a)<(b)? (a): (b))
@@ -275,13 +282,49 @@ int read_fd(unsigned char* res, const char* param, int maxlen, const char* what)
 			ln = pread(fd, ibuf, MIN(2*maxlen+2, (sz? sz: 4096)), off);
 			ibuf[ln] = 0;
 			ln = parse_hex(res, ibuf, maxlen);
-		} else
+		} else {
 			ln = pread(fd, res, MIN(maxlen, (sz? sz: 4096)), off);
+			if (ln < maxlen)
+				memset(res+ln, 0, maxlen-ln);
+		}
 	}
 	return ln<0? ln: 0;
 }
 
-int read_file(unsigned char*, const char*, int maxlen);
-char* mystrncpy(unsigned char*, const char*, int maxlen);
+int read_file(unsigned char* res, const char* param, int maxlen)
+{
+	off_t off = 0;
+	size_t sz = 0;
+	get_offs_len(param, &off, &sz);
+	int fd = open(param, O_RDONLY);
+	if (fd < 0) {
+		FPLOG(FATAL, "Can't open %s for reading: %s\n", 
+			param, strerror(errno));
+		return -1;
+	}
+	int ln = pread(fd, res, MIN(maxlen, (sz? sz: 4096)), off);
+	if (ln < maxlen)
+		memset(res+ln, 0, maxlen-ln);
+	return ln>0? 0: -1;
+}
+
+char* mystrncpy(unsigned char* res, const char* param, int maxlen)
+{
+	int ln = strlen(param);
+	memcpy(res, param, MIN(ln+1, maxlen));
+	return (char*)res;
+}
+
+ddr_plugin_t ddr_plug = {
+	//.name = "crypt",
+	.needs_align = 16,
+	.handles_sparse = 0,
+	.init_callback  = crypt_plug_init,
+	/*
+	.open_callback  = crypt_open,
+	.block_callback = crypt_blk_cb,
+	.close_callback = crypt_close,
+	*/
+};
 
 
