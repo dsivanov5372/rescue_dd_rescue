@@ -53,7 +53,7 @@ typedef struct _crypt_state {
 	const opt_t *opts;
 } crypt_state;
 
-	
+sec_fields *crypto;
 
 const char *crypt_help = "The crypt plugin for dd_rescue de/encrypts data copied on the fly.\n"
 		" It supports unaligned blocks (arbitrary offsets) and holes(sparse writing).\n"
@@ -84,6 +84,7 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	state->opts = opt;
 	state->enc = -1;
 	state->sec = secmem_init();
+	crypto = state->sec;
 	assert(state->sec);
 	state->pad = PAD_ALWAYS;
 #ifdef HAVE_AESNI

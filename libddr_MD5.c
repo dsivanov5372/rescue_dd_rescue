@@ -254,8 +254,22 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 
 int hash_plug_release(void **stat)
 {
-	if (!stat || !*stat)
+	if (!stat || !(*stat))
 		return -1;
+	hash_state *state = (hash_state*)*stat;
+#ifdef HAVE_ATTR_XATTR_H
+	if (state->xnmalloc)
+		free((void*)state->xattr_name);
+#endif
+	if (state->chkfalloc)
+		free((void*)state->chkfnm);
+	if (state->fname && strcmp(state->fname, state->opts->iname) && strcmp(state->fname, state->opts->oname))
+		free((void*)state->fname);
+	if (state->hmacpwd) {
+		memset(state->hmacpwd, 0, MAX_HMACPWDLN);
+		asm("":::"memory");
+		free(state->hmacpwd);
+	}
 	free(*stat);
 	return 0;
 }
@@ -647,18 +661,7 @@ int hash_close(loff_t ooff, void **stat)
 		err += check_xattr(state, res);
 	if (state->set_xattr)
 		err += write_xattr(state, res);
-	if (state->xnmalloc)
-		free((void*)state->xattr_name);
 #endif
-	if (state->chkfalloc)
-		free((void*)state->chkfnm);
-	if (strcmp(state->fname, state->opts->iname) && strcmp(state->fname, state->opts->oname))
-		free((void*)state->fname);
-	if (state->hmacpwd) {
-		memset(state->hmacpwd, 0, MAX_HMACPWDLN);
-		asm("":::"memory");
-		free(state->hmacpwd);
-	}
 	return err;
 }
 

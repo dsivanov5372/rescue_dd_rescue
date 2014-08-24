@@ -492,6 +492,8 @@ typedef void* VOIDP;
 LISTDECL(VOIDP);
 LISTTYPE(VOIDP) *ddr_plug_handles;
 
+void unload_plugins();
+
 ddr_plugin_t* insert_plugin(void* hdl, const char* nm, char* param, opt_t *op)
 {
 	LISTAPPEND(ddr_plug_handles, hdl, VOIDP);
@@ -518,8 +520,12 @@ ddr_plugin_t* insert_plugin(void* hdl, const char* nm, char* param, opt_t *op)
 
 	if (plug->init_callback) {
 		int ret = plug->init_callback(&plug->state, param, plugins_loaded, op);
-		if (ret)
+		if (ret) {
+			plugins_loaded++;
+			LISTAPPEND(ddr_plugins, *plug, ddr_plugin_t);
+			unload_plugins();
 			exit(-ret);
+		}
 	}
 	if (plug->slack_pre > 0)
 		plug_max_slack_pre += plug->slack_pre;
@@ -536,13 +542,13 @@ ddr_plugin_t* insert_plugin(void* hdl, const char* nm, char* param, opt_t *op)
 		plug_not_sparse = 1;
 	if (plug->changes_output)
 		plug_output_chg = 1;
-	plugins_loaded++;
-	LISTAPPEND(ddr_plugins, *plug, ddr_plugin_t);
 	if (param && !memcmp(param, "help", 4))
 		plugin_help++;
+
+	LISTAPPEND(ddr_plugins, *plug, ddr_plugin_t);
+	plugins_loaded++;
 	return plug;
 }
-
 
 void load_plugins(char* plugs, opt_t *op)
 {
@@ -598,19 +604,23 @@ void load_plugins(char* plugs, opt_t *op)
 		}
 		plugs = next;
 	}
-	if (errs)
+	if (errs) {
+		unload_plugins();
 		exit(13);
+	}
 }
 
 void unload_plugins()
 {
+	if (!plugins_loaded)
+		return;
 	LISTTYPE(VOIDP) *plug_hdl;
 	LISTTYPE(ddr_plugin_t) *ddrplug;
 	/* FIXME: Freeing in reverse order would be better ... */
 	LISTFOREACH(ddr_plugins, ddrplug) {
 		ddr_plugin_t *plugp = &LISTDATA(ddrplug);
 		if (plugp->release_callback)
-			plugp->release_callback(plugp->state);
+			plugp->release_callback(&plugp->state);
 		free(plugp->logger);
 	}
 	LISTFOREACH(ddr_plug_handles, plug_hdl) 
@@ -1302,8 +1312,7 @@ int real_cleanup(opt_t *op, fstate_t *fst, progress_t *prg,
 #if USE_LIBDL
 	if (libfalloc)
 		dlclose(libfalloc);
-	if (plugins_loaded)
-		unload_plugins();
+	unload_plugins();
 #endif
 	return errs;
 }
@@ -2876,6 +2885,7 @@ int main(int argc, char* argv[])
 		load_plugins(plugins, opts);
 	if (plug_not_sparse && opts->sparse) {
 		fplog(stderr, FATAL, "not all plugins handle -a/--sparse!\n");
+		unload_plugins();
 		exit(13);
 	}
 	if (plug_not_sparse && !opts->nosparse) {
@@ -2884,10 +2894,12 @@ int main(int argc, char* argv[])
 	}
 	if (plugins_loaded && opts->reverse) {
 		fplog(stderr, FATAL, "Plugins currently don't handle reverse\n");
+		unload_plugins();
 		exit(13);
 	}
 	if (plugins_loaded && opts->dosplice) {
 		fplog(stderr, FATAL, "Plugins can't handle splice\n");
+		unload_plugins();
 		exit(13);
 	}
 #endif
@@ -2895,6 +2907,7 @@ int main(int argc, char* argv[])
 	if (!opts->iname || !opts->oname) {
 		fplog(stderr, FATAL, "both input and output files have to be specified!\n");
 		shortusage();
+		unload_plugins();
 		exit(12);
 	}
 
