@@ -254,8 +254,7 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 
 int hash_plug_release(void **stat)
 {
-	hash_state *state = (hash_state*)*stat;
-	if (!state)
+	if (!stat || !*stat)
 		return -1;
 	free(*stat);
 	return 0;

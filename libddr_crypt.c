@@ -202,9 +202,9 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 
 int crypt_plug_release(void **stat)
 {
-	crypt_state *state = (crypt_state*)*stat;
-	if (!state)
+	if (!stat || !*stat)
 		return -1;
+	crypt_state *state = (crypt_state*)*stat;
 	if (state->sec)
 		secmem_release(state->sec);
 	else
