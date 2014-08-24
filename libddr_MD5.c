@@ -279,7 +279,7 @@ int hash_plug_release(void **stat)
 
 int hash_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	     unsigned int totslack_pre, unsigned int totslack_post,
-	     void **stat)
+	     const fstate_t *fst, void **stat)
 {
 	int err = 0;
 	hash_state *state = (hash_state*)*stat;

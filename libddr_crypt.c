@@ -75,6 +75,16 @@ int read_fd(unsigned char*, const char*, int maxlen, const char*);
 int read_file(unsigned char*, const char*, int maxlen);
 char* mystrncpy(unsigned char*, const char*, int maxlen);
 
+int set_flag(char* flg, const char* msg)
+{
+	if (*flg) {
+		FPLOG(FATAL, "%s already set\n", msg);
+		return -1;
+	}
+	*flg = 1;
+	return 0;
+}
+
 int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 {
 	int err = 0;
@@ -99,9 +109,10 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		char* next = strchr(param, ':');
 		if (next)
 			*next++ = 0;
-		if (!strcmp(param, "help"))
+		if (!strcmp(param, "help")) {
 			FPLOG(INFO, "%s", crypt_help);
-		else if (!strcmp(param, "debug"))
+			return -1;
+		} else if (!strcmp(param, "debug"))
 			state->debug = 1;
 		else if (!strcmp(param, "encrypt") || !strcmp(param, "enc"))
 			state->enc = 1;
@@ -144,41 +155,55 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			}
 		}
 		else if (!memcmp(param, "keyhex=", 7)) {
-			err += parse_hex(state->sec->userkey1, param+7, 32); state->kset = 1;
+			err += parse_hex(state->sec->userkey1, param+7, 32); 
+			err += set_flag(&state->kset, "key");
 		} else if (!memcmp(param, "keyfd=", 6)) {
-			err += read_fd(state->sec->userkey1, param+6, 32, "key"); state->kset = 1;
+			err += read_fd(state->sec->userkey1, param+6, 32, "key");
+			err += set_flag(&state->kset, "key");
 		} else if (!memcmp(param, "keyfile=", 8)) {
-			err += read_file(state->sec->userkey1, param+8, 32); state->kset = 1;
+			err += read_file(state->sec->userkey1, param+8, 32);
+			err += set_flag(&state->kset, "key");
 		} else if (!strcmp(param, "keygen"))
 			state->kgen = 1;
 		else if (!strcmp(param, "keysfile"))
 			state->keyf = 1;
 		else if (!memcmp(param, "ivhex=", 6)) {
-			err += parse_hex(state->sec->iv1.data, param+6, 16); state->iset = 1;
+			err += parse_hex(state->sec->iv1.data, param+6, 16);
+			err += set_flag(&state->iset, "IV");
 		} else if (!memcmp(param, "ivfd=", 5)) {
-			err += read_fd(state->sec->iv1.data, param+5, 16, "iv"); state->iset = 1;
+			err += read_fd(state->sec->iv1.data, param+5, 16, "iv");
+			err += set_flag(&state->iset, "IV");
 		} else if (!memcmp(param, "ivfile=", 7)) {
-			err += read_file(state->sec->iv1.data, param+7, 16); state->iset = 1;
+			err += read_file(state->sec->iv1.data, param+7, 16);
+			err += set_flag(&state->iset, "IV");
 		} else if (!strcmp(param, "ivgen"))
 			state->igen = 1;
 		else if (!strcmp(param, "ivsfile"))
 			state->ivf = 1;
 		else if (!memcmp(param, "pass=", 5)) {
-			mystrncpy(state->sec->passphr, param+5, 128); state->pset = 1;
+			mystrncpy(state->sec->passphr, param+5, 128);
+			err += set_flag(&state->pset, "password");
 		} else if (!memcmp(param, "passhex=", 8)) {
-			err += parse_hex(state->sec->passphr, param+8, 128); state->pset = 1;
+			err += parse_hex(state->sec->passphr, param+8, 128);
+			err += set_flag(&state->pset, "password");
 		} else if (!memcmp(param, "passfd=", 7)) {
-			err += read_fd(state->sec->passphr, param+7, 128, "passphrase"); state->pset = 1;
+			err += read_fd(state->sec->passphr, param+7, 128, "passphrase");
+			err += set_flag(&state->pset, "password");
 		} else if (!memcmp(param, "passfile=", 9)) {
-			err += read_file(state->sec->passphr, param+9, 128); state->pset = 1;
+			err += read_file(state->sec->passphr, param+9, 128);
+			err += set_flag(&state->pset, "password");
 		} else if (!memcmp(param, "salt=", 5)) {
-			mystrncpy(state->sec->salt, param+5, 64); state->sset = 1;
+			mystrncpy(state->sec->salt, param+5, 64);
+			err += set_flag(&state->sset, "salt");
 		} else if (!memcmp(param, "salthex=", 8)) {
-			err += parse_hex(state->sec->salt, param+8, 64); state->sset = 1;
+			err += parse_hex(state->sec->salt, param+8, 64);
+			err += set_flag(&state->sset, "salt");
 		} else if (!memcmp(param, "saltfd=", 7)) {
-			err += read_fd(state->sec->salt, param+7, 64, "salt"); state->sset = 1;
+			err += read_fd(state->sec->salt, param+7, 64, "salt");
+			err += set_flag(&state->sset, "salt");
 		} else if (!memcmp(param, "saltfile=", 9)) {
-			err += read_file(state->sec->salt, param+9, 64); state->sset = 1;
+			err += read_file(state->sec->salt, param+9, 64);
+			err += set_flag(&state->sset, "salt");
 
 		/* Hmmm, ok, let's support algname without alg= */
 		} else
@@ -188,8 +213,17 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	/* Now process params ... */
 	/* 1st: Set engine: Default: aesni/aes_c: Done */
 	/* 2nd: Set alg: Default: AES192-CTR */
-	if (algnm)
-		state->alg = findalg(state->engine, algnm);
+	if (algnm) {
+		if (!strcmp(algnm, "help")) {
+			FPLOG(INFO, "Crypto algorithms:", NULL);
+			aes_desc_t *alg;
+			for (alg = state->engine; alg->name != NULL; ++alg)
+				FPLOG(NOHDR, " %s", alg->name);
+			FPLOG(NOHDR, "\n", NULL);
+			return -1;
+		} else
+			state->alg = findalg(state->engine, algnm);
+	}
 	if (!state->alg) {
 		FPLOG(FATAL, "Unknown parameter/algorithm %s\n", algnm);
 		--err;
@@ -198,6 +232,14 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	/* 4th: pass: done */
 	/* 5th: salt (later: if not given: derive from outnm) */
 	/* 6th: key (later: defaults to pbkdf(pass, salt) */
+	if (!state->pset && !state->kset && !state->keyf && (!state->kgen || !state->enc)) {
+		FPLOG(FATAL, "Need to set key or password\n", NULL);
+		--err;
+	}
+	if (state->kset && state->kgen) {
+		FPLOG(FATAL, "Can't set and generate a key\n", NULL);
+		--err;
+	}
 	/* 7th: iv (later: defaults to salt) */
 	return err;
 }
@@ -331,13 +373,49 @@ char* mystrncpy(unsigned char* res, const char* param, int maxlen)
 	return (char*)res;
 }
 
+int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
+	     unsigned int totslack_pre, unsigned int totslack_post,
+	     const fstate_t *fst, void **stat)
+{
+	int err = 0;
+	crypt_state *state = (crypt_state*)*stat;
+	state->opts = opt;
+	/* Are we en- or decrypting? */
+	/* 5th: salt (later: if not given: derive from outnm) */
+	if ((state->pset && !state->sset) || !state->iset) {
+		if (state->enc) {
+			if (!strcmp(opt->oname, "-")) {
+				FPLOG(FATAL, "Can't initialize salt from name -\n", NULL);
+				return -1;
+			}
+			size_t elen = opt->init_opos + fst->estxfer;
+			if (state->pad == PAD_ALWAYS || (state->pad == PAD_ASNEEDED && (elen&15)))
+				elen += 16-(elen&15);
+			/* TODO: Check for zero elen and for size changing plugins */
+			gensalt(state->sec->salt, 64, opt->oname, NULL, elen);
+		} else {
+			if (!strcmp(opt->iname, "-")) {
+				FPLOG(FATAL, "Can't initialize salt from name -\n", NULL);
+				return -1;
+			}
+			size_t elen = fst->ilen;
+			gensalt(state->sec->salt, 64, opt->iname, NULL, elen);
+		}
+	}		
+	/* 6th: key (later: defaults to pbkdf(pass, salt) */
+	/* Read from keyf if appropriate (and not expl set) */
+	/* 7th: iv (later: defaults to salt) */
+	
+	return err;
+}
+
 ddr_plugin_t ddr_plug = {
 	//.name = "crypt",
 	.needs_align = 16,
 	.handles_sparse = 0,
 	.init_callback  = crypt_plug_init,
-	/*
 	.open_callback  = crypt_open,
+	/*
 	.block_callback = crypt_blk_cb,
 	.close_callback = crypt_close,
 	*/

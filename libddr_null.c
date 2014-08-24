@@ -85,7 +85,7 @@ int null_plug_release(void **stat)
 
 int null_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	      unsigned int totslack_pre, unsigned int totslack_post,
-	      void **stat)
+	      const fstate_t *fst, void **stat)
 {
 	return 0;
 }

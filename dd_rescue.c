@@ -363,14 +363,15 @@ int vfplog(FILE* const file, enum ddrlog_t logpre, const char* const prefix, con
 				fprintf(file, "%s", ddrlogpre_c[logpre]);
 			else
 				fprintf(file, "%s", ddrlogpre[logpre]);
+			fprintf(file, "%s", prefix);
 		}
-		fprintf(file, "%s", prefix);
 		ret = vfprintf(file, fmt, va);
 	}
 	if (logfd) {
-		if (logpre)
+		if (logpre) {
 			fprintf(logfd, "%s", ddrlogpre[logpre]);
-		fprintf(logfd, "%s", prefix);
+			fprintf(logfd, "%s", prefix);
+		}
 		ret = vfprintf(logfd, fmt, v2);
 	}
 	scrollup = 0;
@@ -417,7 +418,7 @@ void call_plugins_open(opt_t *op, fstate_t *fst)
 								   (plugins_opened > plug_first_chg? 1: 0),
 								   (plugins_opened < plug_last_chg ? 1: 0),
 						plug_max_slack_pre-slk_pre, plug_max_slack_post-slk_post,
-					        &LISTDATA(plug).state);
+						fst, &LISTDATA(plug).state);
 			if (err < 0) {
 				fplog(stderr, WARN, "Error initializing plugin %s(%i): %s!\n",
 					LISTDATA(plug).name, plugins_opened, strerror(-err));

@@ -40,7 +40,7 @@ typedef int (_init_callback)(void **stat, char* param, int seq, const opt_t *opt
 typedef int (_open_callback)(const opt_t *opt, int ilnchange, int olnchange, 
 			     int ichange, int ochange,
 			     unsigned int totslack_pre, unsigned int totslack_post,
-			     void **stat);
+			     const fstate_t *fst, void **stat);
 /** block_callback parameters: file state (contains file descriptors, positions,
  * 	...), buffer to be written (can be modified),
  *  	number of bytes to be written (can be null and can be modified), 

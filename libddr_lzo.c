@@ -523,7 +523,7 @@ int lzo_plug_release(void **stat)
 #define MAXBLOCKSZ 16UL*1024UL*1024UL
 int lzo_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	     unsigned int totslack_pre, unsigned int totslack_post,
-	     void **stat)
+	     const fstate_t *fst, void **stat)
 {
 	lzo_state *state = (lzo_state*)*stat;
 	state->opts = opt;
