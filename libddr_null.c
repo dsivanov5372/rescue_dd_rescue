@@ -74,6 +74,15 @@ int null_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	return 0;
 }
 
+int null_plug_release(void **stat)
+{
+	if (!stat || !*stat)
+		return -1;
+	//null_state *state = (null_state*)*stat;
+	free(*stat);
+	return 0;
+}
+
 int null_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	      unsigned int totslack_pre, unsigned int totslack_post,
 	      void **stat)
@@ -103,8 +112,6 @@ unsigned char* null_blk_cb(fstate_t *fst, unsigned char* bf,
 
 int null_close(loff_t ooff, void **stat)
 {
-	//null_state *state = (null_state*)*stat;
-	free(*stat);
 	return 0;
 }
 
@@ -116,6 +123,7 @@ ddr_plugin_t ddr_plug = {
 	.open_callback  = null_open,
 	.block_callback = null_blk_cb,
 	.close_callback = null_close,
+	.release_callback = null_plug_release,
 };
 
 

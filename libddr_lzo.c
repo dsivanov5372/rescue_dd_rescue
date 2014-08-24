@@ -506,6 +506,19 @@ void slackfree(void* base, lzo_state *state)
 	free(state->orig_dbuf);
 }
 
+int lzo_plug_release(void **stat)
+{
+	if (!stat | !*stat)
+		return -1;
+	lzo_state *state = (lzo_state*)*stat;
+	if (state->dbuflen)
+		slackfree(state->dbuf, state);
+	if (state->workspace)
+		free(state->workspace);
+	free(*stat);
+	return 0;
+}
+
 /* TO DO: We could as well adjust to real max (2*softbs) */
 #define MAXBLOCKSZ 16UL*1024UL*1024UL
 int lzo_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
@@ -1351,10 +1364,6 @@ int lzo_close(loff_t ooff, void **stat)
 {
 	lzo_state *state = (lzo_state*)*stat;
 	//loff_t len = ooff-state->first_ooff;
-	if (state->dbuflen)
-		slackfree(state->dbuf, state);
-	if (state->workspace)
-		free(state->workspace);
 	if (state->do_bench || !state->opts->quiet) {
 		if (state->mode == COMPRESS)
 			FPLOG(INFO, "%s_compress %.1fkiB (%1.f%%) + %i <- %.1fkiB\n",
@@ -1381,7 +1390,6 @@ int lzo_close(loff_t ooff, void **stat)
 				(double)state->cpu/CLOCKS_PER_SEC, 
 				state->unc_ln/1024 / (state->cpu/(CLOCKS_PER_SEC/1024.0)));
 	}
-	free(*stat);
 	return 0;
 }
 
@@ -1398,6 +1406,7 @@ ddr_plugin_t ddr_plug = {
 	.open_callback  = lzo_open,
 	.block_callback = lzo_block,
 	.close_callback = lzo_close,
+	.release_callback = lzo_plug_release,
 };
 
 
