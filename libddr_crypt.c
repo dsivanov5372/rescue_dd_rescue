@@ -19,6 +19,7 @@
 #include "hash.h"
 #include "pbkdf2.h"
 #include "secmem.h"
+#include "archdep.h"
 
 #include "aes_c.h"
 #include "aes_ossl.h"
