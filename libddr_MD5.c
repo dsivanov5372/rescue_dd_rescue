@@ -213,6 +213,7 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	if (!state->alg) {
 		FPLOG(FATAL, "No hash algorithm specified\n");
 		--err;
+		return err;
 	}
 #ifdef HAVE_ATTR_XATTR_H
 	if ((state->chk_xattr || state->set_xattr) && !state->xattr_name) {
@@ -251,6 +252,14 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	return err;
 }
 
+int hash_plug_release(void **stat)
+{
+	hash_state *state = (hash_state*)*stat;
+	if (!state)
+		return -1;
+	free(*stat);
+	return 0;
+}
 
 #define MIN(a,b) ((a)<(b)? (a): (b))
 #define MAX(a,b) ((a)<(b)? (b): (a))
@@ -651,7 +660,6 @@ int hash_close(loff_t ooff, void **stat)
 		asm("":::"memory");
 		free(state->hmacpwd);
 	}
-	free(*stat);
 	return err;
 }
 
@@ -734,6 +742,7 @@ ddr_plugin_t ddr_plug = {
 	.open_callback  = hash_open,
 	.block_callback = hash_blk_cb,
 	.close_callback = hash_close,
+	.release_callback = hash_plug_release,
 };
 
 

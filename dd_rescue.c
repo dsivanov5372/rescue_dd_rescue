@@ -607,8 +607,12 @@ void unload_plugins()
 	LISTTYPE(VOIDP) *plug_hdl;
 	LISTTYPE(ddr_plugin_t) *ddrplug;
 	/* FIXME: Freeing in reverse order would be better ... */
-	LISTFOREACH(ddr_plugins, ddrplug)
-		free(LISTDATA(ddrplug).logger);
+	LISTFOREACH(ddr_plugins, ddrplug) {
+		ddr_plugin_t *plugp = &LISTDATA(ddrplug);
+		if (plugp->release_callback)
+			plugp->release_callback(plugp->state);
+		free(plugp->logger);
+	}
 	LISTFOREACH(ddr_plug_handles, plug_hdl) 
 		dlclose(LISTDATA(plug_hdl));
 	LISTTREEDEL(ddr_plug_handles, VOIDP);

@@ -57,6 +57,13 @@ typedef unsigned char* (_block_callback)(fstate_t *fst, unsigned char* bf,
  */
 typedef int (_close_callback)(loff_t ooff, void **stat);
 
+/** release_callback: Called before the plugin is unloaded
+ * (New in 1.47! Previously, deallocation was supposed to happen
+ * in the close_callback
+ */
+typedef int (_release_callback)(void **stat);
+
+
 enum ddrlog_t { NOHDR=0, DEBUG, INFO, WARN, FATAL, GOOD, INPUT };
 typedef int (_fplog_upcall)(FILE* const f, enum ddrlog_t logpre, 
 			    const char* const prefix, const char* const fmt, 
@@ -103,6 +110,8 @@ typedef struct _ddr_plugin {
 	_block_callback *block_callback;
 	/* Will be called before fsyncing and closing the output file */
 	_close_callback *close_callback;
+	/* Will be called before unloading */
+	_release_callback *release_callback;
 	/* Callback filled by the loader: Logging */
 	//_fplog_upcall *fplog;
 	plug_logger_t *logger;

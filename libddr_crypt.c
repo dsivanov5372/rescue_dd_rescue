@@ -196,9 +196,20 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	/* 5th: salt (later: if not given: derive from outnm) */
 	/* 6th: key (later: defaults to pbkdf(pass, salt) */
 	/* 7th: iv (later: defaults to salt) */
-	if (err < 0)
-		secmem_release(state->sec);
 	return err;
+}
+
+int crypt_plug_release(void **stat)
+{
+	crypt_state *state = (crypt_state*)*stat;
+	if (!state)
+		return -1;
+	if (state->sec)
+		secmem_release(state->sec);
+	else
+		return -2;
+	free(*stat);
+	return 0;
 }
 
 int hexchar(const char v)
@@ -327,6 +338,7 @@ ddr_plugin_t ddr_plug = {
 	.block_callback = crypt_blk_cb,
 	.close_callback = crypt_close,
 	*/
+	.release_callback = crypt_plug_release,
 };
 
 
