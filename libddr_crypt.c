@@ -46,6 +46,7 @@ typedef struct _crypt_state {
 	aes_desc_t *alg, *engine;
 	int seq;
 	char enc, debug, kgen, igen, keyf, ivf;
+	char kset, iset, pset, sset;
 	int pad;
 	sec_fields *sec;
 	const opt_t *opts;
@@ -139,45 +140,45 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 				continue;
 			}
 		}
-		else if (!memcmp(param, "keyhex=", 7))
-			err += parse_hex(state->sec->userkey1, param+7, 32);
-		else if (!memcmp(param, "keyfd=", 6))
-			err += read_fd(state->sec->userkey1, param+6, 32, "key");
-		else if (!memcmp(param, "keyfile=", 8))
-			err += read_file(state->sec->userkey1, param+8, 32);
-		else if (!strcmp(param, "keygen"))
+		else if (!memcmp(param, "keyhex=", 7)) {
+			err += parse_hex(state->sec->userkey1, param+7, 32); state->kset = 1;
+		} else if (!memcmp(param, "keyfd=", 6)) {
+			err += read_fd(state->sec->userkey1, param+6, 32, "key"); state->kset = 1;
+		} else if (!memcmp(param, "keyfile=", 8)) {
+			err += read_file(state->sec->userkey1, param+8, 32); state->kset = 1;
+		} else if (!strcmp(param, "keygen"))
 			state->kgen = 1;
 		else if (!strcmp(param, "keysfile"))
 			state->keyf = 1;
-		else if (!memcmp(param, "ivhex=", 6))
-			err += parse_hex(state->sec->iv1.data, param+6, 16);
-		else if (!memcmp(param, "ivfd=", 5))
-			err += read_fd(state->sec->iv1.data, param+5, 16, "iv");
-		else if (!memcmp(param, "ivfile=", 7))
-			err += read_file(state->sec->iv1.data, param+7, 16);
-		else if (!strcmp(param, "ivgen"))
+		else if (!memcmp(param, "ivhex=", 6)) {
+			err += parse_hex(state->sec->iv1.data, param+6, 16); state->iset = 1;
+		} else if (!memcmp(param, "ivfd=", 5)) {
+			err += read_fd(state->sec->iv1.data, param+5, 16, "iv"); state->iset = 1;
+		} else if (!memcmp(param, "ivfile=", 7)) {
+			err += read_file(state->sec->iv1.data, param+7, 16); state->iset = 1;
+		} else if (!strcmp(param, "ivgen"))
 			state->igen = 1;
 		else if (!strcmp(param, "ivsfile"))
 			state->ivf = 1;
-		else if (!memcmp(param, "pass=", 5))
-			mystrncpy(state->sec->passphr, param+5, 128);
-		else if (!memcmp(param, "passhex=", 8))
-			err += parse_hex(state->sec->passphr, param+8, 128);
-		else if (!memcmp(param, "passfd=", 7))
-			err += read_fd(state->sec->passphr, param+7, 128, "passphrase");
-		else if (!memcmp(param, "passfile=", 9))
-			err += read_file(state->sec->passphr, param+9, 128);
-		else if (!memcmp(param, "salt=", 5))
-			mystrncpy(state->sec->salt, param+5, 64);
-		else if (!memcmp(param, "salthex=", 8))
-			err += parse_hex(state->sec->salt, param+8, 64);
-		else if (!memcmp(param, "saltfd=", 7))
-			err += read_fd(state->sec->salt, param+7, 64, "salt");
-		else if (!memcmp(param, "saltfile=", 9))
-			err += read_file(state->sec->salt, param+9, 64);
+		else if (!memcmp(param, "pass=", 5)) {
+			mystrncpy(state->sec->passphr, param+5, 128); state->pset = 1;
+		} else if (!memcmp(param, "passhex=", 8)) {
+			err += parse_hex(state->sec->passphr, param+8, 128); state->pset = 1;
+		} else if (!memcmp(param, "passfd=", 7)) {
+			err += read_fd(state->sec->passphr, param+7, 128, "passphrase"); state->pset = 1;
+		} else if (!memcmp(param, "passfile=", 9)) {
+			err += read_file(state->sec->passphr, param+9, 128); state->pset = 1;
+		} else if (!memcmp(param, "salt=", 5)) {
+			mystrncpy(state->sec->salt, param+5, 64); state->sset = 1;
+		} else if (!memcmp(param, "salthex=", 8)) {
+			err += parse_hex(state->sec->salt, param+8, 64); state->sset = 1;
+		} else if (!memcmp(param, "saltfd=", 7)) {
+			err += read_fd(state->sec->salt, param+7, 64, "salt"); state->sset = 1;
+		} else if (!memcmp(param, "saltfile=", 9)) {
+			err += read_file(state->sec->salt, param+9, 64); state->sset = 1;
 
 		/* Hmmm, ok, let's support algname without alg= */
-		else
+		} else
 			algnm = param;
 		param = next;
 	}
