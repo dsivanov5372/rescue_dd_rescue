@@ -2208,7 +2208,7 @@ struct option longopts[] = { 	{"help", 0, NULL, 'h'}, {"verbose", 0, NULL, 'v'},
 void printlonghelp()
 {
 	printversion();
-	fprintf(stderr, "dd_rescue copies data from one file (or block device) to others.\n");
+	fprintf(stderr, "dd_rescue copies data from one file (or device or pipe) to others.\n");
 	fprintf(stderr, "USAGE: dd_rescue [options] infile outfile\n");
 	fprintf(stderr, "Options: -s ipos    start position in  input file (default=0),\n");
 	fprintf(stderr, "         -S opos    start position in output file (def=ipos),\n");
@@ -2260,7 +2260,8 @@ void printlonghelp()
 	fprintf(stderr, "Sizes may be given in units b(=512), k(=1024), M(=1024^2) or G(1024^3) bytes\n");
 	fprintf(stderr, "This program is useful to rescue data in case of I/O errors, because\n");
 	fprintf(stderr, " it does not normally abort or truncate the output.\n");
-	fprintf(stderr, "It may also help with securly overwriting data.\n");
+	fprintf(stderr, "It may also help data protection by securely overwriting data.\n");
+	fprintf(stderr, "There are plugins for compression, hashing and encryption.\n");
 	fprintf(stderr, "Have a look a the man page for more details and long options.\n");
 }
 
@@ -2269,7 +2270,7 @@ void shortusage()
 	fplog(stderr, INFO, "USAGE: dd_rescue [options] infile outfile\n"
 		"   or: dd_rescue [options] -z/Z/2/3/4 SEED[FILE] outfile\n"
 		" Use dd_rescue -h or dd_rescue --help for more information\n"
-		"  or consult the manpage dd_rescue(1).\n");
+		"  or consult the man page dd_rescue(1).\n");
 }
 
 #define YESNO(flag) (flag? "yes": "no ")
