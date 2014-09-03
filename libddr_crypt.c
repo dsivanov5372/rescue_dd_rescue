@@ -70,10 +70,10 @@ const char *crypt_help = "The crypt plugin for dd_rescue de/encrypts data copied
  *	Need to read from filename
  */
 
-int parse_hex(unsigned char*, const char*, int maxlen);
-int read_fd(unsigned char*, const char*, int maxlen, const char*);
-int read_file(unsigned char*, const char*, int maxlen);
-char* mystrncpy(unsigned char*, const char*, int maxlen);
+int parse_hex(unsigned char*, const char*, uint maxlen);
+int read_fd(unsigned char*, const char*, uint maxlen, const char*);
+int read_file(unsigned char*, const char*, uint maxlen);
+char* mystrncpy(unsigned char*, const char*, uint maxlen);
 
 int set_flag(char* flg, const char* msg)
 {
@@ -280,11 +280,11 @@ int hexbyte(const char s[2])
 	return (i << 4) | j;
 }
 
-int parse_hex(unsigned char* res, const char* str, int maxlen)
+int parse_hex(unsigned char* res, const char* str, uint maxlen)
 {
 	if (str[0] == '0' && str[1] == 'x')
 		str += 2;
-	int i;
+	uint i;
 	for (i = 0; i < maxlen; ++i) {
 		int v = hexbyte(str+i*2);
 		if (v < 0)
@@ -298,8 +298,8 @@ int parse_hex(unsigned char* res, const char* str, int maxlen)
 
 void get_offs_len(const char* str, off_t *off, size_t *len)
 {
-	char* ptr = strrchr(str, '@');
-	char* pt2 = ptr? strrchr(ptr, '@'): NULL;
+	const char* ptr = strrchr(str, '@');
+	const char* pt2 = ptr? strrchr(ptr, '@'): NULL;
 	*off = 0;
 	*len = 0;
 	if (!pt2 && !ptr)
@@ -313,7 +313,7 @@ void get_offs_len(const char* str, off_t *off, size_t *len)
 }
 
 #define MIN(a,b) ((a)<(b)? (a): (b))
-int read_fd(unsigned char* res, const char* param, int maxlen, const char* what)
+int read_fd(unsigned char* res, const char* param, uint maxlen, const char* what)
 {
 	char ibuf[2*maxlen+3];
 	int hex = 0;	
@@ -342,14 +342,14 @@ int read_fd(unsigned char* res, const char* param, int maxlen, const char* what)
 			ln = parse_hex(res, ibuf, maxlen);
 		} else {
 			ln = pread(fd, res, MIN(maxlen, (sz? sz: 4096)), off);
-			if (ln < maxlen)
+			if (ln < (int)maxlen)
 				memset(res+ln, 0, maxlen-ln);
 		}
 	}
 	return ln<0? ln: 0;
 }
 
-int read_file(unsigned char* res, const char* param, int maxlen)
+int read_file(unsigned char* res, const char* param, uint maxlen)
 {
 	off_t off = 0;
 	size_t sz = 0;
@@ -361,14 +361,14 @@ int read_file(unsigned char* res, const char* param, int maxlen)
 		return -1;
 	}
 	int ln = pread(fd, res, MIN(maxlen, (sz? sz: 4096)), off);
-	if (ln < maxlen)
+	if (ln < (int)maxlen)
 		memset(res+ln, 0, maxlen-ln);
 	return ln>0? 0: -1;
 }
 
-char* mystrncpy(unsigned char* res, const char* param, int maxlen)
+char* mystrncpy(unsigned char* res, const char* param, uint maxlen)
 {
-	int ln = strlen(param);
+	size_t ln = strlen(param);
 	memcpy(res, param, MIN(ln+1, maxlen));
 	return (char*)res;
 }

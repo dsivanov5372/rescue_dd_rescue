@@ -166,7 +166,7 @@ void gensalt(unsigned char* salt, unsigned int slen, const char* fn, const char*
 	hash_t hv;
 	sha256_init(&hv);
 	sha256_calc((unsigned char*)hashnm, ln, ln, &hv);
-	int i;
+	uint i;
 	for (i = 0; i < slen/4; ++i)
 		*((unsigned int*)salt+i) = htonl(hv.sha256_h[i%8]);
 }

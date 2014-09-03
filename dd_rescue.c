@@ -2453,6 +2453,8 @@ char* parse_opts(int argc, char* argv[], opt_t *op, dpopt_t *dop)
 
       	ofiles = NULL;
 
+	int tmpfd = 0;
+
 #ifdef LACK_GETOPT_LONG
 	while ((c = getopt(argc, argv, ":rtTfihqvVwWaAdDkMRpPuc:b:B:m:e:s:S:l:L:o:y:z:Z:2:3:4:xY:")) != -1) 
 #else
@@ -2493,8 +2495,8 @@ char* parse_opts(int argc, char* argv[], opt_t *op, dpopt_t *dop)
 			case 's': op->init_ipos = readint(optarg); break;
 			case 'S': op->init_opos = readint(optarg); break;
 			case 'l': op->lname = optarg;
-				int lfd = openfile(op->lname, O_WRONLY | O_CREAT | O_APPEND /* O_EXCL */);
-				logfd = fdopen(lfd, "a");
+				tmpfd = openfile(op->lname, O_WRONLY | O_CREAT | O_APPEND /* O_EXCL */);
+				logfd = fdopen(tmpfd, "a");
 				break;
 			case 'L': plugins = optarg; break;
 			case 'o': op->bbname = optarg; break;
