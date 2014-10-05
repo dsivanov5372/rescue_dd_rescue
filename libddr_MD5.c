@@ -232,6 +232,7 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			     				)) {
 		char cfnm[32];
 		// if (!strcmp(state->alg->name, "md5")) strcpy(cfnm, "MD5SUMS"); else
+		// FIXME: Should we prepend iname or oname path to HMACS/CHECKSUMS ?
 		if (state->hmacpwd)
 			snprintf(cfnm, 32, "HMACS.%s", state->alg->name);
 		else

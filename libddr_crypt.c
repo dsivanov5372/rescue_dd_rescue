@@ -20,6 +20,7 @@
 #include "pbkdf2.h"
 #include "secmem.h"
 #include "archdep.h"
+#include "checksum_file.h"
 
 #include "aes_c.h"
 #include "aes_ossl.h"
@@ -412,20 +413,40 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			/* Write to keysf if requested */
 		} else if (state->keyf) {
 			/* Read from keyfile */
+			// FIXME: Search for oname when encrypting?
+			int off = get_chks("IVS", opt->iname, state->sec->charbuf1);
+			if (off < 0) {
+				char* ptr = strrchr(opt->iname, '/');
+				if (ptr) {
+					char *ivnm = malloc(ptr-opt->iname+5);
+					if (ivnm) {
+						memcpy(ivnm, opt->iname, ptr-opt->iname);
+						strcpy(ivnm+(ptr-opt->iname), "/IVS");
+						off = get_chks(ivnm, ptr+1, state->sec->charbuf1);
+						free(ivnm);
+					}
+				}
+			}
 			/* Fatal if not successful */
+			if (off < 0) {
+				FPLOG(FATAL, "Can't read IV for %s from IVS file!\n", opt->iname);
+				return -1;
+			}
+			err += parse_hex(state->sec->iv1.data, state->sec->charbuf1, 16);
 		}
 	} else {
 		if (state->keyf)
 			/* Write to keyfile */
 			;
 	}
-	/* 7th: iv (later: defaults to salt) */
+	/* 7th: iv (defaults to salt) */
 	if (!state->iset) {
 		if (state->igen) {
 			/* Generate IV */
 			/* Save IV ... */
 		} else if (state->ivf) {
 			/* Read IV from ivsfile */
+			
 			/* Fatal if not successful */
 		} else {
 			/* Generate from salt */
