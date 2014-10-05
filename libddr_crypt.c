@@ -402,9 +402,38 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			gensalt(state->sec->salt, 64, opt->iname, NULL, elen);
 		}
 	}		
-	/* 6th: key (later: defaults to pbkdf(pass, salt) */
-	/* Read from keyf if appropriate (and not expl set) */
+	/* 6th: key - defaults to pbkdf(pass, salt) */
+	if (!state->kset) {
+		if (state->kgen) {
+			/* Do key generation */
+			/* Write to keysfile or warn ... */
+		} else if (state->pset) {
+			/* Do pbkdf2 stuff to generate key */
+			/* Write to keysf if requested */
+		} else if (state->keyf) {
+			/* Read from keyfile */
+			/* Fatal if not successful */
+		}
+	} else {
+		if (state->keyf)
+			/* Write to keyfile */
+			;
+	}
 	/* 7th: iv (later: defaults to salt) */
+	if (!state->iset) {
+		if (state->igen) {
+			/* Generate IV */
+			/* Save IV ... */
+		} else if (state->ivf) {
+			/* Read IV from ivsfile */
+			/* Fatal if not successful */
+		} else {
+			/* Generate from salt */
+			
+		}
+	} else if (state->ivf)
+		/* Save to IVs file */
+		;
 	
 	return err;
 }
