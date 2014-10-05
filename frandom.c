@@ -18,14 +18,13 @@
 #include <string.h>
 #include <asm/errno.h>
 #include <unistd.h>
-#include <time.h>
-#include <sys/time.h>
 
 #ifdef HAVE_CONFIG_H
 # include "config.h"
 #endif
 
 #include "frandom.h"
+#include "random.h"
 
 #if defined(__arm__) /* || ... */
 # define INT_IS_FASTER
@@ -131,31 +130,13 @@ static void get_libc_rand_bytes(u8 *buf, size_t len)
 		lbuf[i] = rand();
 }
 
-#if (defined(__x86_64__) || defined(__i386__)) && !defined(NO_RDRND)
-unsigned int rdrand32();
-#else
-#define BSWAP32(x) ((x<<24) | ((x<<8)&0x00ff0000) | ((x>>8)&0x0000ff00) | (x>>24))
-#endif
-
-unsigned int frandom_getseedval()
-{
-	struct timeval tv;
-	gettimeofday(&tv, NULL);
-#if (defined(__x86_64__) || defined(__i386__)) && !defined(NO_RDRND)
-	unsigned int hwrnd = rdrand32();
-#else
-	unsigned int hwrnd = BSWAP32((unsigned int)(unsigned long)&frandom_getseedval);
-#endif
-	return (tv.tv_usec << 12) ^ tv.tv_sec ^ getpid() ^ hwrnd;
-}
-
 
 void* frandom_init_lrand(int seedval)
 {
 	u8 seedbuf[256];
 
 	if (!seedval)
-		seedval = frandom_getseedval();
+		seedval = random_getseedval32();
 	srand(seedval); rand();
 	get_libc_rand_bytes(seedbuf, 256);
 	return frandom_init(seedbuf);

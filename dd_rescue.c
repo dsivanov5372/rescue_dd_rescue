@@ -114,6 +114,7 @@
 #include <libgen.h>
 #include <assert.h>
 
+#include "random.h"
 #include "frandom.h"
 #include "list.h"
 #include "fmt_no.h"
@@ -2120,7 +2121,7 @@ void init_random(opt_t *op, dpopt_t *dop, dpstate_t *dst)
 		}
 	} else {
 		if (!dop->prng_seed)
-			dop->prng_seed = frandom_getseedval();
+			dop->prng_seed = random_getseedval32();
 		if (dop->prng_libc) {
 			srand(dop->prng_seed); rand();
 		} else
