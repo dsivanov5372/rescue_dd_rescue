@@ -21,6 +21,7 @@
 #include "secmem.h"
 #include "archdep.h"
 #include "checksum_file.h"
+#include "random.h"
 
 #include "aes_c.h"
 #include "aes_ossl.h"
@@ -297,6 +298,14 @@ int parse_hex(unsigned char* res, const char* str, uint maxlen)
 	return (i < 4? -1: 0);
 }
 
+char* hexout(char* buf, unsigned char* val, unsigned int ln)
+{
+	int i;
+	for (i = 0; i < ln; ++i)
+		sprintf(buf+2*i, "%02x", val[i]);
+	return buf;
+}
+
 void get_offs_len(const char* str, off_t *off, size_t *len)
 {
 	const char* ptr = strrchr(str, '@');
@@ -443,6 +452,9 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	if (!state->iset) {
 		if (state->igen) {
 			/* Generate IV */
+			random_bytes(state->sec->iv1.data, 16, 0);
+			char iout[33];
+			FPLOG(INFO, "Generated IV: %s\n", hexout(iout, state->sec->iv1.data, 16)); 
 			/* Save IV ... */
 		} else if (state->ivf) {
 			/* Read IV from ivsfile */
