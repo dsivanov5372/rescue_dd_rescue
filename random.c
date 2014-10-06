@@ -8,6 +8,7 @@
 #include "random.h"
 #include <time.h>
 #include <sys/time.h>
+#include <unistd.h>
 
 #if (defined(__x86_64__) || defined(__i386__)) && !defined(NO_RDRND)
 unsigned int rdrand32();
@@ -22,7 +23,7 @@ unsigned int random_getseedval32()
 #if (defined(__x86_64__) || defined(__i386__)) && !defined(NO_RDRND)
 	unsigned int hwrnd = rdrand32();
 #else
-	unsigned int hwrnd = BSWAP32((unsigned int)(unsigned long)&frandom_getseedval);
+	unsigned int hwrnd = BSWAP32((unsigned int)(unsigned long)&random_getseedval32);
 #endif
 	return (tv.tv_usec << 12) ^ tv.tv_sec ^ getpid() ^ hwrnd;
 }
