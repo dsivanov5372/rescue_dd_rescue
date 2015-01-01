@@ -86,6 +86,21 @@ dd_rhelp from LAB Valentin does automate some of this, so you might want to
 give that a try.
 
 
+Warning
+-------
+If you have dropped your disk or the disk became mechanically damaged there
+is a risk that using a software imaging tool like dd_rescue (and dd_rhelp
+or GNU ddrescue) will cause more damage -- by continuing to use the disk,
+the head might hit and scratch the surface again and again.
+You may be able to observe this by quickly raising SMART error rates. Watch
+especially for the rates other than the normal reallocated sectors.[1] Another
+indicator may be a clicking noise.
+So if your data is very valuable and you consider sending your hard disk
+to a data recovery company, you might be better off NOT trying to use imaging
+tools before.
+[1] http://en.wikipedia.org/wiki/S.M.A.R.T.#Known_ATA_S.M.A.R.T._attributes
+
+
 Limitations
 -----------
 The source code does use the 64bit functions provided by glibc for file

@@ -834,6 +834,14 @@ files in the way dd_rhelp does. It does not have the feature richness
 of dd_rescue, but is reported to be easier to operate for error recovery
 than dd_rescue with dd_rhelp.
 .PP
+If your data is very valuable and you are considering sending your disk
+to a data recovery company, you might be better off NOT trying to use
+imaging tools like dd_rescue, dd_rhelp or GNU ddrescue. If you're unlucky,
+the disk has suffered some mechanical damage (e.g. by having been dropped),
+and continuing to use it may make the head damage the surface further.
+You may be able to detect this condition by quickly raising error counts
+in the SMART attributes or by a clicking noise.
+.PP
 Please report bugs to me via email.
 .
 .SS Data destruction considerations
