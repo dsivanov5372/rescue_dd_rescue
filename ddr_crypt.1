@@ -1,0 +1,152 @@
+.\" $Id$
+.
+.TH ddr_crypt 1 "2015-01-03" "Kurt Garloff" "En/Decryption plugin for dd_rescue"
+.
+.SH NAME
+ddr_crypt \- Data de/encryption plugin for dd_rescue
+.
+.SH SYNOPSIS
+.na
+.nh
+.B -L crypt[=option[:option[:...]]]
+.br
+or
+.br
+.B -L /path/to/libddr_crypt.so[=option[:option[:...]]]
+.
+.SH DESCRIPTION
+.SS About
+This plugin allows to en/decrypt data on the fly as it is written out
+by
+.B dd_rescue.
+It supports a variant of AES ciphers and uses the hardware acceleration
+on x86 (AESNI) to provide good performance.
+.PP
+This plugin has been written for 
+.B dd_rescue
+and uses the plugin interface from it. See the
+.BR dd_rescue(1)
+man page for more information on
+.B dd_rescue.
+.
+.SH OPTIONS
+Options are passed using
+.B dd_rescue
+option passing syntax: The name of the plugin (crypt) is
+followed by an equal sign (=) and options are separated by a colon (:).
+the
+.B crypt
+plugin also allows for some options to be abbreviated to five or six
+letters. See the EXAMPLES section below.
+.
+.SS Encryption or Deccryption
+The crypt dd_rescue plugin (subsequently referred to as just ddr_crypt which
+reflects the variable parts of the filename libddr_crypt.so) choses
+encryption or decryption mode automatically
+if ...
+; otherwise you may specify 
+.B enc[rypt]
+or 
+.B dec[rypt]
+parameters on the
+command line.
+.P
+The plugin also supports the parameter 
+.B bench[mark] ... NO! 
+if it's specified,
+it will output some information about CPU usage and resulting compression
+or decompression bandwidth. (For small files, the numbers become meaningless
+due to jitter and limited time resolution -- ddr_lzo will skip the output
+if the numbers are very tiny.)
+.
+.SS De/encryption algorithm
+The crypt plugin supports a number of the de/encryption variants of AES.
+You can specify which one you want to use by passing 
+.B algo=AESxxx-yyy ,
+where xxx can be 128, 192, 256, 128+, 192+, 256+, 128x2, 192x2, or 256x2,
+and yyy can be ECB, CBC, or CTR. 
+Pass 
+.B algo=help 
+to get a list of available algorithms.
+See section ALGORITHMS for a discussion of the options. Note that decryting
+a file can only be successful if the exact same algorithms is chosen as was
+used for encryption.
+.br
+The default (AES192-CTR) is a good choice if you can ensure that the
+key/IV combination is NEVER reused.
+.
+
+.SS Crypto engine
+
+.SS Padding
+
+.SS Debugging
+The
+.B debug
+flag will cause the ddr_lzo to output information about blocks and other
+internal data.
+It's meant for debugging purposes.
+.
+
+.SH 
+
+.SH Supported dd_rescue features
+appending with -x
+.br
+holes
+.br
+seeking
+.br
+.
+.SH openssl compatibility
+.
+.SH BUGS/LIMITATIONS
+.SS Maturity
+The plugin is new as of dd_rescue 1.47. Do not yet rely on data
+saved with ddr_crypt as the only backup for valuable data. Also
+expect some changes to ddr_crypt in the not too distant future. 
+.br
+.
+.SS Security
+While care has been applied to check the result of memory allocations ...,
+the code has not been audited and only limited fuzzing
+has been applied to ensure it's not vulnerable to malicious data -- 
+be careful when you process data from untrusted sources.
+.
+.SH EXAMPLES
+.TP
+.BI dd_rescue\ \-ptAL\ crypt=algo=AES256-CTR:enc:keygen:ivgen:keysfile:ivsfile\ infile\ outfile
+encrypts data from
+.IR infile
+with AES256 in CTR mode using a generated (random) key and IV and writes the result to
+.IR outflle
+.
+It adds a line to KEYS.AES256-CTR and to IVS.AES256-CTR where the used key
+and IV are written to respectively. (Please ensure that this file is not accessible
+by any unauthorized person!)
+won't have encoded holes; errors in the infile will result in zeros.
+.TP
+.BI dd_rescue\ \-aL\ ...
+.
+.SH SEE ALSO
+.BR dd_rescue (1)
+.
+.SH AUTHOR
+Kurt Garloff <kurt@garloff.de>
+.
+.SH CREDITS
+The x86 AESNI optmized AES implementation has been heavily inspired by
+an intel whitepaper from 2009:
+https://software.intel.com/sites/default/files/article/165683/aes-wp-2012-09-22-v01.pdf
+.br
+. 
+.SH COPYRIGHT
+This plugin is under the same license as dd_rescue: The GNU General 
+Public License (GPL) v2 or v3 - at your option.
+.
+.SH HISTORY
+ddr_crypt plugin was first introduced with dd_rescue 1.47 (Jan 2015).
+.PP
+Some additional information can be found on
+.br
+http://garloff.de/kurt/linux/ddrescue/
