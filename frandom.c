@@ -26,11 +26,19 @@
 #include "frandom.h"
 #include "random.h"
 
-#if defined(__arm__) /* || ... */
+#if !defined(INT_IS_SLOWER) && defined(__arm__) /* || ... */
 # define INT_IS_FASTER
 /* # warning Using INT */
 #else
 /* # warning Using CHAR */
+#endif
+
+#ifdef __GNUC__
+# define LIKELY(expr)   __builtin_expect((expr) != 0, 1)
+# define UNLIKELY(expr) __builtin_expect((expr) != 0, 0)
+#else
+# define LIKELY(expr)   (expr)
+# define UNLIKELY(expr) (expr)
 #endif
 
 typedef unsigned char u8;
@@ -56,6 +64,13 @@ static inline u8 swap_byte_add(u8 *a, u8 *b)
 	const u8 a1 = *a, b1 = *b;
 	*b = a1; *a = b1;   
 	return a1+b1;
+}
+
+static inline u8 swap_byte_add_v(u8 *sip, u8 *sjp, const u8 si)
+{
+	const u8 sj = *sjp;
+	*sjp = si; *sip = sj;   
+	return si+sj;
 }
 
 /* Unused, b/c it's slower
@@ -163,7 +178,7 @@ int frandom_release(void* rstate)
 	return 0;
 }
 
-ssize_t frandom_bytes(void *rstate, u8 *buf, size_t count)
+ssize_t _frandom_bytes(void *rstate, u8 *buf, size_t count)
 {
 	struct frandom_state *state = (struct frandom_state *)rstate;
 	u8 *S;
@@ -200,11 +215,113 @@ ssize_t frandom_bytes(void *rstate, u8 *buf, size_t count)
 	return ret;
 }
 
+
+ssize_t _frandom_bytes_inv(void *rstate, u8 *buf, size_t count)
+{
+	struct frandom_state *state = (struct frandom_state *)rstate;
+	u8 *S;
+#ifdef INT_IS_FASTER
+	unsigned int i, j;
+#else
+	unsigned char i, j;
+#endif
+	const ssize_t ret = count;
+
+	if (!state)
+		state = int_random_state;
+	if (!state)
+		state = (struct frandom_state *)frandom_init_lrand(0);
+  
+	i = state->i;
+	j = state->j;
+	S = state->S;  
+
+	while (count--) {
+#ifdef INT_IS_FASTER
+		i = (i + 1) & 0xff;
+		j = (j + S[i]) & 0xff;
+		*buf++ = S[swap_byte_add(S+i, S+j)];
+#else
+		j += S[++i];
+		*buf++ = S[swap_byte_add(S+i, S+j)];
+#endif
+	}
+
+	state->i = i;     
+	state->j = j;
+
+	return ret;
+}
+
+
+ssize_t frandom_bytes(void *rstate, u8 *buf, size_t count)
+{
+	struct frandom_state *state = (struct frandom_state *)rstate;
+#ifdef INT_IS_FASTER
+	unsigned int i, j;
+#else
+	unsigned char i, j;
+#endif
+	const ssize_t ret = count;
+
+	//if (!state)
+	//	state = (struct frandom_state *)frandom_init_lrand(0);
+  
+	i = state->i;
+	j = state->j;
+	u8 * const S = state->S;
+
+	count /= 2;
+	while (count--) {
+#ifdef INT_IS_FASTER
+		i = (i + 1) & 0xff;
+		const unsigned int i2 = (i + 1) & 0xff;
+		const u8 si1 = S[i];
+		j = (j + si1) & 0xff;
+		u8 si2 = S[i2];
+		*buf++ = S[swap_byte_add_v(S+i, S+j, si1)];
+		/* Did we just swap S[i] with S[i+1]? */
+		if (UNLIKELY(j == i2))
+			si2 = si1; //S[i2];
+		j = (j + si2) & 0xff;
+		i = i2;
+		*buf++ = S[swap_byte_add_v(S+i2, S+j, si2)];
+#else
+		/* Modern speculative CPUs are still not good enough to
+		 * recognize that we can speculatively load si2 .. */
+		const u8 si1 = S[++i];
+		u8 si2 = S[(u8)(i+1)];
+		j += si1;
+		*buf++ = S[swap_byte_add_v(S+i, S+j, si1)];
+		if (UNLIKELY(j == ++i))
+			si2 = S[i]; //si1;
+		j += si2;
+		*buf++ = S[swap_byte_add_v(S+i, S+j, si2)];
+
+#endif
+	}
+	if (ret%2) {
+#ifdef INT_IS_FASTER
+		i = (i + 1) & 0xff;
+		const u8 si1 = S[i];
+		j = (j + si1) & 0xff;
+		*buf++ = S[swap_byte_add_v(S+i, S+j, si1)];
+#else
+		const u8 si1 = S[++i];
+		j += si1;
+		*buf++ = S[swap_byte_add_v(S+i, S+j, si1)];
+#endif
+	}
+
+	state->i = i;     
+	state->j = j;
+
+	return ret;
+}
 
 ssize_t frandom_bytes_inv(void *rstate, u8 *buf, size_t count)
 {
 	struct frandom_state *state = (struct frandom_state *)rstate;
-	u8 *S;
 #ifdef INT_IS_FASTER
 	unsigned int i, j;
 #else
@@ -212,23 +329,52 @@ ssize_t frandom_bytes_inv(void *rstate, u8 *buf, size_t count)
 #endif
 	const ssize_t ret = count;
 
-	if (!state)
-		state = int_random_state;
-	if (!state)
-		state = (struct frandom_state *)frandom_init_lrand(0);
+	//if (!state)
+	//	state = (struct frandom_state *)frandom_init_lrand(0);
   
 	i = state->i;
 	j = state->j;
-	S = state->S;  
+	u8 * const S = state->S;
 
+	count /= 2;
 	while (count--) {
 #ifdef INT_IS_FASTER
 		i = (i + 1) & 0xff;
-		j = (j + S[i]) & 0xff;
-		*buf++ = S[swap_byte_add(S+i, S+j)];
+		const unsigned int i2 = (i + 1) & 0xff;
+		const u8 si1 = S[i];
+		j = (j + si1) & 0xff;
+		u8 si2 = S[i2];
+		*buf++ = S[swap_byte_add_v(S+i, S+j, si1)] ^ 0xff;
+		/* Did we just swap S[i] with S[i+1]? */
+		if (UNLIKELY(j == i2))
+			si2 = si1; //S[i2];
+		j = (j + si2) & 0xff;
+		i = i2;
+		*buf++ = S[swap_byte_add_v(S+i2, S+j, si2)] ^ 0xff;
 #else
-		j += S[++i];
-		*buf++ = S[swap_byte_add(S+i, S+j)];
+		/* Modern speculative CPUs are still not good enough to
+		 * recognize that we can speculatively load si2 .. */
+		const u8 si1 = S[++i];
+		u8 si2 = S[(u8)(i+1)];
+		j += si1;
+		*buf++ = S[swap_byte_add_v(S+i, S+j, si1)] ^ 0xff;
+		if (UNLIKELY(j == ++i))
+			si2 = S[i]; //si1;
+		j += si2;
+		*buf++ = S[swap_byte_add_v(S+i, S+j, si2)] ^ 0xff;
+
+#endif
+	}
+	if (ret%2) {
+#ifdef INT_IS_FASTER
+		i = (i + 1) & 0xff;
+		const u8 si1 = S[i];
+		j = (j + si1) & 0xff;
+		*buf++ = S[swap_byte_add_v(S+i, S+j, si1)] ^ 0xff;
+#else
+		const u8 si1 = S[++i];
+		j += si1;
+		*buf++ = S[swap_byte_add_v(S+i, S+j, si1)] ^ 0xff;
 #endif
 	}
 
@@ -237,6 +383,5 @@ ssize_t frandom_bytes_inv(void *rstate, u8 *buf, size_t count)
 
 	return ret;
 }
-
 
 
