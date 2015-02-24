@@ -51,6 +51,13 @@ static inline void swap_byte(u8 *a, u8 *b)
 	*b = swapByte;
 }
 
+static inline u8 swap_byte_add(u8 *a, u8 *b)
+{
+	const u8 a1 = *a, b1 = *b;
+	*b = a1; *a = b1;   
+	return a1+b1;
+}
+
 /* Unused, b/c it's slower
 static inline void swap_byte_notmp(u8 *a, u8 *b)
 {
@@ -180,13 +187,10 @@ ssize_t frandom_bytes(void *rstate, u8 *buf, size_t count)
 #ifdef INT_IS_FASTER
 		i = (i + 1) & 0xff;
 		j = (j + S[i]) & 0xff;
-		swap_byte(&S[i], &S[j]);
-		*buf++ = S[(S[i] + S[j]) & 0xff];
+		*buf++ = S[swap_byte_add(S+i, S+j)];
 #else
-		i = i + 1;
-		j = j + S[i];
-		swap_byte(&S[i], &S[j]);
-		*buf++ = S[(unsigned char)(S[i] + S[j])];
+		j += S[++i];
+		*buf++ = S[swap_byte_add(S+i, S+j)];
 #endif
 	}
 
@@ -221,13 +225,10 @@ ssize_t frandom_bytes_inv(void *rstate, u8 *buf, size_t count)
 #ifdef INT_IS_FASTER
 		i = (i + 1) & 0xff;
 		j = (j + S[i]) & 0xff;
-		swap_byte(&S[i], &S[j]);
-		*buf++ = S[(S[i] + S[j]) & 0xff] ^ 0xff;
+		*buf++ = S[swap_byte_add(S+i, S+j)];
 #else
-		i = i + 1;
-		j = j + S[i];
-		swap_byte(&S[i], &S[j]);
-		*buf++ = S[(unsigned char)(S[i] + S[j])] ^ 0xff;
+		j += S[++i];
+		*buf++ = S[swap_byte_add(S+i, S+j)];
 #endif
 	}
 
