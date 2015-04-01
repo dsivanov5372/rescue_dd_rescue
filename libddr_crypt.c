@@ -383,6 +383,29 @@ char* mystrncpy(unsigned char* res, const char* param, uint maxlen)
 	return (char*)res;
 }
 
+/* Constructs name for KEYS and IVS files (in alocated mem) */
+char *keyfnm(const char* base, const char *encnm)
+{
+	char* ptr = strrchr(encnm, '/');	// FIXME: Unix
+	if (!ptr)
+		return strdup(base);
+	else {
+		char* kfnm = malloc(ptr-encnm + 2 + strlen(base));
+		assert(kfnm);
+		memcpy(kfnm, encnm, ptr-encnm);
+		*(kfnm+(ptr-encnm+1)) = 0;
+		strcat(kfnm, base);
+		return kfnm;
+	}
+}
+
+int write_keyfile(const char* base, const char* name, const unsigned char* key, const int bytes)
+{
+	char* fnm = keyfnm(base, name);
+	free(fnm);
+	return 0;
+}
+
 int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	     unsigned int totslack_pre, unsigned int totslack_post,
 	     const fstate_t *fst, void **stat)
@@ -390,63 +413,63 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	int err = 0;
 	crypt_state *state = (crypt_state*)*stat;
 	state->opts = opt;
+
+	char ivsnm[32], keynm[32];
+	sprintf(ivsnm, "IVS.%s", state->alg->name);
+	sprintf(keynm, "KEYS.%s", state->alg->name);
+
 	/* Are we en- or decrypting? */
+	const char* encnm = state->enc? opt->oname: opt->iname;
+	size_t encln = state->enc? opt->init_opos + fst->estxfer: fst->ilen;
+	if (state->enc && (state->pad == PAD_ALWAYS || (state->pad == PAD_ASNEEDED && (encln&15))))
+		encln += 16-(encln&15);
+
 	/* 5th: salt (later: if not given: derive from outnm) */
 	if ((state->pset && !state->sset) || !state->iset) {
-		if (state->enc) {
-			if (!strcmp(opt->oname, "-")) {
-				FPLOG(FATAL, "Can't initialize salt from name -\n", NULL);
-				return -1;
-			}
-			size_t elen = opt->init_opos + fst->estxfer;
-			if (state->pad == PAD_ALWAYS || (state->pad == PAD_ASNEEDED && (elen&15)))
-				elen += 16-(elen&15);
-			/* TODO: Check for zero elen and for size changing plugins */
-			gensalt(state->sec->salt, 64, opt->oname, NULL, elen);
-		} else {
-			if (!strcmp(opt->iname, "-")) {
-				FPLOG(FATAL, "Can't initialize salt from name -\n", NULL);
-				return -1;
-			}
-			size_t elen = fst->ilen;
-			gensalt(state->sec->salt, 64, opt->iname, NULL, elen);
+		if (!strcmp(encnm, "-")) {
+			FPLOG(FATAL, "Can't initialize salt from name -\n", NULL);
+			return -1;
 		}
+		/* TODO: Check for zero elen and for size changing plugins */
+		gensalt(state->sec->salt, 64, encnm, NULL, encln);
 	}		
 	/* 6th: key - defaults to pbkdf(pass, salt) */
 	if (!state->kset) {
 		if (state->kgen) {
+			if (!state->enc) {
+				FPLOG(FATAL, "Decrypting with generated key does not make sense!\n", NULL);
+				return -1;
+			}
 			/* Do key generation */
+			random_bytes(state->sec->userkey1, state->alg->keylen/8, 1);
 			/* Write to keysfile or warn ... */
+			if (!state->keyf)
+				FPLOG(WARN, "Generated key not written anywhere?\n", NULL);
+			else 
+				if (write_keyfile(keynm, encnm, state->sec->userkey1, state->alg->keylen/8))
+					return -1;
 		} else if (state->pset) {
 			/* Do pbkdf2 stuff to generate key */
+			FPLOG(FATAL, "Key generation with pass+salt not yet implemented!\n", NULL);
+			return -1;
 			/* Write to keysf if requested */
 		} else if (state->keyf) {
 			/* Read from keyfile */
-			// FIXME: Search for oname when encrypting?
-			int off = get_chks("IVS", opt->iname, state->sec->charbuf1);
-			if (off < 0) {
-				char* ptr = strrchr(opt->iname, '/');
-				if (ptr) {
-					char *ivnm = malloc(ptr-opt->iname+5);
-					if (ivnm) {
-						memcpy(ivnm, opt->iname, ptr-opt->iname);
-						strcpy(ivnm+(ptr-opt->iname), "/IVS");
-						off = get_chks(ivnm, ptr+1, state->sec->charbuf1);
-						free(ivnm);
-					}
-				}
-			}
+			char* kfnm = keyfnm(keynm, encnm);
+			int off = get_chks(kfnm, encnm, state->sec->charbuf1);
+			free(kfnm);
 			/* Fatal if not successful */
 			if (off < 0) {
-				FPLOG(FATAL, "Can't read IV for %s from IVS file!\n", opt->iname);
+				FPLOG(FATAL, "Can't read key for %s from KEYS file!\n", encnm);
 				return -1;
 			}
-			err += parse_hex(state->sec->iv1.data, state->sec->charbuf1, 16);
+			err += parse_hex(state->sec->userkey1, state->sec->charbuf1, state->alg->keylen/8);
 		}
 	} else {
 		if (state->keyf)
 			/* Write to keyfile */
-			;
+			if (write_keyfile(keynm, encnm, state->sec->userkey1, state->alg->keylen/8))
+				return -1;
 	}
 	/* 7th: iv (defaults to salt) */
 	if (!state->iset) {
@@ -456,17 +479,31 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			char iout[33];
 			FPLOG(INFO, "Generated IV: %s\n", hexout(iout, state->sec->iv1.data, 16)); 
 			/* Save IV ... */
+			if (!state->ivf)
+				FPLOG(WARN, "Generated IV not saved?\n", NULL);
+			else 
+				if (write_keyfile(ivsnm, encnm, state->sec->iv1.data, 16))
+					return -1;
 		} else if (state->ivf) {
 			/* Read IV from ivsfile */
-			
-			/* Fatal if not successful */
+			char* ivnm = keyfnm(ivsnm, encnm);
+			int off = get_chks(ivsnm, encnm, state->sec->charbuf1);
+			free(ivnm);
+			if (off < 0) {
+				FPLOG(FATAL, "Can't read IV for %s from IVS file!\n", encnm);
+				return -1;
+			}
+			err += parse_hex(state->sec->iv1.data, state->sec->charbuf1, 16);
 		} else {
+			FPLOG(FATAL, "IV generation with salt not yet implemented!\n", NULL);
+			return -1;
 			/* Generate from salt */
 			
 		}
 	} else if (state->ivf)
 		/* Save to IVs file */
-		;
+		if (write_keyfile(ivsnm, encnm, state->sec->iv1.data, 16))
+			return -1;
 	
 	return err;
 }

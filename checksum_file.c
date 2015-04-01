@@ -129,19 +129,20 @@ int upd_chks(const char* cnm, const char *nm, const char *chks, int acc)
 	FILE *f = fopen_chks(cnm, "r+", 0);
 	int err = 0;
 	char oldchks[129];
+	char* bnm = basename(nm);
 	if (!f) {
 		errno = 0;
 		f = fopen_chks(cnm, "w", acc);
 		if (!f)
 			return -errno;
-		fprintf(f, "%s *%s\n", chks, nm);
+		fprintf(f, "%s *%s\n", chks, bnm);
 		err = -errno;
 	} else {
 		off_t pos = find_chks(f, nm, oldchks);
 		if (pos == -1 || strlen(chks) != strlen(oldchks)) {
 			fclose(f);
 			f = fopen_chks(cnm, "a", 0);
-			fprintf(f, "%s *%s\n", chks, nm);
+			fprintf(f, "%s *%s\n", chks, bnm);
 			err = -errno;
 		} else {
 			if (strcmp(chks, oldchks)) {
