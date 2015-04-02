@@ -18,6 +18,7 @@
 #include "aes.h"
 #include "hash.h"
 #include "pbkdf2.h"
+#include "sha256.h"
 #include "secmem.h"
 #include "archdep.h"
 #include "checksum_file.h"
@@ -298,7 +299,7 @@ int parse_hex(unsigned char* res, const char* str, uint maxlen)
 	return (i < 4? -1: 0);
 }
 
-char* hexout(char* buf, unsigned char* val, unsigned int ln)
+char* hexout(char* buf, const unsigned char* val, unsigned int ln)
 {
 	int i;
 	for (i = 0; i < ln; ++i)
@@ -356,7 +357,9 @@ int read_fd(unsigned char* res, const char* param, uint maxlen, const char* what
 				memset(res+ln, 0, maxlen-ln);
 		}
 	}
-	return ln<0? ln: 0;
+	if (ln <= 0)
+		FPLOG(FATAL, "%s empty!\n", what);
+	return ln<=0? 1: 0;
 }
 
 int read_file(unsigned char* res, const char* param, uint maxlen)
@@ -380,6 +383,8 @@ char* mystrncpy(unsigned char* res, const char* param, uint maxlen)
 {
 	size_t ln = strlen(param);
 	memcpy(res, param, MIN(ln+1, maxlen));
+	if (ln+1 < maxlen)
+		memset(res+ln+1, 0, maxlen-ln-1);
 	return (char*)res;
 }
 
@@ -399,11 +404,17 @@ char *keyfnm(const char* base, const char *encnm)
 	}
 }
 
-int write_keyfile(const char* base, const char* name, const unsigned char* key, const int bytes)
+int write_keyfile(const char* base, const char* name, const unsigned char* key, const int bytes, int acc)
 {
 	char* fnm = keyfnm(base, name);
+	/* FIXME: TO BE IMPLEMENTED */
+	char hex[80];
+	hexout(hex, key, bytes);	
+	int err = upd_chks(fnm, name, hex, acc);
 	free(fnm);
-	return 0;
+	if (err)
+		FPLOG(FATAL, "Could not write key/IV\n", NULL);
+	return err;
 }
 
 int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
@@ -430,7 +441,11 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			FPLOG(FATAL, "Can't initialize salt from name -\n", NULL);
 			return -1;
 		}
-		/* TODO: Check for zero elen and for size changing plugins */
+		if (encln == 0) {
+			FPLOG(FATAL, "Can't initialize salt from 0 len file\n", NULL);
+			return -1;
+		}
+		/* TODO: Check for size changing plugins */
 		gensalt(state->sec->salt, 64, encnm, NULL, encln);
 	}		
 	/* 6th: key - defaults to pbkdf(pass, salt) */
@@ -446,13 +461,22 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			if (!state->keyf)
 				FPLOG(WARN, "Generated key not written anywhere?\n", NULL);
 			else 
-				if (write_keyfile(keynm, encnm, state->sec->userkey1, state->alg->keylen/8))
+				if (write_keyfile(keynm, encnm, state->sec->userkey1, state->alg->keylen/8, 0600))
 					return -1;
 		} else if (state->pset) {
 			/* Do pbkdf2 stuff to generate key */
-			FPLOG(FATAL, "Key generation with pass+salt not yet implemented!\n", NULL);
-			return -1;
+			hashalg_t sha256_halg = SHA256_HALG_T;
+			int err = pbkdf2(&sha256_halg, state->sec->passphr, 128, state->sec->salt, 64, 
+					 16384, state->sec->userkey1, state->alg->keylen/8);
+			if (err) {
+				FPLOG(FATAL, "Key generation with pass+salt failed!\n", NULL);
+				return -1;
+			}
 			/* Write to keysf if requested */
+			if (state->keyf)
+				if (write_keyfile(keynm, encnm, state->sec->userkey1, state->alg->keylen/8, 0600))
+					return -1;
+			
 		} else if (state->keyf) {
 			/* Read from keyfile */
 			char* kfnm = keyfnm(keynm, encnm);
@@ -468,7 +492,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	} else {
 		if (state->keyf)
 			/* Write to keyfile */
-			if (write_keyfile(keynm, encnm, state->sec->userkey1, state->alg->keylen/8))
+			if (write_keyfile(keynm, encnm, state->sec->userkey1, state->alg->keylen/8, 0600))
 				return -1;
 	}
 	/* 7th: iv (defaults to salt) */
@@ -482,7 +506,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			if (!state->ivf)
 				FPLOG(WARN, "Generated IV not saved?\n", NULL);
 			else 
-				if (write_keyfile(ivsnm, encnm, state->sec->iv1.data, 16))
+				if (write_keyfile(ivsnm, encnm, state->sec->iv1.data, 16, 0640))
 					return -1;
 		} else if (state->ivf) {
 			/* Read IV from ivsfile */
@@ -495,14 +519,25 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			}
 			err += parse_hex(state->sec->iv1.data, state->sec->charbuf1, 16);
 		} else {
-			FPLOG(FATAL, "IV generation with salt not yet implemented!\n", NULL);
-			return -1;
-			/* Generate from salt */
-			
+			if (!state->kset && !state->kgen && state->pset) 
+				FPLOG(WARN, "Should not generate KEY and IV from same passwd/salt\n", NULL);
+			/* Do pbkdf2 stuff to generate key */
+			hashalg_t sha256_halg = SHA256_HALG_T;
+			int err = pbkdf2(&sha256_halg, state->sec->passphr, 128, state->sec->salt, 64, 
+					 8192, state->sec->iv1.data, 16);
+			if (err) {
+				FPLOG(FATAL, "IV generation with pass+salt failed!\n", NULL);
+				return -1;
+			}
+			/* Write to keysf if requested */
+			if (state->ivf)
+				if (write_keyfile(ivsnm, encnm, state->sec->iv1.data, 16, 0640))
+					return -1;
+	
 		}
 	} else if (state->ivf)
 		/* Save to IVs file */
-		if (write_keyfile(ivsnm, encnm, state->sec->iv1.data, 16))
+		if (write_keyfile(ivsnm, encnm, state->sec->iv1.data, 16, 0640))
 			return -1;
 	
 	return err;
