@@ -54,6 +54,7 @@ typedef struct _crypt_state {
 	int pad;
 	sec_fields *sec;
 	const opt_t *opts;
+	size_t saltlen;
 } crypt_state;
 
 /* FIXME HACK!!! aesni currently assumes avail of global crypto symbol to point to sec_fields ... */
@@ -65,7 +66,7 @@ const char *crypt_help = "The crypt plugin for dd_rescue de/encrypts data copied
 		"\t:keyhex=HEX:keyfd=[x]INT[@INT@INT]:keyfile=NAME[@INT@INT]:keygen:keysfile\n"
 		"\t:ivhex=HEX:ivfd=[x]INT[@INT@INT]:ivfile=NAME[@INT@INT]:ivgen:ivsfile\n"
 		"\t:pass=STR:passhex=HEX:passfd=[x]INT[@INT@INT]:passfile=NAME[@INT@INT]\n"
-		"\t:salt=STR:salthex=HEX:saltfd=[x]INT[@INT@INT]:saltfile=NAME[@INT@INT]\n"
+		"\t:salt=STR:salthex=HEX:saltfd=[x]INT[@INT@INT]:saltfile=NAME[@INT@INT]:saltlen=INT\n"
 		" Use algorithm=help to get a list of supported crypt algorithms\n";
 
 /* TODO: Need o output key and iv if generated to KEYS.alg and IVS.alg 
@@ -101,6 +102,7 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	crypto = state->sec;
 	assert(state->sec);
 	state->pad = PAD_ALWAYS;
+	state->saltlen = -1;
 #ifdef HAVE_AESNI
 	if (have_aesni)
 		state->engine = AESNI_Methods;
@@ -207,7 +209,9 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		} else if (!memcmp(param, "saltfile=", 9)) {
 			err += read_file(state->sec->salt, param+9, 64);
 			err += set_flag(&state->sset, "salt");
-
+		} else if (!memcmp(param, "saltlen=", 8)) {
+			state->saltlen = atol(param+8);
+		
 		/* Hmmm, ok, let's support algname without alg= */
 		} else
 			algnm = param;
@@ -434,6 +438,8 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	size_t encln = state->enc? opt->init_opos + fst->estxfer: fst->ilen;
 	if (state->enc && (state->pad == PAD_ALWAYS || (state->pad == PAD_ASNEEDED && (encln&15))))
 		encln += 16-(encln&15);
+	if (state->saltlen != (size_t)-1)
+		encln = state->saltlen;
 
 	/* 5th: salt (later: if not given: derive from outnm) */
 	if ((state->pset && !state->sset) || !state->iset) {
@@ -441,11 +447,10 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			FPLOG(FATAL, "Can't initialize salt from name -\n", NULL);
 			return -1;
 		}
-		if (encln == 0) {
-			FPLOG(FATAL, "Can't initialize salt from 0 len file\n", NULL);
-			return -1;
-		}
+		if (encln == 0)
+			FPLOG(WARN, "Weak salt from 0 len file\n", NULL);
 		/* TODO: Check for size changing plugins */
+		
 		gensalt(state->sec->salt, 64, encnm, NULL, encln);
 	}		
 	/* 6th: key - defaults to pbkdf(pass, salt) */
@@ -488,6 +493,9 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 				return -1;
 			}
 			err += parse_hex(state->sec->userkey1, state->sec->charbuf1, state->alg->keylen/8);
+		} else {
+			FPLOG(FATAL, "Need to set key\n", NULL);
+			return -1;
 		}
 	} else {
 		if (state->keyf)
@@ -518,11 +526,12 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 				return -1;
 			}
 			err += parse_hex(state->sec->iv1.data, state->sec->charbuf1, 16);
-		} else {
-			if (!state->kset && !state->kgen && state->pset) 
+		} else if (state->pset) {
+			if (!state->kset && !state->kgen) 
 				FPLOG(WARN, "Should not generate KEY and IV from same passwd/salt\n", NULL);
 			/* Do pbkdf2 stuff to generate key */
 			hashalg_t sha256_halg = SHA256_HALG_T;
+			/* FIXME: Should use different p/s? */
 			int err = pbkdf2(&sha256_halg, state->sec->passphr, 128, state->sec->salt, 64, 
 					 8192, state->sec->iv1.data, 16);
 			if (err) {
@@ -533,7 +542,9 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			if (state->ivf)
 				if (write_keyfile(ivsnm, encnm, state->sec->iv1.data, 16, 0640))
 					return -1;
-	
+		} else {
+			FPLOG(FATAL, "Need to determine IV\n", NULL);
+			return -1;
 		}
 	} else if (state->ivf)
 		/* Save to IVs file */
