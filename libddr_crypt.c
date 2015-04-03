@@ -411,10 +411,12 @@ char *keyfnm(const char* base, const char *encnm)
 int write_keyfile(const char* base, const char* name, const unsigned char* key, const int bytes, int acc)
 {
 	char* fnm = keyfnm(base, name);
-	/* FIXME: TO BE IMPLEMENTED */
+	/* FIXME: Use secmem */
 	char hex[80];
 	hexout(hex, key, bytes);	
 	int err = upd_chks(fnm, name, hex, acc);
+	memset(hex, 0, 80);
+	asm("":::"memory");
 	free(fnm);
 	if (err)
 		FPLOG(FATAL, "Could not write key/IV\n", NULL);
@@ -516,16 +518,6 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			else 
 				if (write_keyfile(ivsnm, encnm, state->sec->iv1.data, 16, 0640))
 					return -1;
-		} else if (state->ivf) {
-			/* Read IV from ivsfile */
-			char* ivnm = keyfnm(ivsnm, encnm);
-			int off = get_chks(ivsnm, encnm, state->sec->charbuf1);
-			free(ivnm);
-			if (off < 0) {
-				FPLOG(FATAL, "Can't read IV for %s from IVS file!\n", encnm);
-				return -1;
-			}
-			err += parse_hex(state->sec->iv1.data, state->sec->charbuf1, 16);
 		} else if (state->pset) {
 			if (!state->kset && !state->kgen) 
 				FPLOG(WARN, "Should not generate KEY and IV from same passwd/salt\n", NULL);
@@ -542,6 +534,16 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			if (state->ivf)
 				if (write_keyfile(ivsnm, encnm, state->sec->iv1.data, 16, 0640))
 					return -1;
+		} else if (state->ivf) {
+			/* Read IV from ivsfile */
+			char* ivnm = keyfnm(ivsnm, encnm);
+			int off = get_chks(ivsnm, encnm, state->sec->charbuf1);
+			free(ivnm);
+			if (off < 0) {
+				FPLOG(FATAL, "Can't read IV for %s from IVS file!\n", encnm);
+				return -1;
+			}
+			err += parse_hex(state->sec->iv1.data, state->sec->charbuf1, 16);
 		} else {
 			FPLOG(FATAL, "Need to determine IV\n", NULL);
 			return -1;
@@ -550,6 +552,12 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 		/* Save to IVs file */
 		if (write_keyfile(ivsnm, encnm, state->sec->iv1.data, 16, 0640))
 			return -1;
+	
+	/* OK, now we can prepare en/decryption */
+	if (state->enc)
+		state->alg->enc_key_setup(state->sec->userkey1, state->sec->ekeys->data, state->alg->rounds);
+	else
+		state->alg->dec_key_setup(state->sec->userkey1, state->sec->dkeys->data, state->alg->rounds);
 	
 	return err;
 }

@@ -35,6 +35,8 @@ typedef struct _sec_fields {
 	unsigned char passphr[128];
 	/* @2720: char buffer, enough for 512bit hash/key in hex */
 	char charbuf1[144];
+	/* @2864: data buffer for incomplete blocks */
+	unsigned char databuf1[32];
 	
 } sec_fields;
 

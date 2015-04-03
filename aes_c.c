@@ -1017,6 +1017,7 @@ void AES_C_KeySetupX2_Bits_Enc(const uchar *usrkey, uchar *rkeys, uint rounds, u
 	hash_t hv;
 	sha256_init(&hv);
 	sha256_calc(usrkey, bits/8, bits/8, &hv);
+	/* FIXME: Use secmem */
 	uchar usrkey2[32];
 	sha256_beout(usrkey2, &hv);
 	sha256_init(&hv);
@@ -1035,6 +1036,7 @@ void AES_C_KeySetupX2_Bits_Dec(const uchar* usrkey, uchar *rkeys, uint rounds, u
 	hash_t hv;
 	sha256_init(&hv);
 	sha256_calc(usrkey, bits/8, bits/8, &hv);
+	/* FIXME: Use secmem */
 	uchar usrkey2[32];
 	sha256_beout(usrkey2, &hv);
 	sha256_init(&hv);
