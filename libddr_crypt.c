@@ -54,6 +54,7 @@ typedef struct _crypt_state {
 	int pad;
 	sec_fields *sec;
 	const opt_t *opts;
+	char *pfnm, *sfnm;
 	size_t saltlen;
 } crypt_state;
 
@@ -195,8 +196,11 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			err += read_fd(state->sec->passphr, param+7, 128, "passphrase");
 			err += set_flag(&state->pset, "password");
 		} else if (!memcmp(param, "passfile=", 9)) {
-			err += read_file(state->sec->passphr, param+9, 128);
-			err += set_flag(&state->pset, "password");
+			if (!state->pset) {
+				err += read_file(state->sec->passphr, param+9, 128);
+				err += set_flag(&state->pset, "password");
+			} else /* Later: save if pset */
+				state->pfnm = param+9;
 		} else if (!memcmp(param, "salt=", 5)) {
 			mystrncpy(state->sec->salt, param+5, 64);
 			err += set_flag(&state->sset, "salt");
@@ -207,8 +211,11 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			err += read_fd(state->sec->salt, param+7, 64, "salt");
 			err += set_flag(&state->sset, "salt");
 		} else if (!memcmp(param, "saltfile=", 9)) {
-			err += read_file(state->sec->salt, param+9, 64);
-			err += set_flag(&state->sset, "salt");
+			if (!state->sset) {
+				err += read_file(state->sec->salt, param+9, 64);
+				err += set_flag(&state->sset, "salt");
+			} else /* Later: save is sset */
+				state->sfnm = param+9;
 		} else if (!memcmp(param, "saltlen=", 8)) {
 			state->saltlen = atol(param+8);
 		
@@ -238,7 +245,7 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	/* 3rd: Padding: Already done */
 	/* 4th: pass: done */
 	/* 5th: salt (later: if not given: derive from outnm) */
-	/* 6th: key (later: defaults to pbkdf(pass, salt) */
+	/* 6th: key (later: defaults to pbkdf2(pass, salt) */
 	if (!state->pset && !state->kset && !state->keyf && (!state->kgen || !state->enc)) {
 		FPLOG(FATAL, "Need to set key or password\n", NULL);
 		--err;
@@ -408,18 +415,25 @@ char *keyfnm(const char* base, const char *encnm)
 	}
 }
 
-int write_keyfile(const char* base, const char* name, const unsigned char* key, const int bytes, int acc)
+char* chartohex(crypt_state *state, const unsigned char* key, const int bytes)
 {
-	char* fnm = keyfnm(base, name);
-	/* FIXME: Use secmem */
-	char hex[80];
-	hexout(hex, key, bytes);	
-	int err = upd_chks(fnm, name, hex, acc);
-	memset(hex, 0, 80);
-	asm("":::"memory");
+	assert(bytes < 144);
+	hexout(state->sec->charbuf1, key, bytes);
+	return state->sec->charbuf1;
+}
+
+
+int write_keyfile(crypt_state *state, const char* base, const char* name, const unsigned char* key, const int bytes, int acc, char confnm)
+{
+	char *fnm;
+	if (confnm)
+		fnm = keyfnm(base, name);
+	else
+		fnm = strdup(base);
+	int err = upd_chks(fnm, name, chartohex(state, key, bytes), acc);
 	free(fnm);
 	if (err)
-		FPLOG(FATAL, "Could not write key/IV\n", NULL);
+		FPLOG(FATAL, "Could not write key/IV/pass/salt file\n", NULL);
 	return err;
 }
 
@@ -442,6 +456,17 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 		encln += 16-(encln&15);
 	if (state->saltlen != (size_t)-1)
 		encln = state->saltlen;
+
+	if (state->pset && state->pfnm && !state->enc) {
+		if (write_keyfile(state, state->pfnm, encnm, state->sec->passphr, strlen((const char*)state->sec->passphr), 0600, 0))
+			return -1;
+	}
+	
+	if (state->sset && state->sfnm && !state->enc) {
+		if (write_keyfile(state, state->sfnm, encnm, state->sec->salt, 64, 0640, 0))
+			return -1;
+	}
+	
 
 	/* 5th: salt (later: if not given: derive from outnm) */
 	if ((state->pset && !state->sset) || !state->iset) {
@@ -468,7 +493,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			if (!state->keyf)
 				FPLOG(WARN, "Generated key not written anywhere?\n", NULL);
 			else 
-				if (write_keyfile(keynm, encnm, state->sec->userkey1, state->alg->keylen/8, 0600))
+				if (write_keyfile(state, keynm, encnm, state->sec->userkey1, state->alg->keylen/8, 0600, 1))
 					return -1;
 		} else if (state->pset) {
 			/* Do pbkdf2 stuff to generate key */
@@ -481,7 +506,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			}
 			/* Write to keysf if requested */
 			if (state->keyf)
-				if (write_keyfile(keynm, encnm, state->sec->userkey1, state->alg->keylen/8, 0600))
+				if (write_keyfile(state, keynm, encnm, state->sec->userkey1, state->alg->keylen/8, 0600, 1))
 					return -1;
 			
 		} else if (state->keyf) {
@@ -502,7 +527,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	} else {
 		if (state->keyf)
 			/* Write to keyfile */
-			if (write_keyfile(keynm, encnm, state->sec->userkey1, state->alg->keylen/8, 0600))
+			if (write_keyfile(state, keynm, encnm, state->sec->userkey1, state->alg->keylen/8, 0600, 1))
 				return -1;
 	}
 	/* 7th: iv (defaults to salt) */
@@ -516,7 +541,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			if (!state->ivf)
 				FPLOG(WARN, "Generated IV not saved?\n", NULL);
 			else 
-				if (write_keyfile(ivsnm, encnm, state->sec->iv1.data, 16, 0640))
+				if (write_keyfile(state, ivsnm, encnm, state->sec->iv1.data, 16, 0640, 1))
 					return -1;
 		} else if (state->pset) {
 			if (!state->kset && !state->kgen) 
@@ -532,7 +557,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			}
 			/* Write to keysf if requested */
 			if (state->ivf)
-				if (write_keyfile(ivsnm, encnm, state->sec->iv1.data, 16, 0640))
+				if (write_keyfile(state, ivsnm, encnm, state->sec->iv1.data, 16, 0640, 1))
 					return -1;
 		} else if (state->ivf) {
 			/* Read IV from ivsfile */
@@ -550,7 +575,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 		}
 	} else if (state->ivf)
 		/* Save to IVs file */
-		if (write_keyfile(ivsnm, encnm, state->sec->iv1.data, 16, 0640))
+		if (write_keyfile(state, ivsnm, encnm, state->sec->iv1.data, 16, 0640, 1))
 			return -1;
 	
 	/* OK, now we can prepare en/decryption */
