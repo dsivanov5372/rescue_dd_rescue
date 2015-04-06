@@ -391,6 +391,7 @@ int plug_first_chg = 9999;
 int plug_last_chg = -1;
 unsigned int plug_max_req_align = 0;
 char plug_not_sparse = 0;
+char plug_unsparse = 0;
 char plug_output_chg = 0;
 char plugin_help = 0;
 
@@ -540,8 +541,10 @@ ddr_plugin_t* insert_plugin(void* hdl, const char* nm, char* param, opt_t *op)
 
 	if (plug->needs_align > plug_max_req_align)
 		plug_max_req_align = plug->needs_align;
-	if (!plug->handles_sparse)
+	if (!plug->handles_sparse && !plug_unsparse)
 		plug_not_sparse = 1;
+	if (plug->makes_unsparse)
+		plug_unsparse = 1;
 	if (plug->changes_output)
 		plug_output_chg = 1;
 	if (param && !memcmp(param, "help", 4))
@@ -2897,6 +2900,7 @@ int main(int argc, char* argv[])
 		fplog(stderr, WARN, "some plugins don't handle sparse, enabled -A/--nosparse!\n");
 		opts->nosparse = 1;
 	}
+	/* TODO: Check for supports_seek of all plugins instead */
 	if (plugins_loaded && opts->reverse) {
 		fplog(stderr, FATAL, "Plugins currently don't handle reverse\n");
 		unload_plugins();

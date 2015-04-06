@@ -150,8 +150,8 @@ comp_alg calgos[] = { {"lzo1x_1",    lzo1x_1_compress,    lzo1x_decompress_safe,
 		      {"lzo1x_1_15", lzo1x_1_15_compress, lzo1x_decompress_safe, lzo1x_optimize, LZO1X_1_15_MEM_COMPRESS, 2, 1},  // 88,15
       		      {"lzo1x_999",  lzo1x_999_compress,  lzo1x_decompress_safe, lzo1x_optimize, LZO1X_999_MEM_COMPRESS,  3, 9},  // 88,29
 		      /* We DON'T use a different method indicator for the variants unlike lzop 
-		       * The encoding is the following: lzo1@_€ gets method 65+@-'a', 2@_€ -> 97+@-'a' 
-		       * and level € if €<=9, 19 for 99 and 29 for 999 */
+		       * The encoding is the following: lzo1@_â¬ gets method 65+@-'a', 2@_â¬ -> 97+@-'a' 
+		       * and level â¬ if â¬<=9, 19 for 99 and 29 for 999 */
 		      {"lzo1y_1",    lzo1y_1_compress,    lzo1y_decompress_safe, lzo1y_optimize, LZO1Y_MEM_COMPRESS,     89, 1},
 		      {"lzo1y_999",  lzo1y_999_compress,  lzo1y_decompress_safe, lzo1y_optimize, LZO1Y_999_MEM_COMPRESS, 89, 29},
 		      {"lzo1f_1",    lzo1f_1_compress,    lzo1f_decompress_safe, NULL,           LZO1F_MEM_COMPRESS,     70, 1},
@@ -1400,8 +1400,10 @@ ddr_plugin_t ddr_plug = {
 	.slack_post = -33,
 	.needs_align = 1,
 	.handles_sparse = 1,
+	.makes_unsparse = 1,
 	.changes_output = 1,
 	.changes_output_len = 1,
+	.supports_seek = 0,
 	.init_callback  = lzo_plug_init,
 	.open_callback  = lzo_open,
 	.block_callback = lzo_block,
