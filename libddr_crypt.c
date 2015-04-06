@@ -175,13 +175,13 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		else if (!strcmp(param, "keysfile"))
 			state->keyf = 1;
 		else if (!memcmp(param, "ivhex=", 6)) {
-			err += parse_hex(state->sec->iv1.data, param+6, 16);
+			err += parse_hex(state->sec->nonce1, param+6, 16);
 			err += set_flag(&state->iset, "IV");
 		} else if (!memcmp(param, "ivfd=", 5)) {
-			err += read_fd(state->sec->iv1.data, param+5, 16, "iv");
+			err += read_fd(state->sec->nonce1, param+5, 16, "iv");
 			err += set_flag(&state->iset, "IV");
 		} else if (!memcmp(param, "ivfile=", 7)) {
-			err += read_file(state->sec->iv1.data, param+7, 16);
+			err += read_file(state->sec->nonce1, param+7, 16);
 			err += set_flag(&state->iset, "IV");
 		} else if (!strcmp(param, "ivgen"))
 			state->igen = 1;
@@ -537,14 +537,14 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	if (!state->iset) {
 		if (state->igen) {
 			/* Generate IV */
-			random_bytes(state->sec->iv1.data, 16, 0);
+			random_bytes(state->sec->nonce1, 16, 0);
 			char iout[33];
-			FPLOG(INFO, "Generated IV: %s\n", hexout(iout, state->sec->iv1.data, 16)); 
+			FPLOG(INFO, "Generated IV: %s\n", hexout(iout, state->sec->nonce1, 16)); 
 			/* Save IV ... */
 			if (!state->ivf)
 				FPLOG(WARN, "Generated IV not saved?\n", NULL);
 			else 
-				if (write_keyfile(state, ivsnm, encnm, state->sec->iv1.data, 16, 0640, 1))
+				if (write_keyfile(state, ivsnm, encnm, state->sec->nonce1, 16, 0640, 1))
 					return -1;
 		} else if (state->pset) {
 			if (!state->kset && !state->kgen) 
@@ -553,14 +553,14 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			hashalg_t sha256_halg = SHA256_HALG_T;
 			/* FIXME: Should use different p/s? */
 			int err = pbkdf2(&sha256_halg, state->sec->passphr, 128, state->sec->salt, 64, 
-					 8192, state->sec->iv1.data, 16);
+					 8192, state->sec->nonce1, 16);
 			if (err) {
 				FPLOG(FATAL, "IV generation with pass+salt failed!\n", NULL);
 				return -1;
 			}
 			/* Write to keysf if requested */
 			if (state->ivf)
-				if (write_keyfile(state, ivsnm, encnm, state->sec->iv1.data, 16, 0640, 1))
+				if (write_keyfile(state, ivsnm, encnm, state->sec->nonce1, 16, 0640, 1))
 					return -1;
 		} else if (state->ivf) {
 			/* Read IV from ivsfile */
@@ -571,14 +571,14 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 				FPLOG(FATAL, "Can't read IV for %s from IVS file!\n", encnm);
 				return -1;
 			}
-			err += parse_hex(state->sec->iv1.data, state->sec->charbuf1, 16);
+			err += parse_hex(state->sec->nonce1, state->sec->charbuf1, 16);
 		} else {
 			FPLOG(FATAL, "Need to determine IV\n", NULL);
 			return -1;
 		}
 	} else if (state->ivf)
 		/* Save to IVs file */
-		if (write_keyfile(state, ivsnm, encnm, state->sec->iv1.data, 16, 0640, 1))
+		if (write_keyfile(state, ivsnm, encnm, state->sec->nonce1, 16, 0640, 1))
 			return -1;
 	
 	/* OK, now we can prepare en/decryption */
@@ -586,6 +586,10 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 		state->alg->enc_key_setup(state->sec->userkey1, state->sec->ekeys->data, state->alg->rounds);
 	else
 		state->alg->dec_key_setup(state->sec->userkey1, state->sec->dkeys->data, state->alg->rounds);
+	if (state->alg->iv_prep)
+		state->alg->iv_prep(state->sec->nonce1, state->sec->iv1.data, state->enc? opt->init_opos/16: opt->init_ipos/16);
+	else
+		memcpy(state->sec->iv1.data, state->sec->nonce1, 16);
 	
 	return err;
 }
@@ -593,6 +597,35 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf, 
 			    int *towr, int eof, int *recall, void **stat)
 {
+	crypt_state *state = (crypt_state*)*stat;
+	assert(state->inbuf == 0);
+	int i = 0;
+	while (i < *towr) {
+		int left = MIN(512, *towr-i);
+		memcpy(state->sec->databuf2, bf+i, left);
+		int err = 0;
+		ssize_t olen = 0;
+		if (state->enc)
+			err = state->alg->encrypt(state->sec->ekeys->data, state->alg->rounds, state->sec->iv1.data,
+						  state->pad, state->sec->databuf2, bf+i, left, &olen);
+		else
+			err = state->alg->decrypt(state->sec->dkeys->data, state->alg->rounds, state->sec->iv1.data,
+						  state->pad, state->sec->databuf2, bf+i, left, &olen);
+		assert(!err);
+		assert(olen == left);
+		i += left;
+	}
+	/* TODO: Check incomplete block */
+	
+	return bf;
+
+}
+
+int crypt_close(loff_t ooff, void **stat)
+{
+	crypt_state *state = (crypt_state*)*stat;
+	/* TODO: Check leftover */
+	return 0;	
 }
 
 ddr_plugin_t ddr_plug = {
@@ -605,10 +638,8 @@ ddr_plugin_t ddr_plug = {
 	.supports_seek = 0,
 	.init_callback  = crypt_plug_init,
 	.open_callback  = crypt_open,
-	/*
 	.block_callback = crypt_blk_cb,
 	.close_callback = crypt_close,
-	*/
 	.release_callback = crypt_plug_release,
 };
 
