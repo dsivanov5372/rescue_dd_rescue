@@ -52,6 +52,7 @@ typedef struct _crypt_state {
 	char enc, debug, kgen, igen, keyf, ivf;
 	char kset, iset, pset, sset;
 	int pad;
+	int inbuf;
 	sec_fields *sec;
 	const opt_t *opts;
 	char *pfnm, *sfnm;
@@ -454,20 +455,22 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	size_t encln = state->enc? opt->init_opos + fst->estxfer: fst->ilen;
 	if (state->enc && (state->pad == PAD_ALWAYS || (state->pad == PAD_ASNEEDED && (encln&15))))
 		encln += 16-(encln&15);
+	else
+		ddr_plug.changes_output_len = 0;	
+
 	if (state->saltlen != (size_t)-1)
 		encln = state->saltlen;
 
-	if (state->pset && state->pfnm && !state->enc) {
+	if (state->pset && state->pfnm) {
 		if (write_keyfile(state, state->pfnm, encnm, state->sec->passphr, strlen((const char*)state->sec->passphr), 0600, 0))
 			return -1;
 	}
 	
-	if (state->sset && state->sfnm && !state->enc) {
+	if (state->sset && state->sfnm) {
 		if (write_keyfile(state, state->sfnm, encnm, state->sec->salt, 64, 0640, 0))
 			return -1;
 	}
 	
-
 	/* 5th: salt (later: if not given: derive from outnm) */
 	if ((state->pset && !state->sset) || !state->iset) {
 		if (!strcmp(encnm, "-")) {
@@ -587,10 +590,19 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	return err;
 }
 
+unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf, 
+			    int *towr, int eof, int *recall, void **stat)
+{
+}
+
 ddr_plugin_t ddr_plug = {
 	//.name = "crypt",
 	.needs_align = 16,
 	.handles_sparse = 0,
+	.makes_unsparse = 0,
+	.changes_output = 1,
+	.changes_output_len = 1,
+	.supports_seek = 0,
 	.init_callback  = crypt_plug_init,
 	.open_callback  = crypt_open,
 	/*
