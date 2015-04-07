@@ -590,7 +590,10 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 		state->alg->iv_prep(state->sec->nonce1, state->sec->iv1.data, state->enc? opt->init_opos/16: opt->init_ipos/16);
 	else
 		memcpy(state->sec->iv1.data, state->sec->nonce1, 16);
-	
+	/* No need to keep key/passphr in memory */
+	memset(state->sec->userkey1, 0, state->alg->keylen/8);
+	memset(state->sec->passphr, 0, 128);
+	asm("":::"memory");
 	return err;
 }
 
@@ -598,25 +601,53 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 			    int *towr, int eof, int *recall, void **stat)
 {
 	crypt_state *state = (crypt_state*)*stat;
-	assert(state->inbuf == 0);
 	int i = 0;
-	while (i < *towr) {
+	int err = 0;
+	ssize_t olen = 0;
+	unsigned char* keys = state->enc? state->sec->ekeys->data: state->sec->dkeys->data;
+	AES_Crypt_IV_fn *crypt = state->enc? state->alg->encrypt: state->alg->decrypt;	
+	/* Process leftover from last block */
+	if (state->inbuf && *towr >= 16-state->inbuf) {
+		i = 16-state->inbuf;
+		memcpy(state->sec->databuf1+state->inbuf, bf, i);
+		bf -= state->inbuf;
+		err = crypt(keys, state->alg->rounds, state->sec->iv1.data,
+			    PAD_ZERO, state->sec->databuf1, bf, 16, &olen);
+		assert(!err);
+		assert(olen == 16);
+		/* We moved the buffer start several bytes forward, need to correct for it */
+		*towr += state->inbuf;
+		i = 16;
+		state->inbuf = 0;
+	}
+	while (i+15 < *towr) {
 		int left = MIN(512, *towr-i);
+		left -= left%16;
 		memcpy(state->sec->databuf2, bf+i, left);
-		int err = 0;
-		ssize_t olen = 0;
-		if (state->enc)
-			err = state->alg->encrypt(state->sec->ekeys->data, state->alg->rounds, state->sec->iv1.data,
-						  state->pad, state->sec->databuf2, bf+i, left, &olen);
-		else
-			err = state->alg->decrypt(state->sec->dkeys->data, state->alg->rounds, state->sec->iv1.data,
-						  state->pad, state->sec->databuf2, bf+i, left, &olen);
+		err = crypt(keys, state->alg->rounds, state->sec->iv1.data,
+			    PAD_ZERO, state->sec->databuf2, bf+i, left, &olen);
 		assert(!err);
 		assert(olen == left);
 		i += left;
 	}
-	/* TODO: Check incomplete block */
-	
+	/* Copy remainder (incomplete block) into buffer */
+	int left = *towr - i;
+	if (left || eof) {
+		assert(left < 16-state->inbuf);
+		memcpy(state->sec->databuf1+state->inbuf, bf+i, left);
+		*towr -= left;
+		left += state->inbuf;
+		if (eof) {
+			memset(state->sec->databuf1+left, 0, 16-left);
+			err = crypt(keys, state->alg->rounds, state->sec->iv1.data,
+				    state->pad, state->sec->databuf1, bf+i, left, &olen);
+			assert(err >= 0);	/* >0 => padding happened */
+			*towr += olen;
+			state->inbuf = 0;
+			return bf;
+		}
+	}
+	state->inbuf = left;
 	return bf;
 
 }
@@ -624,12 +655,16 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 int crypt_close(loff_t ooff, void **stat)
 {
 	crypt_state *state = (crypt_state*)*stat;
-	/* TODO: Check leftover */
+	assert(state->inbuf == 0);
+	state->alg->release(state->enc? state->sec->ekeys->data: state->sec->dkeys->data, state->alg->rounds);
+	/* secmem_release(state->sec) is calles in crypt_plug_release */
 	return 0;	
 }
 
 ddr_plugin_t ddr_plug = {
 	//.name = "crypt",
+	.slack_pre = 16,
+	.slack_post = 16,
 	.needs_align = 16,
 	.handles_sparse = 0,
 	.makes_unsparse = 0,
