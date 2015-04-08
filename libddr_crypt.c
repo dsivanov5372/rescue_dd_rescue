@@ -238,7 +238,8 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			return -1;
 		} else
 			state->alg = findalg(state->engine, algnm);
-	}
+	} else
+		state->alg = findalg(state->engine, "AES192-CTR");
 	if (!state->alg) {
 		FPLOG(FATAL, "Unknown parameter/algorithm %s\n", algnm);
 		--err;

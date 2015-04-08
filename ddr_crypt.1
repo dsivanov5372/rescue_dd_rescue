@@ -20,9 +20,9 @@ This plugin allows to en/decrypt data on the fly as it is written out
 by
 .B dd_rescue.
 It supports a variant of AES ciphers and uses the hardware acceleration
-on x86 (AESNI) to provide good performance.
+on x86 (AESNI) -- if available -- to provide good performance.
 .PP
-This plugin has been written for 
+This plugin has been written for
 .B dd_rescue
 and uses the plugin interface from it. See the
 .BR dd_rescue(1)
@@ -36,66 +36,124 @@ option passing syntax: The name of the plugin (crypt) is
 followed by an equal sign (=) and options are separated by a colon (:).
 the
 .B crypt
-plugin also allows for some options to be abbreviated to five or six
-letters. See the EXAMPLES section below.
+plugin also allows for some options to be abbreviated. At least encryption
+or decryption and a way to determine the key (and IV) needs
+to be passed.
+.
+.SS Help
+Pass
+.B help
+to have ddr_crypt output a short list of options.
 .
 .SS Encryption or Deccryption
 The crypt dd_rescue plugin (subsequently referred to as just ddr_crypt which
-reflects the variable parts of the filename libddr_crypt.so) choses
-encryption or decryption mode automatically
-if ...
-; otherwise you may specify 
+reflects the variable parts of the filename libddr_crypt.so) need to be told
+whether to encrypt or decyrpt. This is done by specifying
 .B enc[rypt]
 or 
 .B dec[rypt]
 parameters on the
 command line.
-.P
-The plugin also supports the parameter 
-.B bench[mark] ... NO! 
-if it's specified,
-it will output some information about CPU usage and resulting compression
-or decompression bandwidth. (For small files, the numbers become meaningless
-due to jitter and limited time resolution -- ddr_lzo will skip the output
-if the numbers are very tiny.)
 .
 .SS De/encryption algorithm
 The crypt plugin supports a number of the de/encryption variants of AES.
 You can specify which one you want to use by passing 
-.B algo=AESxxx-yyy ,
+.TP 4
+.BR algo=AESxxx-yyy ,
 where xxx can be 128, 192, 256, 128+, 192+, 256+, 128x2, 192x2, or 256x2,
 and yyy can be ECB, CBC, or CTR. 
 Pass 
-.B algo=help 
+.BR algo=help 
 to get a list of available algorithms.
-See section ALGORITHMS for a discussion of the options. Note that decryting
+See section ALGORITHMS AND STREAM MODES for a discussion of the options. 
+Note that decryting
 a file can only be successful if the exact same algorithms is chosen as was
-used for encryption.
+used for encryption. There is no way to tell from an encrypted file which
+algorithm has been chosen.
 .br
 The default (AES192-CTR) is a good choice if you can ensure that the
 key/IV combination is NEVER reused.
 .
-
 .SS Crypto engine
-
+There are several implementations of the AES algorithms that this plugin
+can currently use:
+.TP 4
+.BR engine=aesni
+This will use an own AES implementation using the AESNI instructions of
+the intel x86 core CPUs since Westmere. If possible, this should be used,
+as it provides both superior performance and avoids some of the cache
+timing attacks that the lookup tables used in discrete implementations
+may be prone to. This engine supports all algorithms.
+.TP 4
+.BR engine=aes_c
+This uses an AES implementation in C which is based on the rijndael
+reference code. It is available on all CPUs and supports all algorithms.
+Some prefetching is done on the tables to make cache timing attacks
+a bit harder, but this is most likely insufficient to thwart sophisitcated
+attackers.
+.TP 4
+.BR engine=openssl
+This uses the openssl library to implement the AES routines, which should
+take advantage of hardware acceleration where available and have received
+some hardening against attacks. Note that the openssl implementation
+does not support the + variants (increased number of rounds) that the
+other engines provide.
+.PP
+The engines are used in this order if available, which means that 
+.I aesni
+will be used by default on x86 if supported and 
+.I aes_c
+by default on all other platforms.
+.
 .SS Padding
+As AES is a block cipher (with a block size of 16 bytes), files
+which are not a multiple of the block size need padding at the
+end to have a full block.
+.TP 4
+.BR pad=zero
+The last block is filled up with zeroes and then encrypted.
+Note that on decyption, these zeroes can't be automatically
+stripped, as the decryptor has no way to tell whether there
+true trailing zeros or whether those had been added by padding.
+This option is thus not recommended for copying files of
+arbitraty length.
+.TP 4
+.BR pad=always
+This uses the PKCS7 scheme used by openssl, appending one to
+sixteen bytes with the number of bytes to discard when
+decrypting. This is always safe, but makes the output file
+larger than the input file. Use this when copying files.
+.TP 4
+.BR pad=asneeded
+This is a hybrid between zero and always. This does PKCS7
+padding when the file size does not fill a complete block,
+but does no padding when it does. This meachnism has in the
+worst case (one pad byte) a chance of 1/256 to produce an
+incorrect decryption result by wrong unpadding.
+.PP
+Note that the CTR stream mode does NOT require padding and indeed
+ddr_crypt does not apply any padding regardless of the pad option
+when it is used.
 
-.SS Debugging
+.SS Debugging and Benchmarking
 The
 .B debug
-flag will cause the ddr_lzo to output information about blocks and other
-internal data.
-It's meant for debugging purposes.
+and
+.B benchmark
+flags are not yet supported by ddr_crypt.
 .
 
-.SH 
+.SH Setting key and IV
+
+.SH ALGORITHMS AND STREAM MODES
 
 .SH Supported dd_rescue features
-appending with -x
+appending with -x: (currently only 
+works when file size is a multiple of 16 with ECB and CTR).
 .br
-holes
+holes: not yet (only possible with CTR and ECB)
 .br
-seeking
+seeking: not yet (only possible with CTR and ECB)
 .br
 .
 .SH openssl compatibility
@@ -112,6 +170,26 @@ While care has been applied to check the result of memory allocations ...,
 the code has not been audited and only limited fuzzing
 has been applied to ensure it's not vulnerable to malicious data -- 
 be careful when you process data from untrusted sources.
+.br
+Key handling is a tricky business -- the author may have screwed up
+resulting in some ways to use this program to encrypt data may not
+result in the level of secrecy that is desired.
+.
+.SS Testing
+The crypt plugin does not yet have the same test coverage as the other
+plugins, which means it has not been tested as intensively as the others.
+.
+.SS Future work
+Except for more testing and auditing a few more features are envisioned
+for this plugin:
+.br
+Support for other (non-AES) algorithms such as twofish
+.br
+Stronger function to derive keys/IVs from passwords than pbkdf2.
+.br
+Support for random seeking (holes, reverse copy) for xxx-CTR.
+.br
+Support for AES acceleration for ARMv8.
 .
 .SH EXAMPLES
 .TP
@@ -124,6 +202,7 @@ with AES256 in CTR mode using a generated (random) key and IV and writes the res
 It adds a line to KEYS.AES256-CTR and to IVS.AES256-CTR where the used key
 and IV are written to respectively. (Please ensure that this file is not accessible
 by any unauthorized person!)
+
 won't have encoded holes; errors in the infile will result in zeros.
 .TP
 .BI dd_rescue\ \-aL\ ...
