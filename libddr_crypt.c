@@ -453,7 +453,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	/* Are we en- or decrypting? */
 	const char* encnm = state->enc? opt->oname: opt->iname;
 	size_t encln = state->enc? opt->init_opos + fst->estxfer: fst->ilen;
-	if (state->enc && (state->pad == PAD_ALWAYS || (state->pad == PAD_ASNEEDED && (encln&15))))
+	if (state->alg->blksize > 1 && state->enc && (state->pad == PAD_ALWAYS || (state->pad == PAD_ASNEEDED && (encln&15))))
 		encln += 16-(encln&15);
 	else
 		ddr_plug.changes_output_len = 0;	
