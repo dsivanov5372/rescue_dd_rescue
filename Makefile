@@ -1,6 +1,5 @@
 # Makefile for dd_rescue
 # (c) garloff@suse.de, 99/10/09, GNU GPL
-# $Id$
 
 VERSION = 1.47
 
@@ -291,6 +290,7 @@ distclean: clean
 	rm -f *~ config.h config.h.in config.status config.log configure REL-ID
 	rm -rf autom4te.cache
 	rm -f *.cmp *.lzo test
+	rm -f dd_rescue-?.??.tar.bz2
 
 dist: distclean
 	#tar cvzf ../dd_rescue-$(VERSION).tar.gz -C.. --exclude=$(MYDIR)/CV* --exclude $(MYDIR)/dd_rescue2* --exclude $(MYDIR)/.* --exclude $(MYDIR)/*.i --exclude $(MYDIR)/*~ --exclude $(MYDIR)*.S --exclude $(MYDIR)/*_32 --exclude $(MYDIR)/*_64 --exclude $(MYDIR)/*_android --exclude $(MYDIR)/*.o --exclude $(MYDIR)/*.po --exclude $(MYDaIR)/*.so $(MYDIR) 
