@@ -57,6 +57,7 @@ typedef struct _crypt_state {
 	const opt_t *opts;
 	char *pfnm, *sfnm;
 	size_t saltlen;
+	loff_t lastpos;
 } crypt_state;
 
 /* FIXME HACK!!! aesni currently assumes avail of global crypto symbol to point to sec_fields ... */
@@ -244,6 +245,11 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		FPLOG(FATAL, "Unknown parameter/algorithm %s\n", algnm);
 		--err;
 	}
+
+	/* Actually, we can support seeks/reverse copies with CTR */
+	if (state->alg->blksize == 1)
+		ddr_plug.supports_seek = 1;
+
 	/* 3rd: Padding: Already done */
 	/* 4th: pass: done */
 	/* 5th: salt (later: if not given: derive from outnm) */
@@ -587,8 +593,9 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 		state->alg->enc_key_setup(state->sec->userkey1, state->sec->ekeys->data, state->alg->rounds);
 	else
 		state->alg->dec_key_setup(state->sec->userkey1, state->sec->dkeys->data, state->alg->rounds);
+	state->lastpos = state->enc? opt->init_opos: opt->init_ipos;
 	if (state->alg->iv_prep)
-		state->alg->iv_prep(state->sec->nonce1, state->sec->iv1.data, state->enc? opt->init_opos/16: opt->init_ipos/16);
+		state->alg->iv_prep(state->sec->nonce1, state->sec->iv1.data, state->lastpos/16);
 	else
 		memcpy(state->sec->iv1.data, state->sec->nonce1, 16);
 	/* No need to keep key/passphr in memory */
@@ -607,6 +614,12 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 	ssize_t olen = 0;
 	unsigned char* keys = state->enc? state->sec->ekeys->data: state->sec->dkeys->data;
 	AES_Crypt_IV_fn *crypt = state->enc? state->alg->encrypt: state->alg->decrypt;	
+	loff_t currpos = state->enc? fst->opos: fst->ipos;
+	/* FIXME: Can we seek with CTR? */
+	//printf(" Pos: %zi %zi vs %zi\n", fst->ipos, fst->opos, state->lastpos);
+	assert(currpos == state->lastpos);
+	if (!state->enc)
+		state->lastpos += *towr;
 	/* Process leftover from last block */
 	if (state->inbuf && *towr >= 16-state->inbuf) {
 		i = 16-state->inbuf;
@@ -635,7 +648,8 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 	int left = *towr - i;
 	if (left || eof) {
 		assert(left < 16-state->inbuf);
-		memcpy(state->sec->databuf1+state->inbuf, bf+i, left);
+		if (left)
+			memcpy(state->sec->databuf1+state->inbuf, bf+i, left);
 		*towr -= left;
 		left += state->inbuf;
 		if (eof) {
@@ -644,11 +658,12 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 				    state->pad, state->sec->databuf1, bf+i, left, &olen);
 			assert(err >= 0);	/* >0 => padding happened */
 			*towr += olen;
-			state->inbuf = 0;
-			return bf;
+			left = 0;
 		}
 	}
 	state->inbuf = left;
+	if (state->enc)
+		state->lastpos += *towr;
 	return bf;
 
 }
