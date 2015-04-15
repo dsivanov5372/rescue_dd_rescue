@@ -1104,6 +1104,13 @@ unsigned char* lzo_decompress(fstate_t *fst, unsigned char* bf, int *towr,
 			uint32_t cksum = state->flags & F_ADLER32_C ?
 				lzo_adler32(ADLER32_INIT_VALUE, effbf+bhsz, cmp_len) :
 				lzo_crc32  (  CRC32_INIT_VALUE, effbf+bhsz, cmp_len);
+			/*
+			FPLOG(DEBUG, "Check: %02x %02x %02x ... %02x %02x %02x %02x (%i)\n",
+				effbf[bhsz], effbf[bhsz+1], effbf[bhsz+2],
+				effbf[bhsz+cmp_len-4],
+				effbf[bhsz+cmp_len-3], effbf[bhsz+cmp_len-2],
+				effbf[bhsz+cmp_len-1], cmp_len);
+			 */
 			if (cksum != cmp_cksum && (cmp_len || !(state->flags & F_MULTIPART))) {
 				if (d_off) 
 					DRAIN("ccksm");

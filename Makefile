@@ -85,6 +85,7 @@ else
 endif
 ifeq ($(HAVE_RDRNDAES),1)
 	OBJECTS2 += rdrand.o
+	POBJECTS2 += rdrand.po
 	AESNI_O = aesni.o
 	AESNI_PO = aesni.po
 	CFLAGS += -DHAVE_AESNI
@@ -108,6 +109,7 @@ else
 endif
 ifeq ($(HAVE_RDRNDAES),1)
 	OBJECTS2 += rdrand.o
+	POBJECTS2 += rdrand.po
 	AESNI_O = aesni.o
 	AESNI_PO = aesni.po
 	CFLAGS += -DHAVE_AESNI
@@ -182,7 +184,7 @@ libddr_lzo.so: libddr_lzo.po
 libddr_null.so: libddr_null.po
 	$(CC) -shared -o $@ $^
 
-libddr_crypt.so: libddr_crypt.po aes.po aes_c.po $(AESNI_PO) $(AES_OSSL_PO) pbkdf2.po sha256.po checksum_file.po secmem.po random.po
+libddr_crypt.so: libddr_crypt.po aes.po aes_c.po $(AESNI_PO) $(AES_OSSL_PO) pbkdf2.po sha256.po checksum_file.po secmem.po random.po $(POBJECTS2)
 	$(CC) -shared -o $@ $^ $(CRYPTOLIB)
 
 find_nonzero.o: find_nonzero.c $(FNZ_HEADERS) config.h
@@ -205,6 +207,9 @@ ffs_sse42.o: ffs_sse42.c ffs.h archdep.h config.h
 
 rdrand.o: rdrand.c archdep.h
 	$(CC) $(CFLAGS) -fpie -mrdrnd -maes -c $<
+
+rdrand.po: rdrand.c archdep.h
+	$(CC) $(CFLAGS) -fPIC -mrdrnd -maes -o $@ -c $<
 
 libfalloc: dd_rescue.c $(HEADERS) $(OBJECTS) $(OBJECTS2)
 	$(CC) $(CFLAGS) -fpie -DNO_LIBDL $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2) -lfallocate
