@@ -142,6 +142,54 @@ flags are not yet supported by ddr_crypt.
 .
 
 .SH Setting key and IV
+There are many ways to set the key and IV (for -CBC and -CTR 
+stream modes).
+.SS Setting directly
+They can be set directly using 
+.B keyhex= 
+and 
+.B ivhex=
+on the command line. The argument is interpreted as a hex
+ASCII representation of the key/IV (without leading 0x).
+This way to specifiy keys/IVs should only be used for
+testing - the key will be visible to all local users by looking
+at the command line (unless specific measures are taken to
+lock down access to /proc).
+.
+.SS Reading from file of file descriptor
+It's better to pass in the key and IV via a file descriptor via
+.B keyfd=
+and 
+.B ivfd= .
+If the integer is preceded by an x, the key/IV will be read as
+hex string, otherwise binary data will be used. Optionally, @OFF@LEN
+can be appended, designating the offset and length (in bytes) to be 
+read in the file passed via the file descriptor.
+.Br
+This is useful mainly when dd_rescue is called from another program.
+.P
+Alternatively, with
+.B keyfile=
+and 
+.B ivfile=
+a filename to be opened and read from can be specified.
+The syntax does support the same optional @OFF@LEN designation,
+but the key and IV will always be read in binary form.
+.
+.SS Generating random key and IV 
+The Operating System's random number generator can be used to
+generate key and IV on the fly; if your system offers good random
+numbers, this is the most secure way to specify and encryption
+key. The options to specify are
+.B keygen
+and 
+.B ivgen .
+You need to save the key/IV somehow, otherwise you can not
+decrypt again later. (The program will warn you!) Best way is to
+use the next options.
+.
+.SS Index files
+
 
 .SH ALGORITHMS AND STREAM MODES
 
@@ -188,6 +236,10 @@ Stronger function to derive keys/IVs from passwords than pbkdf2.
 Support for random seeking (holes, reverse copy) for xxx-CTR.
 .br
 Support for AES acceleration for ARMv8.
+.br
+Support for other streaming modes (XTR, GCM, ...)
+.br
+Store IV in xattr
 .
 .SH EXAMPLES
 .TP
