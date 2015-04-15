@@ -32,7 +32,8 @@ INSTASROOT = -o root -g root
 LIB = lib
 LIBDIR = /usr/$(LIB)
 COMPILER = $(shell $(CC) --version | head -n1)
-DEFINES = -DVERSION=\"$(VERSION)\"  -D__COMPILER__="\"$(COMPILER)\"" # -DPLUGSEARCH="\"$(LIBDIR)\""
+ID = $(shell git describe --tags || cat REL-ID)
+DEFINES = -DVERSION=\"$(VERSION)\"  -D__COMPILER__="\"$(COMPILER)\"" -DID=\"$(ID)\" # -DPLUGSEARCH="\"$(LIBDIR)\""
 OUT = -o dd_rescue
 
 LZOP = $(shell type -p lzop || type -P true)
@@ -287,15 +288,18 @@ aes_ossl.o: aes_ossl.c aes_ossl.h aes.h sha256.h config.h
 	$(CC) $(CFLAGS) -fpie -O3 -c $<
 
 distclean: clean
-	rm -f *~ config.h config.h.in config.status config.log configure
+	rm -f *~ config.h config.h.in config.status config.log configure REL-ID
 	rm -rf autom4te.cache
 	rm -f *.cmp *.lzo test
 
 dist: distclean
 	#tar cvzf ../dd_rescue-$(VERSION).tar.gz -C.. --exclude=$(MYDIR)/CV* --exclude $(MYDIR)/dd_rescue2* --exclude $(MYDIR)/.* --exclude $(MYDIR)/*.i --exclude $(MYDIR)/*~ --exclude $(MYDIR)*.S --exclude $(MYDIR)/*_32 --exclude $(MYDIR)/*_64 --exclude $(MYDIR)/*_android --exclude $(MYDIR)/*.o --exclude $(MYDIR)/*.po --exclude $(MYDaIR)/*.so $(MYDIR) 
 	#cd .. && tar cvzf dd_rescue-$(VERSION).tar.gz $(MYDIR)/*.c $(MYDIR)/*.h $(MYDIR)/*.in $(MYDIR)/Makefile* $(MYDIR)/*.sh $(MYDIR)/*.1 $(MYDIR)/COPYING $(MYDIR)/README*
-	cvs status | grep ^File | sed 's@^File: \([a-zA-Z0-9_\.-]*\).*$$@dd_rescue/\1@' | xargs tar cvjf ../dd_rescue-$(VERSION).tar.bz2 -C.. 
-
+	mkdir dd_rescue-$(VERSION)
+	git describe --tags > dd_rescue-$(VERSION)/REL-ID
+	for name in `git ls-files`; do cp -p $$name dd_rescue-$(VERSION); done
+	tar cvjf dd_rescue-$(VERSION).tar.bz2 dd_rescue-$(VERSION)
+	rm -rf dd_rescue-$(VERSION)
 
 install: $(TARGETS)
 	mkdir -p $(INSTALLDIR)

@@ -49,8 +49,6 @@
 # define __COMPILER__ "(unknown compiler)"
 #endif
 
-#define ID "$Id$"
-
 #ifndef BUF_SOFTBLOCKSIZE
 # define BUF_SOFTBLOCKSIZE 131072
 #endif
