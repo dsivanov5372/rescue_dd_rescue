@@ -392,6 +392,7 @@ char plug_not_sparse = 0;
 char plug_unsparse = 0;
 char plug_output_chg = 0;
 char plugin_help = 0;
+char plug_no_seek = 0;
 
 char plugins_loaded = 0;
 char plugins_opened = 0;
@@ -547,6 +548,9 @@ ddr_plugin_t* insert_plugin(void* hdl, const char* nm, char* param, opt_t *op)
 		plug_output_chg = 1;
 	if (param && !memcmp(param, "help", 4))
 		plugin_help++;
+
+	if (!plug->supports_seek)
+		plug_no_seek++;
 
 	LISTAPPEND(ddr_plugins, *plug, ddr_plugin_t);
 	plugins_loaded++;
@@ -2899,7 +2903,7 @@ int main(int argc, char* argv[])
 		opts->nosparse = 1;
 	}
 	/* TODO: Check for supports_seek of all plugins instead */
-	if (plugins_loaded && opts->reverse) {
+	if (plug_no_seek && opts->reverse) {
 		fplog(stderr, FATAL, "Plugins currently don't handle reverse\n");
 		unload_plugins();
 		exit(13);
