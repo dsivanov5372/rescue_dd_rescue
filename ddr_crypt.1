@@ -262,8 +262,8 @@ against cryptographic attacks. (This has been inspired by a comment from
 Bruce Schneier who the author of this document has very high respect for.)
 .P
 The C and AESNI implementations support AES128,192,256 modes with 2,3,4
-additional rounds respectively.  modeshese are named AES128+, AES192+, and 
-AES256+ (plus modes) respectively. 
+additional rounds respectively, resulting in 12, 15, 18 rounds. These
+modes are named AES128+, AES192+, and AES256+ (plus modes) respectively. 
 They do offer a computationally relatively cheap
 way to enhance security. The author of this document e.g. would
 chose AES192+ over AES256. While the author of this document would never
@@ -278,29 +278,30 @@ not support the plus modes.
 A computationally more expensive method to enhance security is doubling
 the number of rounds. This is equivalent to encrypting twice (where the
 second key is a simple derivation of the first).
-This method is supported by all engines.
+These methods are supported by all engines and are named AES128x2, AES192x2,
+and AES256x2.
 .
 .SS Stream modes
 The AES algorithm is a block cipher -- it transforms 16 byte blocks.
 The trivial application to a file of arbitrary size is to apply this
 to every block in the file. This is called ECB (electronic codebook)
 mode. This is very insecure ... the same input will always result
-in the same output. Patterns can be easily recognized and know
+in the same output. Patterns can be easily recognized and known
 plaintext attacks are trivial.
 .P
 It's better to make the transformation dependent on the previous
 content of the file or the position within it. This is what the
 CBC (chained block cipher) and CTR modes do.
 .P
-The CBC mode has several disadvantags: It can't be parallellized
+The CBC mode has several disadvantages: It can't be parallellized
 (every block depends on all previous blocks for encryption; things
 are better for decryption) and random access is impossible.
 .P 
 The CTR mode has many desirable properties. It is basically a stream
 of (reproducible) pseudo random numbers that are XORed with the input
 for encryption. Decryption is just another XOR of course. It's a
-one time pad -- which has been proven to be secure -- if the pad is
-unknow to an attacker and only used once.
+one time pad -- which has been proven to be secure, if the pad is
+unknown to an attacker and only used once.
 .br
 The latter can't be stressed enough: Don't ever use the same key/IV
 combination for two files. Mathematically spoken:
