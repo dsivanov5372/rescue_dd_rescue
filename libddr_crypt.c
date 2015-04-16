@@ -64,7 +64,7 @@ typedef struct _crypt_state {
 sec_fields *crypto;
 
 const char *crypt_help = "The crypt plugin for dd_rescue de/encrypts data copied on the fly.\n"
-		" It supports unaligned blocks (arbitrary offsets) and holes(sparse writing).\n"
+		" It only supports aligned blocks (with CTR) and no holes (sparse writing).\n"
 		" Parameters: [alg[o[rithm]]=]ALG:enc[rypt]:dec[rypt]:engine=STR:pad=STR\n"
 		"\t:keyhex=HEX:keyfd=[x]INT[@INT@INT]:keyfile=NAME[@INT@INT]:keygen:keysfile\n"
 		"\t:ivhex=HEX:ivfd=[x]INT[@INT@INT]:ivfile=NAME[@INT@INT]:ivgen:ivsfile\n"
@@ -229,25 +229,24 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	/* Now process params ... */
 	/* 1st: Set engine: Default: aesni/aes_c: Done */
 	/* 2nd: Set alg: Default: AES192-CTR */
-	if (algnm) {
-		if (!strcmp(algnm, "help")) {
-			FPLOG(INFO, "Crypto algorithms:", NULL);
-			aes_desc_t *alg;
-			for (alg = state->engine; alg->name != NULL; ++alg)
-				FPLOG(NOHDR, " %s", alg->name);
-			FPLOG(NOHDR, "\n", NULL);
-			return -1;
-		} else
-			state->alg = findalg(state->engine, algnm);
+	if (!algnm)
+		algnm = "AES192-CTR";
+	if (!strcmp(algnm, "help")) {
+		FPLOG(INFO, "Crypto algorithms:", NULL);
+		aes_desc_t *alg;
+		for (alg = state->engine; alg->name != NULL; ++alg)
+			FPLOG(NOHDR, " %s", alg->name);
+		FPLOG(NOHDR, "\n", NULL);
+		return -1;
 	} else
-		state->alg = findalg(state->engine, "AES192-CTR");
+		state->alg = findalg(state->engine, algnm);
 	if (!state->alg) {
 		FPLOG(FATAL, "Unknown parameter/algorithm %s\n", algnm);
 		--err;
 	}
 
-	/* Actually, we can support seeks/reverse copies with CTR */
-	if (state->alg->blksize == 1)
+	/* Actually, we can support seeks/reverse copies with CTR and ECB */
+	if (state->alg->blksize == 1 || !memcmp("ECB", algnm+strlen(algnm)-3, 3))
 		ddr_plug.supports_seek = 1;
 
 	/* 3rd: Padding: Already done */
@@ -559,12 +558,15 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			/* Do pbkdf2 stuff to generate key */
 			hashalg_t sha256_halg = SHA256_HALG_T;
 			/* FIXME: Should use different p/s? */
+			const unsigned char* xorb = (const unsigned char*) "Hdo7DHk. 9dEaj*/B";
+			memxor(state->sec->salt, xorb, 16);
 			int err = pbkdf2(&sha256_halg, state->sec->passphr, 128, state->sec->salt, 64, 
 					 8192, state->sec->nonce1, 16);
 			if (err) {
 				FPLOG(FATAL, "IV generation with pass+salt failed!\n", NULL);
 				return -1;
 			}
+			memxor(state->sec->salt, xorb, 16);
 			/* Write to keysf if requested */
 			if (state->ivf)
 				if (write_keyfile(state, ivsnm, encnm, state->sec->nonce1, 16, 0640, 1))
@@ -617,7 +619,29 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 	loff_t currpos = state->enc? fst->opos: fst->ipos;
 	/* FIXME: Can we seek with CTR? */
 	//printf(" Pos: %zi %zi vs %zi\n", fst->ipos, fst->opos, state->lastpos);
-	assert(currpos == state->lastpos);
+	if (currpos != state->lastpos) {
+		if (state->alg->iv_prep)
+			state->alg->iv_prep(state->sec->nonce1, state->sec->iv1.data, currpos/16);
+		else {
+			/* ECB: OK */
+			/* CBC: NOK */
+			FPLOG(WARN, "Unexpected offset %li\n", currpos);
+		}
+	}
+	if ((currpos) % 16) {
+		FPLOG(WARN, "Alignment error! (%zi-%i)=%zi %i/%i\n", currpos, state->inbuf,
+			currpos - state->inbuf,
+			(currpos-state->inbuf)%16, (currpos-state->inbuf)&0x0f);
+		/* Try to handle (CTR) */
+		if (state->alg->blksize != 1)
+			abort();
+		memcpy(state->sec->databuf1+(currpos%16), bf, 16-currpos%16);
+		err = crypt(keys, state->alg->rounds, state->sec->iv1.data,
+			    PAD_ZERO, state->sec->databuf1, bf-(currpos%16), 16, &olen);
+		assert(!err);
+		assert(olen == 16);
+		i = 16-(currpos%16);
+	}
 	if (!state->enc)
 		state->lastpos += *towr;
 	/* Process leftover from last block */
