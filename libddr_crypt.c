@@ -628,8 +628,8 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 			FPLOG(WARN, "Unexpected offset %li\n", currpos);
 		}
 	}
-	if ((currpos) % 16) {
-		FPLOG(WARN, "Alignment error! (%zi-%i)=%zi %i/%i\n", currpos, state->inbuf,
+	if ((currpos) % 16 & state->enc) {
+		FPLOG(WARN, "Enc alignment error! (%zi-%i)=%zi %i/%i\n", currpos, state->inbuf,
 			currpos - state->inbuf,
 			(currpos-state->inbuf)%16, (currpos-state->inbuf)&0x0f);
 		/* Try to handle (CTR) */
@@ -641,6 +641,10 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 		assert(!err);
 		assert(olen == 16);
 		i = 16-(currpos%16);
+	} else if ((currpos-state->inbuf)%16 && !state->enc) {
+		FPLOG(WARN, "Dec alignment error! (%zi-%i)=%zi %i/%i\n", currpos, state->inbuf,
+			currpos - state->inbuf,
+			(currpos-state->inbuf)%16, (currpos-state->inbuf)&0x0f);
 	}
 	if (!state->enc)
 		state->lastpos += *towr;
