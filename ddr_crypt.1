@@ -229,7 +229,8 @@ to be memorized. However, be aware that file size or name changes
 will result in a different salt and thus different key/IV which
 render your encrypted file undecryptable. If there is a risk of this
 to happen, rather memorize one salt per file (or better save key
-and IV using keysfile and ivsfile options).
+and IV using keysfile and ivsfile options). Remember that file names
+are case sensitive (as always with Un*x).
 .P
 Password and salt can be specified with a string
 .B pass=
@@ -327,20 +328,26 @@ as partial blocks can be processed.
 .P
 The author of this documents prefers CTR stream mode and ensures
 that keys/IVs are not reused.
-
-
+.
 .SH Supported dd_rescue features
-
-
-appending with -x: (currently only 
-works when file size is a multiple of 16 with ECB and CTR).
+With CTR mode, you can do partial writes to encrypted files and
+the result will still be a consistent file (of course assuming
+that the used key and IV are the same). Same with appending (-x)
+or reverse direction copies.
 .br
-holes: not yet (only possible with CTR and ECB)
-won't have encoded holes; errors in the infile will result in zeros.
-combine with lzo
-.br
-seeking: not yet (only possible with CTR and ECB)
-.br
+With ECB mode, this will only work, if file size and offsets
+are all block (16byte) aligned. With CBC, none of this is possible.
+.P
+The ddr_crypt plugin has no specific support for encoding holes;
+if however previous correctly encrypted content is present in
+a hole, the support for partial writes in CTR and ECB mode will
+result in a meaningful output. If no previous content is in holes,
+then the result of decrypting zeros will result upon decryption.
+.P
+Note that you can compress and encode holes with ddr_lzo and then
+pass to ddr_crypt to encrypt and pass through ddr_crypt to decrypt
+and ddr_lzo to uncompress and extract holes again. This only works
+with CTR mode. 
 .
 .SH openssl compatibility
 TBW
