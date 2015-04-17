@@ -627,14 +627,16 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 	AES_Crypt_IV_fn *crypt = state->enc? state->alg->encrypt: state->alg->decrypt;	
 	loff_t currpos = state->enc? fst->opos: fst->ipos;
 	/* FIXME: Can we seek with CTR? */
-	//printf(" Pos: %zi %zi vs %zi\n", fst->ipos, fst->opos, state->lastpos);
+	printf(" Pos: %zi %zi vs %zi\n", fst->ipos, fst->opos, state->lastpos);
 	if (currpos != state->lastpos) {
-		if (state->alg->iv_prep)
+		if (state->alg->iv_prep) {
 			state->alg->iv_prep(state->sec->nonce1, state->sec->iv1.data, currpos/16);
-		else {
+			FPLOG(INFO, "Adjusted offset %zi -> %zi\n", state->lastpos, currpos);
+			state->lastpos = currpos;
+		} else {
 			/* ECB: OK */
 			/* CBC: NOK */
-			FPLOG(WARN, "Unexpected offset %li\n", currpos);
+			FPLOG(WARN, "Unexpected offset %zi\n", currpos);
 		}
 	}
 	if (((currpos) % 16) && state->enc) {
