@@ -132,15 +132,15 @@ incorrect decryption result by wrong unpadding.
 Note that the CTR stream mode does NOT require padding and indeed
 ddr_crypt does not apply any padding regardless of the pad option
 when it is used.
-
+.
 .SS Debugging and Benchmarking
 The
 .B debug
-and
+paramter makes the ddr_crypt module output some debugging information.
+The
 .B benchmark
-flags are not yet supported by ddr_crypt.
+parameter is not yet supported by ddr_crypt.
 .
-
 .SH Setting key and IV
 There are many ways to set the key and IV (for -CBC and -CTR 
 stream modes).
@@ -343,8 +343,8 @@ seeking: not yet (only possible with CTR and ECB)
 .br
 .
 .SH openssl compatibility
+TBW
 .
-
 .SH BUGS/LIMITATIONS
 .SS Maturity
 The plugin is new as of dd_rescue 1.47. Do not yet rely on data

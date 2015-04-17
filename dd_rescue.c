@@ -1544,8 +1544,11 @@ int blockxfer(const loff_t max, const int bs,
 		/* Write alignment is more important except if fstate->o_chr == 1 */
 		int off = fst->o_chr? fst->ipos % bs: fst->opos % bs;
 		int aligned = op->reverse? off: bs-off;
-		if (!plug_max_req_align || !(aligned % plug_max_req_align))
+		if (!plug_max_req_align || !(aligned % plug_max_req_align) || op->reverse)
 			block = aligned;
+		if (0 && op->verbose)
+			fplog(stderr, DEBUG, "blockxfer: %i -> %i/%i (@%zi/%zi)\n",
+				bs, block, aligned, fst->ipos, fst->opos);
 	}
 	return block;
 }

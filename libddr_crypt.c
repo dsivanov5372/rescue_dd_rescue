@@ -51,7 +51,7 @@ typedef struct _crypt_state {
 	int seq;
 	char enc, debug, kgen, igen, keyf, ivf;
 	char kset, iset, pset, sset;
-	char finfirst;
+	char finfirst, rev;
 	int pad;
 	int inbuf;
 	sec_fields *sec;
@@ -71,6 +71,7 @@ const char *crypt_help = "The crypt plugin for dd_rescue de/encrypts data copied
 		"\t:ivhex=HEX:ivfd=[x]INT[@INT@INT]:ivfile=NAME[@INT@INT]:ivgen:ivsfile\n"
 		"\t:pass=STR:passhex=HEX:passfd=[x]INT[@INT@INT]:passfile=NAME[@INT@INT]\n"
 		"\t:salt=STR:salthex=HEX:saltfd=[x]INT[@INT@INT]:saltfile=NAME[@INT@INT]:saltlen=INT\n"
+		"\t:debug\n"
 		" Use algorithm=help to get a list of supported crypt algorithms\n";
 
 /* TODO: Need o output key and iv if generated to KEYS.alg and IVS.alg 
@@ -222,6 +223,8 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 				state->sfnm = param+9;
 		} else if (!memcmp(param, "saltlen=", 8)) {
 			state->saltlen = atol(param+8);	/* FIXME: need atoll on 32bit */
+		} else if (!strcmp(param, "debug")) {
+			state->debug = 1;
 		
 		/* Hmmm, ok, let's support algname without alg= */
 		} else
@@ -264,8 +267,7 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		FPLOG(FATAL, "Can't set and generate a key\n", NULL);
 		--err;
 	}
-	if (opt->reverse)
-		state->finfirst = 1;
+	state->finfirst = state->rev = opt->reverse;
 	/* 7th: iv (later: defaults to salt) */
 	return err;
 }
@@ -463,7 +465,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 
 	/* Are we en- or decrypting? */
 	const char* encnm = state->enc? opt->oname: opt->iname;
-	size_t encln = state->enc? opt->init_opos + fst->estxfer: fst->ilen;
+	size_t encln = state->enc? opt->init_opos + (opt->reverse? 0: fst->estxfer): fst->ilen;
 	if (state->alg->blksize > 1 && state->enc && (state->pad == PAD_ALWAYS || (state->pad == PAD_ASNEEDED && (encln&15))))
 		encln += 16-(encln&15);
 	else
@@ -626,12 +628,16 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 	unsigned char* keys = state->enc? state->sec->ekeys->data: state->sec->dkeys->data;
 	AES_Crypt_IV_fn *crypt = state->enc? state->alg->encrypt: state->alg->decrypt;	
 	loff_t currpos = state->enc? fst->opos: fst->ipos;
+	if (state->rev)
+		currpos -= *towr;
 	/* FIXME: Can we seek with CTR? */
-	printf(" Pos: %zi %zi vs %zi\n", fst->ipos, fst->opos, state->lastpos);
+	if (0 && state->debug)
+		FPLOG(DEBUG, "pos: %zi %zi vs %zi (%i)\n", fst->ipos, fst->opos, state->lastpos, state->lastpos/16);
 	if (currpos != state->lastpos) {
 		if (state->alg->iv_prep) {
 			state->alg->iv_prep(state->sec->nonce1, state->sec->iv1.data, currpos/16);
-			FPLOG(INFO, "Adjusted offset %zi -> %zi\n", state->lastpos, currpos);
+			if (state->debug)
+				FPLOG(INFO, "Adjusted offset %zi -> %zi (%i)\n", state->lastpos, currpos, currpos/16);
 			state->lastpos = currpos;
 		} else {
 			/* ECB: OK */
@@ -639,6 +645,9 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 			FPLOG(WARN, "Unexpected offset %zi\n", currpos);
 		}
 	}
+	if (0 && state->debug)
+		FPLOG(DEBUG, "%zi: %02x %02x %02x %02x ... -> ",
+			currpos, bf[0], bf[1], bf[2], bf[3]);
 	if (((currpos) % 16) && state->enc) {
 		FPLOG(WARN, "Enc alignment error! (%zi-%i)=%zi %i/%i\n", currpos, state->inbuf,
 			currpos - state->inbuf,
@@ -657,7 +666,7 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 			currpos - state->inbuf,
 			(currpos-state->inbuf)%16, (currpos-state->inbuf)&0x0f);
 	}
-	if (!state->enc)
+	if (!state->enc && !state->rev)
 		state->lastpos += *towr;
 	/* Process leftover from last block */
 	if (state->inbuf && *towr >= 16-state->inbuf) {
@@ -702,8 +711,11 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 		}
 	}
 	state->inbuf = left;
-	if (state->enc)
+	if (state->enc && !state->rev)
 		state->lastpos += *towr;
+	if (0 && state->debug)
+		FPLOG(NOHDR, "%02x %02x %02x %02x ...\n",
+			bf[0], bf[1], bf[2], bf[3]);
 	return bf;
 
 }
