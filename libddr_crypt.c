@@ -51,6 +51,7 @@ typedef struct _crypt_state {
 	int seq;
 	char enc, debug, kgen, igen, keyf, ivf;
 	char kset, iset, pset, sset;
+	char finfirst;
 	int pad;
 	int inbuf;
 	sec_fields *sec;
@@ -263,6 +264,8 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		FPLOG(FATAL, "Can't set and generate a key\n", NULL);
 		--err;
 	}
+	if (opt->reverse)
+		state->finfirst = 1;
 	/* 7th: iv (later: defaults to salt) */
 	return err;
 }
@@ -686,13 +689,14 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 			memcpy(state->sec->databuf1+state->inbuf, bf+i, left);
 		*towr -= left;
 		left += state->inbuf;
-		if (eof) {
+		if (eof || state->finfirst) {
 			memset(state->sec->databuf1+left, 0, 16-left);
 			err = crypt(keys, state->alg->rounds, state->sec->iv1.data,
 				    state->pad, state->sec->databuf1, bf+i, left, &olen);
 			assert(err >= 0);	/* >0 => padding happened */
 			*towr += olen;
 			left = 0;
+			state->finfirst = 0;
 		}
 	}
 	state->inbuf = left;
