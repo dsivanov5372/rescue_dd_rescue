@@ -204,7 +204,8 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			} else /* Later: save if pset */
 				state->pfnm = param+9;
 		} else if (!memcmp(param, "salt=", 5)) {
-			mystrncpy(state->sec->salt, param+5, 64);
+			//mystrncpy(state->sec->salt, param+5, 64);
+			gensalt(state->sec->salt, 64, param+5, NULL, 0); 
 			err += set_flag(&state->sset, "salt");
 		} else if (!memcmp(param, "salthex=", 8)) {
 			err += parse_hex(state->sec->salt, param+8, 64);
@@ -219,7 +220,7 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			} else /* Later: save is sset */
 				state->sfnm = param+9;
 		} else if (!memcmp(param, "saltlen=", 8)) {
-			state->saltlen = atol(param+8);
+			state->saltlen = atol(param+8);	/* FIXME: need atoll on 32bit */
 		
 		/* Hmmm, ok, let's support algname without alg= */
 		} else
@@ -243,6 +244,7 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	if (!state->alg) {
 		FPLOG(FATAL, "Unknown parameter/algorithm %s\n", algnm);
 		--err;
+		return err;
 	}
 
 	/* Actually, we can support seeks/reverse copies with CTR and ECB */
@@ -488,6 +490,10 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 		/* TODO: Check for size changing plugins */
 		
 		gensalt(state->sec->salt, 64, encnm, NULL, encln);
+		if (encln)
+			FPLOG(INFO, "Derived salt from %s=%016zx\n", encnm, encln);
+		else	
+			FPLOG(INFO, "Derived salt from %s\n", encnm);
 	}		
 	/* 6th: key - defaults to pbkdf(pass, salt) */
 	if (!state->kset) {
@@ -554,7 +560,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 					return -1;
 		} else if (state->pset) {
 			if (!state->kset && !state->kgen) 
-				FPLOG(WARN, "Should not generate KEY and IV from same passwd/salt\n", NULL);
+				FPLOG(INFO, "Generate KEY and IV from same passwd/salt\n", NULL);
 			/* Do pbkdf2 stuff to generate key */
 			hashalg_t sha256_halg = SHA256_HALG_T;
 			/* FIXME: Should use different p/s? */
@@ -628,13 +634,13 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 			FPLOG(WARN, "Unexpected offset %li\n", currpos);
 		}
 	}
-	if ((currpos) % 16 & state->enc) {
+	if (((currpos) % 16) && state->enc) {
 		FPLOG(WARN, "Enc alignment error! (%zi-%i)=%zi %i/%i\n", currpos, state->inbuf,
 			currpos - state->inbuf,
 			(currpos-state->inbuf)%16, (currpos-state->inbuf)&0x0f);
-		/* Try to handle (CTR) */
-		if (state->alg->blksize != 1)
-			abort();
+		/* Can only handle in CTR mode and without buffered bytes. */
+		assert(state->alg->blksize == 1);
+		assert(state->inbuf == 0);
 		memcpy(state->sec->databuf1+(currpos%16), bf, 16-currpos%16);
 		err = crypt(keys, state->alg->rounds, state->sec->iv1.data,
 			    PAD_ZERO, state->sec->databuf1, bf-(currpos%16), 16, &olen);

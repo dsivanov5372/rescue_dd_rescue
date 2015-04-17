@@ -228,7 +228,8 @@ of the encrypted file; this allows to work with just one password
 to be memorized. However, be aware that file size or name changes
 will result in a different salt and thus different key/IV which
 render your encrypted file undecryptable. If there is a risk of this
-to happen, rather memorize on salt per file.
+to happen, rather memorize one salt per file (or better save key
+and IV using keysfile and ivsfile options).
 .P
 Password and salt can be specified with a string
 .B pass=
@@ -243,7 +244,12 @@ and
 .B saltfd=
 .B saltfile=
 options with the same possible parameters as above for direct specification
-of key and IV.
+of key and IV. (Note that the salt is hashed, like when derived from filename
+and length.)
+.P
+If the automatically generated salt is used (based on filename and file
+length), the assumed file length for salt generation can be overriden by
+.B saltlen= .
 
 .SH ALGORITHMS AND STREAM MODES
 The AES (Rijndael) family of algorithms is considered cryptographically

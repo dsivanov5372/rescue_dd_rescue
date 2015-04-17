@@ -162,10 +162,17 @@ void gensalt(unsigned char* salt, unsigned int slen, const char* fn, const char*
 {	
 	const int ln = strlen(fn) + (ext? strlen(ext): 0) + 18;
 	char hashnm[ln+2];
-	sprintf(hashnm, "%s%s:%016zx", fn, ext, flen);
+	if (ext)
+		sprintf(hashnm, "%s%s=%016zx", fn, ext, flen);
+	else if (flen)
+		sprintf(hashnm, "%s=%016zx", fn, flen);
+	else
+		sprintf(hashnm, "%s", fn);
+	int sln = strlen(hashnm);
+	//printf("%s\n", hashnm);
 	hash_t hv;
 	sha256_init(&hv);
-	sha256_calc((unsigned char*)hashnm, ln, ln, &hv);
+	sha256_calc((unsigned char*)hashnm, sln, sln, &hv);
 	uint i;
 	for (i = 0; i < slen/4; ++i)
 		*((unsigned int*)salt+i) = htonl(hv.sha256_h[i%8]);
