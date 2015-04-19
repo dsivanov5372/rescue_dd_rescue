@@ -37,6 +37,7 @@
 #include <errno.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <time.h>
 
 
 #define FPLOG(lvl, fmt, args...) \
@@ -51,7 +52,8 @@ typedef struct _crypt_state {
 	int seq;
 	char enc, debug, kgen, igen, keyf, ivf;
 	char kset, iset, pset, sset;
-	char finfirst, rev;
+	char finfirst, rev, bench;
+	clock_t cpu;
 	int pad;
 	int inbuf;
 	sec_fields *sec;
@@ -59,6 +61,7 @@ typedef struct _crypt_state {
 	char *pfnm, *sfnm;
 	size_t saltlen;
 	loff_t lastpos;
+	loff_t processed;
 } crypt_state;
 
 /* FIXME HACK!!! aesni currently assumes avail of global crypto symbol to point to sec_fields ... */
@@ -71,7 +74,7 @@ const char *crypt_help = "The crypt plugin for dd_rescue de/encrypts data copied
 		"\t:ivhex=HEX:ivfd=[x]INT[@INT@INT]:ivfile=NAME[@INT@INT]:ivgen:ivsfile\n"
 		"\t:pass=STR:passhex=HEX:passfd=[x]INT[@INT@INT]:passfile=NAME[@INT@INT]\n"
 		"\t:salt=STR:salthex=HEX:saltfd=[x]INT[@INT@INT]:saltfile=NAME[@INT@INT]:saltlen=INT\n"
-		"\t:debug\n"
+		"\t:debug:bench[mark]\n"
 		" Use algorithm=help to get a list of supported crypt algorithms\n";
 
 /* TODO: Need o output key and iv if generated to KEYS.alg and IVS.alg 
@@ -246,7 +249,9 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 				state->sfnm = param+9;
 		} else if (!memcmp(param, "saltlen=", 8)) {
 			state->saltlen = atol(param+8);	/* FIXME: need atoll on 32bit */
-		} else if (!strcmp(param, "debug")) {
+		} else if (!memcmp(param, "bench", 5))
+			state->bench = 1;
+		else if (!strcmp(param, "debug")) {
 			state->debug = 1;
 		
 		/* Hmmm, ok, let's support algname without alg= */
@@ -468,13 +473,16 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	     const fstate_t *fst, void **stat)
 {
 	int err = 0;
+	char ivsnm[32], keynm[32];
+	clock_t t1 = 0;
 	crypt_state *state = (crypt_state*)*stat;
 	state->opts = opt;
 
-	char ivsnm[32], keynm[32];
 	sprintf(ivsnm, "IVS.%s", state->alg->name);
 	sprintf(keynm, "KEYS.%s", state->alg->name);
 
+	if (state->bench)
+		t1 = clock();
 	/* Are we en- or decrypting? */
 	const char* encnm = state->enc? opt->oname: opt->iname;
 	size_t encln = state->enc? opt->init_opos + (opt->reverse? 0: fst->estxfer): fst->ilen;
@@ -627,6 +635,8 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	memset(state->sec->userkey1, 0, state->alg->keylen/8);
 	memset(state->sec->passphr, 0, 128);
 	asm("":::"memory");
+	if (state->bench)
+		state->cpu += clock() - t1;
 	return err;
 }
 
@@ -636,12 +646,15 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 	crypt_state *state = (crypt_state*)*stat;
 	int i = 0;
 	int err = 0;
+	clock_t t1 = 0;
 	ssize_t olen = 0;
 	unsigned char* keys = state->enc? state->sec->ekeys->data: state->sec->dkeys->data;
 	AES_Crypt_IV_fn *crypt = state->enc? state->alg->encrypt: state->alg->decrypt;	
 	loff_t currpos = state->enc? fst->opos: fst->ipos;
 	if (state->rev)
 		currpos -= *towr;
+	if (state->bench)
+		t1 = clock();
 	/* FIXME: Can we seek with CTR? */
 	if (0 && state->debug)
 		FPLOG(DEBUG, "pos: %zi %zi vs %zi (%i)\n", fst->ipos, fst->opos, state->lastpos, state->lastpos/16);
@@ -728,6 +741,10 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 	if (0 && state->debug)
 		FPLOG(NOHDR, "%02x %02x %02x %02x ...\n",
 			bf[0], bf[1], bf[2], bf[3]);
+
+	if (state->bench)
+		state->cpu += clock() - t1;
+	state->processed += *towr;
 	return bf;
 
 }
@@ -738,6 +755,10 @@ int crypt_close(loff_t ooff, void **stat)
 	assert(state->inbuf == 0);
 	state->alg->release(state->enc? state->sec->ekeys->data: state->sec->dkeys->data, state->alg->rounds);
 	/* secmem_release(state->sec) is calles in crypt_plug_release */
+	if (state->bench && state->cpu/(CLOCKS_PER_SEC/20) > 0)
+		FPLOG(INFO, "%.2fs CPU time, %.1fMiB/s\n",
+			(double)state->cpu/CLOCKS_PER_SEC, 
+			state->processed/1024 / (state->cpu/(CLOCKS_PER_SEC/1024.0)));
 	return 0;	
 }
 
