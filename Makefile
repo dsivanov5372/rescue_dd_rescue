@@ -390,6 +390,7 @@ check: $(TARGETS) find_nonzero md5 sha1 sha256 sha512
 	rm -f /tmp/dd_rescue CHECKSUMS.sha512 TEST HMACS.md5
 	if ./calchmac.py sha1 pass dd_rescue; then make check_hmac; else echo "Sorry, no more HMAC test due to missing python-hashlib support"; true; fi
 	make check_aes
+	make check_crypt
 
 check_hmac: $(TARGETS)
 	FILES="*.c *.h *.po dd_rescue *.so"; \
@@ -496,4 +497,6 @@ check_crypt: $(TARGETS)
 	./dd_rescue -tp -L ./libddr_crypt.so=enc:keygen:keysfile:ivgen:ivsfile:alg=AES192+-CTR dd_rescue dd_rescue.enc
 	./dd_rescue -tp -L ./libddr_crypt.so=dec:keysfile:ivsfile:alg=AES192+-CTR dd_rescue.enc dd_rescue.dec
 	cmp dd_rescue dd_rescue.dec
+	# ...
+	rm -f dd_rescue.enc dd_rescue.dec KEYS.* IVS.*
 
