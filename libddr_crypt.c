@@ -94,6 +94,30 @@ int set_flag(char* flg, const char* msg)
 	return 0;
 }
 
+int set_alg(crypt_state* state, const char* algnm)
+{
+	if (state->alg) {
+		FPLOG(FATAL, "alg already set to %s, can't override with %s\n",
+			state->alg->name, algnm);
+		return -1;
+	}
+	if (!strcmp(algnm, "help")) {
+		FPLOG(INFO, "Crypto algorithms:", NULL);
+		aes_desc_t *alg;
+		for (alg = state->engine; alg->name != NULL; ++alg)
+			FPLOG(NOHDR, " %s", alg->name);
+		FPLOG(NOHDR, "\n", NULL);
+		return -1;
+	} else {
+		state->alg = findalg(state->engine, algnm);
+		if (!state->alg) {
+			FPLOG(FATAL, "Unknown parameter/algorithm %s\n", algnm);
+			return -1;
+		}
+	}
+	return 0;
+}
+
 int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 {
 	int err = 0;
@@ -114,7 +138,6 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	else
 #endif
 		state->engine = AES_C_Methods;
-	char* algnm = NULL;
 	while (param) {
 		char* next = strchr(param, ':');
 		if (next)
@@ -145,11 +168,11 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			}
 		}
 		else if (!memcmp(param, "algorithm=", 10))
-			algnm = param+10;
+			err += set_alg(state, param+10);
 		else if (!memcmp(param, "algo=", 5))
-			algnm = param+5;
+			err += set_alg(state, param+5);
 		else if (!memcmp(param, "alg=", 4))
-			algnm = param+4;
+			err += set_alg(state, param+4);
 		else if (!memcmp(param, "pad=", 4)) {
 			if (!strcmp(param+4, "zero"))
 				state->pad = PAD_ZERO;
@@ -227,32 +250,21 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			state->debug = 1;
 		
 		/* Hmmm, ok, let's support algname without alg= */
-		} else
-			algnm = param;
+		} else {
+			err += set_alg(state, param);
+		}
 		param = next;
 	}
 	/* Now process params ... */
 	/* 1st: Set engine: Default: aesni/aes_c: Done */
-	/* 2nd: Set alg: Default: AES192-CTR */
-	if (!algnm)
-		algnm = "AES192-CTR";
-	if (!strcmp(algnm, "help")) {
-		FPLOG(INFO, "Crypto algorithms:", NULL);
-		aes_desc_t *alg;
-		for (alg = state->engine; alg->name != NULL; ++alg)
-			FPLOG(NOHDR, " %s", alg->name);
-		FPLOG(NOHDR, "\n", NULL);
+	/* 2nd: Set alg: Already done if set explicitly */
+	if (!err && !state->alg)
+		state->alg = findalg(state->engine, "AES192-CTR");
+	if (!state->alg)
 		return -1;
-	} else
-		state->alg = findalg(state->engine, algnm);
-	if (!state->alg) {
-		FPLOG(FATAL, "Unknown parameter/algorithm %s\n", algnm);
-		--err;
-		return err;
-	}
 
 	/* Actually, we can support seeks/reverse copies with CTR and ECB */
-	if (state->alg->blksize == 1 || !memcmp("ECB", algnm+strlen(algnm)-3, 3))
+	if (state->alg->blksize == 1 || !memcmp("ECB", state->alg->name + strlen(state->alg->name)-3, 3))
 		ddr_plug.supports_seek = 1;
 
 	/* 3rd: Padding: Already done */
@@ -268,7 +280,7 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		--err;
 	}
 	state->finfirst = state->rev = opt->reverse;
-	/* 7th: iv (later: defaults to salt) */
+	/* 7th: iv (later: defaults to generation from salt) */
 	return err;
 }
 
@@ -485,7 +497,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	}
 	
 	/* 5th: salt (later: if not given: derive from outnm) */
-	if ((state->pset && !state->sset) || !state->iset) {
+	if ((state->pset && !state->sset) && !(state->iset && state->kset)) {
 		if (!strcmp(encnm, "-")) {
 			FPLOG(FATAL, "Can't initialize salt from name -\n", NULL);
 			return -1;
