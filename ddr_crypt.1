@@ -221,10 +221,13 @@ memorizable rather than stored, you can use a password and salt
 to generate many keys from one password.
 .P
 The key and IV are derived from an expensive to revert function 
-of password and salt. We use 16k rounds of pbkdf2() currently,
+of password and salt. We use 17000 rounds of pbkdf2() currently,
 although a more compute intense function (like scrypt) is planned
 for the future. The expensiveness of this function is a protection
-against brute forcing passwords.
+against brute forcing passwords. To use pbkdf2, you need to specify
+.B pbkdf2
+or
+.B pbkdf2=rounds .
 .P
 The salt can be derived automatically from the name (and length)
 of the encrypted file; this allows to work with just one password

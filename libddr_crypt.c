@@ -38,6 +38,17 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <time.h>
+#include <endian.h>
+
+#if __WORDSIZE == 64
+#define LL "l"
+#define ATOL atol
+#elif __WORDSIZE == 32
+#define LL "ll"
+#define ATOL atoll
+#else
+#error __WORDSIZE unknown
+#endif
 
 
 #define FPLOG(lvl, fmt, args...) \
@@ -56,6 +67,7 @@ typedef struct _crypt_state {
 	clock_t cpu;
 	int pad;
 	int inbuf;
+	int pbkdf2r;
 	sec_fields *sec;
 	const opt_t *opts;
 	char *pfnm, *sfnm;
@@ -74,7 +86,7 @@ const char *crypt_help = "The crypt plugin for dd_rescue de/encrypts data copied
 		"\t:ivhex=HEX:ivfd=[x]INT[@INT@INT]:ivfile=NAME[@INT@INT]:ivgen:ivsfile\n"
 		"\t:pass=STR:passhex=HEX:passfd=[x]INT[@INT@INT]:passfile=NAME[@INT@INT]\n"
 		"\t:salt=STR:salthex=HEX:saltfd=[x]INT[@INT@INT]:saltfile=NAME[@INT@INT]:saltlen=INT\n"
-		"\t:debug:bench[mark]\n"
+		"\t:pbkdf2[=INT]:debug:bench[mark]\n"
 		" Use algorithm=help to get a list of supported crypt algorithms\n";
 
 /* TODO: Need o output key and iv if generated to KEYS.alg and IVS.alg 
@@ -247,15 +259,16 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 				err += set_flag(&state->sset, "salt");
 			} else /* Later: save is sset */
 				state->sfnm = param+9;
-		} else if (!memcmp(param, "saltlen=", 8)) {
-			state->saltlen = atol(param+8);	/* FIXME: need atoll on 32bit */
-		} else if (!memcmp(param, "bench", 5))
+		} else if (!memcmp(param, "saltlen=", 8))
+			state->saltlen = ATOL(param+8);	/* FIXME: need atoll on 32bit */
+		else if (!memcmp(param, "bench", 5))
 			state->bench = 1;
-		else if (!strcmp(param, "debug")) {
-			state->debug = 1;
-		
+		else if (!memcmp(param, "pbkdf2=", 7))
+			state->pbkdf2r = atol(param+7);
+		else if (!strcmp(param, "pbkdf2"))
+			state->pbkdf2r = 17000;
 		/* Hmmm, ok, let's support algname without alg= */
-		} else {
+		else {
 			err += set_alg(state, param);
 		}
 		param = next;
@@ -536,10 +549,14 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 				if (write_keyfile(state, keynm, encnm, state->sec->userkey1, state->alg->keylen/8, 0600, 1))
 					return -1;
 		} else if (state->pset) {
+			if (!state->pbkdf2r) {
+				FPLOG(FATAL, "Need to specify pbkdf2[=INT] to generate key/IV from pass/salt\n", NULL);
+				return -1;
+			}
 			/* Do pbkdf2 stuff to generate key */
 			hashalg_t sha256_halg = SHA256_HALG_T;
 			int err = pbkdf2(&sha256_halg, state->sec->passphr, 128, state->sec->salt, 64, 
-					 16384, state->sec->userkey1, state->alg->keylen/8);
+					 state->pbkdf2r, state->sec->userkey1, state->alg->keylen/8);
 			if (err) {
 				FPLOG(FATAL, "Key generation with pass+salt failed!\n", NULL);
 				return -1;
@@ -584,7 +601,8 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 				if (write_keyfile(state, ivsnm, encnm, state->sec->nonce1, 16, 0640, 1))
 					return -1;
 		} else if (state->pset) {
-			if (!state->kset && !state->kgen) 
+			assert(state->pbkdf2r);
+			if (!state->kset && !state->kgen)
 				FPLOG(INFO, "Generate KEY and IV from same passwd/salt\n", NULL);
 			/* Do pbkdf2 stuff to generate key */
 			hashalg_t sha256_halg = SHA256_HALG_T;
@@ -592,12 +610,12 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			const unsigned char* xorb = (const unsigned char*) "Hdo7DHk. 9dEaj*/B";
 			memxor(state->sec->salt, xorb, 16);
 			int err = pbkdf2(&sha256_halg, state->sec->passphr, 128, state->sec->salt, 64, 
-					 8192, state->sec->nonce1, 16);
+					 state->pbkdf2r/3, state->sec->nonce1, 16);
+			memxor(state->sec->salt, xorb, 16);
 			if (err) {
 				FPLOG(FATAL, "IV generation with pass+salt failed!\n", NULL);
 				return -1;
 			}
-			memxor(state->sec->salt, xorb, 16);
 			/* Write to keysf if requested */
 			if (state->ivf)
 				if (write_keyfile(state, ivsnm, encnm, state->sec->nonce1, 16, 0640, 1))
