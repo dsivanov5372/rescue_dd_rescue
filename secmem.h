@@ -11,7 +11,7 @@ typedef struct _roundkey {
 } roundkey;
 
 typedef struct _ciphblk {
-	unsigned char data[16];
+	unsigned char data[32];
 } ciphblk;
 
 typedef struct _sec_fields {
@@ -20,7 +20,7 @@ typedef struct _sec_fields {
 	/* Up to 256 bit symmetric keys */
 	unsigned char userkey1[32];
 	unsigned char userkey2[32];
-	/* @320: Enough for 38 rounds of en/decryption */
+	/* @320: Enough for 38 rounds of en/decryption with 16byte roundkeys */
 	roundkey ekeys[40];
 	roundkey dkeys[40];
 	roundkey xkeys[40];
@@ -28,18 +28,18 @@ typedef struct _sec_fields {
 	unsigned char hashbuf1[128];
 	unsigned char hashbuf2[128];
 	/* @2496: IVs */
-	unsigned char nonce1[16];
-	unsigned char nonce2[16];
+	unsigned char nonce1[32];
+	unsigned char nonce2[32];
 	ciphblk iv1;	/* ctr */
 	ciphblk iv2;
-	/* @2560: Salt + Password for pbkdf2 ... */
+	/* @2624: Salt + Password for pbkdf2 ... */
 	unsigned char salt[64];
 	unsigned char passphr[128];
-	/* @2752: char buffer, enough for 512bit hash/key in hex */
+	/* @2816: char buffer, enough for 512bit hash/key in hex */
 	char charbuf1[144];
-	/* @2896: data buffer for incomplete blocks */
+	/* @2960: data buffer for incomplete blocks */
 	unsigned char databuf1[32];
-	/* @2928: buffer up to 512 bytes */
+	/* @2992: buffer up to 512 bytes */
 	unsigned char databuf2[512];
 	
 } sec_fields;

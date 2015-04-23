@@ -133,6 +133,8 @@ int set_alg(crypt_state* state, const char* algnm)
 	return 0;
 }
 
+#define BLKSZ (state->alg? state->alg->blocksize: 16)
+
 int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 {
 	int err = 0;
@@ -216,13 +218,13 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		else if (!strcmp(param, "keysfile"))
 			state->keyf = 1;
 		else if (!memcmp(param, "ivhex=", 6)) {
-			err += parse_hex(state->sec->nonce1, param+6, 16);
+			err += parse_hex(state->sec->nonce1, param+6, BLKSZ);
 			err += set_flag(&state->iset, "IV");
 		} else if (!memcmp(param, "ivfd=", 5)) {
-			err += read_fd(state->sec->nonce1, param+5, 16, "iv");
+			err += read_fd(state->sec->nonce1, param+5, BLKSZ, "iv");
 			err += set_flag(&state->iset, "IV");
 		} else if (!memcmp(param, "ivfile=", 7)) {
-			err += read_file(state->sec->nonce1, param+7, 16);
+			err += read_file(state->sec->nonce1, param+7, BLKSZ);
 			err += set_flag(&state->iset, "IV");
 		} else if (!strcmp(param, "ivgen"))
 			state->igen = 1;
@@ -282,6 +284,7 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		return -1;
 
 	/* Actually, we can support seeks/reverse copies with CTR and ECB */
+	ddr_plug.needs_align = state->alg->blocksize;
 	if (state->alg->stream->type == STP_ECB || state->alg->stream->type == STP_CTR)
 		ddr_plug.supports_seek = 1;
 
@@ -499,8 +502,8 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	/* Are we en- or decrypting? */
 	const char* encnm = state->enc? opt->oname: opt->iname;
 	size_t encln = state->enc? opt->init_opos + (opt->reverse? 0: fst->estxfer): fst->ilen;
-	if (state->alg->stream->granul > 1 && state->enc && (state->pad == PAD_ALWAYS || (state->pad == PAD_ASNEEDED && (encln&15))))
-		encln += 16-(encln&15);
+	if (state->alg->stream->granul > 1 && state->enc && (state->pad == PAD_ALWAYS || (state->pad == PAD_ASNEEDED && (encln&(BLKSZ-1)))))
+		encln += BLKSZ-(encln&(BLKSZ-1));
 	else
 		ddr_plug.changes_output_len = 0;	
 
@@ -591,14 +594,14 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	if (!state->iset) {
 		if (state->igen) {
 			/* Generate IV */
-			random_bytes(state->sec->nonce1, 16, 0);
+			random_bytes(state->sec->nonce1, BLKSZ, 0);
 			char iout[33];
-			FPLOG(INFO, "Generated IV: %s\n", hexout(iout, state->sec->nonce1, 16)); 
+			FPLOG(INFO, "Generated IV: %s\n", hexout(iout, state->sec->nonce1, BLKSZ)); 
 			/* Save IV ... */
 			if (!state->ivf)
 				FPLOG(WARN, "Generated IV not saved?\n", NULL);
 			else 
-				if (write_keyfile(state, ivsnm, encnm, state->sec->nonce1, 16, 0640, 1))
+				if (write_keyfile(state, ivsnm, encnm, state->sec->nonce1, BLKSZ, 0640, 1))
 					return -1;
 		} else if (state->pset) {
 			assert(state->pbkdf2r);
@@ -607,18 +610,18 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			/* Do pbkdf2 stuff to generate key */
 			hashalg_t sha256_halg = SHA256_HALG_T;
 			/* FIXME: Should use different p/s? */
-			const unsigned char* xorb = (const unsigned char*) "Hdo7DHk. 9dEaj*/B";
-			memxor(state->sec->salt, xorb, 16);
+			const unsigned char* xorb = (const unsigned char*) "Hdo7DHk. 9dEaj*/B=psdGsf,yM4#q)1<tW_J%";
+			memxor(state->sec->salt, xorb, BLKSZ);
 			int err = pbkdf2(&sha256_halg, state->sec->passphr, 128, state->sec->salt, 64, 
-					 state->pbkdf2r/3, state->sec->nonce1, 16);
-			memxor(state->sec->salt, xorb, 16);
+					 state->pbkdf2r/3, state->sec->nonce1, BLKSZ);
+			memxor(state->sec->salt, xorb, BLKSZ);
 			if (err) {
 				FPLOG(FATAL, "IV generation with pass+salt failed!\n", NULL);
 				return -1;
 			}
 			/* Write to keysf if requested */
 			if (state->ivf)
-				if (write_keyfile(state, ivsnm, encnm, state->sec->nonce1, 16, 0640, 1))
+				if (write_keyfile(state, ivsnm, encnm, state->sec->nonce1, BLKSZ, 0640, 1))
 					return -1;
 		} else if (state->ivf) {
 			/* Read IV from ivsfile */
@@ -629,14 +632,14 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 				FPLOG(FATAL, "Can't read IV for %s from IVS file!\n", encnm);
 				return -1;
 			}
-			err += parse_hex(state->sec->nonce1, state->sec->charbuf1, 16);
+			err += parse_hex(state->sec->nonce1, state->sec->charbuf1, BLKSZ);
 		} else {
 			FPLOG(FATAL, "Need to determine IV\n", NULL);
 			return -1;
 		}
 	} else if (state->ivf)
 		/* Save to IVs file */
-		if (write_keyfile(state, ivsnm, encnm, state->sec->nonce1, 16, 0640, 1))
+		if (write_keyfile(state, ivsnm, encnm, state->sec->nonce1, BLKSZ, 0640, 1))
 			return -1;
 	
 	/* OK, now we can prepare en/decryption */
@@ -646,9 +649,9 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 		state->alg->dec_key_setup(state->sec->userkey1, state->sec->dkeys->data, state->alg->rounds);
 	state->lastpos = state->enc? opt->init_opos: opt->init_ipos;
 	if (state->alg->stream->iv_prep)
-		state->alg->stream->iv_prep(state->sec->nonce1, state->sec->iv1.data, state->lastpos/16);
+		state->alg->stream->iv_prep(state->sec->nonce1, state->sec->iv1.data, state->lastpos/BLKSZ);
 	else
-		memcpy(state->sec->iv1.data, state->sec->nonce1, 16);
+		memcpy(state->sec->iv1.data, state->sec->nonce1, BLKSZ);
 	/* No need to keep key/passphr in memory */
 	memset(state->sec->userkey1, 0, state->alg->keylen/8);
 	memset(state->sec->passphr, 0, 128);
@@ -675,12 +678,12 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 		t1 = clock();
 	/* FIXME: Can we seek with CTR? */
 	if (0 && state->debug)
-		FPLOG(DEBUG, "pos: %zi %zi vs %zi (%i)\n", fst->ipos, fst->opos, state->lastpos, state->lastpos/16);
+		FPLOG(DEBUG, "pos: %zi %zi vs %zi (%i)\n", fst->ipos, fst->opos, state->lastpos, state->lastpos/BLKSZ);
 	if (currpos != state->lastpos) {
 		if (state->alg->stream->iv_prep) {
-			state->alg->stream->iv_prep(state->sec->nonce1, state->sec->iv1.data, currpos/16);
+			state->alg->stream->iv_prep(state->sec->nonce1, state->sec->iv1.data, currpos/BLKSZ);
 			if (state->debug)
-				FPLOG(INFO, "Adjusted offset %zi -> %zi (%i)\n", state->lastpos, currpos, currpos/16);
+				FPLOG(INFO, "Adjusted offset %zi -> %zi (%i)\n", state->lastpos, currpos, currpos/BLKSZ);
 			state->lastpos = currpos;
 		} else {
 			/* ECB: OK, but not yet implemented */
@@ -691,43 +694,43 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 	if (0 && state->debug)
 		FPLOG(DEBUG, "%zi: %02x %02x %02x %02x ... -> ",
 			currpos, bf[0], bf[1], bf[2], bf[3]);
-	if (((currpos) % 16) && state->enc) {
+	if (((currpos) % BLKSZ) && state->enc) {
 		FPLOG(WARN, "Enc alignment error! (%zi-%i)=%zi %i/%i\n", currpos, state->inbuf,
 			currpos - state->inbuf,
-			(currpos-state->inbuf)%16, (currpos-state->inbuf)&0x0f);
+			(currpos-state->inbuf)%BLKSZ, (currpos-state->inbuf)&0x0f);
 		/* Can only handle in CTR mode and without buffered bytes. */
 		assert(state->alg->stream->granul == 1);
 		assert(state->inbuf == 0);
-		memcpy(state->sec->databuf1+(currpos%16), bf, 16-currpos%16);
+		memcpy(state->sec->databuf1+(currpos%BLKSZ), bf, BLKSZ-currpos%BLKSZ);
 		err = crypt(keys, state->alg->rounds, state->sec->iv1.data,
-			    PAD_ZERO, state->sec->databuf1, bf-(currpos%16), 16, &olen);
+			    PAD_ZERO, state->sec->databuf1, bf-(currpos%BLKSZ), BLKSZ, &olen);
 		assert(!err);
-		assert(olen == 16);
-		i = 16-(currpos%16);
-	} else if ((currpos-state->inbuf)%16 && !state->enc) {
+		assert(olen == BLKSZ);
+		i = BLKSZ-(currpos%BLKSZ);
+	} else if ((currpos-state->inbuf)%BLKSZ && !state->enc) {
 		FPLOG(WARN, "Dec alignment error! (%zi-%i)=%zi %i/%i\n", currpos, state->inbuf,
 			currpos - state->inbuf,
-			(currpos-state->inbuf)%16, (currpos-state->inbuf)&0x0f);
+			(currpos-state->inbuf)%BLKSZ, (currpos-state->inbuf)&0x0f);
 	}
 	if (!state->enc && !state->rev)
 		state->lastpos += *towr;
 	/* Process leftover from last block */
-	if (state->inbuf && *towr >= 16-state->inbuf) {
-		i = 16-state->inbuf;
+	if (state->inbuf && *towr >= BLKSZ-state->inbuf) {
+		i = BLKSZ-state->inbuf;
 		memcpy(state->sec->databuf1+state->inbuf, bf, i);
 		bf -= state->inbuf;
 		err = crypt(keys, state->alg->rounds, state->sec->iv1.data,
-			    PAD_ZERO, state->sec->databuf1, bf, 16, &olen);
+			    PAD_ZERO, state->sec->databuf1, bf, BLKSZ, &olen);
 		assert(!err);
-		assert(olen == 16);
+		assert(olen == BLKSZ);
 		/* We moved the buffer start several bytes forward, need to correct for it */
 		*towr += state->inbuf;
-		i = 16;
+		i = BLKSZ;
 		state->inbuf = 0;
 	}
 	while (i+15 < *towr) {
 		int left = MIN(512, *towr-i);
-		left -= left%16;
+		left -= left%BLKSZ;
 		memcpy(state->sec->databuf2, bf+i, left);
 		err = crypt(keys, state->alg->rounds, state->sec->iv1.data,
 			    PAD_ZERO, state->sec->databuf2, bf+i, left, &olen);
@@ -738,13 +741,13 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 	/* Copy remainder (incomplete block) into buffer */
 	int left = *towr - i;
 	if (left || eof) {
-		assert(left < 16-state->inbuf);
+		assert(left < BLKSZ-state->inbuf);
 		if (left)
 			memcpy(state->sec->databuf1+state->inbuf, bf+i, left);
 		*towr -= left;
 		left += state->inbuf;
 		if (eof || state->finfirst) {
-			memset(state->sec->databuf1+left, 0, 16-left);
+			memset(state->sec->databuf1+left, 0, BLKSZ-left);
 			err = crypt(keys, state->alg->rounds, state->sec->iv1.data,
 				    state->pad, state->sec->databuf1, bf+i, left, &olen);
 			assert(err >= 0);	/* >0 => padding happened */
@@ -782,9 +785,9 @@ int crypt_close(loff_t ooff, void **stat)
 
 ddr_plugin_t ddr_plug = {
 	//.name = "crypt",
-	.slack_pre = 16,
-	.slack_post = 16,
-	.needs_align = 16,
+	.slack_pre = 32,
+	.slack_post = 32,
+	.needs_align = 32,
 	.handles_sparse = 0,
 	.makes_unsparse = 0,
 	.changes_output = 1,
