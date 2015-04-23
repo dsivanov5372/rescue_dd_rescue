@@ -31,29 +31,45 @@ typedef unsigned char uchar;
 typedef unsigned int uint;
 typedef unsigned long ulong;
 
+
+#define STP_ECB 0
+#define STP_CBC 1
+#define STP_CTR 2
+
+extern const char* stypes[]; // = { "ECB", "CBC", "CTR" };
+
+typedef void (Crypt_IV_Prep_fn)(const uchar *nonce /*[16]*/, uchar *ctr /*[16]*/, unsigned long long ival);
+
+typedef struct _stream_dsc {
+	uint granul;	/* bytes */
+	uchar seek_blk;
+	uchar type;
+	Crypt_IV_Prep_fn *iv_prep;
+} stream_dsc_t;
+
+extern stream_dsc_t aes_stream_ecb, aes_stream_cbc, aes_stream_ctr;
+
 /* Both Enc and Dec */
-typedef void (AES_Key_Setup_fn)(const uchar* usrkey, uchar* rkeys, uint rounds); 
-typedef void (AES_Crypt_IV_Prep_fn)(const uchar nonce[16], uchar ctr[16], unsigned long long ival);
+typedef void (Key_Setup_fn)(const uchar* usrkey, uchar* rkeys, uint rounds); 
 typedef void (AES_Crypt_Blk_fn)(const uchar* rkeys, uint rounds, 
-				const uchar* input, uchar* output);
-typedef int  (AES_Crypt_IV_fn) (const uchar* rkeys, uint rounds,
-				      uchar *iv /* [16] */, uint pad,
-				const uchar* input, uchar* output,
-				ssize_t len, ssize_t *olen);
-typedef void (AES_Key_Release_fn)(uchar* rkeys, uint rounds);
+			    const uchar* input, uchar* output);
+typedef int  (Crypt_IV_fn) (const uchar* rkeys, uint rounds,
+			    uchar *iv /* [16] */, uint pad,
+			    const uchar* input, uchar* output,
+			    ssize_t len, ssize_t *olen);
+typedef void (Key_Release_fn)(uchar* rkeys, uint rounds);
 
-
-typedef struct _aes_desc {
+typedef struct _ciph_desc {
 	const char *name;
 	uint keylen;	/* bits */
 	uint rounds;
-	uint blksize;	/* bytes */
+	uint blocksize;	/* blk cipher blksize, always 16 for AES */
 	uint ctx_size;	/* Size for all round keys (and potentially addtl context in bytes) */
-	AES_Key_Setup_fn *enc_key_setup, *dec_key_setup;
-	AES_Crypt_IV_Prep_fn *iv_prep;
-	AES_Crypt_IV_fn *encrypt, *decrypt;
-	AES_Key_Release_fn *release;
-} aes_desc_t;
+	stream_dsc_t *stream;
+	Key_Setup_fn *enc_key_setup, *dec_key_setup;
+	Crypt_IV_fn *encrypt, *decrypt;
+	Key_Release_fn *release;
+} ciph_desc_t;
 
 
 /* Generic functions */
@@ -82,10 +98,11 @@ int  AES_Gen_CTR_Crypt(AES_Crypt_Blk_fn *cryptfn,
 			uchar *ctr, /* uint pad unused ,*/
 			const uchar *input, uchar *output,
 			ssize_t len/*, ssize_t *olen unused */);
-void AES_Gen_CTR_Prep(const uchar nonce[16], uchar ctr[16], unsigned long long ival);
+
+void AES_Gen_CTR_Prep(const uchar *nonce /*[16]*/, uchar *ctr/*[16]*/, unsigned long long ival);
 void AES_Gen_Release(uchar *rkeys, uint rounds);
 int  dec_fix_olen_pad(ssize_t *olen, uint pad, const uchar *output);
 
-aes_desc_t *findalg(aes_desc_t* list, const char* nm);
+ciph_desc_t *findalg(ciph_desc_t* list, const char* nm);
 
 #endif

@@ -2,7 +2,6 @@
 #define _AES_C_H
 
 #include "aes.h"
-#include <stdio.h>
 
 #define DECL_KEYSETUP(MODE, BITS)	\
 void AES_C_KeySetup_##BITS##_##MODE(const uchar *usrkey, uchar *rkeys, uint rounds)
@@ -39,6 +38,6 @@ int  AES_C_CBC_EncryptX2(const uchar* rkeys, uint rounds, uchar *iv,  uint pad, 
 int  AES_C_CBC_DecryptX2(const uchar* rkeys, uint rounds, uchar *iv,  uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen);
 int  AES_C_CTR_CryptX2  (const uchar* rkeys, uint rounds, uchar *ctr, uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen);
 
-extern aes_desc_t AES_C_Methods[];
+extern ciph_desc_t AES_C_Methods[];
 
 #endif

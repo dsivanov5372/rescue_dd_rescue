@@ -123,6 +123,6 @@ int  AESNI_CTR_CryptX2(const unsigned char* key, unsigned int rounds,
 			const unsigned char* in, unsigned char* out,
 			ssize_t len, ssize_t *olen /* unneeded */);
 
-extern aes_desc_t AESNI_Methods[];
+extern ciph_desc_t AESNI_Methods[];
 
 #endif

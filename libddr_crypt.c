@@ -59,7 +59,7 @@ extern ddr_plugin_t ddr_plug;
 
 
 typedef struct _crypt_state {
-	aes_desc_t *alg, *engine;
+	ciph_desc_t *alg, *engine;
 	int seq;
 	char enc, debug, kgen, igen, keyf, ivf;
 	char kset, iset, pset, sset;
@@ -118,7 +118,7 @@ int set_alg(crypt_state* state, const char* algnm)
 	}
 	if (!strcmp(algnm, "help")) {
 		FPLOG(INFO, "Crypto algorithms:", NULL);
-		aes_desc_t *alg;
+		ciph_desc_t *alg;
 		for (alg = state->engine; alg->name != NULL; ++alg)
 			FPLOG(NOHDR, " %s", alg->name);
 		FPLOG(NOHDR, "\n", NULL);
@@ -143,7 +143,7 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	state->opts = opt;
 	state->enc = -1;
 	state->sec = secmem_init();
-	crypto = state->sec;
+	crypto = state->sec;	// HACK for aesni
 	assert(state->sec);
 	state->pad = PAD_ALWAYS;
 	state->saltlen = -1;
@@ -282,7 +282,7 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		return -1;
 
 	/* Actually, we can support seeks/reverse copies with CTR and ECB */
-	if (state->alg->blksize == 1 || !memcmp("ECB", state->alg->name + strlen(state->alg->name)-3, 3))
+	if (state->alg->stream->type == STP_ECB || state->alg->stream->type == STP_CTR)
 		ddr_plug.supports_seek = 1;
 
 	/* 3rd: Padding: Already done */
@@ -499,7 +499,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	/* Are we en- or decrypting? */
 	const char* encnm = state->enc? opt->oname: opt->iname;
 	size_t encln = state->enc? opt->init_opos + (opt->reverse? 0: fst->estxfer): fst->ilen;
-	if (state->alg->blksize > 1 && state->enc && (state->pad == PAD_ALWAYS || (state->pad == PAD_ASNEEDED && (encln&15))))
+	if (state->alg->stream->granul > 1 && state->enc && (state->pad == PAD_ALWAYS || (state->pad == PAD_ASNEEDED && (encln&15))))
 		encln += 16-(encln&15);
 	else
 		ddr_plug.changes_output_len = 0;	
@@ -645,8 +645,8 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	else
 		state->alg->dec_key_setup(state->sec->userkey1, state->sec->dkeys->data, state->alg->rounds);
 	state->lastpos = state->enc? opt->init_opos: opt->init_ipos;
-	if (state->alg->iv_prep)
-		state->alg->iv_prep(state->sec->nonce1, state->sec->iv1.data, state->lastpos/16);
+	if (state->alg->stream->iv_prep)
+		state->alg->stream->iv_prep(state->sec->nonce1, state->sec->iv1.data, state->lastpos/16);
 	else
 		memcpy(state->sec->iv1.data, state->sec->nonce1, 16);
 	/* No need to keep key/passphr in memory */
@@ -667,7 +667,7 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 	clock_t t1 = 0;
 	ssize_t olen = 0;
 	unsigned char* keys = state->enc? state->sec->ekeys->data: state->sec->dkeys->data;
-	AES_Crypt_IV_fn *crypt = state->enc? state->alg->encrypt: state->alg->decrypt;	
+	Crypt_IV_fn *crypt = state->enc? state->alg->encrypt: state->alg->decrypt;	
 	loff_t currpos = state->enc? fst->opos: fst->ipos;
 	if (state->rev)
 		currpos -= *towr;
@@ -677,13 +677,13 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 	if (0 && state->debug)
 		FPLOG(DEBUG, "pos: %zi %zi vs %zi (%i)\n", fst->ipos, fst->opos, state->lastpos, state->lastpos/16);
 	if (currpos != state->lastpos) {
-		if (state->alg->iv_prep) {
-			state->alg->iv_prep(state->sec->nonce1, state->sec->iv1.data, currpos/16);
+		if (state->alg->stream->iv_prep) {
+			state->alg->stream->iv_prep(state->sec->nonce1, state->sec->iv1.data, currpos/16);
 			if (state->debug)
 				FPLOG(INFO, "Adjusted offset %zi -> %zi (%i)\n", state->lastpos, currpos, currpos/16);
 			state->lastpos = currpos;
 		} else {
-			/* ECB: OK */
+			/* ECB: OK, but not yet implemented */
 			/* CBC: NOK */
 			FPLOG(WARN, "Unexpected offset %zi\n", currpos);
 		}
@@ -696,7 +696,7 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 			currpos - state->inbuf,
 			(currpos-state->inbuf)%16, (currpos-state->inbuf)&0x0f);
 		/* Can only handle in CTR mode and without buffered bytes. */
-		assert(state->alg->blksize == 1);
+		assert(state->alg->stream->granul == 1);
 		assert(state->inbuf == 0);
 		memcpy(state->sec->databuf1+(currpos%16), bf, 16-currpos%16);
 		err = crypt(keys, state->alg->rounds, state->sec->iv1.data,

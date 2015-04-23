@@ -311,31 +311,29 @@ inline void AESNI_EKey_DKey(const unsigned char* ekey,
 }
 
 
+/* FIXME: need to find better way to address secure scratch space (xkeys) */
 void AESNI_128_DKey_Expansion_r(const unsigned char *userkey,
 				unsigned char *dkey,
 				unsigned int rounds)
 {
-	//unsigned char ekey[13*16];
 	AESNI_128_EKey_Expansion_r(userkey, (unsigned char*)crypto->xkeys, rounds);
 	AESNI_EKey_DKey((unsigned char*)crypto->xkeys, dkey, rounds);
 }
 
+/* FIXME: need to find better way to address secure scratch space (xkeys) */
 void AESNI_192_DKey_Expansion_r(const unsigned char *userkey,
 				unsigned char *dkey,
 				unsigned int rounds)
 {
-	/* FIXME: Need secmem */
-	//unsigned char ekey[16*16];
 	AESNI_192_EKey_Expansion_r(userkey, (unsigned char*)crypto->xkeys, rounds);
 	AESNI_EKey_DKey((unsigned char*)crypto->xkeys, dkey, rounds);
 }
 
+/* FIXME: need to find better way to address secure scratch space (xkeys) */
 void AESNI_256_DKey_Expansion_r(const unsigned char *userkey,
 				unsigned char *dkey,
 				unsigned int rounds)
 {
-	/* FIXME: Need secmem */
-	//unsigned char ekey[19*16];
 	AESNI_256_EKey_Expansion_r(userkey, (unsigned char*)crypto->xkeys, rounds);
 	AESNI_EKey_DKey((unsigned char*)crypto->xkeys, dkey, rounds);
 }
@@ -1310,61 +1308,90 @@ int  AESNI_CTR_CryptX2(const uchar* rkeys, unsigned int rounds,
 
 
 
-aes_desc_t AESNI_Methods[] = {{"AES128-ECB"  , 128, 10, 16, 11*16, AESNI_128_EKey_Expansion_r, AESNI_128_DKey_Expansion_r,
-							NULL, AESNI_ECB_Encrypt, AESNI_ECB_Decrypt, AES_Gen_Release},
-			      {"AES128-CBC"  , 128, 10, 16, 11*16, AESNI_128_EKey_Expansion_r, AESNI_128_DKey_Expansion_r,
-							NULL, AESNI_CBC_Encrypt, AESNI_CBC_Decrypt, AES_Gen_Release},
-			      {"AES128-CTR"  , 128, 10,  1, 11*16, AESNI_128_EKey_Expansion_r, AESNI_128_EKey_Expansion_r,
-						AESNI_CTR_Prep, AESNI_CTR_Crypt, AESNI_CTR_Crypt, AES_Gen_Release},
-			      {"AES192-ECB"  , 192, 12, 16, 13*16, AESNI_192_EKey_Expansion_r, AESNI_192_DKey_Expansion_r,
-							NULL, AESNI_ECB_Encrypt, AESNI_ECB_Decrypt, AES_Gen_Release},
-			      {"AES192-CBC"  , 192, 12, 16, 13*16, AESNI_192_EKey_Expansion_r, AESNI_192_DKey_Expansion_r,
-							NULL, AESNI_CBC_Encrypt, AESNI_CBC_Decrypt, AES_Gen_Release},
-			      {"AES192-CTR"  , 192, 12,  1, 13*16, AESNI_192_EKey_Expansion_r, AESNI_192_EKey_Expansion_r,
-						AESNI_CTR_Prep, AESNI_CTR_Crypt, AESNI_CTR_Crypt, AES_Gen_Release},
-			      {"AES256-ECB"  , 256, 14, 16, 15*16, AESNI_256_EKey_Expansion_r, AESNI_256_DKey_Expansion_r,
-							NULL, AESNI_ECB_Encrypt, AESNI_ECB_Decrypt, AES_Gen_Release},
-			      {"AES256-CBC"  , 256, 14, 16, 15*16, AESNI_256_EKey_Expansion_r, AESNI_256_DKey_Expansion_r,
-							NULL, AESNI_CBC_Encrypt, AESNI_CBC_Decrypt, AES_Gen_Release},
-			      {"AES256-CTR"  , 256, 14,  1, 15*16, AESNI_256_EKey_Expansion_r, AESNI_256_EKey_Expansion_r,
-						AESNI_CTR_Prep, AESNI_CTR_Crypt, AESNI_CTR_Crypt, AES_Gen_Release},
-			      {"AES128+-ECB" , 128, 12, 16, 13*16, AESNI_128_EKey_Expansion_r, AESNI_128_DKey_Expansion_r,
-							NULL, AESNI_ECB_Encrypt, AESNI_ECB_Decrypt, AES_Gen_Release},
-			      {"AES128+-CBC" , 128, 12, 16, 13*16, AESNI_128_EKey_Expansion_r, AESNI_128_DKey_Expansion_r,
-							NULL, AESNI_CBC_Encrypt, AESNI_CBC_Decrypt, AES_Gen_Release},
-			      {"AES128+-CTR" , 128, 12,  1, 13*16, AESNI_128_EKey_Expansion_r, AESNI_128_EKey_Expansion_r,
-						AESNI_CTR_Prep, AESNI_CTR_Crypt, AESNI_CTR_Crypt, AES_Gen_Release},
-			      {"AES192+-ECB" , 192, 15, 16, 16*16, AESNI_192_EKey_Expansion_r, AESNI_192_DKey_Expansion_r,
-							NULL, AESNI_ECB_Encrypt, AESNI_ECB_Decrypt, AES_Gen_Release},
-			      {"AES192+-CBC" , 192, 15, 16, 16*16, AESNI_192_EKey_Expansion_r, AESNI_192_DKey_Expansion_r,
-							NULL, AESNI_CBC_Encrypt, AESNI_CBC_Decrypt, AES_Gen_Release},
-			      {"AES192+-CTR" , 192, 15,  1, 16*16, AESNI_192_EKey_Expansion_r, AESNI_192_EKey_Expansion_r,
-						AESNI_CTR_Prep, AESNI_CTR_Crypt, AESNI_CTR_Crypt, AES_Gen_Release},
-			      {"AES256+-ECB" , 256, 18, 16, 19*16, AESNI_256_EKey_Expansion_r, AESNI_256_DKey_Expansion_r,
-							NULL, AESNI_ECB_Encrypt, AESNI_ECB_Decrypt, AES_Gen_Release},
-			      {"AES256+-CBC" , 256, 18, 16, 19*16, AESNI_256_EKey_Expansion_r, AESNI_256_DKey_Expansion_r,
-							NULL, AESNI_CBC_Encrypt, AESNI_CBC_Decrypt, AES_Gen_Release},
-			      {"AES256+-CTR" , 256, 18,  1, 19*16, AESNI_256_EKey_Expansion_r, AESNI_256_EKey_Expansion_r,
-						AESNI_CTR_Prep, AESNI_CTR_Crypt, AESNI_CTR_Crypt, AES_Gen_Release},
-			      {"AES128x2-ECB", 128, 20, 16, 22*16, AESNI_128_EKey_ExpansionX2_r, AESNI_128_DKey_ExpansionX2_r,
-							NULL, AESNI_ECB_EncryptX2, AESNI_ECB_DecryptX2, AES_Gen_Release},
-			      {"AES128x2-CBC", 128, 20, 16, 22*16, AESNI_128_EKey_ExpansionX2_r, AESNI_128_DKey_ExpansionX2_r,
-							NULL, AESNI_CBC_EncryptX2, AESNI_CBC_DecryptX2, AES_Gen_Release},
-			      {"AES128x2-CTR", 128, 20,  1, 22*16, AESNI_128_EKey_ExpansionX2_r, AESNI_128_EKey_ExpansionX2_r,
-						AESNI_CTR_Prep, AESNI_CTR_CryptX2, AESNI_CTR_CryptX2, AES_Gen_Release},
-			      {"AES192x2-ECB", 192, 24, 16, 26*16, AESNI_192_EKey_ExpansionX2_r, AESNI_192_DKey_ExpansionX2_r,
-							NULL, AESNI_ECB_EncryptX2, AESNI_ECB_DecryptX2, AES_Gen_Release},
-			      {"AES192x2-CBC", 192, 24, 16, 26*16, AESNI_192_EKey_ExpansionX2_r, AESNI_192_DKey_ExpansionX2_r,
-							NULL, AESNI_CBC_EncryptX2, AESNI_CBC_DecryptX2, AES_Gen_Release},
-			      {"AES192x2-CTR", 192, 24,  1, 26*16, AESNI_192_EKey_ExpansionX2_r, AESNI_192_EKey_ExpansionX2_r,
-						AESNI_CTR_Prep, AESNI_CTR_CryptX2, AESNI_CTR_CryptX2, AES_Gen_Release},
-			      {"AES256x2-ECB", 256, 28, 16, 30*16, AESNI_256_EKey_ExpansionX2_r, AESNI_256_DKey_ExpansionX2_r,
-							NULL, AESNI_ECB_EncryptX2, AESNI_ECB_DecryptX2, AES_Gen_Release},
-			      {"AES256x2-CBC", 256, 28, 16, 30*16, AESNI_256_EKey_ExpansionX2_r, AESNI_256_DKey_ExpansionX2_r,
-							NULL, AESNI_CBC_EncryptX2, AESNI_CBC_DecryptX2, AES_Gen_Release},
-			      {"AES256x2-CTR", 256, 28,  1, 30*16, AESNI_256_EKey_ExpansionX2_r, AESNI_256_EKey_ExpansionX2_r,
-						AESNI_CTR_Prep, AESNI_CTR_CryptX2, AESNI_CTR_CryptX2, AES_Gen_Release},
-			      {NULL, /* ... */}
+ciph_desc_t AESNI_Methods[] = {{"AES128-ECB"  , 128, 10, 16, 11*16, &aes_stream_ecb,
+					AESNI_128_EKey_Expansion_r, AESNI_128_DKey_Expansion_r,
+					AESNI_ECB_Encrypt, AESNI_ECB_Decrypt, AES_Gen_Release},
+			       {"AES128-CBC"  , 128, 10, 16, 11*16, &aes_stream_cbc,
+					AESNI_128_EKey_Expansion_r, AESNI_128_DKey_Expansion_r,
+					AESNI_CBC_Encrypt, AESNI_CBC_Decrypt, AES_Gen_Release},
+			       {"AES128-CTR"  , 128, 10, 16, 11*16, &aes_stream_ctr,
+					AESNI_128_EKey_Expansion_r, AESNI_128_EKey_Expansion_r,
+					AESNI_CTR_Crypt, AESNI_CTR_Crypt, AES_Gen_Release},
+			       {"AES192-ECB"  , 192, 12, 16, 13*16, &aes_stream_ecb,
+					AESNI_192_EKey_Expansion_r, AESNI_192_DKey_Expansion_r,
+					AESNI_ECB_Encrypt, AESNI_ECB_Decrypt, AES_Gen_Release},
+			       {"AES192-CBC"  , 192, 12, 16, 13*16, &aes_stream_cbc,
+					AESNI_192_EKey_Expansion_r, AESNI_192_DKey_Expansion_r,
+					AESNI_CBC_Encrypt, AESNI_CBC_Decrypt, AES_Gen_Release},
+			       {"AES192-CTR"  , 192, 12, 16, 13*16, &aes_stream_ctr,
+					AESNI_192_EKey_Expansion_r, AESNI_192_EKey_Expansion_r,
+					AESNI_CTR_Crypt, AESNI_CTR_Crypt, AES_Gen_Release},
+			       {"AES256-ECB"  , 256, 14, 16, 15*16, &aes_stream_ecb,
+					AESNI_256_EKey_Expansion_r, AESNI_256_DKey_Expansion_r,
+					AESNI_ECB_Encrypt, AESNI_ECB_Decrypt, AES_Gen_Release},
+			       {"AES256-CBC"  , 256, 14, 16, 15*16, &aes_stream_cbc,
+					AESNI_256_EKey_Expansion_r, AESNI_256_DKey_Expansion_r,
+					AESNI_CBC_Encrypt, AESNI_CBC_Decrypt, AES_Gen_Release},
+			       {"AES256-CTR"  , 256, 14, 16, 15*16, &aes_stream_ctr,
+					AESNI_256_EKey_Expansion_r, AESNI_256_EKey_Expansion_r,
+					AESNI_CTR_Crypt, AESNI_CTR_Crypt, AES_Gen_Release},
+				/* plus methods */
+			       {"AES128+-ECB" , 128, 12, 16, 13*16, &aes_stream_ecb,
+					AESNI_128_EKey_Expansion_r, AESNI_128_DKey_Expansion_r,
+					AESNI_ECB_Encrypt, AESNI_ECB_Decrypt, AES_Gen_Release},
+			       {"AES128+-CBC" , 128, 12, 16, 13*16, &aes_stream_cbc,
+					AESNI_128_EKey_Expansion_r, AESNI_128_DKey_Expansion_r,
+					AESNI_CBC_Encrypt, AESNI_CBC_Decrypt, AES_Gen_Release},
+			       {"AES128+-CTR" , 128, 12, 16, 13*16, &aes_stream_ctr,
+					AESNI_128_EKey_Expansion_r, AESNI_128_EKey_Expansion_r,
+					AESNI_CTR_Crypt, AESNI_CTR_Crypt, AES_Gen_Release},
+			       {"AES192+-ECB" , 192, 15, 16, 16*16, &aes_stream_ecb,
+					AESNI_192_EKey_Expansion_r, AESNI_192_DKey_Expansion_r,
+					AESNI_ECB_Encrypt, AESNI_ECB_Decrypt, AES_Gen_Release},
+			       {"AES192+-CBC" , 192, 15, 16, 16*16, &aes_stream_cbc,
+					AESNI_192_EKey_Expansion_r, AESNI_192_DKey_Expansion_r,
+					AESNI_CBC_Encrypt, AESNI_CBC_Decrypt, AES_Gen_Release},
+			       {"AES192+-CTR" , 192, 15, 16, 16*16, &aes_stream_ctr,
+					AESNI_192_EKey_Expansion_r, AESNI_192_EKey_Expansion_r,
+					AESNI_CTR_Crypt, AESNI_CTR_Crypt, AES_Gen_Release},
+			       {"AES256+-ECB" , 256, 18, 16, 19*16, &aes_stream_ecb,
+					AESNI_256_EKey_Expansion_r, AESNI_256_DKey_Expansion_r,
+					AESNI_ECB_Encrypt, AESNI_ECB_Decrypt, AES_Gen_Release},
+			       {"AES256+-CBC" , 256, 18, 16, 19*16, &aes_stream_cbc,
+					AESNI_256_EKey_Expansion_r, AESNI_256_DKey_Expansion_r,
+					AESNI_CBC_Encrypt, AESNI_CBC_Decrypt, AES_Gen_Release},
+			       {"AES256+-CTR" , 256, 18, 16, 19*16, &aes_stream_ctr,
+					AESNI_256_EKey_Expansion_r, AESNI_256_EKey_Expansion_r,
+					AESNI_CTR_Crypt, AESNI_CTR_Crypt, AES_Gen_Release},
+				/* x2 methods */
+			       {"AES128x2-ECB", 128, 20, 16, 22*16, &aes_stream_ecb,
+					AESNI_128_EKey_ExpansionX2_r, AESNI_128_DKey_ExpansionX2_r,
+					AESNI_ECB_EncryptX2, AESNI_ECB_DecryptX2, AES_Gen_Release},
+			       {"AES128x2-CBC", 128, 20, 16, 22*16, &aes_stream_cbc,
+					AESNI_128_EKey_ExpansionX2_r, AESNI_128_DKey_ExpansionX2_r,
+					AESNI_CBC_EncryptX2, AESNI_CBC_DecryptX2, AES_Gen_Release},
+			       {"AES128x2-CTR", 128, 20, 16, 22*16, &aes_stream_ctr,
+					AESNI_128_EKey_ExpansionX2_r, AESNI_128_EKey_ExpansionX2_r,
+					AESNI_CTR_CryptX2, AESNI_CTR_CryptX2, AES_Gen_Release},
+			       {"AES192x2-ECB", 192, 24, 16, 26*16, &aes_stream_ecb,
+					AESNI_192_EKey_ExpansionX2_r, AESNI_192_DKey_ExpansionX2_r,
+					AESNI_ECB_EncryptX2, AESNI_ECB_DecryptX2, AES_Gen_Release},
+			       {"AES192x2-CBC", 192, 24, 16, 26*16, &aes_stream_cbc,
+					AESNI_192_EKey_ExpansionX2_r, AESNI_192_DKey_ExpansionX2_r,
+					AESNI_CBC_EncryptX2, AESNI_CBC_DecryptX2, AES_Gen_Release},
+			       {"AES192x2-CTR", 192, 24, 16, 26*16, &aes_stream_ctr,
+					AESNI_192_EKey_ExpansionX2_r, AESNI_192_EKey_ExpansionX2_r,
+					AESNI_CTR_CryptX2, AESNI_CTR_CryptX2, AES_Gen_Release},
+			       {"AES256x2-ECB", 256, 28, 16, 30*16, &aes_stream_ecb,
+					AESNI_256_EKey_ExpansionX2_r, AESNI_256_DKey_ExpansionX2_r,
+					AESNI_ECB_EncryptX2, AESNI_ECB_DecryptX2, AES_Gen_Release},
+			       {"AES256x2-CBC", 256, 28, 16, 30*16, &aes_stream_cbc,
+					AESNI_256_EKey_ExpansionX2_r, AESNI_256_DKey_ExpansionX2_r,
+					AESNI_CBC_EncryptX2, AESNI_CBC_DecryptX2, AES_Gen_Release},
+			       {"AES256x2-CTR", 256, 28, 16, 30*16, &aes_stream_ctr,
+					AESNI_256_EKey_ExpansionX2_r, AESNI_256_EKey_ExpansionX2_r,
+					AESNI_CTR_CryptX2, AESNI_CTR_CryptX2, AES_Gen_Release},
+			       {NULL, /* ... */}
 };
 
 

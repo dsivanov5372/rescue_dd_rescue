@@ -11,6 +11,8 @@
 #include <netinet/in.h>
 #include <stdlib.h>
 
+const char* stypes[] = { "ECB", "CBC", "CTR" };
+
 void xor16(const uchar x1[16], const uchar x2[16], uchar xout[16])
 {
 	uint i;
@@ -157,7 +159,7 @@ int  AES_Gen_CBC_Dec(AES_Crypt_Blk_fn *cryptfn,
 
 
 /* Use 12 bits from nonce, initialize rest with counter */
-void AES_Gen_CTR_Prep(const uchar nonce[16], uchar ctr[16], unsigned long long ival)
+void AES_Gen_CTR_Prep(const uchar *nonce /*[16]*/, uchar *ctr /*[16]*/, unsigned long long ival)
 {
 	memcpy(ctr, nonce, 12);
 	unsigned int low  = (unsigned int)ival;
@@ -211,9 +213,9 @@ void AES_Gen_Release(uchar *rkeys, uint rounds)
 	asm("":::"memory");
 }
 
-aes_desc_t *findalg(aes_desc_t* list, const char* nm)
+ciph_desc_t *findalg(ciph_desc_t* list, const char* nm)
 {
-	aes_desc_t* alg = list;
+	ciph_desc_t* alg = list;
 	while (alg->name) {
 		if (!strcmp(alg->name, nm))
 			return alg;
@@ -221,5 +223,10 @@ aes_desc_t *findalg(aes_desc_t* list, const char* nm)
 	}
 	return NULL;
 }
+
+stream_dsc_t aes_stream_ecb = { 16, 1, STP_ECB, NULL };
+stream_dsc_t aes_stream_cbc = { 16, 0, STP_CBC, NULL };
+stream_dsc_t aes_stream_ctr = {  1, 1, STP_CTR, AES_Gen_CTR_Prep };
+
 
 
