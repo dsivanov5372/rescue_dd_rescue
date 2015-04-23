@@ -728,7 +728,7 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 		i = BLKSZ;
 		state->inbuf = 0;
 	}
-	while (i+15 < *towr) {
+	while (i+BLKSZ <= *towr) {
 		int left = MIN(512, *towr-i);
 		left -= left%BLKSZ;
 		memcpy(state->sec->databuf2, bf+i, left);

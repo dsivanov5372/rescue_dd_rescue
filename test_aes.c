@@ -78,12 +78,12 @@ void fillval(unsigned char* bf, ssize_t ln, unsigned int val)
 	printf("%6.3fs (%6.0fMB/s) ", tdiff, (double)(_rep)*(_ln)/(1e6*tdiff))
 
 
-void setup_iv(stream_dsc_t *strm, uchar iv[16])
+void setup_iv(stream_dsc_t *strm, uchar *iv /*[16]*/, uint ln)
 {
 	if (strm->iv_prep)
 		strm->iv_prep((const uchar*)"Halleluja 12345", iv, 0);
 	else
-		memcpy(iv, "Halleluja 12345", 16);
+		memcpy(iv, "Halleluja 12345", ln);
 }
 
 int compare(uchar* p1, uchar* p2, size_t ln, const char* msg)
@@ -126,19 +126,21 @@ int last_epad, last_dpad;
 /* Result cache contents */
 uint last_eln, last_dln;
 int last_eres, last_dres;
-uchar last_ct[DEF_LN+16];
+uchar last_ct[DEF_LN+32];
+
+#define BLKSZ (alg->blocksize)
 
 int test_alg(const char* prefix, ciph_desc_t *alg, uchar *key, uchar *in, ssize_t ln, int epad, int dpad, int rep)
 {
-	uchar ctxt[DEF_LN+16], vfy[DEF_LN+2*16];	/* OpenSSL may need +2*16, sigh */
-	uchar iv[16];
+	uchar ctxt[DEF_LN+32], vfy[DEF_LN+2*32];	/* OpenSSL may need +2*16, sigh */
+	uchar iv[32];
         struct timeval t1, t2;
 	double tdiff; 
 	int i;
 	int err = 0;
 	int eerr = 0, derr = 0;
 	ssize_t eln, dln;
-	ssize_t exp_eln = alg->stream->granul <= 1? ln: ((epad == PAD_ALWAYS || (ln&15))? ln+16-(ln&15): ln);
+	ssize_t exp_eln = alg->stream->granul <= 1? ln: ((epad == PAD_ALWAYS || (ln&(BLKSZ-1)))? ln+BLKSZ-(ln&(BLKSZ-1)): ln);
 	++tested;
 	printf("* %s %s (%i, %i, %i) pad %i/%i", prefix, alg->name, alg->keylen, alg->rounds, alg->ctx_size, epad, dpad);
 	printf("\nEKey setup: ");
@@ -147,7 +149,7 @@ int test_alg(const char* prefix, ciph_desc_t *alg, uchar *key, uchar *in, ssize_
 	BENCH(alg->enc_key_setup(key, rkeys, alg->rounds); if (alg->release) alg->release(rkeys, alg->rounds), rep, 16*(1+alg->rounds));
 	alg->enc_key_setup(key, rkeys, alg->rounds);
 	printf("\nEncrypt   : ");
-	BENCH(setup_iv(alg->stream, iv); eerr = alg->encrypt(rkeys, alg->rounds, iv, epad, in, ctxt, ln, &eln), rep/2+1, ln);
+	BENCH(setup_iv(alg->stream, iv, BLKSZ); eerr = alg->encrypt(rkeys, alg->rounds, iv, epad, in, ctxt, ln, &eln), rep/2+1, ln);
 	printf("%zi->%zi: %i ", ln, eln, eerr);
 	if (eerr < 0)
 		++err;
@@ -162,8 +164,8 @@ int test_alg(const char* prefix, ciph_desc_t *alg, uchar *key, uchar *in, ssize_
 	BENCH(alg->dec_key_setup(key, rkeys, alg->rounds); if (alg->release) alg->release(rkeys, alg->rounds), rep, 16*(1+alg->rounds));
 	alg->dec_key_setup(key, rkeys, alg->rounds);
 	printf("\nDecrypt   : ");
-	memset(vfy, 0xff, DEF_LN+16);
-	BENCH(setup_iv(alg->stream, iv); derr = alg->decrypt(rkeys, alg->rounds, iv, dpad, ctxt, vfy, eln, &dln), rep/2+1, eln);
+	memset(vfy, 0xff, DEF_LN+32);
+	BENCH(setup_iv(alg->stream, iv, BLKSZ); derr = alg->decrypt(rkeys, alg->rounds, iv, dpad, ctxt, vfy, eln, &dln), rep/2+1, eln);
 	printf("%zi->%zi: %i ", eln, dln, derr);
 	if (derr < 0)
 		++err;
@@ -180,12 +182,12 @@ int test_alg(const char* prefix, ciph_desc_t *alg, uchar *key, uchar *in, ssize_
 	if (alg->stream->granul <= 1 && vfy[dln] != 0xff) {
 		printf("overrun detected "); ++err;
 	}
-	if (alg->stream->granul > 1 && (ln&15)) {
+	if (alg->stream->granul > 1 && (ln&(BLKSZ-1))) {
 		if (epad == PAD_ZERO && vfy[ln] != 0) {
 			printf("no zero pad "); ++err;
 		}
-		if (epad != PAD_ZERO && vfy[ln] != 16-(ln&15)) {
-			printf("no %i pad ", 16-(int)(ln&15)); ++err;
+		if (epad != PAD_ZERO && vfy[ln] != BLKSZ-(ln&(BLKSZ-1))) {
+			printf("no %i pad ", BLKSZ-(int)(ln&(BLKSZ-1))); ++err;
 		}
 	}
 	//if (err) printf("%i ", err);
