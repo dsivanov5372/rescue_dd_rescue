@@ -62,6 +62,7 @@ static int getrandom(void *buf, size_t buflen, unsigned int flags)
  * Notes: 
  * - We use getrandom() and getentropy() if available, otherwise fall back to
  *   	/dev/random or /dev/urandom which works only Linux
+ *   	(TODO: Use CryptGenRandom and/or RtlGenRandom/s_rand on Windows.)
  * - We mix in the bytes from the libc rand() function, not because it really adds 
  *   entropy, but to make observation from the outside (think hypervisors ...) a bit
  *   harder. (TODO: Could do better on BSD with arc4random() ... )

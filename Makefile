@@ -498,6 +498,23 @@ check_crypt: $(TARGETS)
 	$(VG) ./dd_rescue -tp -L ./libddr_crypt.so=enc:keygen:keysfile:ivgen:ivsfile:alg=AES192+-CTR dd_rescue dd_rescue.enc
 	$(VG) ./dd_rescue -tp -L ./libddr_crypt.so=dec:keysfile:ivsfile:alg=AES192+-CTR dd_rescue.enc dd_rescue.dec
 	cmp dd_rescue dd_rescue.dec
-	# ...
-	rm -f dd_rescue.enc dd_rescue.dec KEYS.* IVS.*
+	# Reverse (CTR, ECB)
+	cp -p dd_rescue.enc dd_rescue.enc.orig
+	$(VG) ./dd_rescue -tpr -L ./libddr_crypt.so=enc:keysfile:ivsfile:alg=AES192+-CTR dd_rescue dd_rescue.enc
+	cmp dd_rescue.enc.orig dd_rescue.enc
+	$(VG) ./dd_rescue -tpr -L ./libddr_crypt.so=dec:keysfile:ivsfile:alg=AES192+-CTR dd_rescue.enc dd_rescue.dec
+	cmp dd_rescue dd_rescue.dec
+	# Appending (CTR)
+	$(VG) ./dd_rescue -px -L ./libddr_crypt.so=enc:keysfile:ivsfile:alg=AES192+-CTR dd_rescue dd_rescue.enc
+	$(VG) ./dd_rescue -tp -L ./libddr_crypt.so=dec:keysfile:ivsfile:alg=AES192+-CTR dd_rescue.enc dd_rescue.dec
+	cat dd_rescue dd_rescue > dd_rescue2
+	cmp dd_rescue2 dd_rescue.dec
+	# Holes (all)
+	# Reverse (CTR, ECB)
+	# Chain with lzo, hash (all)
+	# Various ways to pass in keys/IVs
+	# Padding variations
+	# OpenSSL compatibility
+	# Algs and Engines
+	rm -f dd_rescue.enc dd_rescue.dec dd_rescue.enc.orig dd_rescue2 KEYS.* IVS.*
 

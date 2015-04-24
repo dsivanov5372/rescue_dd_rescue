@@ -90,9 +90,8 @@ const char *crypt_help = "The crypt plugin for dd_rescue de/encrypts data copied
 		"\t:pbkdf2[=INT]:debug:bench[mark]:skiphole\n"
 		" Use algorithm=help to get a list of supported crypt algorithms\n";
 
-/* TODO: Need o output key and iv if generated to KEYS.alg and IVS.alg 
- *	And optionally also read and parse these.
- *	Need to read from filename
+/* TODO: 
+ * openssl compatibility (force padding?)
  */
 
 int parse_hex(unsigned char*, const char*, uint maxlen);
