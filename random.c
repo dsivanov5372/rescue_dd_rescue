@@ -14,6 +14,9 @@
 #include <string.h>
 #include <fcntl.h>
 #include <signal.h>
+#ifdef HAVE_LINUX_RANDOM_H
+#include <linux/random.h>
+#endif
 
 #if (defined(__x86_64__) || defined(__i386__)) && !defined(NO_RDRND)
 unsigned int rdrand32();
@@ -33,28 +36,56 @@ unsigned int random_getseedval32()
 	return (tv.tv_usec << 12) ^ tv.tv_sec ^ getpid() ^ hwrnd;
 }
 
+#if defined(HAVE_GETENTROPY) && !defined(HAVE_GETRANDOM)
+static int getrandom(void *buf, size_t buflen, unsigned int flags)
+{
+	/* Problem: We can't differentiate b/w urandom and random(GRND_RANDOM) */
+	int err = getentropy(buf, buflen);
+	if (err < 0)
+		return err;
+	else
+		return buflen;
+}
+#define GRND_RANDOM 2
+#define HAVE_GETRANDOM 2
+#endif
+
+#ifdef HAVE_GETRANDOM 
+#define READ_RAND(fd, buf, ln, flg) getrandom(buf, ln, flg)
+#define RAND_CLOSE(fd) do {} while(0)
+#else
+#define READ_RAND(fd, buf, ln, flg) read(fd, buf, ln)
+#define RAND_CLOSE(fd) close(fd)
+#endif
+
 /* Functions to generate N bytes of good or really good random numbers
- * Notes: -We use /dev/random or /dev/urandom which works on Linux, but not everywhere
- * 	(TODO: make more portable)
+ * Notes: 
+ * - We use getrandom() and getentropy() if available, otherwise fall back to
+ *   	/dev/random or /dev/urandom which works only Linux
  * - We mix in the bytes from the libc rand() function, not because it really adds 
  *   entropy, but to make observation from the outside (think hypervisors ...) a bit
- *   harder.
+ *   harder. (TODO: Could do better on BSD with arc4random() ... )
  */
 unsigned int random_bytes(unsigned char* buf, unsigned int ln, unsigned char nourand)
 {
-	const char* rdfnm = (nourand? "/dev/random": "/dev/urandom");
 	srand(random_getseedval32());
 	rand();
+#ifndef HAVE_GETRANDOM
+	const char* rdfnm = (nourand? "/dev/random": "/dev/urandom");
 	int fd = open(rdfnm, O_RDONLY);
 	if (fd < 0) {
 		fprintf(stderr, "FATAL: Can't open %s for random numbers\n", rdfnm);
 		raise(SIGQUIT);
 	}
+#else
+	unsigned int flg = nourand? GRND_RANDOM: 0;
+#endif
 	unsigned i;
 	for (i = 0; i < (ln+3)/4; ++i) {
 		unsigned int rnd;
-		if (read(fd, &rnd, 4) != 4) {
-			fprintf(stderr, "FATAL: Short read on %s\n", rdfnm);
+		if (READ_RAND(fd, &rnd, 4, flg) != 4) {
+			fprintf(stderr, "FATAL: Error getting random numbers\n");
+			RAND_CLOSE(fd);
 			raise(SIGQUIT);
 		}
 		rnd ^= rand();
@@ -63,7 +94,7 @@ unsigned int random_bytes(unsigned char* buf, unsigned int ln, unsigned char nou
 		else
 			memcpy(buf+4*i, &rnd, ln-4*i);
 	}
-	close(fd);
+	RAND_CLOSE(fd);
 	return ln;
 }
 
