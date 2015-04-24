@@ -39,6 +39,7 @@
 #include <fcntl.h>
 #include <time.h>
 #include <endian.h>
+#include <signal.h>
 
 #if __WORDSIZE == 64
 #define LL "l"
@@ -285,8 +286,7 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 
 	/* Actually, we can support seeks/reverse copies with CTR and ECB */
 	ddr_plug.needs_align = state->alg->blocksize;
-	if (state->alg->stream->type == STP_ECB || state->alg->stream->type == STP_CTR)
-		ddr_plug.supports_seek = 1;
+	ddr_plug.supports_seek = state->alg->stream->seek_blk;
 
 	/* 3rd: Padding: Already done */
 	/* 4th: pass: done */
@@ -680,15 +680,15 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 	if (0 && state->debug)
 		FPLOG(DEBUG, "pos: %zi %zi vs %zi (%i)\n", fst->ipos, fst->opos, state->lastpos, state->lastpos/BLKSZ);
 	if (currpos != state->lastpos) {
-		if (state->alg->stream->iv_prep) {
-			state->alg->stream->iv_prep(state->sec->nonce1, state->sec->iv1.data, currpos/BLKSZ);
+		if (state->alg->stream->seek_blk) {	/* CTR and ECB */
+			if (state->alg->stream->iv_prep)
+				state->alg->stream->iv_prep(state->sec->nonce1, state->sec->iv1.data, currpos/BLKSZ);
 			if (state->debug)
 				FPLOG(INFO, "Adjusted offset %zi -> %zi (%i)\n", state->lastpos, currpos, currpos/BLKSZ);
 			state->lastpos = currpos;
 		} else {
-			/* ECB: OK, but not yet implemented */
-			/* CBC: NOK */
-			FPLOG(WARN, "Unexpected offset %zi\n", currpos);
+			FPLOG(FATAL, "Unexpected offset %zi\n", currpos);
+			raise(SIGQUIT);
 		}
 	}
 	if (0 && state->debug)
@@ -711,6 +711,7 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 		FPLOG(WARN, "Dec alignment error! (%zi-%i)=%zi %i/%i\n", currpos, state->inbuf,
 			currpos - state->inbuf,
 			(currpos-state->inbuf)%BLKSZ, (currpos-state->inbuf)&0x0f);
+		//raise(SIGQUIT);
 	}
 	if (!state->enc && !state->rev)
 		state->lastpos += *towr;
