@@ -64,7 +64,7 @@ typedef struct _crypt_state {
 	int seq;
 	char enc, debug, kgen, igen, keyf, ivf;
 	char kset, iset, pset, sset;
-	char finfirst, rev, bench;
+	char finfirst, rev, bench, skiphole;
 	clock_t cpu;
 	int pad;
 	int inbuf;
@@ -87,7 +87,7 @@ const char *crypt_help = "The crypt plugin for dd_rescue de/encrypts data copied
 		"\t:ivhex=HEX:ivfd=[x]INT[@INT@INT]:ivfile=NAME[@INT@INT]:ivgen:ivsfile\n"
 		"\t:pass=STR:passhex=HEX:passfd=[x]INT[@INT@INT]:passfile=NAME[@INT@INT]\n"
 		"\t:salt=STR:salthex=HEX:saltfd=[x]INT[@INT@INT]:saltfile=NAME[@INT@INT]:saltlen=INT\n"
-		"\t:pbkdf2[=INT]:debug:bench[mark]\n"
+		"\t:pbkdf2[=INT]:debug:bench[mark]:skiphole\n"
 		" Use algorithm=help to get a list of supported crypt algorithms\n";
 
 /* TODO: Need o output key and iv if generated to KEYS.alg and IVS.alg 
@@ -270,6 +270,8 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			state->pbkdf2r = atol(param+7);
 		else if (!strcmp(param, "pbkdf2"))
 			state->pbkdf2r = 17000;
+		else if (!strcmp(param, "skiphole"))
+			state->skiphole = 1;
 		/* Hmmm, ok, let's support algname without alg= */
 		else {
 			err += set_alg(state, param);
@@ -661,12 +663,33 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	return err;
 }
 
+char holememcpy(void* dst, const void* src, size_t ln)
+{
+	unsigned long *ldst = (unsigned long*)dst;
+	unsigned long *lsrc = (unsigned long*)src;
+	unsigned int left = ln/sizeof(long);
+	if (*lsrc || ln%sizeof(long)) {
+		memcpy(dst, src, ln);
+		return 0;
+	}
+	while (left--) {
+		unsigned long val = *lsrc++;
+		*ldst++ = val;
+		if (val) {
+			memcpy(ldst, lsrc, left*sizeof(long));
+			return 0;
+		}
+	}
+	return 1;
+}
+
 unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf, 
 			    int *towr, int eof, int *recall, void **stat)
 {
 	crypt_state *state = (crypt_state*)*stat;
 	int i = 0;
 	int err = 0;
+	int skipped = 0;
 	clock_t t1 = 0;
 	ssize_t olen = 0;
 	unsigned char* keys = state->enc? state->sec->ekeys->data: state->sec->dkeys->data;
@@ -732,12 +755,26 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 	while (i+BLKSZ <= *towr) {
 		int left = MIN(512, *towr-i);
 		left -= left%BLKSZ;
-		memcpy(state->sec->databuf2, bf+i, left);
-		err = crypt(keys, state->alg->rounds, state->sec->iv1.data,
-			    PAD_ZERO, state->sec->databuf2, bf+i, left, &olen);
-		assert(!err);
-		assert(olen == left);
+		//memcpy(state->sec->databuf2, bf+i, left);
+		char zero = (state->skiphole? holememcpy(state->sec->databuf2, bf+i, left): (memcpy(state->sec->databuf2, bf+i, left), 0));
+		if (!zero) {
+			/* Fix up after skipped holes */
+			if (skipped && state->alg->stream->iv_prep) {
+				state->alg->stream->iv_prep(state->sec->nonce1, state->sec->iv1.data, (currpos+i)/BLKSZ);
+				skipped = 0;
+			}
+			err = crypt(keys, state->alg->rounds, state->sec->iv1.data,
+				    PAD_ZERO, state->sec->databuf2, bf+i, left, &olen);
+			assert(!err);
+			assert(olen == left);
+		} else
+			++skipped;
 		i += left;
+	}
+	/* Fix up after skipped holes */
+	if (skipped && state->alg->stream->iv_prep) {
+		state->alg->stream->iv_prep(state->sec->nonce1, state->sec->iv1.data, (currpos+i)/BLKSZ);
+		skipped = 0;
 	}
 	/* Copy remainder (incomplete block) into buffer */
 	int left = *towr - i;

@@ -319,74 +319,75 @@ install: $(TARGETS)
 	gzip -9f $(MANDIR)/man1/dd_rescue.1 $(MANDIR)/man1/ddr_lzo.1 $(MANDIR)/man1/ddr_crypt.1
 
 check: $(TARGETS) find_nonzero md5 sha1 sha256 sha512
-	./dd_rescue --version
+	@echo "make check ... Pass VG=\"valgrind --options\" to use with valgrind"
+	$(VG) ./dd_rescue --version
 	@echo "***** find_nonzero tests *****"
-	./find_nonzero 2
+	$(VG) ./find_nonzero 2
 	@echo "***** dd_rescue tests *****"
 	@rm -f dd_rescue.copy dd_rescue.copy2
-	./dd_rescue -apP dd_rescue dd_rescue.copy
+	$(VG) ./dd_rescue -apP dd_rescue dd_rescue.copy
 	cmp dd_rescue dd_rescue.copy 
 	@rm dd_rescue.copy
-	./dd_rescue -b16k -B16k -a dd_rescue dd_rescue.copy
+	$(VG) ./dd_rescue -b16k -B16k -a dd_rescue dd_rescue.copy
 	cmp dd_rescue dd_rescue.copy
 	@rm dd_rescue.copy
-	./dd_rescue -r dd_rescue dd_rescue.copy
+	$(VG) ./dd_rescue -r dd_rescue dd_rescue.copy
 	cmp dd_rescue dd_rescue.copy
-	./dd_rescue -x dd_rescue dd_rescue.copy
+	$(VG) ./dd_rescue -x dd_rescue dd_rescue.copy
 	cat dd_rescue dd_rescue > dd_rescue.copy2
 	cmp dd_rescue.copy dd_rescue.copy2
 	@rm dd_rescue.copy dd_rescue.copy2
 	@rm -f zero zero2
 	@echo "***** dd_rescue sparse tests *****"
-	./dd_rescue -a -m 261k /dev/zero zero
+	$(VG) ./dd_rescue -a -m 261k /dev/zero zero
 	du zero
-	./dd_rescue -S 12k -m 4k -b 4k -Z 0 zero
-	./dd_rescue -S 20k -m 4k -b 4k -Z 0 zero
-	./dd_rescue -a -b 8k zero zero2
+	$(VG) ./dd_rescue -S 12k -m 4k -b 4k -Z 0 zero
+	$(VG) ./dd_rescue -S 20k -m 4k -b 4k -Z 0 zero
+	$(VG) ./dd_rescue -a -b 8k zero zero2
 	du zero zero2
 	cmp zero zero2
 	@rm zero2
-	./dd_rescue -a -b 16k zero zero2
+	$(VG) ./dd_rescue -a -b 16k zero zero2
 	du zero zero2
 	cmp zero zero2
 	@rm zero zero2
 	@rm -f TEST TEST2
 	@echo "***** dd_rescue MD5 plugin tests *****"
-	./md5 /dev/null
-	./md5 /dev/null | md5sum -c
-	./dd_rescue -a -b 16k -m 32k /dev/zero TEST
-	./dd_rescue -x -a -b 16k -m32k dd_rescue TEST
-	./dd_rescue -x -a -b 16k -m17k /dev/zero TEST
-	./dd_rescue -c0 -a -b16k -t -L ./libddr_MD5.so=output TEST TEST2 >HASH.TEST
+	$(VG) ./md5 /dev/null
+	$(VG) ./md5 /dev/null | md5sum -c
+	$(VG) ./dd_rescue -a -b 16k -m 32k /dev/zero TEST
+	$(VG) ./dd_rescue -x -a -b 16k -m32k dd_rescue TEST
+	$(VG) ./dd_rescue -x -a -b 16k -m17k /dev/zero TEST
+	$(VG) ./dd_rescue -c0 -a -b16k -t -L ./libddr_MD5.so=output TEST TEST2 >HASH.TEST
 	md5sum -c HASH.TEST
 	#MD5=$$(./dd_rescue -c0 -a -b16k -L ./libddr_MD5.so TEST TEST2 2>&1 | grep 'MD5(0)': | tail -n1 | sed 's/^dd_rescue: (info): MD5(0):[^:]*: //'); MD5S=$$(md5sum TEST | sed 's/ .*$$//'); echo $$MD5 $$MD5S; if test "$$MD5" != "$$MD5S"; then false; fi
 	rm -f HASH.TEST
-	./sha1 /dev/null
-	./sha1 /dev/null | sha1sum -c
-	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=outnm=HASH.TEST:alg=sha1 TEST TEST2
+	$(VG) ./sha1 /dev/null
+	$(VG) ./sha1 /dev/null | sha1sum -c
+	$(VG) ./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=outnm=HASH.TEST:alg=sha1 TEST TEST2
 	sha1sum -c HASH.TEST
 	if test $(HAVE_SHA256SUM) = 1; then $(MAKE) check_sha2; fi
-	./sha256 /dev/null
-	./sha512 /dev/null
+	$(VG) ./sha256 /dev/null
+	$(VG) ./sha512 /dev/null
 	rm -f TEST TEST2 HASH.TEST
 	if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo; fi
 	if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo_algos; fi
 	#if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo_test; fi
 	if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo_fuzz; fi
 	# Tests for libddr_null
-	./dd_rescue -L ./libddr_null.so=debug dd_rescue /dev/null
+	$(VG) ./dd_rescue -L ./libddr_null.so=debug dd_rescue /dev/null
 	# Tests with hash set_xattr and chk_xattr (with fallback as not all filesystems support xattrs ...)
-	./dd_rescue -tL ./libddr_hash.so=sha256:set_xattr:fallback dd_rescue /tmp/dd_rescue
-	./dd_rescue -L ./libddr_hash.so=sha256:chk_xattr:fallback /tmp/dd_rescue /dev/null
+	$(VG) ./dd_rescue -tL ./libddr_hash.so=sha256:set_xattr:fallback dd_rescue /tmp/dd_rescue
+	$(VG) ./dd_rescue -L ./libddr_hash.so=sha256:chk_xattr:fallback /tmp/dd_rescue /dev/null
 	rm -f /tmp/dd_rescue CHECKSUMS.sha256
 	# Tests with prepend and append
-	./dd_rescue -tL ./libddr_hash.so=sha512:set_xattr:fallback:prepend=abc:append=xyz dd_rescue /tmp/dd_rescue
-	./dd_rescue  -L ./libddr_hash.so=sha512:chk_xattr:fallback /tmp/dd_rescue /dev/null && false || true
-	./dd_rescue  -L ./libddr_hash.so=sha512:chk_xattr:fallback:prepend=abc:append=xyz /tmp/dd_rescue /dev/null
+	$(VG) ./dd_rescue -tL ./libddr_hash.so=sha512:set_xattr:fallback:prepend=abc:append=xyz dd_rescue /tmp/dd_rescue
+	$(VG) ./dd_rescue  -L ./libddr_hash.so=sha512:chk_xattr:fallback /tmp/dd_rescue /dev/null && false || true
+	$(VG) ./dd_rescue  -L ./libddr_hash.so=sha512:chk_xattr:fallback:prepend=abc:append=xyz /tmp/dd_rescue /dev/null
 	# Tests with HMAC
 	echo -n "what do ya want for nothing?" > TEST
 	echo "750c783e6ab0b503eaa86e310a5db738 *TEST" > HMACS.md5
-	./dd_rescue -L ./libddr_hash.so=md5:hmacpwd=Jefe:chknm= TEST /dev/null
+	$(VG) ./dd_rescue -L ./libddr_hash.so=md5:hmacpwd=Jefe:chknm= TEST /dev/null
 	rm -f /tmp/dd_rescue CHECKSUMS.sha512 TEST HMACS.md5
 	if ./calchmac.py sha1 pass dd_rescue; then make check_hmac; else echo "Sorry, no more HMAC test due to missing python-hashlib support"; true; fi
 	make check_aes
@@ -399,75 +400,75 @@ check_hmac: $(TARGETS)
 	done
 	for name in *.c *.h *.po dd_rescue *.so; do \
 		for alg in md5 sha1 sha256 sha384; do \
-			./dd_rescue -L ./libddr_hash.so=$$alg:hmacpwd=pass_$$alg:chknm= $$name /dev/null || exit 1; \
+			$(VG) ./dd_rescue -L ./libddr_hash.so=$$alg:hmacpwd=pass_$$alg:chknm= $$name /dev/null || exit 1; \
 		done \
 	done
 	rm -f HMACS.md5 HMACS.sha1 HMACS.sha256 HMACS.sha384
 
 	
 check_sha2: $(TARGETS) sha224 sha384
-	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=output:alg=sha224 TEST TEST2 >HASH.TEST
+	$(VG) ./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=output:alg=sha224 TEST TEST2 >HASH.TEST
 	sha224sum -c HASH.TEST
-	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=outnm=:alg=sha256 TEST TEST2 >HASH.TEST
+	$(VG) ./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=outnm=:alg=sha256 TEST TEST2 >HASH.TEST
 	sha256sum -c CHECKSUMS.sha256
-	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=output:alg=sha384 TEST TEST2 >HASH.TEST
+	$(VG) ./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=output:alg=sha384 TEST TEST2 >HASH.TEST
 	sha384sum -c HASH.TEST
-	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=outnm=:alg=sha512 TEST TEST2
-	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=outnm=:alg=sha512,./libddr_null.so=change dd_rescue /dev/null
+	$(VG) ./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=outnm=:alg=sha512 TEST TEST2
+	$(VG) ./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=outnm=:alg=sha512,./libddr_null.so=change dd_rescue /dev/null
 	sha512sum -c CHECKSUMS.sha512
-	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=sha512:chknm=CHECKSUMS.sha512 TEST2 /dev/null
-	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=alg=sha512:chknm= dd_rescue /dev/null
-	./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=sha512:check dd_rescue /dev/null <CHECKSUMS.sha512
-	./sha224 /dev/null | sha224sum -c
-	./sha256 /dev/null | sha256sum -c
-	./sha384 /dev/null | sha384sum -c
-	./sha512 /dev/null | sha512sum -c
+	$(VG) ./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=sha512:chknm=CHECKSUMS.sha512 TEST2 /dev/null
+	$(VG) ./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=alg=sha512:chknm= dd_rescue /dev/null
+	$(VG) ./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=sha512:check dd_rescue /dev/null <CHECKSUMS.sha512
+	$(VG) ./sha224 /dev/null | sha224sum -c
+	$(VG) ./sha256 /dev/null | sha256sum -c
+	$(VG) ./sha384 /dev/null | sha384sum -c
+	$(VG) ./sha512 /dev/null | sha512sum -c
 	rm -f HASH.TEST CHECKSUMS.sha256 CHECKSUMS.sha512 TEST2
 
 check_lzo: $(TARGETS)
 	@echo "***** dd_rescue lzo (and MD5) plugin tests *****"
-	./dd_rescue -b32k -ATL ./libddr_lzo.so dd_rescue dd_rescue.ddr.lzo
+	$(VG) ./dd_rescue -b32k -ATL ./libddr_lzo.so dd_rescue dd_rescue.ddr.lzo
 	$(LZOP) -t dd_rescue.ddr.lzo
 	@cp -p dd_rescue dd_rescue.ddr
 	$(LZOP) -fd dd_rescue.ddr.lzo
 	cmp dd_rescue dd_rescue.ddr
 	@rm -f dd_rescue.ddr dd_rescue.ddr.lzo
-	./dd_rescue -b256k -L ./libddr_MD5.so=output,./libddr_lzo.so=compress,./libddr_MD5.so=output dd_rescue dd_rescue.ddr.lzo > dd_rescue.ddr.MD5SUM
+	$(VG) ./dd_rescue -b256k -L ./libddr_MD5.so=output,./libddr_lzo.so=compress,./libddr_MD5.so=output dd_rescue dd_rescue.ddr.lzo > dd_rescue.ddr.MD5SUM
 	md5sum -c dd_rescue.ddr.MD5SUM
 	md5sum dd_rescue dd_rescue.ddr.lzo
 	$(LZOP) -Nvl dd_rescue.ddr.lzo
-	./dd_rescue -b256k -TL ./libddr_MD5.so=output,./libddr_lzo.so=compress,./libddr_MD5.so,./libddr_lzo.so=decompress,./libddr_MD5.so=outfd=1 dd_rescue dd_rescue.ddr > dd_rescue.ddr.MD5
+	$(VG) ./dd_rescue -b256k -TL ./libddr_MD5.so=output,./libddr_lzo.so=compress,./libddr_MD5.so,./libddr_lzo.so=decompress,./libddr_MD5.so=outfd=1 dd_rescue dd_rescue.ddr > dd_rescue.ddr.MD5
 	cmp dd_rescue dd_rescue.ddr
 	md5sum -c dd_rescue.ddr.MD5
-	./dd_rescue -b16k -TL ./libddr_MD5.so=output,./libddr_lzo.so=compress,./libddr_MD5.so,./libddr_lzo.so=decompress,./libddr_MD5.so=outfd=1 dd_rescue dd_rescue.ddr > dd_rescue.ddr.MD5
+	$(VG) ./dd_rescue -b16k -TL ./libddr_MD5.so=output,./libddr_lzo.so=compress,./libddr_MD5.so,./libddr_lzo.so=decompress,./libddr_MD5.so=outfd=1 dd_rescue dd_rescue.ddr > dd_rescue.ddr.MD5
 	cmp dd_rescue dd_rescue.ddr
 	md5sum -c dd_rescue.ddr.MD5
 	@cp -p dd_rescue.ddr.lzo dd_rescue.lzo
 	@rm -f dd_rescue.ddr dd_rescue.ddr.lzo dd_rescue.ddr.MD5
 	$(LZOP) -f dd_rescue
-	./dd_rescue -b256k -TL ./libddr_lzo.so dd_rescue.lzo dd_rescue.cmp
+	$(VG) ./dd_rescue -b256k -TL ./libddr_lzo.so dd_rescue.lzo dd_rescue.cmp
 	cmp dd_rescue dd_rescue.cmp
 	@rm -f dd_rescue.cmp dd_rescue.lzo
-	./dd_rescue -b16k -L ./libddr_MD5.so=output,./libddr_lzo.so,./libddr_MD5.so=output dd_rescue dd_rescue.lzo > MD5.1
-	./dd_rescue -b 8k -L ./libddr_MD5.so=output,./libddr_lzo.so,./libddr_MD5.so=output dd_rescue.lzo dd_rescue.cmp > MD5.2
+	$(VG) ./dd_rescue -b16k -L ./libddr_MD5.so=output,./libddr_lzo.so,./libddr_MD5.so=output dd_rescue dd_rescue.lzo > MD5.1
+	$(VG) ./dd_rescue -b 8k -L ./libddr_MD5.so=output,./libddr_lzo.so,./libddr_MD5.so=output dd_rescue.lzo dd_rescue.cmp > MD5.2
 	cmp dd_rescue dd_rescue.cmp
 	md5sum dd_rescue dd_rescue.lzo
 	md5sum -c MD5.1
 	md5sum -c MD5.2
 	@rm -f dd_rescue.lzo dd_rescue.cmp MD5.1 MD5.2
 	# Sparse testing and MULTIPART testing and extend
-	./dd_rescue -ta -m 64k /dev/zero test
-	./dd_rescue -ax dd_rescue test
-	./dd_rescue -axm 128k /dev/zero test
-	./dd_rescue -taL ./libddr_MD5.so test test2
-	./dd_rescue -taL ./libddr_MD5.so=output,./libddr_lzo.so,./libddr_MD5.so=output test test.lzo > MD5
+	$(VG) ./dd_rescue -ta -m 64k /dev/zero test
+	$(VG) ./dd_rescue -ax dd_rescue test
+	$(VG) ./dd_rescue -axm 128k /dev/zero test
+	$(VG) ./dd_rescue -taL ./libddr_MD5.so test test2
+	$(VG) ./dd_rescue -taL ./libddr_MD5.so=output,./libddr_lzo.so,./libddr_MD5.so=output test test.lzo > MD5
 	md5sum -c MD5
 	rm -f MD5 test2
-	./dd_rescue -axL ./libddr_lzo.so,./libddr_MD5.so=output dd_rescue test.lzo > MD5
+	$(VG) ./dd_rescue -axL ./libddr_lzo.so,./libddr_MD5.so=output dd_rescue test.lzo > MD5
 	#md5sum -c MD5
 	$(LZOP) -Nvl test.lzo
 	cat dd_rescue >> test
-	./dd_rescue -aL ./libddr_lzo.so,./libddr_MD5.so=output test.lzo test.cmp > MD5
+	$(VG) ./dd_rescue -aL ./libddr_lzo.so,./libddr_MD5.so=output test.lzo test.cmp > MD5
 	md5sum -c MD5
 	cmp test test.cmp
 	rm -f MD5 test test.lzo test.cmp
@@ -494,8 +495,8 @@ check_aes: $(TARGETS) test_aes
 	for alg in $(ALGS); do $(VG) ./test_aes $$alg 10000 || exit $$?; done
 
 check_crypt: $(TARGETS)
-	./dd_rescue -tp -L ./libddr_crypt.so=enc:keygen:keysfile:ivgen:ivsfile:alg=AES192+-CTR dd_rescue dd_rescue.enc
-	./dd_rescue -tp -L ./libddr_crypt.so=dec:keysfile:ivsfile:alg=AES192+-CTR dd_rescue.enc dd_rescue.dec
+	$(VG) ./dd_rescue -tp -L ./libddr_crypt.so=enc:keygen:keysfile:ivgen:ivsfile:alg=AES192+-CTR dd_rescue dd_rescue.enc
+	$(VG) ./dd_rescue -tp -L ./libddr_crypt.so=dec:keysfile:ivsfile:alg=AES192+-CTR dd_rescue.enc dd_rescue.dec
 	cmp dd_rescue dd_rescue.dec
 	# ...
 	rm -f dd_rescue.enc dd_rescue.dec KEYS.* IVS.*

@@ -349,6 +349,20 @@ if however previous correctly encrypted content is present in
 a hole, the support for partial writes in CTR and ECB mode will
 result in a meaningful output. If no previous content is in holes,
 then the result of decrypting zeros will result upon decryption.
+.br
+You can pass the option
+.B skiphole
+to make ddr_crypt leave 512byte blocks of zeros untouched.
+This will reveal blocks of zeros and may thus disclose valuable
+information to an attacker, so use with care. Also note that you
+need to use this with en- and decryption and with the same 
+alignment (mod 512) for encryption to be reversible. You have
+been warned. (You don't need to be worried about misdetecting
+zeros on decrypting -- the chances of non-zero plaintext resulting
+in an aligned 512byte block of zeros is smaller than 2^-4096. So
+this option is safe on decrypting -- if some of the ciphertext
+has been overwritten with blocks of zeros, you might even prefer
+to have zeros in the decrypted file rather than random gibberish.)
 .P
 Note that you can compress and encode holes with ddr_lzo and then
 pass to ddr_crypt to encrypt and pass through ddr_crypt to decrypt
@@ -383,15 +397,14 @@ plugins, which means it has not been tested as intensively as the others.
 Except for more testing and auditing a few more features are envisioned
 for this plugin:
 .br
-Support for other (non-AES) algorithms such as twofish
+Support for other (non-AES) algorithms such as twofish (and
+possibly also threefish).
 .br
 Stronger function to derive keys/IVs from passwords than pbkdf2.
 .br
-Support for random seeking (holes, reverse copy) for xxx-CTR.
-.br
 Support for AES acceleration for ARMv8.
 .br
-Support for other streaming modes (XTR, GCM, ...)
+Support for other streaming modes (XTS, GCM, ...)
 .br
 Store IV in xattr
 .
