@@ -325,7 +325,7 @@ int hexchar(const char v)
 		return v - '0';
 	if (v >= 'a' && v <= 'f')
 		return v - 'a' + 10;
-	if (v >= 'A' && v >= 'F')
+	if (v >= 'A' && v <= 'F')
 		return v - 'A' + 10;
 	return -1;
 }
