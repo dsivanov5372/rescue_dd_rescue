@@ -206,7 +206,8 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			}
 		}
 		else if (!memcmp(param, "keyhex=", 7)) {
-			err += parse_hex_u32((unsigned int*)state->sec->userkey1, param+7, state->alg->keylen/32); 
+			/* FIXME: Need per alg hex to key conversion -- we may have bytes or u32 or u64 ... */
+			err += parse_hex_u32((unsigned int*)state->sec->userkey1, param+7, state->alg->keylen/(8*sizeof(int))); 
 			//err += parse_hex(state->sec->userkey1, param+7, state->alg->keylen/8); 
 			err += set_flag(&state->kset, "key");
 		} else if (!memcmp(param, "keyfd=", 6)) {
@@ -220,7 +221,7 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		else if (!strcmp(param, "keysfile"))
 			state->keyf = 1;
 		else if (!memcmp(param, "ivhex=", 6)) {
-			//err += parse_hex_u32((unsigned int*)state->sec->nonce1, param+6, BLKSZ/4);
+			//err += parse_hex_u32((unsigned int*)state->sec->nonce1, param+6, BLKSZ/sizeof(int));
 			err += parse_hex(state->sec->nonce1, param+6, BLKSZ);
 			err += set_flag(&state->iset, "IV");
 		} else if (!memcmp(param, "ivfd=", 5)) {
@@ -265,7 +266,7 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			} else /* Later: save is sset */
 				state->sfnm = param+9;
 		} else if (!memcmp(param, "saltlen=", 8))
-			state->saltlen = ATOL(param+8);	/* FIXME: need atoll on 32bit */
+			state->saltlen = ATOL(param+8);
 		else if (!memcmp(param, "bench", 5))
 			state->bench = 1;
 		else if (!memcmp(param, "pbkdf2=", 7))
@@ -737,6 +738,9 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 	int skipped = 0;
 	clock_t t1 = 0;
 	ssize_t olen = 0;
+	/* FIXME: Hack -- detect last block on decoding to be able to strip padding.
+	 * Cleaner (nut more complex) aalternative would be to always buffer the last 
+	 * 16 bytes and only flush them on receiving eof flag */ 
 	char lastdec = state->enc? 0: (fst->ipos+*towr == fst->ilen? 1: 0);
 	unsigned char* keys = state->enc? state->sec->ekeys->data: state->sec->dkeys->data;
 	Crypt_IV_fn *crypt = state->enc? state->alg->encrypt: state->alg->decrypt;	
@@ -803,8 +807,7 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 		left -= left%BLKSZ;
 		//memcpy(state->sec->databuf2, bf+i, left);
 		char zero = (state->skiphole? holememcpy(state->sec->databuf2, bf+i, left): (memcpy(state->sec->databuf2, bf+i, left), 0));
-		//unsigned int pad = *towr-i+left == 0? state->pad: PAD_ZERO;
-		unsigned int pad = (eof || (lastdec && i+left == *towr))? state->pad: PAD_ZERO;
+		unsigned int unpad = (eof || (lastdec && i+left == *towr))? state->pad: PAD_ZERO;
 		if (!zero) {
 			/* Fix up after skipped holes */
 			if (skipped && state->alg->stream->iv_prep) {
@@ -812,9 +815,9 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 				skipped = 0;
 			}
 			err = crypt(keys, state->alg->rounds, state->sec->iv1.data,
-				    pad, state->sec->databuf2, bf+i, left, &olen);
+				    unpad, state->sec->databuf2, bf+i, left, &olen);
 			assert(!err);
-			assert(olen == left || ((eof||lastdec) && olen >= 0));
+			assert(olen == left || (unpad && olen >= 0));
 			if (olen < left) {
 				*towr -= (left-olen);
 				i -= (left-olen);
