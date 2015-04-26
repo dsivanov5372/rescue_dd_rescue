@@ -95,6 +95,7 @@ const char *crypt_help = "The crypt plugin for dd_rescue de/encrypts data copied
  */
 
 int parse_hex(unsigned char*, const char*, uint maxlen);
+int parse_hex_u32(unsigned int*, const char*, uint maxlen);
 int read_fd(unsigned char*, const char*, uint maxlen, const char*);
 int read_file(unsigned char*, const char*, uint maxlen);
 char* mystrncpy(unsigned char*, const char*, uint maxlen);
@@ -205,7 +206,8 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			}
 		}
 		else if (!memcmp(param, "keyhex=", 7)) {
-			err += parse_hex(state->sec->userkey1, param+7, 32); 
+			err += parse_hex_u32((unsigned int*)state->sec->userkey1, param+7, state->alg->keylen/32); 
+			//err += parse_hex(state->sec->userkey1, param+7, state->alg->keylen/8); 
 			err += set_flag(&state->kset, "key");
 		} else if (!memcmp(param, "keyfd=", 6)) {
 			err += read_fd(state->sec->userkey1, param+6, 32, "key");
@@ -218,7 +220,8 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		else if (!strcmp(param, "keysfile"))
 			state->keyf = 1;
 		else if (!memcmp(param, "ivhex=", 6)) {
-			err += parse_hex(state->sec->nonce1, param+6, BLKSZ);
+			err += parse_hex_u32((unsigned int*)state->sec->nonce1, param+6, BLKSZ/4);
+			//err += parse_hex(state->sec->nonce1, param+6, BLKSZ);
 			err += set_flag(&state->iset, "IV");
 		} else if (!memcmp(param, "ivfd=", 5)) {
 			err += read_fd(state->sec->nonce1, param+5, BLKSZ, "iv");
@@ -353,9 +356,34 @@ int parse_hex(unsigned char* res, const char* str, uint maxlen)
 			break;
 		res[i] = v;
 	}
-	if (i < maxlen)
+	if (i < maxlen) {
 		memset(res+i, 0, maxlen-i);
-	return (i < 4? -1: 0);
+		FPLOG(FATAL, "Too short key/IV (%i/%i) bytes\n", i, maxlen);
+		return -1;
+	}
+	return 0;
+}
+
+int parse_hex_u32(unsigned int* res, const char* str, uint maxlen)
+{
+	if (str[0] == '0' && str[1] == 'x')
+		str += 2;
+	uint i;
+	for (i = 0; i < maxlen; ++i) {
+		int v3 = hexbyte(str+i*8);
+		int v2 = hexbyte(str+i*8+2);
+		int v1 = hexbyte(str+i*8+4);
+		int v0 = hexbyte(str+i*8+6);
+		if (v3 < 0 || v2 < 0 || v1 < 0 || v0 < 0)
+			break;
+		res[i] = v3 << 24 | v2 << 16 | v1 << 8 | v0;
+	}
+	if (i < maxlen) {
+		memset(res+i, 0, 4*(maxlen-i));
+		FPLOG(FATAL, "Too short key/IV (%i/%i) u32s\n", i, maxlen);
+		return -1;
+	}
+	return 0;
 }
 
 char* hexout(char* buf, const unsigned char* val, unsigned int ln)
