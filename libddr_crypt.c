@@ -91,7 +91,7 @@ const char *crypt_help = "The crypt plugin for dd_rescue de/encrypts data copied
 		" Use algorithm=help to get a list of supported crypt algorithms\n";
 
 /* TODO: 
- * openssl compatibility (force padding?)
+ * openssl compatibility (Salted__ <SALT> header)
  */
 
 int parse_hex(unsigned char*, const char*, uint maxlen);
@@ -220,8 +220,8 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		else if (!strcmp(param, "keysfile"))
 			state->keyf = 1;
 		else if (!memcmp(param, "ivhex=", 6)) {
-			err += parse_hex_u32((unsigned int*)state->sec->nonce1, param+6, BLKSZ/4);
-			//err += parse_hex(state->sec->nonce1, param+6, BLKSZ);
+			//err += parse_hex_u32((unsigned int*)state->sec->nonce1, param+6, BLKSZ/4);
+			err += parse_hex(state->sec->nonce1, param+6, BLKSZ);
 			err += set_flag(&state->iset, "IV");
 		} else if (!memcmp(param, "ivfd=", 5)) {
 			err += read_fd(state->sec->nonce1, param+5, BLKSZ, "iv");
@@ -394,6 +394,14 @@ char* hexout(char* buf, const unsigned char* val, unsigned int ln)
 	return buf;
 }
 
+char* hexout_u32(char* buf, const unsigned int* val, unsigned int ln)
+{
+	int i;
+	for (i = 0; i < ln; ++i)
+		sprintf(buf+8*i, "%08x", val[i]);
+	return buf;
+}
+
 void get_offs_len(const char* str, off_t *off, size_t *len)
 {
 	const char* ptr = strrchr(str, '@');
@@ -498,15 +506,24 @@ char* chartohex(crypt_state *state, const unsigned char* key, const int bytes)
 	return state->sec->charbuf1;
 }
 
+char* chartohex_u32(crypt_state *state, const unsigned int* key, const int words)
+{
+	assert(words < 36);
+	hexout_u32(state->sec->charbuf1, key, words);
+	return state->sec->charbuf1;
+}
 
-int write_keyfile(crypt_state *state, const char* base, const char* name, const unsigned char* key, const int bytes, int acc, char confnm)
+
+int write_keyfile(crypt_state *state, const char* base, const char* name, const unsigned char* key, const int bytes, int acc, char confnm, char isu32)
 {
 	char *fnm;
 	if (confnm)
 		fnm = keyfnm(base, name);
 	else
 		fnm = strdup(base);
-	int err = upd_chks(fnm, name, chartohex(state, key, bytes), acc);
+	int err = isu32?
+		upd_chks(fnm, name, chartohex_u32(state, (unsigned int*)key, bytes/sizeof(int)), acc) :
+		upd_chks(fnm, name, chartohex(state, key, bytes), acc);
 	free(fnm);
 	if (err)
 		FPLOG(FATAL, "Could not write key/IV/pass/salt file\n", NULL);
@@ -540,12 +557,12 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 		encln = state->saltlen;
 
 	if (state->pset && state->pfnm) {
-		if (write_keyfile(state, state->pfnm, encnm, state->sec->passphr, strlen((const char*)state->sec->passphr), 0600, 0))
+		if (write_keyfile(state, state->pfnm, encnm, state->sec->passphr, strlen((const char*)state->sec->passphr), 0600, 0, 0))
 			return -1;
 	}
 	
 	if (state->sset && state->sfnm) {
-		if (write_keyfile(state, state->sfnm, encnm, state->sec->salt, 64, 0640, 0))
+		if (write_keyfile(state, state->sfnm, encnm, state->sec->salt, 64, 0640, 0, 0))
 			return -1;
 	}
 	
@@ -578,7 +595,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			if (!state->keyf)
 				FPLOG(WARN, "Generated key not written anywhere?\n", NULL);
 			else 
-				if (write_keyfile(state, keynm, encnm, state->sec->userkey1, state->alg->keylen/8, 0600, 1))
+				if (write_keyfile(state, keynm, encnm, state->sec->userkey1, state->alg->keylen/8, 0600, 1, 1))
 					return -1;
 		} else if (state->pset) {
 			if (!state->pbkdf2r) {
@@ -595,7 +612,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			}
 			/* Write to keysf if requested */
 			if (state->keyf)
-				if (write_keyfile(state, keynm, encnm, state->sec->userkey1, state->alg->keylen/8, 0600, 1))
+				if (write_keyfile(state, keynm, encnm, state->sec->userkey1, state->alg->keylen/8, 0600, 1, 1))
 					return -1;
 			
 		} else if (state->keyf) {
@@ -608,7 +625,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 				FPLOG(FATAL, "Can't read key for %s from KEYS file!\n", encnm);
 				return -1;
 			}
-			err += parse_hex(state->sec->userkey1, state->sec->charbuf1, state->alg->keylen/8);
+			err += parse_hex_u32((unsigned int*)state->sec->userkey1, state->sec->charbuf1, state->alg->keylen/(8*sizeof(int)));
 		} else {
 			FPLOG(FATAL, "Need to set key\n", NULL);
 			return -1;
@@ -616,7 +633,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	} else {
 		if (state->keyf)
 			/* Write to keyfile */
-			if (write_keyfile(state, keynm, encnm, state->sec->userkey1, state->alg->keylen/8, 0600, 1))
+			if (write_keyfile(state, keynm, encnm, state->sec->userkey1, state->alg->keylen/8, 0600, 1, 1))
 				return -1;
 	}
 	/* 7th: iv (defaults to salt) */
@@ -630,7 +647,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			if (!state->ivf)
 				FPLOG(WARN, "Generated IV not saved?\n", NULL);
 			else 
-				if (write_keyfile(state, ivsnm, encnm, state->sec->nonce1, BLKSZ, 0640, 1))
+				if (write_keyfile(state, ivsnm, encnm, state->sec->nonce1, BLKSZ, 0640, 1, 0))
 					return -1;
 		} else if (state->pset) {
 			assert(state->pbkdf2r);
@@ -650,7 +667,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			}
 			/* Write to keysf if requested */
 			if (state->ivf)
-				if (write_keyfile(state, ivsnm, encnm, state->sec->nonce1, BLKSZ, 0640, 1))
+				if (write_keyfile(state, ivsnm, encnm, state->sec->nonce1, BLKSZ, 0640, 1, 0))
 					return -1;
 		} else if (state->ivf) {
 			/* Read IV from ivsfile */
@@ -661,6 +678,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 				FPLOG(FATAL, "Can't read IV for %s from IVS file!\n", encnm);
 				return -1;
 			}
+			//err += parse_hex_u32((unsigned int*)state->sec->nonce1, state->sec->charbuf1, BLKSZ/sizeof(int));
 			err += parse_hex(state->sec->nonce1, state->sec->charbuf1, BLKSZ);
 		} else {
 			FPLOG(FATAL, "Need to determine IV\n", NULL);
@@ -668,7 +686,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 		}
 	} else if (state->ivf)
 		/* Save to IVs file */
-		if (write_keyfile(state, ivsnm, encnm, state->sec->nonce1, BLKSZ, 0640, 1))
+		if (write_keyfile(state, ivsnm, encnm, state->sec->nonce1, BLKSZ, 0640, 1, 0))
 			return -1;
 	
 	/* OK, now we can prepare en/decryption */
@@ -719,6 +737,7 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 	int skipped = 0;
 	clock_t t1 = 0;
 	ssize_t olen = 0;
+	char lastdec = state->enc? 0: (fst->ipos+*towr == fst->ilen? 1: 0);
 	unsigned char* keys = state->enc? state->sec->ekeys->data: state->sec->dkeys->data;
 	Crypt_IV_fn *crypt = state->enc? state->alg->encrypt: state->alg->decrypt;	
 	loff_t currpos = state->enc? fst->opos: fst->ipos;
@@ -784,6 +803,8 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 		left -= left%BLKSZ;
 		//memcpy(state->sec->databuf2, bf+i, left);
 		char zero = (state->skiphole? holememcpy(state->sec->databuf2, bf+i, left): (memcpy(state->sec->databuf2, bf+i, left), 0));
+		//unsigned int pad = *towr-i+left == 0? state->pad: PAD_ZERO;
+		unsigned int pad = (eof || (lastdec && i+left == *towr))? state->pad: PAD_ZERO;
 		if (!zero) {
 			/* Fix up after skipped holes */
 			if (skipped && state->alg->stream->iv_prep) {
@@ -791,9 +812,13 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 				skipped = 0;
 			}
 			err = crypt(keys, state->alg->rounds, state->sec->iv1.data,
-				    PAD_ZERO, state->sec->databuf2, bf+i, left, &olen);
+				    pad, state->sec->databuf2, bf+i, left, &olen);
 			assert(!err);
-			assert(olen == left);
+			assert(olen == left || ((eof||lastdec) && olen >= 0));
+			if (olen < left) {
+				*towr -= (left-olen);
+				i -= (left-olen);
+			}
 		} else
 			++skipped;
 		i += left;
@@ -805,6 +830,8 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 	}
 	/* Copy remainder (incomplete block) into buffer */
 	int left = *towr - i;
+	if (0 && state->debug && eof)
+		FPLOG(DEBUG, "EOF Block with %i bytes ...\n", *towr);
 	if (left || eof) {
 		assert(left < BLKSZ-state->inbuf);
 		if (left)
