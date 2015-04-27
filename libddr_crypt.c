@@ -208,7 +208,7 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		else if (!memcmp(param, "keyhex=", 7)) {
 			/* FIXME: Need per alg hex to key conversion -- we may have bytes or u32 or u64 ... */
 			err += parse_hex_u32((unsigned int*)state->sec->userkey1, param+7, state->alg->keylen/(8*sizeof(int))); 
-			//err += parse_hex(state->sec->userkey1, param+7, state->alg->keylen/8); 
+			err += parse_hex(state->sec->userkey1, param+7, state->alg->keylen/8); 
 			err += set_flag(&state->kset, "key");
 		} else if (!memcmp(param, "keyfd=", 6)) {
 			err += read_fd(state->sec->userkey1, param+6, 32, "key");
@@ -596,7 +596,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			if (!state->keyf)
 				FPLOG(WARN, "Generated key not written anywhere?\n", NULL);
 			else 
-				if (write_keyfile(state, keynm, encnm, state->sec->userkey1, state->alg->keylen/8, 0600, 1, 1))
+				if (write_keyfile(state, keynm, encnm, state->sec->userkey1, state->alg->keylen/8, 0600, 1, 0))
 					return -1;
 		} else if (state->pset) {
 			if (!state->pbkdf2r) {
@@ -613,7 +613,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			}
 			/* Write to keysf if requested */
 			if (state->keyf)
-				if (write_keyfile(state, keynm, encnm, state->sec->userkey1, state->alg->keylen/8, 0600, 1, 1))
+				if (write_keyfile(state, keynm, encnm, state->sec->userkey1, state->alg->keylen/8, 0600, 1, 0))
 					return -1;
 			
 		} else if (state->keyf) {
@@ -626,7 +626,8 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 				FPLOG(FATAL, "Can't read key for %s from KEYS file!\n", encnm);
 				return -1;
 			}
-			err += parse_hex_u32((unsigned int*)state->sec->userkey1, state->sec->charbuf1, state->alg->keylen/(8*sizeof(int)));
+			//err += parse_hex_u32((unsigned int*)state->sec->userkey1, state->sec->charbuf1, state->alg->keylen/(8*sizeof(int)));
+			err += parse_hex(state->sec->userkey1, state->sec->charbuf1, state->alg->keylen/8);
 		} else {
 			FPLOG(FATAL, "Need to set key\n", NULL);
 			return -1;
@@ -634,7 +635,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	} else {
 		if (state->keyf)
 			/* Write to keyfile */
-			if (write_keyfile(state, keynm, encnm, state->sec->userkey1, state->alg->keylen/8, 0600, 1, 1))
+			if (write_keyfile(state, keynm, encnm, state->sec->userkey1, state->alg->keylen/8, 0600, 1, 0))
 				return -1;
 	}
 	/* 7th: iv (defaults to salt) */
