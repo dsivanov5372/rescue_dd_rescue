@@ -206,8 +206,8 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			}
 		}
 		else if (!memcmp(param, "keyhex=", 7)) {
-			/* FIXME: Need per alg hex to key conversion -- we may have bytes or u32 or u64 ... */
-			err += parse_hex_u32((unsigned int*)state->sec->userkey1, param+7, state->alg->keylen/(8*sizeof(int))); 
+			/* FIXME: We'd need per alg hex to key conversion -- we may have bytes or u32 or u64 ... */
+			//err += parse_hex_u32((unsigned int*)state->sec->userkey1, param+7, state->alg->keylen/(8*sizeof(int))); 
 			err += parse_hex(state->sec->userkey1, param+7, state->alg->keylen/8); 
 			err += set_flag(&state->kset, "key");
 		} else if (!memcmp(param, "keyfd=", 6)) {

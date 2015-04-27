@@ -370,7 +370,21 @@ and ddr_lzo to uncompress and extract holes again. This only works
 with CTR mode. 
 .
 .SH openssl compatibility
-TBW
+Files that are encrypted with openssl enc where you specify
+the key (with -K) and the IV (with -iv) result in the same
+output that ddr_crypt generates for -ECB and -CBC modes.
+Currently, -CTR produces a different output. openssl does zero
+out the last 32bit of the IV (to replace it with the counter),
+whereas ddr_crypt currently does not do that and just adds the
+counter to the start value (defined by the last 64bits ...).
+So to be compatible, you need to zero out the last 32bits
+of the IV you pass to ddr_crypt. (An option to do this
+automatically may be implemented in a future version of
+ddr_crypt.)
+.P
+ddr_crypt does not currently support the way that openssl
+prefixes files with Salted__ and a salt when using password
+and salt for key and IV generation.
 .
 .SH BUGS/LIMITATIONS
 .SS Maturity
