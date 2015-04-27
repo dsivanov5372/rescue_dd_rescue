@@ -44,6 +44,7 @@ typedef struct _stream_dsc {
 	uint granul;	/* bytes */
 	uchar seek_blk;
 	uchar type;
+	uchar needs_iv;
 	Crypt_IV_Prep_fn *iv_prep;
 } stream_dsc_t;
 

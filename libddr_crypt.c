@@ -638,7 +638,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 				return -1;
 	}
 	/* 7th: iv (defaults to salt) */
-	if (!state->iset) {
+	if (!state->iset && state->alg->stream->needs_iv) {
 		if (state->igen) {
 			/* Generate IV */
 			random_bytes(state->sec->nonce1, BLKSZ, 0);
@@ -685,7 +685,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			FPLOG(FATAL, "Need to determine IV\n", NULL);
 			return -1;
 		}
-	} else if (state->ivf)
+	} else if (state->ivf && state->alg->stream->needs_iv)
 		/* Save to IVs file */
 		if (write_keyfile(state, ivsnm, encnm, state->sec->nonce1, BLKSZ, 0640, 1, 0))
 			return -1;

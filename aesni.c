@@ -1306,7 +1306,7 @@ int  AESNI_CTR_CryptX2(const uchar* rkeys, unsigned int rounds,
 				    rkeys, rounds, iv, in, out, len);
 }
 
-stream_dsc_t aesni_stream_ctr = {  1, 1, STP_CTR, AESNI_CTR_Prep };
+stream_dsc_t aesni_stream_ctr = {  1, 1, STP_CTR, 1, AESNI_CTR_Prep };
 
 ciph_desc_t AESNI_Methods[] = {{"AES128-ECB"  , 128, 10, 16, 11*16, &aes_stream_ecb,
 					AESNI_128_EKey_Expansion_r, AESNI_128_DKey_Expansion_r,

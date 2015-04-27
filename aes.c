@@ -224,9 +224,9 @@ ciph_desc_t *findalg(ciph_desc_t* list, const char* nm)
 	return NULL;
 }
 
-stream_dsc_t aes_stream_ecb = { 16, 1, STP_ECB, NULL };
-stream_dsc_t aes_stream_cbc = { 16, 0, STP_CBC, NULL };
-stream_dsc_t aes_stream_ctr = {  1, 1, STP_CTR, AES_Gen_CTR_Prep };
+stream_dsc_t aes_stream_ecb = { 16, 1, STP_ECB, 0, NULL };
+stream_dsc_t aes_stream_cbc = { 16, 0, STP_CBC, 1, NULL };
+stream_dsc_t aes_stream_ctr = {  1, 1, STP_CTR, 1, AES_Gen_CTR_Prep };
 
 
 
