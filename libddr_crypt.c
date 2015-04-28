@@ -62,7 +62,7 @@ extern ddr_plugin_t ddr_plug;
 typedef struct _crypt_state {
 	ciph_desc_t *alg, *engine;
 	int seq;
-	char enc, debug, kgen, igen, keyf, ivf;
+	char enc, debug, kgen, igen, sgen, keyf, ivf;
 	char kset, iset, pset, sset;
 	char finfirst, rev, bench, skiphole;
 	clock_t cpu;
@@ -86,7 +86,8 @@ const char *crypt_help = "The crypt plugin for dd_rescue de/encrypts data copied
 		"\t:keyhex=HEX:keyfd=[x]INT[@INT@INT]:keyfile=NAME[@INT@INT]:keygen:keysfile\n"
 		"\t:ivhex=HEX:ivfd=[x]INT[@INT@INT]:ivfile=NAME[@INT@INT]:ivgen:ivsfile\n"
 		"\t:pass=STR:passhex=HEX:passfd=[x]INT[@INT@INT]:passfile=NAME[@INT@INT]\n"
-		"\t:salt=STR:salthex=HEX:saltfd=[x]INT[@INT@INT]:saltfile=NAME[@INT@INT]:saltlen=INT\n"
+		"\t:salt=STR:salthex=HEX:saltfd=[x]INT[@INT@INT]:saltfile=NAME[@INT@INT]\n"
+		"\t:saltlen=INT:saltgen\n"
 		"\t:pbkdf2[=INT]:debug:bench[mark]:skiphole\n"
 		" Use algorithm=help to get a list of supported crypt algorithms\n";
 
@@ -260,13 +261,15 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			err += read_fd(state->sec->salt, param+7, 64, "salt");
 			err += set_flag(&state->sset, "salt");
 		} else if (!memcmp(param, "saltfile=", 9)) {
-			if (!state->sset) {
+			if (!state->sset && !state->sgen) {
 				err += read_file(state->sec->salt, param+9, 64);
 				err += set_flag(&state->sset, "salt");
-			} else /* Later: save is sset */
+			} else /* sset is set, so save later */
 				state->sfnm = param+9;
 		} else if (!memcmp(param, "saltlen=", 8))
 			state->saltlen = ATOL(param+8);
+		else if (!strcmp(param, "saltgen"))
+			state->sgen = 1;
 		else if (!memcmp(param, "bench", 5))
 			state->bench = 1;
 		else if (!memcmp(param, "pbkdf2=", 7))
@@ -282,6 +285,11 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		param = next;
 	}
 	/* Now process params ... */
+	/* 0th: encryption or decryption? */
+	if (state->enc == (char)-1) {
+		FPLOG(FATAL, "Need to specify enc[rypt] or dec[rypt]\n", NULL);
+		return -1;
+	}
 	/* 1st: Set engine: Default: aesni/aes_c: Done */
 	/* 2nd: Set alg: Already done if set explicitly */
 	if (!err && !state->alg)
@@ -297,7 +305,11 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	/* 4th: pass: done */
 	/* 5th: salt (later: if not given: derive from outnm) */
 	/* 6th: key (later: defaults to pbkdf2(pass, salt) */
-	if (!state->pset && !state->kset && !state->keyf && (!state->kgen || !state->enc)) {
+	if (state->kgen && !state->enc) {
+		FPLOG(FATAL, "Decrypting with a generated key does not make sense\n", NULL);
+		return -1;
+	}
+	if (!state->pset && !state->kset && !state->keyf && !state->kgen) {
 		FPLOG(FATAL, "Need to set key or password\n", NULL);
 		--err;
 	}
@@ -431,7 +443,7 @@ int read_fd(unsigned char* res, const char* param, uint maxlen, const char* what
 	int fd = atol(param);
 	int ln = -1;
 	if (fd == 0 && isatty(fd)) {
-		FPLOG(INPUT, "Enter %s : ", what);
+		FPLOG(INPUT, "Enter %s: ", what);
 		if (hex) {
 			ln = hidden_input(fd, ibuf, 2*maxlen+2, 1);
 			ibuf[ln] = 0;
@@ -553,22 +565,35 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 		encln += BLKSZ-(encln&(BLKSZ-1));
 	else
 		ddr_plug.changes_output_len = 0;	
-
+	/* If we need to generate a salt ... */
 	if (state->saltlen != (size_t)-1)
 		encln = state->saltlen;
 
+	/* Password */
 	if (state->pset && state->pfnm) {
 		if (write_keyfile(state, state->pfnm, encnm, state->sec->passphr, strlen((const char*)state->sec->passphr), 0600, 0, 0))
 			return -1;
 	}
+
+	/* 5th: Salt possibilities:
+	 * (.) We may not need a salt as user opted to specify/read/generate key+IV ...
+	 * (a) It's been set already via salt=, saltfd=, salthex=, saltfile= (sset is set)
+	 * (b) It needs to be generated via prng (sgen)
+	 * (c) Nothing: Generate from file name and length
+	 */
 	
-	if (state->sset && state->sfnm) {
-		if (write_keyfile(state, state->sfnm, encnm, state->sec->salt, 64, 0640, 0, 0))
-			return -1;
+	char needsalt = state->pset && !((state->iset||state->igen) && (state->kset||state->kgen));
+
+	if (needsalt && state->sgen) {
+		assert(state->pset);
+		random_bytes(state->sec->salt, 64, 0);
+		state->sset = 1;
+		if (!state->sfnm)
+			FPLOG(WARN, "Generated salt not written anywhere?\n", NULL);
 	}
-	
+
 	/* 5th: salt (later: if not given: derive from outnm) */
-	if ((state->pset && !state->sset) && !(state->iset && state->kset)) {
+	if (needsalt && !state->sset) {
 		if (!strcmp(encnm, "-")) {
 			FPLOG(FATAL, "Can't initialize salt from name -\n", NULL);
 			return -1;
@@ -576,20 +601,26 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 		if (encln == 0)
 			FPLOG(WARN, "Weak salt from 0 len file\n", NULL);
 		/* TODO: Check for size changing plugins */
-		
 		gensalt(state->sec->salt, 64, encnm, NULL, encln);
 		if (encln)
 			FPLOG(INFO, "Derived salt from %s=%016zx\n", encnm, encln);
 		else	
 			FPLOG(INFO, "Derived salt from %s\n", encnm);
-	}		
-	/* 6th: key - defaults to pbkdf(pass, salt) */
-	if (!state->kset) {
-		if (state->kgen) {
-			if (!state->enc) {
-				FPLOG(FATAL, "Decrypting with generated key does not make sense!\n", NULL);
-				return -1;
-			}
+		state->sset = 1;
+	}
+
+	if (needsalt && state->sfnm) {
+		if (write_keyfile(state, state->sfnm, encnm, state->sec->salt, 64, 0640, 0, 0))
+			return -1;
+	}
+	/* 6th: key options
+	 + (a) has been set already
+	 * (b) generate from PRNG
+	 * (c) generate from pass+salt -- pbkdf2
+	 * (d) read from keyf
+	 */
+	if (!state->kset) {	/* (a) */
+		if (state->kgen) {	/* (b) */
 			/* Do key generation */
 			random_bytes(state->sec->userkey1, state->alg->keylen/8, 1);
 			/* Write to keysfile or warn ... */
@@ -598,7 +629,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			else 
 				if (write_keyfile(state, keynm, encnm, state->sec->userkey1, state->alg->keylen/8, 0600, 1, 0))
 					return -1;
-		} else if (state->pset) {
+		} else if (state->pset) {	/* (c) */
 			if (!state->pbkdf2r) {
 				FPLOG(FATAL, "Need to specify pbkdf2[=INT] to generate key/IV from pass/salt\n", NULL);
 				return -1;
@@ -616,7 +647,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 				if (write_keyfile(state, keynm, encnm, state->sec->userkey1, state->alg->keylen/8, 0600, 1, 0))
 					return -1;
 			
-		} else if (state->keyf) {
+		} else if (state->keyf) {	/* (d) */
 			/* Read from keyfile */
 			char* kfnm = keyfnm(keynm, encnm);
 			int off = get_chks(kfnm, encnm, state->sec->charbuf1);
@@ -628,7 +659,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			}
 			//err += parse_hex_u32((unsigned int*)state->sec->userkey1, state->sec->charbuf1, state->alg->keylen/(8*sizeof(int)));
 			err += parse_hex(state->sec->userkey1, state->sec->charbuf1, state->alg->keylen/8);
-		} else {
+		} else {	/* Should not happen! */
 			FPLOG(FATAL, "Need to set key\n", NULL);
 			return -1;
 		}
@@ -638,7 +669,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			if (write_keyfile(state, keynm, encnm, state->sec->userkey1, state->alg->keylen/8, 0600, 1, 0))
 				return -1;
 	}
-	/* 7th: iv (defaults to salt) */
+	/* 7th: iv -- same logic as for key applies (defaults to be generated from pass+salt) */
 	if (!state->iset && state->alg->stream->needs_iv) {
 		if (state->igen) {
 			/* Generate IV */
@@ -667,7 +698,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 				FPLOG(FATAL, "IV generation with pass+salt failed!\n", NULL);
 				return -1;
 			}
-			/* Write to keysf if requested */
+			/* Write to ivsfile if requested */
 			if (state->ivf)
 				if (write_keyfile(state, ivsnm, encnm, state->sec->nonce1, BLKSZ, 0640, 1, 0))
 					return -1;
@@ -696,11 +727,14 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 		state->alg->enc_key_setup(state->sec->userkey1, state->sec->ekeys->data, state->alg->rounds);
 	else
 		state->alg->dec_key_setup(state->sec->userkey1, state->sec->dkeys->data, state->alg->rounds);
+	/* Prepare for hole detection */
 	state->lastpos = state->enc? opt->init_opos: opt->init_ipos;
+	/* IV */
 	if (state->alg->stream->iv_prep)
 		state->alg->stream->iv_prep(state->sec->nonce1, state->sec->iv1.data, state->lastpos/BLKSZ);
 	else
 		memcpy(state->sec->iv1.data, state->sec->nonce1, BLKSZ);
+
 	/* No need to keep key/passphr in memory */
 	memset(state->sec->userkey1, 0, state->alg->keylen/8);
 	memset(state->sec->passphr, 0, 128);
