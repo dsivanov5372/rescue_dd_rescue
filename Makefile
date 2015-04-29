@@ -509,6 +509,8 @@ check_crypt: $(TARGETS)
 	$(VG) ./dd_rescue -tp -L ./libddr_crypt.so=dec:keysfile:ivsfile:alg=AES192+-CTR dd_rescue.enc dd_rescue.dec
 	cat dd_rescue dd_rescue > dd_rescue2
 	cmp dd_rescue2 dd_rescue.dec
+	# TODO: Move previous cases into script ...
+	./test_crypt.sh	
 	# Holes (all)
 	# Reverse (CTR, ECB)
 	# Chain with lzo, hash (all)

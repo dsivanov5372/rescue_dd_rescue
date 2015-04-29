@@ -161,6 +161,10 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		char* next = strchr(param, ':');
 		if (next)
 			*next++ = 0;
+		if (!*param) {
+			param = next;
+			continue;
+		}
 		if (!strcmp(param, "help")) {
 			FPLOG(INFO, "%s", crypt_help);
 			return -1;
@@ -851,7 +855,11 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 			}
 			err = crypt(keys, state->alg->rounds, state->sec->iv1.data,
 				    unpad, state->sec->databuf2, bf+i, left, &olen);
-			assert(!err);
+			if (err < 0 || (err > 0 && !unpad)) {
+				FPLOG(FATAL, "crypt returned %i (unpad=%i)!\n", err, unpad);
+				raise(SIGQUIT);
+			}
+			//assert(!err || (unpad != PAD_ZERO && err >= 0));
 			assert(olen == left || (unpad && olen >= 0));
 			if (olen < left) {
 				*towr -= (left-olen);
