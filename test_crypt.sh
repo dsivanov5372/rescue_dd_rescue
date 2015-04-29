@@ -31,6 +31,9 @@ enc_dec_compare_pass()
 
 TESTALGS="AES192-ECB AES192+-ECB AES192x2-ECB AES192-CBC AES192+-CBC AES192x2-CBC AES128-CTR AES128+-CTR AES128x2-CTR AES192-CTR AES192+-CTR AES192x2-CTR AES256-CTR AES256+-CTR AES256x2-CTR"
 
+echo "We will eat a lot of entropy ... hopefully you have some!"
+echo " Otherwise we might hang :-("
+
 for alg in $TESTALGS; do
 	enc_dec_compare_keys dd_rescue $alg keygen:ivgen 
 	enc_dec_compare_pass dd_rescue $alg "" pass=PWD:pbkdf2
