@@ -491,6 +491,26 @@ int read_file(unsigned char* res, const char* param, uint maxlen)
 	return ln>0? 0: -1;
 }
 
+int write_file(const unsigned char *data, const char* param, uint maxlen, int mode)
+{
+	off_t off = 0;
+	size_t sz = 0;
+	get_offs_len(param, &off, &sz);
+	if (!sz)
+		sz = maxlen;
+	int fd = open(param, O_RDWR|O_CREAT, mode);
+	if (fd < 0) {
+		FPLOG(FATAL, "Can't open %s for writing: %s\n", 
+			param, strerror(errno));
+		return -1;
+	}
+	off_t o = lseek(fd, off, SEEK_SET);
+	assert(o == off);
+	int ln = write(fd, data, sz);
+	//assert(ln == sz);
+	return ln==sz? 0: -1;
+}
+
 char* mystrncpy(unsigned char* res, const char* param, uint maxlen)
 {
 	size_t ln = strlen(param);
@@ -575,7 +595,11 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 
 	/* Password */
 	if (state->pset && state->pfnm) {
+		/*
 		if (write_keyfile(state, state->pfnm, encnm, state->sec->passphr, strlen((const char*)state->sec->passphr), 0600, 0, 0))
+			return -1;
+		 */
+		if (write_file(state->sec->passphr, state->pfnm, strlen((const char*)state->sec->passphr), 0600))
 			return -1;
 	}
 
@@ -614,7 +638,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	}
 
 	if (needsalt && state->sfnm) {
-		if (write_keyfile(state, state->sfnm, encnm, state->sec->salt, 64, 0640, 0, 0))
+		if (write_file(state->sec->salt, state->sfnm, 64, 0640))
 			return -1;
 	}
 	/* 6th: key options
