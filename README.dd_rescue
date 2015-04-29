@@ -208,9 +208,13 @@ dd_rescue has a few nifty features:
 * Version 1.45 added sha1 to ddr_hash as well as the chk_xattr:chknm=:check
   and outnm:set_xattr parameters that allow to conveniently store and validate
   hashes on files.
-* Version 1.46 adds rdrand() to the PRNG initiatlization (if 0 seed is 
-  specified) if available and add the possibility to generate/check HMACs
+* Version 1.46 added rdrand() to the PRNG initiatlization (if 0 seed is 
+  specified) if available and added the possibility to generate/check HMACs
   instead of plain hashes.
+* Version 1.47 brought a speed-up of the userspace PRNG, so if your storage
+  subsystem writes several GB/s, you see better performane for secure deletion.
+  More importantly, it introduced a crypt plugin, allowing to en/decrypt data
+  with various AES variants.
 
 
 Copyright
