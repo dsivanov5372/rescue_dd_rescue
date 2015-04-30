@@ -62,7 +62,7 @@ extern ddr_plugin_t ddr_plug;
 typedef struct _crypt_state {
 	ciph_desc_t *alg, *engine;
 	int seq;
-	char enc, debug, kgen, igen, sgen, keyf, ivf;
+	char enc, debug, kgen, igen, sgen, keyf, ivf, saltf;
 	char kset, iset, pset, sset;
 	char finfirst, rev, bench, skiphole;
 	clock_t cpu;
@@ -87,7 +87,7 @@ const char *crypt_help = "The crypt plugin for dd_rescue de/encrypts data copied
 		"\t:ivhex=HEX:ivfd=[x]INT[@INT@INT]:ivfile=NAME[@INT@INT]:ivgen:ivsfile\n"
 		"\t:pass=STR:passhex=HEX:passfd=[x]INT[@INT@INT]:passfile=NAME[@INT@INT]\n"
 		"\t:salt=STR:salthex=HEX:saltfd=[x]INT[@INT@INT]:saltfile=NAME[@INT@INT]\n"
-		"\t:saltlen=INT:saltgen\n"
+		"\t:saltlen=INT:saltgen:saltsfile\n"
 		"\t:pbkdf2[=INT]:debug:bench[mark]:skiphole\n"
 		" Use algorithm=help to get a list of supported crypt algorithms\n";
 
@@ -100,6 +100,7 @@ int parse_hex_u32(unsigned int*, const char*, uint maxlen);
 int read_fd(unsigned char*, const char*, uint maxlen, const char*);
 int read_file(unsigned char*, const char*, uint maxlen);
 char* mystrncpy(unsigned char*, const char*, uint maxlen);
+int stripcrlf(char* str, uint maxlen);
 
 int set_flag(char* flg, const char* msg)
 {
@@ -247,10 +248,12 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			err += set_flag(&state->pset, "password");
 		} else if (!memcmp(param, "passfd=", 7)) {
 			err += read_fd(state->sec->passphr, param+7, 128, "passphrase");
+			stripcrlf((char*)state->sec->passphr, 128);
 			err += set_flag(&state->pset, "password");
 		} else if (!memcmp(param, "passfile=", 9)) {
 			if (!state->pset) {
 				err += read_file(state->sec->passphr, param+9, 128);
+				stripcrlf((char*)state->sec->passphr, 128);
 				err += set_flag(&state->pset, "password");
 			} else /* Later: save if pset */
 				state->pfnm = param+9;
@@ -270,7 +273,9 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 				err += set_flag(&state->sset, "salt");
 			} else /* sset is set, so save later */
 				state->sfnm = param+9;
-		} else if (!memcmp(param, "saltlen=", 8))
+		} else if (!strcmp(param, "saltsfile"))
+			state->saltf = 1;
+		else if (!memcmp(param, "saltlen=", 8))
 			state->saltlen = ATOL(param+8);
 		else if (!strcmp(param, "saltgen"))
 			state->sgen = 1;
@@ -520,6 +525,21 @@ char* mystrncpy(unsigned char* res, const char* param, uint maxlen)
 	return (char*)res;
 }
 
+int stripcrlf(char* str, uint maxlen)
+{
+	/* Note: We may read beyond str -- but we have zeros in secmem, so it's harmless */
+	size_t ln = strlen(str);
+	if (ln >= maxlen)
+		return 0;
+	size_t oln = ln;
+	/* This removes a trailing \n (Unix), \r (Mac) or \r\n (DOS). */
+	if (str[ln-1] == '\n')
+		str[--ln] = 0;
+	if (str[ln-1] == '\r')
+		str[--ln] = 0;
+	return (oln == ln? 0: 1);
+}
+
 /* Constructs name for KEYS and IVS files (in alocated mem) */
 char *keyfnm(const char* base, const char *encnm)
 {
@@ -572,13 +592,14 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	     const fstate_t *fst, void **stat)
 {
 	int err = 0;
-	char ivsnm[32], keynm[32];
+	char ivsnm[32], keynm[32], saltnm[32];
 	clock_t t1 = 0;
 	crypt_state *state = (crypt_state*)*stat;
 	state->opts = opt;
 
 	sprintf(ivsnm, "IVS.%s", state->alg->name);
 	sprintf(keynm, "KEYS.%s", state->alg->name);
+	sprintf(saltnm, "SALT.%s", state->alg->name);
 
 	if (state->bench)
 		t1 = clock();
@@ -606,19 +627,22 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	/* 5th: Salt possibilities:
 	 * (.) We may not need a salt as user opted to specify/read/generate key+IV ...
 	 * (a) It's been set already via salt=, saltfd=, salthex=, saltfile= (sset is set)
-	 * (b) It needs to be generated via prng (sgen)
-	 * (c) Nothing: Generate from file name and length
+	 * (b) We can read it from saltsfile (SALT.$ALG)
+	 * (c) It needs to be generated via prng (sgen)
+	 * (d) Nothing: Generate from file name and length
 	 */
 	
 	char needsalt = state->pset && !((state->iset||state->igen) && (state->kset||state->kgen));
 
 	if (needsalt && state->sgen) {
-		assert(state->pset);
+		/* FIXME: Should we shorten this to 8 bytes? */
 		random_bytes(state->sec->salt, 64, 0);
 		state->sset = 1;
 		if (!state->sfnm)
 			FPLOG(WARN, "Generated salt not written anywhere?\n", NULL);
 	}
+
+	/* FIXME: Need to handle saltf here! */
 
 	/* 5th: salt (later: if not given: derive from outnm) */
 	if (needsalt && !state->sset) {
