@@ -243,7 +243,6 @@ Password and salt can be specified with a string
 and 
 .B salt=
 or using the 
-.B passhex=
 .B passfd=
 .B passfile=
 and 
@@ -252,11 +251,16 @@ and
 .B saltfile=
 options with the same possible parameters as above for direct specification
 of key and IV. (Note that the salt is hashed, like when derived from filename
-and length.)
+and length.) The password/passphrase is treated as a string, null-terminated
+and with a trailing CRLF stripped off.
 .P
 If the automatically generated salt is used (based on filename and file
 length), the assumed file length for salt generation can be overriden by
 .B saltlen= .
+.P
+Alternatively, the salts can also be stored and retrieved from an MD5SUMS style
+index file (like with keysfile and ivsfile) by specifying
+.B saltsfile .
 
 .SH ALGORITHMS AND STREAM MODES
 The AES (Rijndael) family of algorithms is considered cryptographically

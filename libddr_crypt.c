@@ -85,7 +85,7 @@ const char *crypt_help = "The crypt plugin for dd_rescue de/encrypts data copied
 		" Parameters: [alg[o[rithm]]=]ALG:enc[rypt]:dec[rypt]:engine=STR:pad=STR\n"
 		"\t:keyhex=HEX:keyfd=[x]INT[@INT@INT]:keyfile=NAME[@INT@INT]:keygen:keysfile\n"
 		"\t:ivhex=HEX:ivfd=[x]INT[@INT@INT]:ivfile=NAME[@INT@INT]:ivgen:ivsfile\n"
-		"\t:pass=STR:passhex=HEX:passfd=[x]INT[@INT@INT]:passfile=NAME[@INT@INT]\n"
+		"\t:pass=STR:passfd=[x]INT[@INT@INT]:passfile=NAME[@INT@INT]\n"
 		"\t:salt=STR:salthex=HEX:saltfd=[x]INT[@INT@INT]:saltfile=NAME[@INT@INT]\n"
 		"\t:saltlen=INT:saltgen:saltsfile\n"
 		"\t:pbkdf2[=INT]:debug:bench[mark]:skiphole\n"
@@ -243,9 +243,12 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		else if (!memcmp(param, "pass=", 5)) {
 			mystrncpy(state->sec->passphr, param+5, 128);
 			err += set_flag(&state->pset, "password");
+#if 0
 		} else if (!memcmp(param, "passhex=", 8)) {
+			/* FIXME: This will error out on shorter passphrases! */
 			err += parse_hex(state->sec->passphr, param+8, 128);
 			err += set_flag(&state->pset, "password");
+#endif
 		} else if (!memcmp(param, "passfd=", 7)) {
 			err += read_fd(state->sec->passphr, param+7, 128, "passphrase");
 			stripcrlf((char*)state->sec->passphr, 128);
@@ -531,6 +534,8 @@ int stripcrlf(char* str, uint maxlen)
 	size_t ln = strlen(str);
 	if (ln >= maxlen)
 		return 0;
+	if (ln+1 < maxlen)
+		memset(str+ln+1, 0, maxlen-ln-1);
 	size_t oln = ln;
 	/* This removes a trailing \n (Unix), \r (Mac) or \r\n (DOS). */
 	if (str[ln-1] == '\n')
