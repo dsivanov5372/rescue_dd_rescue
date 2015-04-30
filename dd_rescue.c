@@ -393,6 +393,8 @@ char plug_unsparse = 0;
 char plug_output_chg = 0;
 char plugin_help = 0;
 char plug_no_seek = 0;
+char no_input = 0;
+char no_output = 0;
 
 char plugins_loaded = 0;
 char plugins_opened = 0;
@@ -551,6 +553,11 @@ ddr_plugin_t* insert_plugin(void* hdl, const char* nm, char* param, opt_t *op)
 
 	if (!plug->supports_seek)
 		plug_no_seek++;
+
+	if (plug->replaces_input)
+		no_input++;
+	if (plug->replaces_output)
+		no_output++;
 
 	LISTAPPEND(ddr_plugins, *plug, ddr_plugin_t);
 	plugins_loaded++;
@@ -2917,6 +2924,13 @@ int main(int argc, char* argv[])
 		exit(13);
 	}
 #endif
+
+	if (no_input || no_output) {
+		fplog(stderr, FATAL, "plugins that replace in/output not yet supported!\n");
+		shortusage();
+		unload_plugins();
+		exit(12);
+	}
 
 	if (!opts->iname || !opts->oname) {
 		fplog(stderr, FATAL, "both input and output files have to be specified!\n");

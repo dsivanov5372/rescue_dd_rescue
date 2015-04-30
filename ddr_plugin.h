@@ -104,6 +104,10 @@ typedef struct _ddr_plugin {
 	char changes_output_len:1;
 	/* Support random access / reverse */
 	char supports_seek:1;
+	/* Don't use first non-option arg as input */
+	char replaces_input:1;
+	/* Don't use second non-option arg as output */
+	char replaces_output:1;
 	/* Internal individual state of plugin */
 	void* state;
 	/* Will be called after loading the plugin */
