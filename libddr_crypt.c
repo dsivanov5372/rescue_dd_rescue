@@ -219,7 +219,7 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			err += read_fd(state->sec->userkey1, param+6, 32, "key");
 			err += set_flag(&state->kset, "key");
 		} else if (!memcmp(param, "keyfile=", 8)) {
-			err += read_file(state->sec->userkey1, param+8, 32);
+			err += read_file(state->sec->userkey1, param+8, state->alg->keylen/8);
 			err += set_flag(&state->kset, "key");
 		} else if (!strcmp(param, "keygen"))
 			state->kgen = 1;
@@ -641,7 +641,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	if (needsalt && state->sgen) {
 		random_bytes(state->sec->salt, 8, 0);
 		state->sset = 1;
-		if (!state->sfnm)
+		if (!state->sfnm && !state->saltf)
 			FPLOG(WARN, "Generated salt not written anywhere?\n", NULL);
 	}
 
