@@ -212,7 +212,6 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			}
 		}
 		else if (!memcmp(param, "keyhex=", 7)) {
-			/* FIXME: We'd need per alg hex to key conversion -- we may have bytes or u32 or u64 ... */
 			//err += parse_hex_u32((unsigned int*)state->sec->userkey1, param+7, state->alg->keylen/(8*sizeof(int))); 
 			err += parse_hex(state->sec->userkey1, param+7, state->alg->keylen/8); 
 			err += set_flag(&state->kset, "key");
@@ -262,17 +261,17 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 				state->pfnm = param+9;
 		} else if (!memcmp(param, "salt=", 5)) {
 			//mystrncpy(state->sec->salt, param+5, 64);
-			gensalt(state->sec->salt, 64, param+5, NULL, 0); 
+			gensalt(state->sec->salt, 8, param+5, NULL, 0); 
 			err += set_flag(&state->sset, "salt");
 		} else if (!memcmp(param, "salthex=", 8)) {
-			err += parse_hex(state->sec->salt, param+8, 64);
+			err += parse_hex(state->sec->salt, param+8, 8);
 			err += set_flag(&state->sset, "salt");
 		} else if (!memcmp(param, "saltfd=", 7)) {
-			err += read_fd(state->sec->salt, param+7, 64, "salt");
+			err += read_fd(state->sec->salt, param+7, 8, "salt");
 			err += set_flag(&state->sset, "salt");
 		} else if (!memcmp(param, "saltfile=", 9)) {
 			if (!state->sset && !state->sgen) {
-				err += read_file(state->sec->salt, param+9, 64);
+				err += read_file(state->sec->salt, param+9, 8);
 				err += set_flag(&state->sset, "salt");
 			} else /* sset is set, so save later */
 				state->sfnm = param+9;
@@ -640,14 +639,25 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	char needsalt = state->pset && !((state->iset||state->igen) && (state->kset||state->kgen));
 
 	if (needsalt && state->sgen) {
-		/* FIXME: Should we shorten this to 8 bytes? */
-		random_bytes(state->sec->salt, 64, 0);
+		random_bytes(state->sec->salt, 8, 0);
 		state->sset = 1;
 		if (!state->sfnm)
 			FPLOG(WARN, "Generated salt not written anywhere?\n", NULL);
 	}
 
 	/* FIXME: Need to handle saltf here! */
+	if (needsalt && !state->sgen && !state->sset && state->saltf) {
+		char* sfnm = keyfnm(saltnm, encnm);
+		int off = get_chks(sfnm, encnm, state->sec->charbuf1);
+		/* Failure is NOT fatal */
+		if (off >= 0) {
+			err += parse_hex(state->sec->salt, state->sec->charbuf1, 8);
+			state->sset = 1;
+		} else 
+			FPLOG(WARN, "Could not find salt for %s in %s\n", encnm, sfnm);
+
+		free(sfnm);
+	}
 
 	/* 5th: salt (later: if not given: derive from outnm) */
 	if (needsalt && !state->sset) {
@@ -658,7 +668,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 		if (encln == 0)
 			FPLOG(WARN, "Weak salt from 0 len file\n", NULL);
 		/* TODO: Check for size changing plugins */
-		gensalt(state->sec->salt, 64, encnm, NULL, encln);
+		gensalt(state->sec->salt, 8, encnm, NULL, encln);
 		if (encln)
 			FPLOG(INFO, "Derived salt from %s=%016zx\n", encnm, encln);
 		else	
@@ -667,9 +677,14 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	}
 
 	if (needsalt && state->sfnm) {
-		if (write_file(state->sec->salt, state->sfnm, 64, 0640))
+		if (write_file(state->sec->salt, state->sfnm, 8, 0640))
 			return -1;
 	}
+	if (needsalt && state->saltf) {
+		if (write_keyfile(state, saltnm, encnm, state->sec->salt, 8, 0640, 1, 0))
+			return -1;
+	}
+
 	/* 6th: key options
 	 + (a) has been set already
 	 * (b) generate from PRNG
@@ -693,7 +708,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			}
 			/* Do pbkdf2 stuff to generate key */
 			hashalg_t sha256_halg = SHA256_HALG_T;
-			int err = pbkdf2(&sha256_halg, state->sec->passphr, 128, state->sec->salt, 64, 
+			int err = pbkdf2(&sha256_halg, state->sec->passphr, 128, state->sec->salt, 8, 
 					 state->pbkdf2r, state->sec->userkey1, state->alg->keylen/8);
 			if (err) {
 				FPLOG(FATAL, "Key generation with pass+salt failed!\n", NULL);
@@ -748,7 +763,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			/* FIXME: Should use different p/s? */
 			const unsigned char* xorb = (const unsigned char*) "Hdo7DHk. 9dEaj*/B=psdGsf,yM4#q)1<tW_J%";
 			memxor(state->sec->salt, xorb, BLKSZ);
-			int err = pbkdf2(&sha256_halg, state->sec->passphr, 128, state->sec->salt, 64, 
+			int err = pbkdf2(&sha256_halg, state->sec->passphr, 128, state->sec->salt, 8, 
 					 state->pbkdf2r/3, state->sec->nonce1, BLKSZ);
 			memxor(state->sec->salt, xorb, BLKSZ);
 			if (err) {
