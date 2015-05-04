@@ -79,6 +79,8 @@ int AES_OSSL_##BITCHAIN##_Encrypt(const unsigned char* ctx, unsigned int rounds,
 	if (0 && olen+elen < len)				\
 		fprintf(stderr, "Encryption length mismatch %i+%i != %zi\n",	\
 			olen, elen, len);			\
+	if (IV)							\
+		memcpy(iv, evpctx->iv, 16);			\
 	return (DOPAD && (pad == PAD_ALWAYS || (len&15)))? 16-(len&15): 0;	\
 };								\
 int AES_OSSL_##BITCHAIN##_Decrypt(const unsigned char* ctx, unsigned int rounds,\
@@ -129,6 +131,8 @@ int AES_OSSL_##BITCHAIN##_Decrypt(const unsigned char* ctx, unsigned int rounds,
 		*flen = olen + elen;				\
 	} else							\
 		*flen = len;					\
+	if (IV)							\
+		memcpy(iv, evpctx->iv, 16);			\
 	if (DOPAD && pad == PAD_ASNEEDED)			\
 		return (elen? 16-elen: 1);			\
 	return ores - 1;					\
@@ -263,6 +267,8 @@ int  AES_OSSL_##BITCHAIN##_EncryptX2(const unsigned char* ctx, unsigned int roun
 	*flen = olen+elen;					\
 	if (pad == PAD_ASNEEDED && !(len&15))			\
 		*flen -= 16;					\
+	if (IV)							\
+		memcpy(iv, evpctx->iv, 16);			\
 	return (pad == PAD_ALWAYS || (len&15))? 16-(len&15): 0;	\
 };								\
 int  AES_OSSL_##BITCHAIN##_DecryptX2(const unsigned char* ctx, unsigned int rounds,	\
@@ -318,6 +324,8 @@ int  AES_OSSL_##BITCHAIN##_DecryptX2(const unsigned char* ctx, unsigned int roun
 		*flen = olen+elen;				\
 	else							\
 		*flen = len;					\
+	if (IV)							\
+		memcpy(iv, evpctx->iv, 16);			\
 	if (pad == PAD_ASNEEDED)				\
 		return (elen? 16-elen: 1);			\
 	return ores - 1;					\

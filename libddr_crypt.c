@@ -946,7 +946,7 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 	int left = *towr - i;
 	if (0 && state->debug && eof)
 		FPLOG(DEBUG, "EOF Block with %i bytes ...\n", *towr);
-	if (left || eof) {
+	if (left || (eof && state->inbuf)) {
 		assert(left < BLKSZ-state->inbuf);
 		if (left)
 			memcpy(state->sec->databuf1+state->inbuf, bf+i, left);
