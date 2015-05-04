@@ -14,6 +14,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <errno.h>
 #ifdef HAVE_LINUX_RANDOM_H
 #include <linux/random.h>
 #endif
@@ -84,8 +85,10 @@ unsigned int random_bytes(unsigned char* buf, unsigned int ln, unsigned char nou
 	unsigned i;
 	for (i = 0; i < (ln+3)/4; ++i) {
 		unsigned int rnd;
-		if (READ_RAND(fd, &rnd, 4, flg) != 4) {
-			fprintf(stderr, "FATAL: Error getting random numbers\n");
+		int err = READ_RAND(fd, &rnd, 4, flg);
+		if (err != 4) {
+			fprintf(stderr, "FATAL: Error getting random numbers (%i): %i %s\n", 
+				nourand, err, strerror(errno));
 			RAND_CLOSE(fd);
 			raise(SIGQUIT);
 		}
