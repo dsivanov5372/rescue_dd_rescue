@@ -9,9 +9,9 @@ enc_dec_compare()
 	if test -n "$5"; then eng=":engine=$5"; else unset eng; fi
 	echo "Validating enc/decryption $eng $alg $othargs"
 	cp -p $file.enc $file.enc.old 2>/dev/null
-	echo $VG ./dd_rescue -pt -L ./libddr_crypt.so=enc$eng:alg=$alg:$keyargs$othargs $file $file.enc || exit 1
+	echo $VG ./dd_rescue -pt -L ./libddr_crypt.so=enc$eng:alg=$alg:$keyargs$othargs $file $file.enc 
 	$VG ./dd_rescue -pt -L ./libddr_crypt.so=enc$eng:alg=$alg:$keyargs$othargs $file $file.enc || exit 1
-	echo $VG ./dd_rescue -pt -L ./libddr_crypt.so=dec$eng:alg=$alg$othargs $file.enc $file.cmp || exit 2
+	echo $VG ./dd_rescue -pt -L ./libddr_crypt.so=dec$eng:alg=$alg$othargs $file.enc $file.cmp 
 	$VG ./dd_rescue -pt -L ./libddr_crypt.so=dec$eng:alg=$alg$othargs $file.enc $file.cmp || exit 2
 	cmp $file $file.cmp || exit 3
 }
@@ -29,7 +29,26 @@ TESTALGS="$ECB_ALGS $CBC_ALGS $CTR_ALGS"
 echo "We will eat a lot of entropy ... hopefully you have some!"
 echo " Otherwise we might hang :-("
 
+# MAIN TEST
+# Reverse (CTR, ECB)
+# Appending (CTR, ECB only when block-aligned)
+# Holes (all), skiphole
+# Reverse (CTR, ECB)
+# Chain with lzo, hash (all)
+# Various ways to pass in keys/IVs
+# Padding variations
+# OpenSSL compatibility
+echo "*** OpenSSL compatibility ***"
+openssl enc -aes-192-ctr -K 4d20e517cd98ff130ac160dcb4177ef1ab4e8f9501bc6e1d -iv f61059ec2d87a410853b8f1500000000 -in dd_rescue -out dd_rescue.enc.o || exit 1
+enc_dec_compare dd_rescue AES192-CTR "" keyhex=4d20e517cd98ff130ac160dcb4177ef1ab4e8f9501bc6e1d:ivhex=f61059ec2d87a410853b8f1500000000  || exit 2
+cmp dd_rescue.enc dd_rescue.enc.o || exit 3
+openssl enc -aes-192-cbc -K 4d20e517cd98ff130ac160dcb4177ef1ab4e8f9501bc6e1d -iv f61059ec2d87a410853b8f150752bd8f -in dd_rescue -out dd_rescue.enc.o || exit 1
+enc_dec_compare dd_rescue AES192-CBC "" keyhex=4d20e517cd98ff130ac160dcb4177ef1ab4e8f9501bc6e1d:ivhex=f61059ec2d87a410853b8f150752bd8f || exit 2
+cmp dd_rescue.enc dd_rescue.enc.o || exit 3
+echo "*** Algorithms ... ***"
+# Algs and Engines
 for alg in $TESTALGS; do
+	echo "** $alg **"
 	# Generate key+IV, save to index file and use for decryption
 	enc_dec_compare_keys dd_rescue $alg keygen:ivgen
 	## Generate key+IV, save to binary files 
@@ -40,14 +59,5 @@ for alg in $TESTALGS; do
 	enc_dec_compare dd_rescue $alg saltgen pass=PWD:pbkdf2:saltfile=SALT
 	# Use random numbers and write to index file
 	enc_dec_compare dd_rescue $alg saltgen pass=PWD:pbkdf2:saltsfile
-	# Reverse (CTR, ECB)
-	# Appending (CTR, ECB only when block-aligned)
-	# Holes (all), skiphole
-	# Reverse (CTR, ECB)
-	# Chain with lzo, hash (all)
-	# Various ways to pass in keys/IVs
-	# Padding variations
-	# OpenSSL compatibility
-	# Algs and Engines
 done
-
+rm -f dd_rescue.enc dd_rescue.enc.o dd_rescue.enc.old dd_rescue.cmp SALT SALT.* KEYS.* IVS.*
