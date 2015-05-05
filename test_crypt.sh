@@ -33,7 +33,7 @@ echo " Otherwise we might hang :-("
 # Reverse (CTR, ECB)
 echo "*** Reverse ***"
 enc_dec_compare_keys dd_rescue AES192-CTR keygen:ivgen "" "" "-qptAr"
-#enc_dec_compare_keys dd_rescue AES192-ECB keygen:ivgen "" "" "-qptAr"
+enc_dec_compare_keys dd_rescue AES192-ECB keygen:ivgen "" "" "-qptAr"
 # Appending (CTR, ECB only when block-aligned)
 # Holes (all), skiphole
 # Reverse (CTR, ECB)

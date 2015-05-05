@@ -868,9 +868,10 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 	clock_t t1 = 0;
 	ssize_t olen = 0;
 	/* FIXME: Hack -- detect last block on decoding to be able to strip padding.
-	 * Cleaner (nut more complex) aalternative would be to always buffer the last 
+	 * Cleaner (but more complex) alternative would be to always buffer the last
 	 * 16 bytes and only flush them on receiving eof flag */ 
 	char lastdec = state->enc? 0: (fst->ipos+*towr == fst->ilen? 1: 0);
+	//char lastencrev = (state->enc && state->rev) ? (fst->opos == fst->init_opos? 1: 0): 0;
 	unsigned char* keys = state->enc? state->sec->ekeys->data: state->sec->dkeys->data;
 	Crypt_IV_fn *crypt = state->enc? state->alg->encrypt: state->alg->decrypt;	
 	loff_t currpos = state->enc? fst->opos: fst->ipos;
@@ -878,15 +879,17 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 		currpos -= *towr;
 	if (state->bench)
 		t1 = clock();
-	/* FIXME: Can we seek with CTR? */
 	if (0 && state->debug)
-		FPLOG(DEBUG, "pos: %zi %zi vs %zi (%i)\n", fst->ipos, fst->opos, state->lastpos, state->lastpos/BLKSZ);
+		FPLOG(DEBUG, "pos: %li %li vs %li (%i) towr %i\n", (unsigned long)fst->ipos,
+			(unsigned long)fst->opos, (unsigned long)state->lastpos,
+			(unsigned long)state->lastpos/BLKSZ, *towr);
 	if (currpos != state->lastpos) {
 		if (state->alg->stream->seek_blk) {	/* CTR and ECB */
 			if (state->alg->stream->iv_prep)
 				state->alg->stream->iv_prep(state->sec->nonce1, state->sec->iv1.data, currpos/BLKSZ);
 			if (state->debug)
-				FPLOG(INFO, "Adjusted offset %zi -> %zi (%i)\n", state->lastpos, currpos, currpos/BLKSZ);
+				FPLOG(INFO, "Adjusted offset %li -> %li (%i)\n", (unsigned long)state->lastpos,
+					(unsigned int)currpos, (unsigned int)currpos/BLKSZ);
 			state->lastpos = currpos;
 		} else {
 			FPLOG(FATAL, "Unexpected offset %zi\n", currpos);
@@ -968,18 +971,27 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 	int left = *towr - i;
 	if (0 && state->debug && eof)
 		FPLOG(DEBUG, "EOF Block with %i bytes ...\n", *towr);
+	if (0 && state->debug)
+		FPLOG(DEBUG, "left %i finfirst %i eof %i\n", left, state->finfirst, eof);
 	if (left || (eof && state->inbuf) || (state->enc && state->pad)) {
 		assert(left < BLKSZ-state->inbuf);
 		if (left)
 			memcpy(state->sec->databuf1+state->inbuf, bf+i, left);
 		*towr -= left;
 		left += state->inbuf;
+		if (0 && state->debug)
+			FPLOG(DEBUG, "left %i finfirst %i eof %i",
+				left, state->finfirst, eof);
 		if (eof || state->finfirst) {
 			memset(state->sec->databuf1+left, 0, BLKSZ-left);
 			err = crypt(keys, state->alg->rounds, state->sec->iv1.data,
 				    state->pad, state->sec->databuf1, bf+i, left, &olen);
 			assert(err >= 0);	/* >0 => padding happened */
 			*towr += olen;
+			if (0 && state->debug)
+				FPLOG(NOHDR, " olen %i err %i towr %i\n", olen, err, *towr);
+			if (state->enc && state->rev)
+				fst->opos += olen-left;
 			left = 0;
 			state->finfirst = 0;
 		}
