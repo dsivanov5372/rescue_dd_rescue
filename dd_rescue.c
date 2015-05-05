@@ -1489,6 +1489,7 @@ ssize_t writeblock(int towrite,
 		} while ((err == -1 && (errno == EINTR || errno == EAGAIN))
 			  || (wr < towrite && err > 0 && errno == 0));
 		totwr += wr;
+		//fplog(stderr, DEBUG, "wrote %i/%i orig %i\n", wr, towrite, prev_tow);
 		if (wr < towrite && err != 0) {
 			/* Write error: handle ? .. */
 			lasterr = errno;
@@ -1575,6 +1576,11 @@ static void advancepos(const ssize_t rd, const ssize_t wr, const ssize_t rwr,
 		       opt_t *op, fstate_t *fst, progress_t *prg)
 {
 	prg->sxfer += rwr; prg->xfer += rd;
+#if 0
+	fplog(stderr, DEBUG, "Adv %i+%i->%i, %i+%i->%i\n",
+		(int)fst->ipos, op->reverse? (int)-rd: (int)rd, op->reverse? (int)(fst->ipos-rd): (int)(fst->ipos+rd),
+		(int)fst->opos, op->reverse? (int)-wr: (int)wr, op->reverse? (int)(fst->opos-wr): (int)(fst->opos+wr));
+#endif
 	if (op->reverse) { 
 		fst->ipos -= rd; fst->opos -= wr; 
 	} else { 
@@ -1616,7 +1622,7 @@ ssize_t dowrite(const ssize_t rd, opt_t *op, fstate_t *fst,
 		errno = 0;
 		/* FIXME: This breaks for opts->reverse direction */
 		if (!op->reverse)
-			advancepos(wr, wr, wr, op, fst, prg);
+			advancepos(rd, wr, wr, op, fst, prg);
 		else
 			return 0;
 	} else
@@ -1680,7 +1686,7 @@ int dowrite_retry(const ssize_t rd, opt_t *op, fstate_t *fst,
 		return 0;
 	if ((rd <= (ssize_t)op->hardbs) || (weno != ENOSPC && weno != EFBIG)) {
 		/* No retry, move on */
-		advancepos(rd-wr, rd-wr, 0, op, fst, prg);
+		//advancepos(rd-wr, rd-wr, 0, op, fst, prg);
 		return is_writeerr_fatal(weno, op)? -1: 1;
 	} else {
 		ssize_t rwr = wr;
