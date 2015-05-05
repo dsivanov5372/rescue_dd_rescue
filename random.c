@@ -19,6 +19,15 @@
 #include <linux/random.h>
 #endif
 
+static void msleep(unsigned int msecs)
+{
+	struct timespec ts1, ts2;
+	ts1.tv_sec = msecs/1000;
+	ts1.tv_nsec= (msecs%1000)*1000000;
+	nanosleep(&ts1, &ts2);
+}
+
+
 #if (defined(__x86_64__) || defined(__i386__)) && !defined(NO_RDRND)
 unsigned int rdrand32();
 #else
@@ -89,7 +98,7 @@ unsigned int random_bytes(unsigned char* buf, unsigned int ln, unsigned char nou
 		int err = READ_RAND(fd, &rnd, 4, flg);
 		if (nourand && err < 4) {
 			fprintf(stderr, "WARN: Short on entropy, generate some more!\n");
-			sleep(1);
+			msleep(100);
 			if (err > 0)
 				err += READ_RAND(fd, ((unsigned char*)(&rnd))+err, 4-err, flg);
 			else
