@@ -101,7 +101,7 @@ int read_fd(unsigned char*, const char*, uint maxlen, const char*);
 int read_file(unsigned char*, const char*, uint maxlen);
 char* mystrncpy(unsigned char*, const char*, uint maxlen);
 int stripcrlf(char* str, uint maxlen);
-void whiteout(char* str);
+void whiteout(char* str, char quiet);
 
 int set_flag(char* flg, const char* msg)
 {
@@ -189,6 +189,7 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 				FPLOG(FATAL, "Engine %s unknown, specify aesni/aes_c/openssl\n",
 					param+7);
 				--err;
+				param = next;
 				continue;
 			}
 		}
@@ -209,13 +210,14 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 				FPLOG(FATAL, "Illegal padding %s: Specify zero/always/asneeded!\n",
 					param+4);
 				--err;
+				param = next;
 				continue;
 			}
 		}
 		else if (!memcmp(param, "keyhex=", 7)) {
 			//err += parse_hex_u32((unsigned int*)state->sec->userkey1, param+7, state->alg->keylen/(8*sizeof(int))); 
 			err += parse_hex(state->sec->userkey1, param+7, state->alg->keylen/8); 
-			whiteout(param+7);
+			whiteout(param+7, opt->quiet);
 			err += set_flag(&state->kset, "key");
 		} else if (!memcmp(param, "keyfd=", 6)) {
 			err += read_fd(state->sec->userkey1, param+6, 32, "key");
@@ -230,7 +232,7 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		else if (!memcmp(param, "ivhex=", 6)) {
 			//err += parse_hex_u32((unsigned int*)state->sec->nonce1, param+6, BLKSZ/sizeof(int));
 			err += parse_hex(state->sec->nonce1, param+6, BLKSZ);
-			whiteout(param+6);
+			whiteout(param+6, opt->quiet);
 			err += set_flag(&state->iset, "IV");
 		} else if (!memcmp(param, "ivfd=", 5)) {
 			err += read_fd(state->sec->nonce1, param+5, BLKSZ, "iv");
@@ -244,7 +246,7 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			state->ivf = 1;
 		else if (!memcmp(param, "pass=", 5)) {
 			mystrncpy(state->sec->passphr, param+5, 128);
-			whiteout(param+5);
+			whiteout(param+5, opt->quiet);
 			err += set_flag(&state->pset, "password");
 #if 0
 		} else if (!memcmp(param, "passhex=", 8)) {
@@ -266,11 +268,11 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		} else if (!memcmp(param, "salt=", 5)) {
 			//mystrncpy(state->sec->salt, param+5, 64);
 			gensalt(state->sec->salt, 8, param+5, NULL, 0); 
-			whiteout(param+5);
+			whiteout(param+5, opt->quiet);
 			err += set_flag(&state->sset, "salt");
 		} else if (!memcmp(param, "salthex=", 8)) {
 			err += parse_hex(state->sec->salt, param+8, 8);
-			whiteout(param+8);
+			whiteout(param+8, opt->quiet);
 			err += set_flag(&state->sset, "salt");
 		} else if (!memcmp(param, "saltfd=", 7)) {
 			err += read_fd(state->sec->salt, param+7, 8, "salt");
@@ -550,13 +552,15 @@ int stripcrlf(char* str, uint maxlen)
 	return (oln == ln? 0: 1);
 }
 
-void whiteout(char* str)
+void whiteout(char* str, char quiet)
 {
 #ifndef NO_WRITE_ARGV
 	int ln = strlen(str);
 	assert(ln<=512 && ln >=0);
 	memset(str, 'X', ln);
 #endif
+	if (!quiet)
+		FPLOG(WARN, "Don't specify sensitive data on the command line!\n", NULL);
 }
 
 /* Constructs name for KEYS and IVS files (in alocated mem) */
@@ -668,7 +672,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 		if (off >= 0) {
 			err += parse_hex(state->sec->salt, state->sec->charbuf1, 8);
 			state->sset = 1;
-		} else 
+		} else if (!opt->quiet)
 			FPLOG(WARN, "Could not find salt for %s in %s\n", encnm, sfnm);
 
 		free(sfnm);
@@ -680,14 +684,16 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			FPLOG(FATAL, "Can't initialize salt from name -\n", NULL);
 			return -1;
 		}
-		if (encln == 0)
+		if (encln == 0 && !opt->quiet)
 			FPLOG(WARN, "Weak salt from 0 len file\n", NULL);
 		/* TODO: Check for size changing plugins */
 		gensalt(state->sec->salt, 8, encnm, NULL, encln);
-		if (encln)
-			FPLOG(INFO, "Derived salt from %s=%016zx\n", encnm, encln);
-		else	
-			FPLOG(INFO, "Derived salt from %s\n", encnm);
+		if (!opt->quiet) {
+			if (encln)
+				FPLOG(INFO, "Derived salt from %s=%016zx\n", encnm, encln);
+			else	
+				FPLOG(INFO, "Derived salt from %s\n", encnm);
+		}
 		state->sset = 1;
 	}
 
@@ -762,7 +768,8 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			/* Generate IV */
 			random_bytes(state->sec->nonce1, BLKSZ, 0);
 			char iout[33];
-			FPLOG(INFO, "Generated IV: %s\n", hexout(iout, state->sec->nonce1, BLKSZ)); 
+			if (!opt->quiet)
+				FPLOG(INFO, "Generated IV: %s\n", hexout(iout, state->sec->nonce1, BLKSZ)); 
 			/* Save IV ... */
 			if (!state->ivf)
 				FPLOG(WARN, "Generated IV not saved?\n", NULL);
@@ -771,7 +778,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 					return -1;
 		} else if (state->pset) {
 			assert(state->pbkdf2r);
-			if (!state->kset && !state->kgen)
+			if (!state->kset && !state->kgen && !opt->quiet)
 				FPLOG(INFO, "Generate KEY and IV from same passwd/salt\n", NULL);
 			/* Do pbkdf2 stuff to generate key */
 			hashalg_t sha256_halg = SHA256_HALG_T;

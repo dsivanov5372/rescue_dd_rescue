@@ -1,24 +1,24 @@
 #!/bin/bash
 # Script to test crypt module
 
-
 enc_dec_compare()
 {
 	file=$1; alg=$2; keyargs=$3
 	if test -n "$4"; then othargs=":$4"; else unset othargs; fi
 	if test -n "$5"; then eng=":engine=$5"; else unset eng; fi
+	if test -n "$6"; then opt="$6"; else opt="-qptA"; fi
 	echo "Validating enc/decryption $eng $alg $othargs"
 	cp -p $file.enc $file.enc.old 2>/dev/null
-	echo $VG ./dd_rescue -pt -L ./libddr_crypt.so=enc$eng:alg=$alg:$keyargs$othargs $file $file.enc 
-	$VG ./dd_rescue -pt -L ./libddr_crypt.so=enc$eng:alg=$alg:$keyargs$othargs $file $file.enc || exit 1
-	echo $VG ./dd_rescue -pt -L ./libddr_crypt.so=dec$eng:alg=$alg$othargs $file.enc $file.cmp 
-	$VG ./dd_rescue -pt -L ./libddr_crypt.so=dec$eng:alg=$alg$othargs $file.enc $file.cmp || exit 2
+	echo $VG ./dd_rescue $opt -L ./libddr_crypt.so=enc$eng:alg=$alg:$keyargs$othargs $file $file.enc 
+	$VG ./dd_rescue $opt -L ./libddr_crypt.so=enc$eng:alg=$alg:$keyargs$othargs $file $file.enc || exit 1
+	echo $VG ./dd_rescue $opt -L ./libddr_crypt.so=dec$eng:alg=$alg$othargs $file.enc $file.cmp 
+	$VG ./dd_rescue $opt -L ./libddr_crypt.so=dec$eng:alg=$alg$othargs $file.enc $file.cmp || exit 2
 	cmp $file $file.cmp || exit 3
 }
 
 enc_dec_compare_keys()
 {
-	enc_dec_compare $1 $2 $3 $4:keysfile:ivsfile $5 $6 $7
+	enc_dec_compare "$1" "$2" "$3" "$4:keysfile:ivsfile" "$5" "$6"
 }
 
 ECB_ALGS="AES192-ECB AES192+-ECB AES192x2-ECB"
@@ -31,6 +31,9 @@ echo " Otherwise we might hang :-("
 
 # MAIN TEST
 # Reverse (CTR, ECB)
+echo "*** Reverse ***"
+enc_dec_compare_keys dd_rescue AES192-CTR keygen:ivgen "" "" "-qptAr"
+#enc_dec_compare_keys dd_rescue AES192-ECB keygen:ivgen "" "" "-qptAr"
 # Appending (CTR, ECB only when block-aligned)
 # Holes (all), skiphole
 # Reverse (CTR, ECB)
@@ -55,11 +58,12 @@ for alg in $TESTALGS; do
 	#enc_dec_compare dd_rescue $alg keygen:ivgen keyfile=KEY:ivfile=IV
 	# Use default salt generation 
 	enc_dec_compare dd_rescue $alg "" pass=PWD:pbkdf2
-	# Use random numbers and write to binary file
-	enc_dec_compare dd_rescue $alg saltgen pass=PWD:pbkdf2:saltfile=SALT
 	# Use random numbers and write to index file
 	enc_dec_compare dd_rescue $alg saltgen pass=PWD:pbkdf2:saltsfile
 done
+# Use random numbers and write to binary file
+enc_dec_compare dd_rescue AES192-CTR saltgen pass=PWD:pbkdf2:saltfile=SALT
+
 HAVE_AESNI=`grep " aes " /proc/cpuinfo 2>/dev/null`
 echo "*** Engines comparison ***"
 for alg in $TESTALGS; do
