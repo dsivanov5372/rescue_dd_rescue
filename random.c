@@ -32,6 +32,7 @@ unsigned int random_getseedval32()
 #if (defined(__x86_64__) || defined(__i386__)) && !defined(NO_RDRND)
 	unsigned int hwrnd = rdrand32();
 #else
+	/* Some randomness due to ASLR ... */
 	unsigned int hwrnd = BSWAP32((unsigned int)(unsigned long)&random_getseedval32);
 #endif
 	return (tv.tv_usec << 12) ^ tv.tv_sec ^ getpid() ^ hwrnd;
@@ -86,6 +87,14 @@ unsigned int random_bytes(unsigned char* buf, unsigned int ln, unsigned char nou
 	for (i = 0; i < (ln+3)/4; ++i) {
 		unsigned int rnd;
 		int err = READ_RAND(fd, &rnd, 4, flg);
+		if (nourand && err < 4) {
+			fprintf(stderr, "WARN: Short on entropy, generate some more!\n");
+			sleep(1);
+			if (err > 0)
+				err += READ_RAND(fd, ((unsigned char*)(&rnd))+err, 4-err, flg);
+			else
+				err = READ_RAND(fd, &rnd, 4, flg);
+		}
 		if (err != 4) {
 			fprintf(stderr, "FATAL: Error getting random numbers (%i): %i %s\n", 
 				nourand, err, strerror(errno));
