@@ -33,8 +33,15 @@ echo " Otherwise we might hang :-("
 # Reverse (CTR, ECB)
 echo "*** Reverse ***"
 enc_dec_compare_keys dd_rescue AES192-CTR keygen:ivgen "" "" "-qptAr"
-enc_dec_compare_keys dd_rescue AES192-ECB keygen:ivgen "" "" "-qptAr"
+enc_dec_compare_keys dd_rescue AES192-ECB "" "" "" "-qptAr"
 # Appending (CTR, ECB only when block-aligned)
+enc_dec_compare_keys dd_rescue AES192-CTR
+./dd_rescue -qAx -L ./libddr_crypt.so=enc:alg=AES192-CTR:keysfile:ivsfile dd_rescue dd_rescue.enc || exit 1
+cat dd_rescue dd_rescue > dd_rescue2
+./dd_rescue -qAp -L ./libddr_crypt.so=dec:alg=AES192-CTR:keysfile:ivsfile dd_rescue.enc dd_rescue.cmp || exit 2
+cmp dd_rescue.cmp dd_rescue2 || exit 3
+rm dd_rescue2
+
 # Holes (all), skiphole
 # Reverse (CTR, ECB)
 # Chain with lzo, hash (all)
