@@ -70,7 +70,7 @@ typedef struct _crypt_state {
 	int inbuf;
 	int pbkdf2r;
 	sec_fields *sec;
-	const opt_t *opts;
+	/*const*/ opt_t *opts;
 	char *pfnm, *sfnm;
 	size_t saltlen;
 	loff_t lastpos;
@@ -146,7 +146,7 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	*stat = (void*)state;
 	memset(state, 0, sizeof(crypt_state));
 	state->seq = seq;
-	state->opts = opt;
+	state->opts = (opt_t*)opt;
 	state->enc = -1;
 	state->sec = secmem_init();
 	crypto = state->sec;	// HACK for aesni
@@ -618,7 +618,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	char ivsnm[32], keynm[32], saltnm[32];
 	clock_t t1 = 0;
 	crypt_state *state = (crypt_state*)*stat;
-	state->opts = opt;
+	//state->opts = (opt_t*)opt;
 
 	sprintf(ivsnm, "IVS.%s", state->alg->name);
 	sprintf(keynm, "KEYS.%s", state->alg->name);
@@ -870,7 +870,7 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 	/* FIXME: Hack -- detect last block on decoding to be able to strip padding.
 	 * Cleaner (but more complex) alternative would be to always buffer the last
 	 * 16 bytes and only flush them on receiving eof flag */ 
-	char lastdec = state->enc? 0: (fst->ipos+*towr == fst->ilen? 1: 0);
+	char lastdec = state->enc? 0: (state->finfirst? (fst->ipos == fst->ilen? 1: 0): (fst->ipos+*towr == fst->ilen? 1: 0));
 	//char lastencrev = (state->enc && state->rev) ? (fst->opos == fst->init_opos? 1: 0): 0;
 	unsigned char* keys = state->enc? state->sec->ekeys->data: state->sec->dkeys->data;
 	Crypt_IV_fn *crypt = state->enc? state->alg->encrypt: state->alg->decrypt;	
@@ -879,7 +879,7 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 		currpos -= *towr;
 	if (state->bench)
 		t1 = clock();
-	if (0 && state->debug)
+	if (1 && state->debug)
 		FPLOG(DEBUG, "pos: %li %li vs %li (%i) towr %i\n", (unsigned long)fst->ipos,
 			(unsigned long)fst->opos, (unsigned long)state->lastpos,
 			(unsigned long)state->lastpos/BLKSZ, *towr);
@@ -940,6 +940,9 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 		//memcpy(state->sec->databuf2, bf+i, left);
 		char zero = (state->skiphole? holememcpy(state->sec->databuf2, bf+i, left): (memcpy(state->sec->databuf2, bf+i, left), 0));
 		unsigned int unpad = (eof || (lastdec && i+left == *towr))? state->pad: PAD_ZERO;
+		if (state->debug && unpad)
+			FPLOG(DEBUG, "Unpad %i eof %i lastdec %i i %i left %i towr %i\n",
+				unpad, eof, lastdec, i, left, *towr);
 		if (!zero) {
 			/* Fix up after skipped holes */
 			if (skipped && state->alg->stream->iv_prep) {
@@ -954,9 +957,20 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 			}
 			//assert(!err || (unpad != PAD_ZERO && err >= 0));
 			assert(olen == left || (unpad && olen >= 0));
-			if (olen < left) {
+			if (olen != left) {
 				*towr -= (left-olen);
 				i -= (left-olen);
+				if (state->finfirst) {
+					fst->opos += olen-left;
+					if (state->debug)
+						FPLOG(DEBUG, "correct pos by %i err %i newpos %i newtowr %i\n", 
+							olen-left, err, (unsigned int)fst->opos, *towr);
+					//lseek64(fst->odes, fst->opos, SEEK_SET);
+					//int ft = ftruncate(fst->odes, fst->opos);
+					//assert(!ft);
+					state->opts->init_opos += olen-left;
+					state->finfirst = 0;
+				}
 			}
 		} else
 			++skipped;
@@ -971,7 +985,7 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 	int left = *towr - i;
 	if (0 && state->debug && eof)
 		FPLOG(DEBUG, "EOF Block with %i bytes ...\n", *towr);
-	if (0 && state->debug)
+	if (1 && state->debug)
 		FPLOG(DEBUG, "left %i finfirst %i eof %i\n", left, state->finfirst, eof);
 	if (left || (eof && state->inbuf) || (state->enc && state->pad)) {
 		assert(left < BLKSZ-state->inbuf);
@@ -982,7 +996,7 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 		if (0 && state->debug)
 			FPLOG(DEBUG, "left %i finfirst %i eof %i",
 				left, state->finfirst, eof);
-		if (eof || state->finfirst) {
+		if ((eof && !state->rev) || state->finfirst) {
 			memset(state->sec->databuf1+left, 0, BLKSZ-left);
 			err = crypt(keys, state->alg->rounds, state->sec->iv1.data,
 				    state->pad, state->sec->databuf1, bf+i, left, &olen);
@@ -990,8 +1004,10 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 			*towr += olen;
 			if (0 && state->debug)
 				FPLOG(NOHDR, " olen %i err %i towr %i\n", olen, err, *towr);
-			if (state->enc && state->rev)
+			if (state->enc && state->rev) {
 				fst->opos += olen-left;
+				FPLOG(DEBUG, " LAST %i -> %i\n", left, olen);
+			}
 			left = 0;
 			state->finfirst = 0;
 		}
