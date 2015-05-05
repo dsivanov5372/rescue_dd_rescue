@@ -101,6 +101,7 @@ int read_fd(unsigned char*, const char*, uint maxlen, const char*);
 int read_file(unsigned char*, const char*, uint maxlen);
 char* mystrncpy(unsigned char*, const char*, uint maxlen);
 int stripcrlf(char* str, uint maxlen);
+void whiteout(char* str);
 
 int set_flag(char* flg, const char* msg)
 {
@@ -214,6 +215,7 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		else if (!memcmp(param, "keyhex=", 7)) {
 			//err += parse_hex_u32((unsigned int*)state->sec->userkey1, param+7, state->alg->keylen/(8*sizeof(int))); 
 			err += parse_hex(state->sec->userkey1, param+7, state->alg->keylen/8); 
+			whiteout(param+7);
 			err += set_flag(&state->kset, "key");
 		} else if (!memcmp(param, "keyfd=", 6)) {
 			err += read_fd(state->sec->userkey1, param+6, 32, "key");
@@ -228,6 +230,7 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		else if (!memcmp(param, "ivhex=", 6)) {
 			//err += parse_hex_u32((unsigned int*)state->sec->nonce1, param+6, BLKSZ/sizeof(int));
 			err += parse_hex(state->sec->nonce1, param+6, BLKSZ);
+			whiteout(param+6);
 			err += set_flag(&state->iset, "IV");
 		} else if (!memcmp(param, "ivfd=", 5)) {
 			err += read_fd(state->sec->nonce1, param+5, BLKSZ, "iv");
@@ -241,6 +244,7 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			state->ivf = 1;
 		else if (!memcmp(param, "pass=", 5)) {
 			mystrncpy(state->sec->passphr, param+5, 128);
+			whiteout(param+5);
 			err += set_flag(&state->pset, "password");
 #if 0
 		} else if (!memcmp(param, "passhex=", 8)) {
@@ -262,9 +266,11 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		} else if (!memcmp(param, "salt=", 5)) {
 			//mystrncpy(state->sec->salt, param+5, 64);
 			gensalt(state->sec->salt, 8, param+5, NULL, 0); 
+			whiteout(param+5);
 			err += set_flag(&state->sset, "salt");
 		} else if (!memcmp(param, "salthex=", 8)) {
 			err += parse_hex(state->sec->salt, param+8, 8);
+			whiteout(param+8);
 			err += set_flag(&state->sset, "salt");
 		} else if (!memcmp(param, "saltfd=", 7)) {
 			err += read_fd(state->sec->salt, param+7, 8, "salt");
@@ -542,6 +548,15 @@ int stripcrlf(char* str, uint maxlen)
 	if (str[ln-1] == '\r')
 		str[--ln] = 0;
 	return (oln == ln? 0: 1);
+}
+
+void whiteout(char* str)
+{
+#ifndef NO_WRITE_ARGV
+	int ln = strlen(str);
+	assert(ln<=512 && ln >=0);
+	memset(str, 'X', ln);
+#endif
 }
 
 /* Constructs name for KEYS and IVS files (in alocated mem) */

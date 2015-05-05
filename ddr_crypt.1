@@ -158,7 +158,10 @@ This way to specifiy keys/IVs should only be used for
 testing - the key will be visible to all local users by looking
 at the command line (unless specific measures are taken to
 lock down access to /proc). Not normally a good idea on a multi-user
-system.
+system. ddr_crypt does overwrite the sensitive data with X to make
+the attack a bit harder, but this still leaks the length and 
+-- more importantly -- there is still a tiem window where the sensitive
+data is visible.
 .
 .SS Reading from file of file descriptor
 It's better to pass in the key and IV via a file descriptor via
@@ -258,6 +261,10 @@ options with the same possible parameters as above for direct specification
 of key and IV. (Note that the salt is hashed, like when derived from filename
 and length.) The password/passphrase is treated as a string, null-terminated
 and with a trailing CRLF stripped off.
+.br
+The warnings about passing confidential data (here: pass, salt, salthex) on 
+the command line apply -- only do it for testing or in a single-user
+environment.
 .P
 If the automatically generated salt is used (based on filename and file
 length), the assumed file length for salt generation can be overriden by
