@@ -217,12 +217,12 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	}
 #ifdef HAVE_ATTR_XATTR_H
 	if ((state->chk_xattr || state->set_xattr) && !state->xattr_name) {
-		state->xattr_name = (char*)malloc(24);
+		state->xattr_name = (char*)malloc(32);
 		state->xnmalloc = 1;
 		if (state->hmacpwd)
-			snprintf(state->xattr_name, 24, "user.hmac.%s", state->alg->name);
+			snprintf(state->xattr_name, 32, "user.hmac.%s", state->alg->name);
 		else
-			snprintf(state->xattr_name, 24, "user.checksum.%s", state->alg->name);
+			snprintf(state->xattr_name, 32, "user.checksum.%s", state->alg->name);
 	}
 #endif
 	if ((!state->chkfnm || !*state->chkfnm) && (state->chkf || state->outf

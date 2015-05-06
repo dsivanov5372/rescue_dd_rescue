@@ -630,6 +630,56 @@ int write_keyfile(crypt_state *state, const char* base, const char* name, const 
 	return err;
 }
 
+#ifdef HAVE_ATTR_XATTR_H
+int get_xattr(crypt_state* state)
+{
+	const char* name = state->opts->iname;
+	int err = 0;
+	if (state->enc)
+		name = state->opts->oname;
+	if (state->debug)
+		FPLOG(DEBUG, "Read xattr from output file %s\n", name);
+	/* Longest is 128byte hex for SHA512 (8x64byte numbers -> 8x16 digits) */
+	ssize_t itln = getxattr(name, state->salt_xattr_name, state->sec->charbuf1, 128);
+	if (itln <= 0) {
+		if (!state->sxfallback ) 
+			FPLOG(WARN, "Salt could not be read from xattr of %s\n", name);
+		return -ENOENT;
+	} else if (itln != 16) {
+		FPLOG(WARN, "Wrong salt length (expected 16 hex chars, got %i)\n", itln);
+		return -ENOENT;
+	} else {
+		err += parse_hex(state->sec->salt, state->sec->charbuf1, 8);
+		err += set_flag(&state->sset, "salt");
+	}
+	return err;
+}
+
+int set_xattr(crypt_state* state)
+{
+	const char* name = state->opts->oname;
+	if (state->enc)
+		name = state->opts->oname;
+	/* FIXME: Use same logic as in hash plugin */
+	//if (state->ochg && !state->ichg) {
+	//	name = state->opts->iname;
+	//} else if (state->ochg) {
+	//	FPLOG(WARN, "Can't write xattr in the middle of plugin chain (%s)\n",
+	//			state->fname);
+	//	return -ENOENT;
+	//}
+	if (state->debug)
+		FPLOG(INFO, "Write xattr to input file %s\n", name);
+	if (setxattr(name, state->salt_xattr_name, chartohex(state, state->sec->salt, 8), 16, 0)) {
+		if (!state->sxfallback)
+			FPLOG(FATAL, "Failed writing salt to xattr for %s: %s\n", 
+					name, strerror(errno));
+		return -1;
+	}
+	return 0;
+}
+#endif
+
 int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	     unsigned int totslack_pre, unsigned int totslack_post,
 	     const fstate_t *fst, void **stat)
@@ -643,6 +693,12 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	sprintf(ivsnm, "IVS.%s", state->alg->name);
 	sprintf(keynm, "KEYS.%s", state->alg->name);
 	sprintf(saltnm, "SALT.%s", state->alg->name);
+#ifdef HAVE_ATTR_XATTR_H
+	if (state->sxattr && !state->salt_xattr_name) {
+		state->salt_xattr_name = malloc(32);
+		snprintf(state->salt_xattr_name, 32, "user.salt.%s", state->alg->name);
+	}
+#endif
 
 	if (state->bench)
 		t1 = clock();
@@ -667,6 +723,8 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			return -1;
 	}
 
+	char needsalt = state->pset && !((state->iset||state->igen) && (state->kset||state->kgen));
+
 	/* 5th: Salt possibilities:
 	 * (.) We may not need a salt as user opted to specify/read/generate key+IV ...
 	 * (a) It's been set already via salt=, saltfd=, salthex=, saltfile= (sset is set)
@@ -674,62 +732,73 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	 * (c) It needs to be generated via prng (sgen)
 	 * (d) Nothing: Generate from file name and length
 	 */
-	
-	char needsalt = state->pset && !((state->iset||state->igen) && (state->kset||state->kgen));
 
-	if (needsalt && state->sgen) {
-		random_bytes(state->sec->salt, 8, 0);
-		state->sset = 1;
-		if (!state->sfnm && !state->saltf && !state->sxattr)
-			FPLOG(WARN, "Generated salt not written anywhere?\n", NULL);
-	}
+	if (needsalt) {
 
-#ifdef HAVE_ATTR_XATTR_H
-	/* TODO: Try getting salt from xattr */
-#endif
-	if (needsalt && !state->sgen && !state->sset && (state->saltf || state->sxfallback)) {
-		char* sfnm = keyfnm(saltnm, encnm);
-		int off = get_chks(sfnm, encnm, state->sec->charbuf1);
-		/* Failure is NOT fatal */
-		if (off >= 0) {
-			err += parse_hex(state->sec->salt, state->sec->charbuf1, 8);
+		if (state->sgen) {
+			random_bytes(state->sec->salt, 8, 0);
 			state->sset = 1;
-		} else if (!opt->quiet)
-			FPLOG(WARN, "Could not find salt for %s in %s\n", encnm, sfnm);
-
-		free(sfnm);
-	}
-
-	/* 5th: salt (later: if not given: derive from outnm) */
-	if (needsalt && !state->sset) {
-		if (!strcmp(encnm, "-")) {
-			FPLOG(FATAL, "Can't initialize salt from name -\n", NULL);
-			return -1;
+			if (!state->sfnm && !state->saltf && !state->sxattr)
+				FPLOG(WARN, "Generated salt not written anywhere?\n", NULL);
 		}
-		if (encln == 0 && !opt->quiet)
-			FPLOG(WARN, "Weak salt from 0 len file\n", NULL);
-		/* TODO: Check for size changing plugins */
-		gensalt(state->sec->salt, 8, encnm, NULL, encln);
-		if (!opt->quiet) {
-			if (encln)
-				FPLOG(INFO, "Derived salt from %s=%016zx\n", encnm, encln);
-			else	
-				FPLOG(INFO, "Derived salt from %s\n", encnm);
-		}
-		state->sset = 1;
-	}
 
-	if (needsalt && state->sfnm) {
-		if (write_file(state->sec->salt, state->sfnm, 8, 0640))
-			return -1;
-	}
 #ifdef HAVE_ATTR_XATTR_H
-	/* TODO: Write salt to xattr */
+		/* TODO: Try getting salt from xattr */
+		if (needsalt && state->sxattr)
+			get_xattr(state);		
 #endif
 
-	if (needsalt && state->saltf) {
-		if (write_keyfile(state, saltnm, encnm, state->sec->salt, 8, 0640, 1, 0))
-			return -1;
+		if (!state->sgen && !state->sset && (state->saltf || state->sxfallback)) {
+			char* sfnm = keyfnm(saltnm, encnm);
+			int off = get_chks(sfnm, encnm, state->sec->charbuf1);
+			/* Failure is NOT fatal */
+			if (off >= 0) {
+				err += parse_hex(state->sec->salt, state->sec->charbuf1, 8);
+				state->sset = 1;
+			} else if (!opt->quiet)
+				FPLOG(WARN, "Could not find salt for %s in %s\n", encnm, sfnm);
+	
+			free(sfnm);
+		}
+
+		/* 5d: salt: derive from outnm */
+		if (!state->sset) {
+			if (!strcmp(encnm, "-")) {
+				FPLOG(FATAL, "Can't initialize salt from name -\n", NULL);
+				return -1;
+			}
+			if (encln == 0 && !opt->quiet)
+				FPLOG(WARN, "Weak salt from 0 len file\n", NULL);
+			/* TODO: Check for size changing plugins */
+			gensalt(state->sec->salt, 8, encnm, NULL, encln);
+			if (!opt->quiet) {
+				if (encln)
+					FPLOG(INFO, "Derived salt from %s=%016zx\n", encnm, encln);
+				else	
+					FPLOG(INFO, "Derived salt from %s\n", encnm);
+			}
+			state->sset = 1;
+		}
+
+		if (state->sfnm) {
+			if (write_file(state->sec->salt, state->sfnm, 8, 0640))
+				return -1;
+		}
+#ifdef HAVE_ATTR_XATTR_H
+		/* TODO: Write salt to xattr */
+		if (set_xattr(state)) {
+			if (state->sxfallback)
+				state->saltf = 1;
+			else
+				return -1;
+		}
+#endif
+
+		if (needsalt && state->saltf) {
+			if (write_keyfile(state, saltnm, encnm, state->sec->salt, 8, 0640, 1, 0))
+				return -1;
+		}
+
 	}
 
 	/* 6th: key options
