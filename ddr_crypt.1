@@ -229,13 +229,16 @@ memorizable rather than stored, you can use a password and salt
 to generate many keys from one password.
 .P
 The key and IV are derived from an expensive to revert function 
-of password and salt. We use 17000 rounds of pbkdf2() currently,
+of password and salt. We use 17000 rounds of pbkdf2() currently
+for the key (and a third for the IV),
 although a more compute intense function (like scrypt) is planned
 for the future. The expensiveness of this function is a protection
 against brute forcing passwords. To use pbkdf2, you need to specify
 .B pbkdf2
 or
 .B pbkdf2=rounds .
+The latter format allows overriding the number of iterations for
+key generation. (IV generation will be done with a third again.)
 .P
 The salt can be derived automatically from the name (and length)
 of the encrypted file; this allows to work with just one password
@@ -243,7 +246,8 @@ to be memorized. However, be aware that file size or name changes
 will result in a different salt and thus different key/IV which
 render your encrypted file undecryptable. If there is a risk of this
 to happen, rather memorize one salt per file (or better save key
-and IV using keysfile and ivsfile options). Remember that file names
+and IV using keysfile and ivsfile options or save the salt using
+saltsfile or saltxattr, see below). Remember that file names
 are case sensitive (as always with Un*x).
 .P
 Password and salt can be specified with a string
@@ -266,14 +270,31 @@ The warnings about passing confidential data (here: pass, salt, salthex) on
 the command line apply -- only do it for testing or in a single-user
 environment.
 .P
-If the automatically generated salt is used (based on filename and file
-length), the assumed file length for salt generation can be overriden by
+If the filename based automatic salt derivation is used, the assumed file
+length for salt generation can be overriden by
 .B saltlen= .
 .P
 Alternatively, the salts can also be stored and retrieved from an MD5SUMS style
 index file (like with keysfile and ivsfile) by specifying the option
 .B saltsfile .
-
+When saltsfile is used to store salts, using random salts on encryption
+becomes a good idea. This can be achieved by specifying the
+.B saltgen
+option.
+.P
+Instead of a salt index file (saltsfile), the salt can also be stored in 
+(and retrieved from) an extended attribute. This can be done using the
+.B saltxattr[=xattr_name]
+option. The attribute name is optional and defaults to user.salt.ALGNAME
+(with ALGNAME replaced by the algorithm).
+It's also possible to try using the xattr feature and fall back to using
+the inxdex file. Use the
+.B sxfallback
+option to tell ddr_crypt to do this.
+.br
+See the main dd_rescue (1) man page for a discussion of advantages and
+disadvantages of using extended attributes.
+.
 .SH ALGORITHMS AND STREAM MODES
 The AES (Rijndael) family of algorithms is considered cryptographically
 safe at the time of writing, as no practicable attacks have been published
@@ -437,6 +458,8 @@ Support for AES acceleration for ARMv8.
 Support for other streaming modes (XTS, GCM, ...)
 .br
 Store IV in xattr
+.br
+openssl Salted__ file format support
 .
 .SH EXAMPLES
 .TP

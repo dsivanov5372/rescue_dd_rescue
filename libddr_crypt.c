@@ -41,6 +41,10 @@
 #include <endian.h>
 #include <signal.h>
 
+#ifdef HAVE_ATTR_XATTR_H
+#include <attr/xattr.h>
+#endif
+
 #if __WORDSIZE == 64
 #define LL "l"
 #define ATOL atol
@@ -75,6 +79,10 @@ typedef struct _crypt_state {
 	size_t saltlen;
 	loff_t lastpos;
 	loff_t processed;
+#if 1 //def HAVE_ATTR_XATTR_H
+	char* salt_xattr_name;
+	char sxattr, sxfallback;
+#endif
 } crypt_state;
 
 /* FIXME HACK!!! aesni currently assumes avail of global crypto symbol to point to sec_fields ... */
@@ -88,6 +96,9 @@ const char *crypt_help = "The crypt plugin for dd_rescue de/encrypts data copied
 		"\t:pass=STR:passfd=[x]INT[@INT@INT]:passfile=NAME[@INT@INT]\n"
 		"\t:salt=STR:salthex=HEX:saltfd=[x]INT[@INT@INT]:saltfile=NAME[@INT@INT]\n"
 		"\t:saltlen=INT:saltgen:saltsfile\n"
+#ifdef HAVE_ATTR_XATTR_H
+		"\t:saltxattr[=xattr_name]:sxfallback\n"
+#endif
 		"\t:pbkdf2[=INT]:debug:bench[mark]:skiphole\n"
 		" Use algorithm=help to get a list of supported crypt algorithms\n";
 
@@ -289,6 +300,15 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			state->saltlen = ATOL(param+8);
 		else if (!strcmp(param, "saltgen"))
 			state->sgen = 1;
+#ifdef HAVE_ATTR_XATTR_H
+		else if (!strcmp(param, "saltxattr"))
+			err += set_flag(&state->sxattr, "saltxattr");
+		else if (!memcmp(param, "saltxattr=", 10)) {
+			state->salt_xattr_name = strdup(param+10);
+			err += set_flag(&state->sxattr, "saltxattr");
+		} else if (!strcmp(param, "sxfallback") || !strcmp(param, "sxfallb"))
+			err += set_flag(&state->sxfallback, "sxfallback");
+#endif
 		else if (!memcmp(param, "bench", 5))
 			state->bench = 1;
 		else if (!memcmp(param, "pbkdf2=", 7))
@@ -660,12 +680,14 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	if (needsalt && state->sgen) {
 		random_bytes(state->sec->salt, 8, 0);
 		state->sset = 1;
-		if (!state->sfnm && !state->saltf)
+		if (!state->sfnm && !state->saltf && !state->sxattr)
 			FPLOG(WARN, "Generated salt not written anywhere?\n", NULL);
 	}
 
-	/* FIXME: Need to handle saltf here! */
-	if (needsalt && !state->sgen && !state->sset && state->saltf) {
+#ifdef HAVE_ATTR_XATTR_H
+	/* TODO: Try getting salt from xattr */
+#endif
+	if (needsalt && !state->sgen && !state->sset && (state->saltf || state->sxfallback)) {
 		char* sfnm = keyfnm(saltnm, encnm);
 		int off = get_chks(sfnm, encnm, state->sec->charbuf1);
 		/* Failure is NOT fatal */
@@ -701,6 +723,10 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 		if (write_file(state->sec->salt, state->sfnm, 8, 0640))
 			return -1;
 	}
+#ifdef HAVE_ATTR_XATTR_H
+	/* TODO: Write salt to xattr */
+#endif
+
 	if (needsalt && state->saltf) {
 		if (write_keyfile(state, saltnm, encnm, state->sec->salt, 8, 0640, 1, 0))
 			return -1;
@@ -858,6 +884,11 @@ char holememcpy(void* dst, const void* src, size_t ln)
 	return 1;
 }
 
+/* TODO: This routine has become too complex, needs refactoring:
+ * Handle special cases explicitly:
+ * - Last block decryption forward, reverse
+ * - Last block encryption forward, reverse
+ */
 unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf, 
 			    int *towr, int eof, int *recall, void **stat)
 {
@@ -934,11 +965,13 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 		i = BLKSZ;
 		state->inbuf = 0;
 	}
+	/* Bulk */
 	while (i+BLKSZ <= *towr) {
 		int left = MIN(512, *towr-i);
 		left -= left%BLKSZ;
 		//memcpy(state->sec->databuf2, bf+i, left);
 		char zero = (state->skiphole? holememcpy(state->sec->databuf2, bf+i, left): (memcpy(state->sec->databuf2, bf+i, left), 0));
+		/* Last block on decryption ? */
 		unsigned int unpad = (eof || (lastdec && i+left == *towr))? state->pad: PAD_ZERO;
 		if (state->debug && unpad)
 			FPLOG(DEBUG, "Unpad %i eof %i lastdec %i i %i left %i towr %i\n",
@@ -996,6 +1029,7 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 		if (0 && state->debug)
 			FPLOG(DEBUG, "left %i finfirst %i eof %i",
 				left, state->finfirst, eof);
+		/* Last block (encryption) ?? */
 		if ((eof && !state->rev) || state->finfirst) {
 			memset(state->sec->databuf1+left, 0, BLKSZ-left);
 			err = crypt(keys, state->alg->rounds, state->sec->iv1.data,
@@ -1036,6 +1070,10 @@ int crypt_close(loff_t ooff, void **stat)
 		FPLOG(INFO, "%.2fs CPU time, %.1fMiB/s\n",
 			(double)state->cpu/CLOCKS_PER_SEC, 
 			state->processed/1024 / (state->cpu/(CLOCKS_PER_SEC/1024.0)));
+#ifdef HAVE_ATTR_XATTR_H
+	if (state->salt_xattr_name)
+		free(state->salt_xattr_name);
+#endif
 	return 0;	
 }
 
