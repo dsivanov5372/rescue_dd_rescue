@@ -583,7 +583,16 @@ void whiteout(char* str, char quiet)
 		FPLOG(WARN, "Don't specify sensitive data on the command line!\n", NULL);
 }
 
-/* Constructs name for KEYS and IVS files (in alocated mem) */
+const char* mybasenm(const char* nm)
+{
+	const char* ptr = strrchr(nm, '/');		// FIXME: Unix
+	if (ptr)
+		return ptr+1;
+	else
+		return nm;
+}
+
+/* Constructs name for KEYS and IVS files (in allocated mem) */
 char *keyfnm(const char* base, const char *encnm)
 {
 	char* ptr = strrchr(encnm, '/');	// FIXME: Unix
@@ -592,7 +601,7 @@ char *keyfnm(const char* base, const char *encnm)
 	else {
 		char* kfnm = malloc(ptr-encnm + 2 + strlen(base));
 		assert(kfnm);
-		memcpy(kfnm, encnm, ptr-encnm);
+		memcpy(kfnm, encnm, ptr-encnm+1);
 		*(kfnm+(ptr-encnm+1)) = 0;
 		strcat(kfnm, base);
 		return kfnm;
@@ -744,8 +753,8 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 
 #ifdef HAVE_ATTR_XATTR_H
 		/* TODO: Try getting salt from xattr */
-		if (needsalt && state->sxattr)
-			get_xattr(state);		
+		if (!state->sset && state->sxattr && !get_xattr(state) && !state->enc)
+			state->sxattr = 0;
 #endif
 
 		if (!state->sgen && !state->sset && (state->saltf || state->sxfallback)) {
@@ -756,7 +765,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 				err += parse_hex(state->sec->salt, state->sec->charbuf1, 8);
 				state->sset = 1;
 			} else if (!opt->quiet)
-				FPLOG(WARN, "Could not find salt for %s in %s\n", encnm, sfnm);
+				FPLOG(WARN, "Could not find salt for %s in %s\n", mybasenm(encnm), sfnm);
 	
 			free(sfnm);
 		}
@@ -770,12 +779,12 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			if (encln == 0 && !opt->quiet)
 				FPLOG(WARN, "Weak salt from 0 len file\n", NULL);
 			/* TODO: Check for size changing plugins */
-			gensalt(state->sec->salt, 8, encnm, NULL, encln);
+			gensalt(state->sec->salt, 8, mybasenm(encnm), NULL, encln);
 			if (!opt->quiet) {
 				if (encln)
-					FPLOG(INFO, "Derived salt from %s=%016zx\n", encnm, encln);
+					FPLOG(INFO, "Derived salt from %s=%016zx\n", mybasenm(encnm), encln);
 				else	
-					FPLOG(INFO, "Derived salt from %s\n", encnm);
+					FPLOG(INFO, "Derived salt from %s\n", mybasenm(encnm));
 			}
 			state->sset = 1;
 		}
@@ -786,7 +795,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 		}
 #ifdef HAVE_ATTR_XATTR_H
 		/* TODO: Write salt to xattr */
-		if (set_xattr(state)) {
+		if (state->sxattr && state->enc && set_xattr(state)) {
 			if (state->sxfallback)
 				state->saltf = 1;
 			else
@@ -794,7 +803,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 		}
 #endif
 
-		if (needsalt && state->saltf) {
+		if (state->saltf && state->enc) {
 			if (write_keyfile(state, saltnm, encnm, state->sec->salt, 8, 0640, 1, 0))
 				return -1;
 		}
