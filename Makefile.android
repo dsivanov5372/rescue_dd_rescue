@@ -8,6 +8,7 @@ INCD = $(PLAT)/include
 LIBD = $(PLAT)/lib
 
 CFLG = -I $(INCD) -D__WORDSIZE=32 -L$(LIBD)
+ATTR = $(shell ls $(LIBD)/libattr.a)
 
 DEPS = $(wildcard *.c *.h)
 
@@ -28,10 +29,10 @@ config:
 	$(MAKE) -f Makefile.android config.h
 
 default: $(DEPS) 
-	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm $@
+	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm EXTRA_LDFLAGS="$(ATTR)" $@
 
 dd_rescue: $(DEPS) 
-	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm $@
+	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm EXTRA_LDFLAGS="$(ATTR)" $@
 
 libfalloc:
 	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm $@
@@ -61,7 +62,7 @@ fiemap: $(DEPS)
 	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm $@
 
 all: 
-	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm $@
+	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm EXTRA_LDFLAGS="$(ATTR)" $@
 
 clean:
 	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm $@

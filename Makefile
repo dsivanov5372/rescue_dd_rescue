@@ -1,7 +1,7 @@
 # Makefile for dd_rescue
 # (c) garloff@suse.de, 99/10/09, GNU GPL
 
-VERSION = 1.47
+VERSION = 1.98
 
 DESTDIR = 
 
@@ -173,7 +173,7 @@ sha1.po: sha1.c sha1.h hash.h config.h
 	$(CC) $(CFLAGS_OPT) -fPIC -o $@ -c $<
 
 libddr_hash.so: libddr_MD5.po md5.po sha256.po sha512.po sha1.po pbkdf2.po checksum_file.po
-	$(CC) -shared -o $@ $^
+	$(CC) -shared -o $@ $^ $(EXTRA_LDFLAGS)
 
 libddr_MD5.so: libddr_hash.so
 	ln -sf $< $@
@@ -185,7 +185,7 @@ libddr_null.so: libddr_null.po
 	$(CC) -shared -o $@ $^
 
 libddr_crypt.so: libddr_crypt.po aes.po aes_c.po $(AESNI_PO) $(AES_OSSL_PO) pbkdf2.po sha256.po checksum_file.po secmem.po random.po $(POBJECTS2)
-	$(CC) -shared -o $@ $^ $(CRYPTOLIB)
+	$(CC) -shared -o $@ $^ $(CRYPTOLIB) $(EXTRA_LDFLAGS)
 
 find_nonzero.o: find_nonzero.c $(FNZ_HEADERS) config.h
 	$(CC) $(CFLAGS_OPT) -fpie -c $< $(SSE)
@@ -218,7 +218,7 @@ libfalloc-static: dd_rescue.c $(HEADERS) $(OBJECTS) $(OBJECTS2)
 	$(CC) $(CFLAGS) -fpie -DNO_LIBDL $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2) $(LIBDIR)/libfallocate.a
 
 dd_rescue: dd_rescue.c $(HEADERS) $(OBJECTS) $(OBJECTS2)
-	$(CC) $(CFLAGS) -fpie $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2) -ldl
+	$(CC) $(CFLAGS) -fpie $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2) -ldl $(EXTRA_LDFLAGS)
 
 md5: md5.c md5.h hash.h config.h
 	$(CC) $(CFLAGS_OPT) -fpie -DMD5_MAIN -o $@ $<
