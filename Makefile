@@ -495,6 +495,18 @@ check_aes: $(TARGETS) test_aes
 	for alg in $(ALGS); do $(VG) ./test_aes $$alg 10000 || exit $$?; done
 
 check_crypt: $(TARGETS)
+	# TODO: Move previous cases into script ...
+	./test_crypt.sh
+	# Holes (all)
+	# Reverse (CTR, ECB)
+	# Chain with lzo, hash (all)
+	# Various ways to pass in keys/IVs
+	# Padding variations
+	# OpenSSL compatibility
+	# Algs and Engines
+	rm -f dd_rescue.enc dd_rescue.dec dd_rescue.enc.orig dd_rescue2 KEYS.* IVS.*
+
+make_check_crypt: check_crypt
 	$(VG) ./dd_rescue -tp -L ./libddr_crypt.so=enc:keygen:keysfile:ivgen:ivsfile:alg=AES192+-CTR dd_rescue dd_rescue.enc
 	$(VG) ./dd_rescue -tp -L ./libddr_crypt.so=dec:keysfile:ivsfile:alg=AES192+-CTR dd_rescue.enc dd_rescue.dec
 	cmp dd_rescue dd_rescue.dec
@@ -509,14 +521,5 @@ check_crypt: $(TARGETS)
 	$(VG) ./dd_rescue -tp -L ./libddr_crypt.so=dec:keysfile:ivsfile:alg=AES192+-CTR dd_rescue.enc dd_rescue.dec
 	cat dd_rescue dd_rescue > dd_rescue2
 	cmp dd_rescue2 dd_rescue.dec
-	# TODO: Move previous cases into script ...
-	./test_crypt.sh	
-	# Holes (all)
-	# Reverse (CTR, ECB)
-	# Chain with lzo, hash (all)
-	# Various ways to pass in keys/IVs
-	# Padding variations
-	# OpenSSL compatibility
-	# Algs and Engines
-	rm -f dd_rescue.enc dd_rescue.dec dd_rescue.enc.orig dd_rescue2 KEYS.* IVS.*
+
 

@@ -139,7 +139,7 @@ int upd_chks(const char* cnm, const char *nm, const char *chks, int acc)
 		err = -errno;
 	} else {
 		off_t pos = find_chks(f, nm, oldchks);
-		if (pos == -1 || strlen(chks) != strlen(oldchks)) {
+		if (pos == -ENOENT || strlen(chks) != strlen(oldchks)) {
 			fclose(f);
 			f = fopen_chks(cnm, "a", 0);
 			fprintf(f, "%s *%s\n", chks, bnm);

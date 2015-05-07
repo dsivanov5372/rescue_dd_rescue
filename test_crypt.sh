@@ -33,7 +33,7 @@ echo " Otherwise we might hang :-("
 # Reverse (CTR, ECB)
 echo "*** Reverse ***"
 enc_dec_compare_keys dd_rescue AES192-CTR keygen:ivgen "" "" "-qptAr"
-enc_dec_compare_keys dd_rescue AES192-ECB "" "" "" "-qptAr"
+enc_dec_compare_keys dd_rescue AES192-ECB keygen:ivgen "" "" "-qptAr"
 # Appending (CTR, ECB only when block-aligned)
 enc_dec_compare_keys dd_rescue AES192-CTR
 ./dd_rescue -qAx -L ./libddr_crypt.so=enc:alg=AES192-CTR:keysfile:ivsfile dd_rescue dd_rescue.enc || exit 1
@@ -64,12 +64,14 @@ for alg in $TESTALGS; do
 	## Generate key+IV, save to binary files 
 	#enc_dec_compare dd_rescue $alg keygen:ivgen keyfile=KEY:ivfile=IV
 	# Use default salt generation 
-	enc_dec_compare dd_rescue $alg "" pass=PWD:pbkdf2
+	enc_dec_compare dd_rescue $alg "" pass=PWRD:pbkdf2
 	# Use random numbers and write to index file
-	enc_dec_compare dd_rescue $alg saltgen pass=PWD:pbkdf2:saltsfile
+	enc_dec_compare dd_rescue $alg saltgen pass=PAWD:pbkdf2:saltsfile
 done
 # Use random numbers and write to binary file
-enc_dec_compare dd_rescue AES192-CTR saltgen pass=PWD:pbkdf2:saltfile=SALT
+enc_dec_compare dd_rescue AES192-CTR saltgen pass=PWD_:pbkdf2:saltfile=SALT
+# Use random numbers and write to xattr, fall back to saltsfile
+enc_dec_compare dd_rescue AES192-CTR saltgen pass=PSWD:pbkdf2:saltxattr:sxfallback
 
 HAVE_AESNI=`grep " aes " /proc/cpuinfo 2>/dev/null`
 echo "*** Engines comparison ***"
