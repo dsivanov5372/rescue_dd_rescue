@@ -242,6 +242,15 @@ typedef char* charp;
 LISTDECL(charp);
 LISTTYPE(charp) *freenames;
 
+typedef struct _fault_in {
+	loff_t off;
+	int rep;
+} fault_in_t;
+
+LISTDECL(fault_in_t);
+LISTTYPE(fault_in_t) *read_faults;
+LISTTYPE(fault_in_t) *write_faults;
+
 const char *scrollup = 0;
 
 #ifndef UP
@@ -1390,6 +1399,33 @@ static ssize_t find_zero_blk(const unsigned char* blk, const size_t ln,
 }
 #endif
 
+int in_fault_list(LISTTYPE(fault_in_t) *faults, off_t off1, off_t off2)
+{
+	if (!faults)
+		return 0;
+	LISTTYPE(fault_in_t) *faultiter;
+	LISTFOREACH(faults, faultiter) {
+		fault_in_t *fault = &LISTDATA(faultiter);
+#if 0
+		fplog(stderr, DEBUG, "Match %li/%i in [%li,%li]\n",
+			(long)fault->off, fault->rep, (long)off1, (long)off2);
+#endif
+		if (fault->off >= off1 && fault->off < off2) {
+			assert(fault->rep != 0);
+			if (fault->rep < 0) {
+				if (!++fault->rep)
+					fault->rep = 15;
+				continue;
+			} else {
+				if (!--fault->rep)
+					LISTDEL(faultiter, fault_in_t);
+				fplog(stderr, DEBUG, "Inject fault @ %li!\n", (long)fault->off);
+				return (fault->off - off1 + 1);
+			}
+		}
+	}
+	return 0;
+}
 
 static inline ssize_t mypread(int fd, void* bf, size_t sz, loff_t off,
 			      opt_t *op, fstate_t *fst, repeat_t *rep, 
@@ -1401,6 +1437,7 @@ static inline ssize_t mypread(int fd, void* bf, size_t sz, loff_t off,
 		else
 			rep->i_rep_init = 1;
 	}
+	/* TODO: Handle plugin input here ... */
 	if (dop->prng_libc)
 		return fill_rand(bf, sz);
 	if (dop->prng_frnd) {
@@ -1409,6 +1446,14 @@ static inline ssize_t mypread(int fd, void* bf, size_t sz, loff_t off,
 		else
 			return frandom_bytes_inv(dst->prng_state, (unsigned char*) bf, sz);
 	}
+	/* Handle fault injection here */
+	int fault = in_fault_list(read_faults, (fst->ipos-op->init_ipos)/op->hardbs, (fst->ipos+sz-op->init_ipos)/op->hardbs);
+	if (fault) {
+		errno = EIO;
+		return -1;
+		// Cloud read and return (fault-1)*op->hardbs bytes ...
+	}
+	/* OK, regular read ... */
 	if (fst->i_chr)
 		return read(fd, bf, sz);
 	else
@@ -1418,6 +1463,15 @@ static inline ssize_t mypread(int fd, void* bf, size_t sz, loff_t off,
 static inline ssize_t mypwrite(int fd, void* bf, size_t sz, loff_t off,
 			       opt_t *op, fstate_t *fst, progress_t *prg)
 {
+	/* TODO: Handle plugin output here ... */
+	/* Handle fault injection here */
+	int fault = in_fault_list(write_faults, (fst->opos-op->init_opos)/op->hardbs, (fst->opos+sz-op->init_opos)/op->hardbs);
+	if (fault) {
+		errno = EIO;
+		return -1;
+		// Cloud write and return (fault-1)*op->hardbs bytes ...
+	}
+	/* Continue with real writes */
 	if (fst->o_chr) {
 		if (!op->avoidnull)
 			return write(fd, bf, sz);
@@ -2215,6 +2269,7 @@ struct option longopts[] = { 	{"help", 0, NULL, 'h'}, {"verbose", 0, NULL, 'v'},
  				{"shred3", 1, NULL, '3'}, {"shred4", 1, NULL, '4'},
  				{"shred2", 1, NULL, '2'},
 				{"rmvtrim", 0, NULL, 'u'}, {"plugins", 1, NULL, 'L'},
+				{"fault", 1, NULL, 'F'},
 				/* GNU ddrescue compat */
 				{"block-size", 1, NULL, 'B'}, {"input-position", 1, NULL, 's'},
 				{"output-position", 1, NULL, 'S'}, {"max-size", 1, NULL, 'm'},
@@ -2268,6 +2323,7 @@ void printlonghelp()
 	fprintf(stderr, "         -f         force: skip some sanity checks (def=no),\n");
 	fprintf(stderr, "         -p         preserve: preserve ownership, perms, times, attrs (def=no),\n");
 	fprintf(stderr, "         -Y oname   Secondary output file (multiple possible),\n");
+	fprintf(stderr, "         -F offr/rep[,offw/rep[,...]]  fault injection (hardbs off) read/write\n");
 	fprintf(stderr, "         -q         quiet operation,\n");
 	fprintf(stderr, "         -v         verbose operation,\n");
 	fprintf(stderr, "         -c 0/1     switch off/on colors (def=auto),\n");
@@ -2449,6 +2505,42 @@ char test_nocolor_term()
 	return 0;
 }
 
+void populate_faultlists(const char* arg)
+{
+	if (!*arg) {
+		fplog(stderr, FATAL, "Empty fault list specified\n");
+		exit(11);
+	}
+	while (*arg) {
+		const char* ptr = strchr(arg, ',');
+		char rw;
+		fault_in_t fault;
+		fault.off = 0L;
+		int err = sscanf(arg, "%lu%c/%i", (unsigned long*)&fault.off, &rw, &fault.rep);
+		if (err != 3) {
+			fplog(stderr, FATAL, "Could not parse fault spec %s\n", arg);
+			exit(11);
+		}
+		if (fault.rep == 0)
+			fault.rep = INT_MAX;
+		if (rw == 'r')
+			LISTAPPEND(read_faults, fault, fault_in_t);
+		else if (rw == 'w')
+			LISTAPPEND(write_faults, fault, fault_in_t);
+		else {
+			fplog(stderr, FATAL, "Need to specify r or w for X in offX/rep in %s\n", arg);
+			exit(11);
+		}
+		if (ptr)
+			arg = ptr+1;
+		else
+			arg = arg+strlen(arg);
+	}
+	fplog(stderr, DEBUG, "%i/%i faults injected for read/write\n",
+		LISTSIZE(read_faults, fault_in_t), LISTSIZE(write_faults, fault_in_t));
+}
+
+
 char* parse_opts(int argc, char* argv[], opt_t *op, dpopt_t *dop)
 {
 	int c;
@@ -2478,9 +2570,9 @@ char* parse_opts(int argc, char* argv[], opt_t *op, dpopt_t *dop)
 	int tmpfd = 0;
 
 #ifdef LACK_GETOPT_LONG
-	while ((c = getopt(argc, argv, ":rtTfihqvVwWaAdDkMRpPuc:b:B:m:e:s:S:l:L:o:y:z:Z:2:3:4:xY:")) != -1) 
+	while ((c = getopt(argc, argv, ":rtTfihqvVwWaAdDkMRpPuc:b:B:m:e:s:S:l:L:o:y:z:Z:2:3:4:xY:F:")) != -1)
 #else
-	while ((c = getopt_long(argc, argv, ":rtTfihqvVwWaAdDkMRpPuc:b:B:m:e:s:S:l:L:o:y:z:Z:2:3:4:xY:", longopts, NULL)) != -1) 
+	while ((c = getopt_long(argc, argv, ":rtTfihqvVwWaAdDkMRpPuc:b:B:m:e:s:S:l:L:o:y:z:Z:2:3:4:xY:F:", longopts, NULL)) != -1)
 #endif
 	{
 		switch (c) {
@@ -2524,6 +2616,7 @@ char* parse_opts(int argc, char* argv[], opt_t *op, dpopt_t *dop)
 			case 'o': op->bbname = optarg; break;
 			case 'x': op->extend = 1; break;
 			case 'u': op->rmvtrim = 1; break;
+			case 'F': populate_faultlists(optarg); break;
 			case 'Y': do { ofile_t of; of.name = optarg; of.fd = -1; of.cdev = 0; LISTAPPEND(ofiles, of, ofile_t); } while (0); break;
 			case 'z': dop->prng_libc = 1; if (is_filename(optarg)) dop->prng_sfile = optarg; else dop->prng_seed = readint(optarg); break;
 			case 'Z': dop->prng_frnd = 1; if (is_filename(optarg)) dop->prng_sfile = optarg; else dop->prng_seed = readint(optarg); break;
