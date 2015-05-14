@@ -1403,7 +1403,7 @@ int in_fault_list(LISTTYPE(fault_in_t) *faults, off_t off1, off_t off2)
 {
 	if (!faults)
 		return 0;
-	LISTTYPE(fault_in_t) *faultiter;
+	LISTTYPE(fault_in_t) *faultiter, *prvfault = NULL;
 	LISTFOREACH(faults, faultiter) {
 		fault_in_t *fault = &LISTDATA(faultiter);
 #if 0
@@ -1411,23 +1411,36 @@ int in_fault_list(LISTTYPE(fault_in_t) *faults, off_t off1, off_t off2)
 			(long)fault->off, fault->rep, (long)off1, (long)off2);
 #endif
 		if (fault->off >= off1 && fault->off < off2) {
+#if 1
 			if (fault->rep == 0) {
 				fplog(stderr, WARN, "Fault ctr for blk %i is zero, should have been deleted ...\n",
 					(int)fault->off);
+				prvfault = faultiter;
 				continue;
 			}
+#endif
 			assert(fault->rep != 0);
 			if (fault->rep < 0) {
 				if (!++fault->rep)
 					fault->rep = 15;
+				prvfault = faultiter;
 				continue;
 			} else {
-				if (!--fault->rep)
-					LISTDEL(faultiter, fault_in_t);
+				/* FIXME: Need to count down other affected blocks */
+				if (!--fault->rep) {
+					/* FIXME: We need to move the real list header */
+					if (faultiter == read_faults)
+						LISTDELH(read_faults, fault_in_t);
+					else if (faultiter == write_faults)
+						LISTDELH(write_faults, fault_in_t);
+					else 
+						LISTDEL(faultiter, prvfault, fault_in_t);
+				}
 				fplog(stderr, DEBUG, "Inject fault @ %li!\n", (long)fault->off);
 				return (fault->off - off1 + 1);
 			}
 		}
+		prvfault = faultiter;
 	}
 	return 0;
 }
@@ -1681,7 +1694,7 @@ ssize_t dowrite(const ssize_t rd, opt_t *op, fstate_t *fst,
 		errno = 0;
 		/* FIXME: This breaks for opts->reverse direction */
 		if (!op->reverse)
-			advancepos(rd, wr, wr, op, fst, prg);
+			advancepos(rd, rd, wr, op, fst, prg);
 		else
 			return 0;
 	} else

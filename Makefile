@@ -517,6 +517,11 @@ check_fault: $(TARGETS)
 	cmp dd_rescue dd_rescue.cmp || true
 	$(VG) ./dd_rescue -p -F 6r/0 dd_rescue dd_rescue.cmp || true
 	cmp dd_rescue dd_rescue.cmp
+	# Write errors
+	$(VG) ./dd_rescue -tp -F 4w/1,22w/1 dd_rescue dd_rescue.cmp || true
+	#$(VG) ./dd_rescue -p -F 6w/1 dd_rescue dd_rescue.cmp || true
+	cmp dd_rescue dd_rescue.cmp
+
 
 
 make_check_crypt: check_crypt
