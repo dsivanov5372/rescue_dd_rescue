@@ -1411,6 +1411,11 @@ int in_fault_list(LISTTYPE(fault_in_t) *faults, off_t off1, off_t off2)
 			(long)fault->off, fault->rep, (long)off1, (long)off2);
 #endif
 		if (fault->off >= off1 && fault->off < off2) {
+			if (fault->rep == 0) {
+				fplog(stderr, WARN, "Fault ctr for blk %i is zero, should have been deleted ...\n",
+					(int)fault->off);
+				continue;
+			}
 			assert(fault->rep != 0);
 			if (fault->rep < 0) {
 				if (!++fault->rep)

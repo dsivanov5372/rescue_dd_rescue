@@ -390,6 +390,7 @@ check: $(TARGETS) find_nonzero md5 sha1 sha256 sha512
 	$(VG) ./dd_rescue -L ./libddr_hash.so=md5:hmacpwd=Jefe:chknm= TEST /dev/null
 	rm -f /tmp/dd_rescue CHECKSUMS.sha512 TEST HMACS.md5
 	if ./calchmac.py sha1 pass dd_rescue; then make check_hmac; else echo "Sorry, no more HMAC test due to missing python-hashlib support"; true; fi
+	make check_fault
 	make check_aes
 	make check_crypt
 
@@ -505,6 +506,18 @@ check_crypt: $(TARGETS)
 	# OpenSSL compatibility
 	# Algs and Engines
 	rm -f dd_rescue.enc dd_rescue.dec dd_rescue.enc.orig dd_rescue2 KEYS.* IVS.*
+
+check_fault: $(TARGETS)
+	# Test fault injection
+	# Only one fault, should be handled by retrying.
+	$(VG) ./dd_rescue -tp -F 4r/1,6r/1,22r/1 dd_rescue dd_rescue.cmp || true
+	cmp dd_rescue dd_rescue.cmp
+	# Incremental
+	$(VG) ./dd_rescue -tp -F 4r/0,20r/0 dd_rescue dd_rescue.cmp || true
+	cmp dd_rescue dd_rescue.cmp || true
+	$(VG) ./dd_rescue -p -F 6r/0 dd_rescue dd_rescue.cmp || true
+	cmp dd_rescue dd_rescue.cmp
+
 
 make_check_crypt: check_crypt
 	$(VG) ./dd_rescue -tp -L ./libddr_crypt.so=enc:keygen:keysfile:ivgen:ivsfile:alg=AES192+-CTR dd_rescue dd_rescue.enc
