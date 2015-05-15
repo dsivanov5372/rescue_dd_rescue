@@ -63,22 +63,22 @@ struct _list_##type {			\
 		l = 0;				\
 	} } while(0)
 
-#define LISTDELH(lh,type) do { 			\
+#define LISTDEL(l,prv,lhd,type) do { 		\
+	struct _list_##type *_nxt = l->next;	\
+	if (prv) prv->next = _nxt; else (lhd)->next = _nxt; \
+	free(l);				\
+	if (prv) l = prv; else l = lhd;		\
+	} while (0)
+
+#define LISTDEL1(lh,type) do { 			\
 	struct _list_##type *_nxt = lh->next;	\
 	free(lh);				\
 	lh = _nxt;				\
 	} while (0)
 
-#define LISTDEL(l,prv,type) do { 		\
-	struct _list_##type *_nxt = l->next;	\
-	if (prv) prv->next = _nxt;		\
-	free(l);				\
-	if (prv) l = prv; else l = _nxt;	\
-	} while (0)
-
 #define LISTTREEDEL(lh, type) do {		\
 	while (lh) 				\
-		LISTDELH(lh, type);		\
+		LISTDEL1(lh, type);		\
 	lh = 0;					\
 	} while (0)
 

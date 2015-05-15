@@ -1404,6 +1404,8 @@ int in_fault_list(LISTTYPE(fault_in_t) *faults, off_t off1, off_t off2)
 	if (!faults)
 		return 0;
 	LISTTYPE(fault_in_t) *faultiter, *prvfault = NULL;
+	LISTTYPE(fault_in_t) dummy;
+	memset(&dummy.data, 0, sizeof(fault_in_t));
 	LISTFOREACH(faults, faultiter) {
 		fault_in_t *fault = &LISTDATA(faultiter);
 #if 0
@@ -1430,11 +1432,11 @@ int in_fault_list(LISTTYPE(fault_in_t) *faults, off_t off1, off_t off2)
 				if (!--fault->rep) {
 					/* FIXME: We need to move the real list header */
 					if (faultiter == read_faults)
-						LISTDELH(read_faults, fault_in_t);
+						LISTDEL1(read_faults, fault_in_t);
 					else if (faultiter == write_faults)
-						LISTDELH(write_faults, fault_in_t);
+						LISTDEL1(write_faults, fault_in_t);
 					else 
-						LISTDEL(faultiter, prvfault, fault_in_t);
+						LISTDEL(faultiter, prvfault, &dummy, fault_in_t);
 				}
 				fplog(stderr, DEBUG, "Inject fault @ %li!\n", (long)fault->off);
 				return (fault->off - off1 + 1);
