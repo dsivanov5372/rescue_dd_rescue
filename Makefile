@@ -510,7 +510,7 @@ check_crypt: $(TARGETS)
 check_fault: $(TARGETS)
 	# Test fault injection
 	# Only one fault, should be handled by retrying.
-	$(VG) ./dd_rescue -tp -F 4r/1,6r/1,22r/1 dd_rescue dd_rescue.cmp || true
+	$(VG) ./dd_rescue -tpv -F 4r/1,6r/1,22r/1 dd_rescue dd_rescue.cmp || true
 	cmp dd_rescue dd_rescue.cmp
 	# Incremental
 	$(VG) ./dd_rescue -tp -F 4r/0,20r/0 dd_rescue dd_rescue.cmp || true

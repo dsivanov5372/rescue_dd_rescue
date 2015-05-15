@@ -1403,48 +1403,27 @@ int in_fault_list(LISTTYPE(fault_in_t) *faults, off_t off1, off_t off2)
 {
 	if (!faults)
 		return 0;
-	LISTTYPE(fault_in_t) *faultiter, *prvfault = NULL;
-	LISTTYPE(fault_in_t) dummy;
-	memset(&dummy.data, 0, sizeof(fault_in_t));
+	int hit = 0;
+	LISTTYPE(fault_in_t) *faultiter;
 	LISTFOREACH(faults, faultiter) {
 		fault_in_t *fault = &LISTDATA(faultiter);
 #if 0
 		fplog(stderr, DEBUG, "Match %li/%i in [%li,%li]\n",
 			(long)fault->off, fault->rep, (long)off1, (long)off2);
 #endif
-		if (fault->off >= off1 && fault->off < off2) {
-#if 1
-			if (fault->rep == 0) {
-				fplog(stderr, WARN, "Fault ctr for blk %i is zero, should have been deleted ...\n",
-					(int)fault->off);
-				prvfault = faultiter;
-				continue;
-			}
-#endif
-			assert(fault->rep != 0);
+		if (fault->off >= off1 && fault->off < off2 && fault->rep) {
 			if (fault->rep < 0) {
 				if (!++fault->rep)
 					fault->rep = 15;
-				prvfault = faultiter;
 				continue;
 			} else {
-				/* FIXME: Need to count down other affected blocks */
-				if (!--fault->rep) {
-					/* FIXME: We need to move the real list header */
-					if (faultiter == read_faults)
-						LISTDEL1(read_faults, fault_in_t);
-					else if (faultiter == write_faults)
-						LISTDEL1(write_faults, fault_in_t);
-					else 
-						LISTDEL(faultiter, prvfault, &dummy, fault_in_t);
-				}
-				fplog(stderr, DEBUG, "Inject fault @ %li!\n", (long)fault->off);
-				return (fault->off - off1 + 1);
+				--fault->rep;
+				if (!hit)
+					hit = fault->off-off1+1;
 			}
 		}
-		prvfault = faultiter;
 	}
-	return 0;
+	return hit;
 }
 
 static inline ssize_t mypread(int fd, void* bf, size_t sz, loff_t off,
@@ -1469,6 +1448,9 @@ static inline ssize_t mypread(int fd, void* bf, size_t sz, loff_t off,
 	/* Handle fault injection here */
 	int fault = in_fault_list(read_faults, (fst->ipos-op->init_ipos)/op->hardbs, (fst->ipos+sz-op->init_ipos)/op->hardbs);
 	if (fault) {
+		if (op->verbose)
+			fplog(stderr, DEBUG, "Inject read fault @ %li\n",
+				(long)((fault-1)*op->hardbs+off));
 		errno = EIO;
 		return -1;
 		// Cloud read and return (fault-1)*op->hardbs bytes ...
@@ -1487,6 +1469,9 @@ static inline ssize_t mypwrite(int fd, void* bf, size_t sz, loff_t off,
 	/* Handle fault injection here */
 	int fault = in_fault_list(write_faults, (fst->opos-op->init_opos)/op->hardbs, (fst->opos+sz-op->init_opos)/op->hardbs);
 	if (fault) {
+		if (op->verbose)
+			fplog(stderr, DEBUG, "Inject write fault @ %li\n",
+				(long)((fault-1)*op->hardbs+off));
 		errno = EIO;
 		return -1;
 		// Cloud write and return (fault-1)*op->hardbs bytes ...
@@ -2376,9 +2361,9 @@ void shortusage()
 void printinfo(FILE* const file, opt_t *op)
 {
 	fplog(file, INFO, "about to transfer %s kiBytes from %s to %s\n",
-	      fmt_kiB(op->maxxfer, !op->nocol), op->iname, op->oname);
+	      (op->maxxfer? fmt_kiB(op->maxxfer, !op->nocol): "unlim"), op->iname, op->oname);
 	fplog(file, INFO, "blocksizes: soft %i, hard %i\n", op->softbs, op->hardbs);
-	fplog(file, INFO, "starting positions: in %skiB, out %SkiB\n",
+	fplog(file, INFO, "starting positions: in %skiB, out %skiB\n",
 	      fmt_kiB(op->init_ipos, !nocol), fmt_kiB(op->init_opos, !nocol));
 	fplog(file, INFO, "Logfile: %s, Maxerr: %li\n",
 	      (op->lname? op->lname: "(none)"), op->maxerr);
@@ -2525,7 +2510,7 @@ char test_nocolor_term()
 	return 0;
 }
 
-void populate_faultlists(const char* arg)
+void populate_faultlists(const char* arg, opt_t *op)
 {
 	if (!*arg) {
 		fplog(stderr, FATAL, "Empty fault list specified\n");
@@ -2556,8 +2541,9 @@ void populate_faultlists(const char* arg)
 		else
 			arg = arg+strlen(arg);
 	}
-	fplog(stderr, DEBUG, "%i/%i faults injected for read/write\n",
-		LISTSIZE(read_faults, fault_in_t), LISTSIZE(write_faults, fault_in_t));
+	if (op->verbose)
+		fplog(stderr, DEBUG, "Will inject %i/%i faults for read/write\n",
+			LISTSIZE(read_faults, fault_in_t), LISTSIZE(write_faults, fault_in_t));
 }
 
 
@@ -2636,7 +2622,7 @@ char* parse_opts(int argc, char* argv[], opt_t *op, dpopt_t *dop)
 			case 'o': op->bbname = optarg; break;
 			case 'x': op->extend = 1; break;
 			case 'u': op->rmvtrim = 1; break;
-			case 'F': populate_faultlists(optarg); break;
+			case 'F': populate_faultlists(optarg, op); break;
 			case 'Y': do { ofile_t of; of.name = optarg; of.fd = -1; of.cdev = 0; LISTAPPEND(ofiles, of, ofile_t); } while (0); break;
 			case 'z': dop->prng_libc = 1; if (is_filename(optarg)) dop->prng_sfile = optarg; else dop->prng_seed = readint(optarg); break;
 			case 'Z': dop->prng_frnd = 1; if (is_filename(optarg)) dop->prng_sfile = optarg; else dop->prng_seed = readint(optarg); break;
