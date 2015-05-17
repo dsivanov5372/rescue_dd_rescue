@@ -24,7 +24,11 @@ enc_dec_compare_keys()
 ECB_ALGS="AES192-ECB AES192+-ECB AES192x2-ECB"
 CBC_ALGS="AES192-CBC AES192+-CBC AES192x2-CBC"
 CTR_ALGS="AES128-CTR AES128+-CTR AES128x2-CTR AES192-CTR AES192+-CTR AES192x2-CTR AES256-CTR AES256+-CTR AES256x2-CTR"
-TESTALGS="$ECB_ALGS $CBC_ALGS $CTR_ALGS"
+if test "$1" = "-q"; then
+  TESTALGS=""
+else
+  TESTALGS="$ECB_ALGS $CBC_ALGS $CTR_ALGS"
+fi
 
 echo "We will eat a lot of entropy ... hopefully you have some!"
 echo " Otherwise we might hang :-("
@@ -43,11 +47,25 @@ cmp dd_rescue.cmp dd_rescue2 || exit 3
 rm dd_rescue2
 
 # Holes (all), skiphole
+echo "*** Holes ***"
+dd_rescue -qpt dd_rescue dd_rescue3
+dd_rescue -qS 512k dd_rescue dd_rescue3
+enc_dec_compare_keys dd_rescue3 AES192-CTR keygen:ivgen "" "" "-qpt"
+enc_dec_compare_keys dd_rescue3 AES192-CTR keygen:ivgen skiphole "" "-qpt"
+dd_rescue -qt -s 384k -m 128k -S 0 dd_rescue3.cmp dd_rescue3.cmp3
+dd_rescue -qm 128k /dev/zero dd_rescue3.cmp2
+cmp dd_rescue3.cmp2 dd_rescue3.cmp3 || exit 3
+enc_dec_compare_keys dd_rescue3 AES192-CTR keygen:ivgen "" "" "-qptr"
+enc_dec_compare_keys dd_rescue3 AES192-CTR keygen:ivgen skiphole "" "-qptr"
+dd_rescue -qt -s 384k -m 128k -S 0 dd_rescue3.cmp dd_rescue3.cmp3
+cmp dd_rescue3.cmp2 dd_rescue3.cmp3 || exit 3
+rm -f dd_rescue3 dd_rescue3.enc dd_rescue3.enc.old dd_rescue3.cmp dd_rescue3.cmp2 dd_rescue3.cmp3
 # Reverse (CTR, ECB)
 # Chain with lzo, hash (all)
 # Various ways to pass in keys/IVs
 # Padding variations
 # OpenSSL compatibility
+
 echo "*** OpenSSL compatibility ***"
 openssl enc -aes-192-ctr -K 4d20e517cd98ff130ac160dcb4177ef1ab4e8f9501bc6e1d -iv f61059ec2d87a410853b8f1500000000 -in dd_rescue -out dd_rescue.enc.o || exit 1
 enc_dec_compare dd_rescue AES192-CTR "" keyhex=4d20e517cd98ff130ac160dcb4177ef1ab4e8f9501bc6e1d:ivhex=f61059ec2d87a410853b8f1500000000
@@ -55,6 +73,8 @@ cmp dd_rescue.enc dd_rescue.enc.o || exit 4
 openssl enc -aes-192-cbc -K 4d20e517cd98ff130ac160dcb4177ef1ab4e8f9501bc6e1d -iv f61059ec2d87a410853b8f150752bd8f -in dd_rescue -out dd_rescue.enc.o || exit 1
 enc_dec_compare dd_rescue AES192-CBC "" keyhex=4d20e517cd98ff130ac160dcb4177ef1ab4e8f9501bc6e1d:ivhex=f61059ec2d87a410853b8f150752bd8f
 cmp dd_rescue.enc dd_rescue.enc.o || exit 4
+rm -f dd_rescue.enc.o
+
 echo "*** Algorithms ... ***"
 # Algs and Engines
 for alg in $TESTALGS; do
@@ -74,7 +94,9 @@ enc_dec_compare dd_rescue AES192-CTR saltgen pass=PWD_:pbkdf2:saltfile=SALT
 enc_dec_compare dd_rescue AES192-CTR saltgen pass=PSWD:pbkdf2:saltxattr:sxfallback
 
 HAVE_AESNI=`grep " aes " /proc/cpuinfo 2>/dev/null`
-echo "*** Engines comparison ***"
+if test -n "$TESTALGS"; then
+  echo "*** Engines comparison ***"
+fi
 for alg in $TESTALGS; do
 	rm dd_rescue.enc.old dd_rescue.enc
 	case $alg in AES???+-???)

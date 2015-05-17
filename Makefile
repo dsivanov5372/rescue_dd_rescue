@@ -525,6 +525,8 @@ check_fault: $(TARGETS)
 	$(VG) ./dd_rescue -tp -b 16k -F 4w/2,22w/2 dd_rescue dd_rescue.cmp || true
 	$(VG) ./dd_rescue -p -b 16k -F 12w/2 dd_rescue dd_rescue.cmp || true
 	cmp dd_rescue dd_rescue.cmp
+	# TODO: More fault injection tests!
+	# Test reverse, holes, ... with faults
 
 
 make_check_crypt: check_crypt

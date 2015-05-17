@@ -126,9 +126,13 @@ int set_flag(char* flg, const char* msg)
 
 int set_alg(crypt_state* state, const char* algnm)
 {
+	ciph_desc_t *alg = findalg(state->engine, algnm);
 	if (state->alg) {
-		FPLOG(FATAL, "alg already set to %s, can't override with %s\n",
-			state->alg->name, algnm);
+		if (alg)
+			FPLOG(FATAL, "alg already set to, can't override with %s\n",
+				state->alg->name, algnm);
+		else
+			FPLOG(FATAL, "Don't understand option (alg?) %s\n", algnm);
 		return -1;
 	}
 	if (!strcmp(algnm, "help")) {
@@ -139,11 +143,11 @@ int set_alg(crypt_state* state, const char* algnm)
 		FPLOG(NOHDR, "\n", NULL);
 		return -1;
 	} else {
-		state->alg = findalg(state->engine, algnm);
-		if (!state->alg) {
+		if (!alg) {
 			FPLOG(FATAL, "Unknown parameter/algorithm %s\n", algnm);
 			return -1;
 		}
+		state->alg = alg;
 	}
 	return 0;
 }
@@ -1118,7 +1122,8 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 				FPLOG(NOHDR, " olen %i err %i towr %i\n", olen, err, *towr);
 			if (state->enc && state->rev) {
 				fst->opos += olen-left;
-				FPLOG(DEBUG, " LAST %i -> %i\n", left, olen);
+				if (state->debug)
+					FPLOG(DEBUG, " LAST %i -> %i\n", left, olen);
 			}
 			left = 0;
 			state->finfirst = 0;
