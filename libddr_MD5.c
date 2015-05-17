@@ -149,8 +149,12 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			state->xfallback = 1; state->chkfnm = param+9; }
 		else if (!memcmp(param, "fallb=", 6)) {
 			state->xfallback = 1; state->chkfnm = param+6; }
+		else if (!strcmp(param, "outnm"))
+			state->outf = 1;
 		else if (!memcmp(param, "outnm=", 6)) {
 			state->outf = 1; state->chkfnm=param+6; }
+		else if (!strcmp(param, "chknm"))
+			state->chkf = 1;
 		else if (!memcmp(param, "chknm=", 6)) {
 			state->chkf = 1; state->chkfnm=param+6; }
 		else if (!strcmp(param, "check")) {

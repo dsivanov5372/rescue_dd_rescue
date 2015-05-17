@@ -48,20 +48,29 @@ rm dd_rescue2
 
 # Holes (all), skiphole
 echo "*** Holes ***"
-dd_rescue -qpt dd_rescue dd_rescue3
-dd_rescue -qS 512k dd_rescue dd_rescue3
+./dd_rescue -qpt dd_rescue dd_rescue3
+./dd_rescue -qS 512k dd_rescue dd_rescue3
 enc_dec_compare_keys dd_rescue3 AES192-CTR keygen:ivgen "" "" "-qpt"
 enc_dec_compare_keys dd_rescue3 AES192-CTR keygen:ivgen skiphole "" "-qpt"
-dd_rescue -qt -s 384k -m 128k -S 0 dd_rescue3.cmp dd_rescue3.cmp3
-dd_rescue -qm 128k /dev/zero dd_rescue3.cmp2
-cmp dd_rescue3.cmp2 dd_rescue3.cmp3 || exit 3
+./dd_rescue -qt -s 384k -m 128k -S 0 dd_rescue3.cmp dd_rescue3.cmp3
+./dd_rescue -qm 128k /dev/zero dd_rescue3.cmp2
+cmp dd_rescue3.cmp2 dd_rescue3.cmp3 || exit 4
 enc_dec_compare_keys dd_rescue3 AES192-CTR keygen:ivgen "" "" "-qptr"
 enc_dec_compare_keys dd_rescue3 AES192-CTR keygen:ivgen skiphole "" "-qptr"
-dd_rescue -qt -s 384k -m 128k -S 0 dd_rescue3.cmp dd_rescue3.cmp3
-cmp dd_rescue3.cmp2 dd_rescue3.cmp3 || exit 3
-rm -f dd_rescue3 dd_rescue3.enc dd_rescue3.enc.old dd_rescue3.cmp dd_rescue3.cmp2 dd_rescue3.cmp3
-# Reverse (CTR, ECB)
+./dd_rescue -qt -s 384k -m 128k -S 0 dd_rescue3.cmp dd_rescue3.cmp3
+cmp dd_rescue3.cmp2 dd_rescue3.cmp3 || exit 4
+#rm -f dd_rescue3 dd_rescue3.enc dd_rescue3.enc.old dd_rescue3.cmp dd_rescue3.cmp2 dd_rescue3.cmp3
+
 # Chain with lzo, hash (all)
+echo "*** Plugin chains ... ***"
+$VG ./dd_rescue -pqt -L ./libddr_hash.so=sha256:outnm=,./libddr_lzo.so=compr,./libddr_hash.so=sha256:output,./libddr_crypt.so=enc:AES192-CTR:keygen:ivgen:keysfile:ivsfile,./libddr_hash.so=sha256:outnm= dd_rescue3 dd_rescue3.enc || exit 1
+sha256sum -c CHECKSUMS.sha256 || exit 4
+$VG ./dd_rescue -pqt -L ./libddr_hash.so=sha256:chknm,./libddr_crypt.so=AES192-CTR:dec:keysfile:ivsfile,./libddr_lzo.so=decompr,./libddr_hash.so=sha256:outnm dd_rescue3.enc dd_rescue3.cmp
+sha256sum -c CHECKSUMS.sha256 || exit 4
+cmp dd_rescue3.cmp dd_rescue3 || exit 3
+cat CHECKSUMS.sha256
+ls -lAF dd_rescue3*
+
 # Various ways to pass in keys/IVs
 # Padding variations
 # OpenSSL compatibility

@@ -471,10 +471,25 @@ with AES256 in CTR mode using a generated (random) key and IV and writes the res
 .
 It adds a line to KEYS.AES256-CTR and to IVS.AES256-CTR where the used key
 and IV are written to respectively. (Please ensure that this file is not accessible
-by any unauthorized person!)
-
+by any unauthorized person!) Decryption can be performed by
+.P
+.BI dd_rescue\ \-ptAL\ crypt=algo=AES256-CTR:dec:keysfile:ivsfile\ outfile\ infile
+.
 .TP
-.BI dd_rescue\ \-aL\ ...
+.BI dd_rescue\ \-AL\ crypt=AES192+-CTR:enc:saltgen:saltxattr:sxfallback:passfd=0:pbkdf2\ infile\ outfile
+will ask for a password, generate a random salt and store it in the extended attribute of
+.B outfile 
+(and fallback to SALTS.AES192+-CTR index file) and uses pbkdf2 function to produce a key
+and IV for encrypting the data. For decrypting, just omit the
+.B saltgen 
+parameter.
+.TP
+.BI dd_rescue\ \-ptL\ lzo=compr,crypt=AES256-CTR:enc:keygen:ivgen:keysfile:ivsfile\ infile\ outfile
+will compress the data (using lzo) and then encrypt. Use the reverse order and omit keygen and ivgen
+to decrypt and uncompress. Compression has the nice side effect of dealing with holes, which otherwise
+get compressed to non-zero values (unless you specify skiphole). Feel free to add the hash plugin
+at the beginning and/or the end to produce cryptographic checksums for both the original file and the
+end result.
 .
 .SH SEE ALSO
 .BR dd_rescue (1)
