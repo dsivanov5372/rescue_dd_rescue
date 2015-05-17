@@ -1527,7 +1527,8 @@ ssize_t writeblock(int towrite,
 	int prev_tow;
 	int redo = -1;
 	unsigned char* wbuf;
-	do {
+	do {	
+		char retry = 0;
 		prev_tow = towrite;
 	       	wbuf = call_plugins_block(fst->buf, &towrite, eof, &redo, op, fst);
 		if (!wbuf || !towrite) {
@@ -1541,12 +1542,14 @@ ssize_t writeblock(int towrite,
 		/* If sparse detection needs to be redone, it's handled in call_plugins_block() */
 		ssize_t wr = 0;
 		//errno = 0; /* should not be necessary */
+		/* Loop for EINTR/EAGAIN and for incomplete writes that make progress */
 		do {
 			wr += (err = mypwrite(fst->odes, wbuf+wr, towrite-wr, fst->opos+wr-op->reverse*towrite, op, fst, prg));
 			if (err == -1) 
 				wr++;
-		} while ((err == -1 && (errno == EINTR || errno == EAGAIN))
-			  || (wr < towrite && err > 0 && errno == 0));
+		} while ((err == -1 && (errno == EINTR || errno == EAGAIN || !retry++))
+		      || (err > 0 && errno == 0 && wr < towrite)
+		      || (err == 0 && !retry++));
 		totwr += wr;
 		//fplog(stderr, DEBUG, "wrote %i/%i orig %i\n", wr, towrite, prev_tow);
 		if (wr < towrite && err != 0) {
@@ -1677,7 +1680,7 @@ ssize_t dowrite(const ssize_t rd, opt_t *op, fstate_t *fst,
 		fplog(stderr, WARN, "assumption rd(%i) == wr(%i) failed! \n", rd, wr);
 		fplog(stderr, (fatal? FATAL: WARN),
 			"write %s (%skiB): %s!\n", 
-			op->oname, fmt_kiB(fst->opos+wr, !nocol), strerror(weno));
+			op->oname, fmt_kiB(fst->opos/*+wr*/, !nocol), strerror(weno));
 		errno = 0;
 		/* FIXME: This breaks for opts->reverse direction */
 		if (!op->reverse)
