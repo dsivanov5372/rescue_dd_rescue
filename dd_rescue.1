@@ -806,6 +806,21 @@ infile nor to write the checksum to CHECKSUMS.sha512.
 .PP
 See also README.dd_rescue and ddr_lzo(1) to learn about the possibilities.
 .
+.SH TESTING
+Untested code is buggy, almost always.
+I happen to have a damaged hard disk that I use for testing dd_rescue from
+time to time. But to allow for automated testing of error recovery, it's
+better to have predictable failures for the program to deal with. So there
+is a fault injection framework.
+.br
+Specifying
+.B -F\ 5w/1,17r/3,42r/-1,80r/0
+on the command-line will result in in the 5th block (counted in hardblocksize)
+will fail to be written once (from which dd_rescue should recover, as it
+tries a second time for failed writes), block no 17 will fail to be read 3 times,
+block no 42 will read fine once, but then fail afterwards, whereas block 80
+is completely unreadable (will fail infinite times).
+
 .SH BUGS/LIMITATIONS
 The source code does use the 64bit functions provided by glibc for file
 positioning. However, your kernel might not support it, so you might be
@@ -935,6 +950,8 @@ Plugins exist since 1.42, the MD5 plugin came with 1.42, the
 lzo plugin with 1.43. 1.44 renamed the MD5 plugin to hash and
 added support for the SHA-2 family of hashes. 1.45 added SHA-1
 and the ability to store and validate checksums.
+.br
+1.98 brought encryption and the fault injection framework.
 .PP
 Some additional information can be found on
 .br

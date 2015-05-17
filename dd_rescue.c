@@ -1528,7 +1528,7 @@ ssize_t writeblock(int towrite,
 	int redo = -1;
 	unsigned char* wbuf;
 	do {	
-		char retry = 0;
+		char retry = fst->o_chr;
 		prev_tow = towrite;
 	       	wbuf = call_plugins_block(fst->buf, &towrite, eof, &redo, op, fst);
 		if (!wbuf || !towrite) {
