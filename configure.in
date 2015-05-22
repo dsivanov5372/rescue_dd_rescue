@@ -1,4 +1,4 @@
-AC_INIT(dd_rescue, 1.47, kurt@garloff.de)
+AC_INIT(dd_rescue, 1.98, kurt@garloff.de)
 AC_CONFIG_HEADER(config.h)
 AC_PROG_CC
 AC_C_CONST

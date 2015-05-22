@@ -211,10 +211,13 @@ dd_rescue has a few nifty features:
 * Version 1.46 added rdrand() to the PRNG initiatlization (if 0 seed is 
   specified) if available and added the possibility to generate/check HMACs
   instead of plain hashes.
-* Version 1.47 brought a speed-up of the userspace PRNG, so if your storage
-  subsystem writes several GB/s, you see better performane for secure deletion.
-  More importantly, it introduced a crypt plugin, allowing to en/decrypt data
+* Version 1.98 (following 1.46) brought a speed-up of the userspace PRNG, so
+  if your storage subsystem writes several GB/s, you see better performane for
+  secure deletion.
+  More importantly, 1.98 introduced a crypt plugin, allowing to en/decrypt data
   with various AES variants.
+  It also brought a fault injection framework, that allows for improving the
+  test suite for testing error resilience.
 
 
 Copyright
