@@ -259,7 +259,7 @@ strip-all: $(OTHTARGETS)
 	strip -S $^
 
 clean:
-	rm -f $(TARGETS) $(OTHTARGETS) $(OBJECTS) $(OBJECTS2) core test log *.o *.po
+	rm -f $(TARGETS) $(OTHTARGETS) $(OBJECTS) $(OBJECTS2) core test log *.o *.po *.cmp *.enc *.enc.old CHECKSUMS.* SALTS.* KEYS.* IVS.*
 
 find_nonzero: find_nonzero_main.o $(OBJECTS2)
 	$(CC) $(CFLAGS_OPT) -fpie -o $@ $^ 
@@ -384,6 +384,8 @@ check: $(TARGETS) find_nonzero md5 sha1 sha256 sha512
 	$(VG) ./dd_rescue -tL ./libddr_hash.so=sha512:set_xattr:fallback:prepend=abc:append=xyz dd_rescue /tmp/dd_rescue
 	$(VG) ./dd_rescue  -L ./libddr_hash.so=sha512:chk_xattr:fallback /tmp/dd_rescue /dev/null && false || true
 	$(VG) ./dd_rescue  -L ./libddr_hash.so=sha512:chk_xattr:fallback:prepend=abc:append=xyz /tmp/dd_rescue /dev/null
+	# Extra xattrs (should be preserved)
+	#make check_xattr_copy
 	# Tests with HMAC
 	echo -n "what do ya want for nothing?" > TEST
 	echo "750c783e6ab0b503eaa86e310a5db738 *TEST" > HMACS.md5
@@ -393,6 +395,18 @@ check: $(TARGETS) find_nonzero md5 sha1 sha256 sha512
 	make check_fault
 	make check_aes
 	make check_crypt
+
+
+# FIXME: This fails on filesystems without xattr support - disabled until we know how to handle this
+check_xattr_copy: $(TARGETS)
+	$(VG) ./dd_rescue -pt dd_rescue dd_rescue.cmp
+	attr -s testattr -V testval dd_rescue.cmp
+	attr -qg testattr dd_rescue.cmp > attr
+	$(VG) ./dd_rescue -pt -L ./libddr_hash.so=sha256:set_xattr dd_rescue.cmp dd_rescue.cmp2
+	attr -qg testattr dd_rescue.cmp2 > attr2
+	cmp attr attr2
+	rm attr attr2 dd_rescue.cmp dd_rescue.cmp2
+
 
 check_hmac: $(TARGETS)
 	FILES="*.c *.h *.po dd_rescue *.so"; \
@@ -527,6 +541,11 @@ check_fault: $(TARGETS)
 	cmp dd_rescue dd_rescue.cmp
 	# TODO: More fault injection tests!
 	# Test reverse, holes, ... with faults
+	#
+	# TODO: Fault injection combined with
+	# - encryption (check_crypt)
+	# - compression
+	# - checksums
 
 
 make_check_crypt: check_crypt

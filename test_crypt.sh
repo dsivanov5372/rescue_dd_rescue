@@ -81,6 +81,12 @@ enc_dec_compare_keys urandom AES192-CBC "" pad=asneeded "" "-qpt"
 cmp urandom.enc urandom.enc.old || exit 4
 # zero padding does not work well for odd sizes (trailing zeroes)
 #enc_dec_compare_keys urandom AES192-CBC "" pad=zero "" "-qpt"
+# Reverse: Need to use ECB (reverse not possible with CBC)
+enc_dec_compare_keys urandom AES192-ECB keygen:ivgen pad=always "" "-qptr"
+enc_dec_compare_keys urandom AES192-ECB "" pad=asneeded "" "-qptr"
+# For odd sizes, always and asneeded should be identical
+cmp urandom.enc urandom.enc.old || exit 4
+# Block aligned ("even")
 $VG ./dd_rescue -t -m 4096 urandom urandom.new || exit 1
 mv urandom.new urandom
 enc_dec_compare_keys urandom AES192-CBC "" pad=always "" "-qpt"
@@ -88,6 +94,14 @@ enc_dec_compare_keys urandom AES192-CBC "" pad=asneeded "" "-qpt"
 # Those are not identical ...
 #cmp urandom.enc urandom.enc.old || exit 4
 enc_dec_compare_keys urandom AES192-CBC "" pad=zero "" "-qpt"
+# For even sizes, zero and asneeded should be identical
+cmp urandom.enc urandom.enc.old || exit 4
+# Reverse
+enc_dec_compare_keys urandom AES192-ECB "" pad=always "" "-qptr"
+enc_dec_compare_keys urandom AES192-ECB "" pad=asneeded "" "-qptr"
+# Those are not identical ...
+#cmp urandom.enc urandom.enc.old || exit 4
+enc_dec_compare_keys urandom AES192-ECB "" pad=zero "" "-qptr"
 # For even sizes, zero and asneeded should be identical
 cmp urandom.enc urandom.enc.old || exit 4
 rm -f urandom urandom.enc urandom.enc.old urandom.cmp
@@ -144,5 +158,6 @@ for alg in $TESTALGS; do
 	done
 done
 
+## TODO: Encryption with fault injection
 
 rm -f dd_rescue.enc dd_rescue.enc.o dd_rescue.enc.old dd_rescue.cmp SALT SALT.* KEYS.* IVS.*
