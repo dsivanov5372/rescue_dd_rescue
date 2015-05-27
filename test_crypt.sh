@@ -72,7 +72,26 @@ cat CHECKSUMS.sha256
 ls -lAF dd_rescue3*
 
 # Various ways to pass in keys/IVs
+
 # Padding variations
+$VG ./dd_rescue -t -m 4100 /dev/urandom . || exit 1
+enc_dec_compare_keys urandom AES192-CBC keygen:ivgen pad=always "" "-qpt"
+enc_dec_compare_keys urandom AES192-CBC "" pad=asneeded "" "-qpt"
+# For odd sizes, always and asneeded should be identical
+cmp urandom.enc urandom.enc.old || exit 4
+# zero padding does not work well for odd sizes (trailing zeroes)
+#enc_dec_compare_keys urandom AES192-CBC "" pad=zero "" "-qpt"
+$VG ./dd_rescue -t -m 4096 urandom urandom.new || exit 1
+mv urandom.new urandom
+enc_dec_compare_keys urandom AES192-CBC "" pad=always "" "-qpt"
+enc_dec_compare_keys urandom AES192-CBC "" pad=asneeded "" "-qpt"
+# Those are not identical ...
+#cmp urandom.enc urandom.enc.old || exit 4
+enc_dec_compare_keys urandom AES192-CBC "" pad=zero "" "-qpt"
+# For even sizes, zero and asneeded should be identical
+cmp urandom.enc urandom.enc.old || exit 4
+rm -f urandom urandom.enc urandom.enc.old urandom.cmp
+
 # OpenSSL compatibility
 
 echo "*** OpenSSL compatibility ***"
