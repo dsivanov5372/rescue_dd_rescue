@@ -58,7 +58,7 @@
 
 #if (defined(__x86_64__) || defined(__i386__)) && !defined(NO_SSE42) && !defined(NO_AVX2) && !defined(NO_RDRAND)
 # define MAY_AESNI 1
-char have_aesni;
+//char have_aesni;
 #endif
 
 

@@ -157,7 +157,7 @@ fmt_no.o: fmt_no.c fmt_no.h config.h ddr_ctrl.h
 %.o: %.c %.h config.h ddr_ctrl.h
 	$(CC) $(CFLAGS) -fpie -c $<
 
-%.po: %.c ddr_plugin.h config.h ddr_ctrl.h md5.h sha256.h sha512.h sha1.h hash.h
+%.po: %.c ddr_plugin.h config.h ddr_ctrl.h md5.h sha256.h sha512.h sha1.h hash.h find_nonzero.h
 	$(CC) $(CFLAGS) -fPIC -o $@ -c $<
 
 md5.po: md5.c md5.h hash.h config.h
@@ -184,7 +184,7 @@ libddr_lzo.so: libddr_lzo.po
 libddr_null.so: libddr_null.po
 	$(CC) -shared -o $@ $^
 
-libddr_crypt.so: libddr_crypt.po aes.po aes_c.po $(AESNI_PO) $(AES_OSSL_PO) pbkdf2.po sha256.po checksum_file.po secmem.po random.po $(POBJECTS2)
+libddr_crypt.so: libddr_crypt.po aes.po aes_c.po $(AESNI_PO) $(AES_OSSL_PO) pbkdf2.po sha256.po checksum_file.po secmem.po random.po find_nonzero.po $(POBJECTS2)
 	$(CC) -shared -o $@ $^ $(CRYPTOLIB) $(EXTRA_LDFLAGS)
 
 find_nonzero.o: find_nonzero.c $(FNZ_HEADERS) config.h

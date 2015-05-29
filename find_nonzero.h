@@ -93,5 +93,6 @@ inline static size_t find_nonzero(const unsigned char* blk, const size_t ln)
 	return ln;
 }
 
+char probe_procedure(void (*probefn)(void));
 
 #endif /* _FIND_NONZERO_H */
