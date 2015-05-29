@@ -15,12 +15,13 @@
 
 #include "ddr_plugin.h"
 #include "ddr_ctrl.h"
+#include "find_nonzero.h"
+#include "archdep.h"
 #include "aes.h"
 #include "hash.h"
 #include "pbkdf2.h"
 #include "sha256.h"
 #include "secmem.h"
-#include "archdep.h"
 #include "checksum_file.h"
 #include "random.h"
 
@@ -53,6 +54,11 @@
 #define ATOL atoll
 #else
 #error __WORDSIZE unknown
+#endif
+
+#if (defined(__x86_64__) || defined(__i386__)) && !defined(NO_SSE42) && !defined(NO_AVX2) && !defined(NO_RDRAND)
+# define MAY_AESNI 1
+char have_aesni;
 #endif
 
 
@@ -169,6 +175,9 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	state->pad = PAD_ALWAYS;
 	state->saltlen = -1;
 #ifdef HAVE_AESNI
+#ifdef MAY_AESNI
+	have_aesni = detect2("aes", probe_aesni);
+#endif
 	if (have_aesni)
 		state->engine = AESNI_Methods;
 	else
