@@ -126,10 +126,10 @@ larger than the input file. Use this when copying files.
 This is a hybrid between zero and always. This does PKCS7
 padding when the file size does not fill a complete block,
 but does no padding when it does. This meachnism has in the
-worst case (one pad byte) a chance of 1/256 to produce an
+worst case (no pad bytes) a chance of 1/255 to produce an
 incorrect decryption result by wrong unpadding (which means
 that it has an overall chance of misrepresenting the final
-filesize of 1/4096 for arbitrary file sizes). Don't use this
+filesize of 1/4080 for arbitrary file sizes). Don't use this
 unless you can deal with such errors (or exclude them)!
 .PP
 Note that the CTR stream mode does NOT require padding and indeed
