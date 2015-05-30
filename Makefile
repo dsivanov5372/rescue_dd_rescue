@@ -91,6 +91,7 @@ ifeq ($(HAVE_RDRNDAES),1)
 	CFLAGS += -DHAVE_AESNI
 else
 	CFLAGS += -DNO_RDRND -DNO_AES
+	HAVE_RDRNDAES = 0
 endif
 endif
 
@@ -115,6 +116,7 @@ ifeq ($(HAVE_RDRNDAES),1)
 	CFLAGS += -DHAVE_AESNI
 else
 	CFLAGS += -DNO_RDRND -DNO_AES
+	HAVE_RDRNDAES = 0
 endif
 endif
 
