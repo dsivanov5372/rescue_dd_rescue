@@ -113,13 +113,15 @@ rm -f urandom urandom.enc urandom.enc.old urandom.cmp
 # OpenSSL compatibility
 
 echo "*** OpenSSL compatibility ***"
-openssl enc -aes-192-ctr -K 4d20e517cd98ff130ac160dcb4177ef1ab4e8f9501bc6e1d -iv f61059ec2d87a410853b8f1500000000 -in dd_rescue -out dd_rescue.enc.o || exit 1
-enc_dec_compare dd_rescue AES192-CTR "" keyhex=4d20e517cd98ff130ac160dcb4177ef1ab4e8f9501bc6e1d:ivhex=f61059ec2d87a410853b8f1500000000
-cmp dd_rescue.enc dd_rescue.enc.o || exit 4
-openssl enc -aes-192-cbc -K 4d20e517cd98ff130ac160dcb4177ef1ab4e8f9501bc6e1d -iv f61059ec2d87a410853b8f150752bd8f -in dd_rescue -out dd_rescue.enc.o || exit 1
-enc_dec_compare dd_rescue AES192-CBC "" keyhex=4d20e517cd98ff130ac160dcb4177ef1ab4e8f9501bc6e1d:ivhex=f61059ec2d87a410853b8f150752bd8f
-cmp dd_rescue.enc dd_rescue.enc.o || exit 4
-rm -f dd_rescue.enc.o
+if openssl enc -aes-192-ctr -K 4d20e517cd98ff130ac160dcb4177ef1ab4e8f9501bc6e1d -iv f61059ec2d87a410853b8f1500000000 -in dd_rescue -out dd_rescue.enc.o; then
+  enc_dec_compare dd_rescue AES192-CTR "" keyhex=4d20e517cd98ff130ac160dcb4177ef1ab4e8f9501bc6e1d:ivhex=f61059ec2d87a410853b8f1500000000
+  cmp dd_rescue.enc dd_rescue.enc.o || exit 4
+fi
+if openssl enc -aes-192-cbc -K 4d20e517cd98ff130ac160dcb4177ef1ab4e8f9501bc6e1d -iv f61059ec2d87a410853b8f150752bd8f -in dd_rescue -out dd_rescue.enc.o; then
+  enc_dec_compare dd_rescue AES192-CBC "" keyhex=4d20e517cd98ff130ac160dcb4177ef1ab4e8f9501bc6e1d:ivhex=f61059ec2d87a410853b8f150752bd8f
+  cmp dd_rescue.enc dd_rescue.enc.o || exit 4
+  rm -f dd_rescue.enc.o
+fi
 
 echo "*** Algorithms ... ***"
 # Algs and Engines
