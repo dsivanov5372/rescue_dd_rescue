@@ -71,11 +71,11 @@ extern ddr_plugin_t ddr_plug;
 
 typedef struct _crypt_state {
 	ciph_desc_t *alg, *engine;
-	int seq;
 	char enc, debug, kgen, igen, sgen, keyf, ivf, saltf;
 	char kset, iset, pset, sset;
 	char finfirst, rev, bench, skiphole;
 	clock_t cpu;
+	int seq;
 	int pad;
 	int inbuf;
 	int pbkdf2r;
@@ -89,6 +89,7 @@ typedef struct _crypt_state {
 	char* salt_xattr_name;
 	char sxattr, sxfallback;
 #endif
+	char weakrnd;
 } crypt_state;
 
 /* FIXME HACK!!! aesni currently assumes avail of global crypto symbol to point to sec_fields ... */
@@ -105,7 +106,7 @@ const char *crypt_help = "The crypt plugin for dd_rescue de/encrypts data copied
 #ifdef HAVE_ATTR_XATTR_H
 		"\t:saltxattr[=xattr_name]:sxfallback\n"
 #endif
-		"\t:pbkdf2[=INT]:debug:bench[mark]:skiphole\n"
+		"\t:pbkdf2[=INT]:debug:bench[mark]:skiphole:weakrnd\n"
 		" Use algorithm=help to get a list of supported crypt algorithms\n";
 
 /* TODO: 
@@ -330,6 +331,8 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			state->pbkdf2r = 17000;
 		else if (!strcmp(param, "skiphole"))
 			state->skiphole = 1;
+		else if (!strcmp(param, "weakrnd"))
+			state->weakrnd = 1;
 		/* Hmmm, ok, let's support algname without alg= */
 		else {
 			err += set_alg(state, param);
@@ -832,7 +835,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	if (!state->kset) {	/* (a) */
 		if (state->kgen) {	/* (b) */
 			/* Do key generation */
-			random_bytes(state->sec->userkey1, state->alg->keylen/8, 1);
+			random_bytes(state->sec->userkey1, state->alg->keylen/8, 1 && !state->weakrnd);
 			/* Write to keysfile or warn ... */
 			if (!state->keyf)
 				FPLOG(WARN, "Generated key not written anywhere?\n", NULL);

@@ -36,8 +36,8 @@ echo " Otherwise we might hang :-("
 # MAIN TEST
 # Reverse (CTR, ECB)
 echo "*** Reverse ***"
-enc_dec_compare_keys dd_rescue AES192-CTR keygen:ivgen "" "" "-qptAr"
-enc_dec_compare_keys dd_rescue AES192-ECB keygen:ivgen "" "" "-qptAr"
+enc_dec_compare_keys dd_rescue AES192-CTR keygen:ivgen:weakrnd "" "" "-qptAr"
+enc_dec_compare_keys dd_rescue AES192-ECB keygen:ivgen:weakrnd "" "" "-qptAr"
 # Appending (CTR, ECB only when block-aligned)
 enc_dec_compare_keys dd_rescue AES192-CTR
 ./dd_rescue -qAx -L ./libddr_crypt.so=enc:alg=AES192-CTR:keysfile:ivsfile dd_rescue dd_rescue.enc || exit 1
@@ -50,20 +50,20 @@ rm dd_rescue2
 echo "*** Holes ***"
 ./dd_rescue -qpt dd_rescue dd_rescue3
 ./dd_rescue -qS 512k dd_rescue dd_rescue3
-enc_dec_compare_keys dd_rescue3 AES192-CTR keygen:ivgen "" "" "-qpt"
-enc_dec_compare_keys dd_rescue3 AES192-CTR keygen:ivgen skiphole "" "-qpt"
+enc_dec_compare_keys dd_rescue3 AES192-CTR keygen:ivgen:weakrnd "" "" "-qpt"
+enc_dec_compare_keys dd_rescue3 AES192-CTR keygen:ivgen:weakrnd skiphole "" "-qpt"
 ./dd_rescue -qt -s 384k -m 128k -S 0 dd_rescue3.cmp dd_rescue3.cmp3
 ./dd_rescue -qm 128k /dev/zero dd_rescue3.cmp2
 cmp dd_rescue3.cmp2 dd_rescue3.cmp3 || exit 4
-enc_dec_compare_keys dd_rescue3 AES192-CTR keygen:ivgen "" "" "-qptr"
-enc_dec_compare_keys dd_rescue3 AES192-CTR keygen:ivgen skiphole "" "-qptr"
+enc_dec_compare_keys dd_rescue3 AES192-CTR keygen:ivgen:weakrnd "" "" "-qptr"
+enc_dec_compare_keys dd_rescue3 AES192-CTR keygen:ivgen:weakrnd skiphole "" "-qptr"
 ./dd_rescue -qt -s 384k -m 128k -S 0 dd_rescue3.cmp dd_rescue3.cmp3
 cmp dd_rescue3.cmp2 dd_rescue3.cmp3 || exit 4
 #rm -f dd_rescue3 dd_rescue3.enc dd_rescue3.enc.old dd_rescue3.cmp dd_rescue3.cmp2 dd_rescue3.cmp3
 
 # Chain with lzo, hash (all)
 echo "*** Plugin chains ... ***"
-$VG ./dd_rescue -pqt -L ./libddr_hash.so=sha256:outnm=,./libddr_lzo.so=compr,./libddr_hash.so=sha256:output,./libddr_crypt.so=enc:AES192-CTR:keygen:ivgen:keysfile:ivsfile,./libddr_hash.so=sha256:outnm= dd_rescue3 dd_rescue3.enc || exit 1
+$VG ./dd_rescue -pqt -L ./libddr_hash.so=sha256:outnm=,./libddr_lzo.so=compr,./libddr_hash.so=sha256:output,./libddr_crypt.so=enc:AES192-CTR:keygen:ivgen:weakrnd:keysfile:ivsfile,./libddr_hash.so=sha256:outnm= dd_rescue3 dd_rescue3.enc || exit 1
 sha256sum -c CHECKSUMS.sha256 || exit 4
 $VG ./dd_rescue -pqt -L ./libddr_hash.so=sha256:chknm,./libddr_crypt.so=AES192-CTR:dec:keysfile:ivsfile,./libddr_lzo.so=decompr,./libddr_hash.so=sha256:outnm dd_rescue3.enc dd_rescue3.cmp
 sha256sum -c CHECKSUMS.sha256 || exit 4
@@ -75,14 +75,14 @@ ls -lAF dd_rescue3*
 
 # Padding variations
 $VG ./dd_rescue -t -m 4100 /dev/urandom . || exit 1
-enc_dec_compare_keys urandom AES192-CBC keygen:ivgen pad=always "" "-qpt"
+enc_dec_compare_keys urandom AES192-CBC keygen:ivgen:weakrnd pad=always "" "-qpt"
 enc_dec_compare_keys urandom AES192-CBC "" pad=asneeded "" "-qpt"
 # For odd sizes, always and asneeded should be identical
 cmp urandom.enc urandom.enc.old || exit 4
 # zero padding does not work well for odd sizes (trailing zeroes)
 #enc_dec_compare_keys urandom AES192-CBC "" pad=zero "" "-qpt"
 # Reverse: Need to use ECB (reverse not possible with CBC)
-enc_dec_compare_keys urandom AES192-ECB keygen:ivgen pad=always "" "-qptr"
+enc_dec_compare_keys urandom AES192-ECB keygen:ivgen:weakrnd pad=always "" "-qptr"
 enc_dec_compare_keys urandom AES192-ECB "" pad=asneeded "" "-qptr"
 # For odd sizes, always and asneeded should be identical
 cmp urandom.enc urandom.enc.old || exit 4
@@ -125,9 +125,9 @@ echo "*** Algorithms ... ***"
 for alg in $TESTALGS; do
 	echo "** $alg **"
 	# Generate key+IV, save to index file and use for decryption
-	enc_dec_compare_keys dd_rescue $alg keygen:ivgen
+	enc_dec_compare_keys dd_rescue $alg keygen:ivgen:weakrnd
 	## Generate key+IV, save to binary files 
-	#enc_dec_compare dd_rescue $alg keygen:ivgen keyfile=KEY:ivfile=IV
+	#enc_dec_compare dd_rescue $alg keygen:ivgen:weakrnd keyfile=KEY:ivfile=IV
 	# Use default salt generation 
 	enc_dec_compare dd_rescue $alg "" pass=PWRD:pbkdf2
 	# Use random numbers and write to index file

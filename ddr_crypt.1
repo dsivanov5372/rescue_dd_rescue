@@ -405,6 +405,12 @@ Note that you can compress and encode holes with ddr_lzo and then
 pass to ddr_crypt to encrypt and pass through ddr_crypt to decrypt
 and ddr_lzo to uncompress and extract holes again. This only works
 with CTR mode. 
+.P
+The option
+.B weakrnd
+is provided for testing in environments, where strong random
+numbers are not available. It will cause weaker random numbers
+to be used for key generation. Don't use it if you want security.
 .
 .SH openssl compatibility
 Files that are encrypted with openssl enc where you specify
