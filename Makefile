@@ -66,6 +66,10 @@ HAVE_AVX2 := $(shell echo "" | $(CC) -mavx2 -xc - 2>&1 | grep unrecognized || ec
 HAVE_SSE42 := $(shell echo "" | $(CC) -msse4.2 -xc - 2>&1 | grep unrecognized || echo 1)
 HAVE_RDRNDAES := $(shell echo "" | $(CC) -mrdrnd -maes -xc - 2>&1 | grep unrecognized || echo 1)
 
+ifneq ($(HAVE_RDRNDAES),1)
+	HAVE_RDRNDAES = 0
+endif
+
 MACH := $(shell uname -m | tr A-Z a-z | sed 's/i[3456]86/i386/')
 
 ifeq ($(MACH),i386)
@@ -91,7 +95,6 @@ ifeq ($(HAVE_RDRNDAES),1)
 	CFLAGS += -DHAVE_AESNI
 else
 	CFLAGS += -DNO_RDRND -DNO_AES
-	HAVE_RDRNDAES = 0
 endif
 endif
 
@@ -116,7 +119,6 @@ ifeq ($(HAVE_RDRNDAES),1)
 	CFLAGS += -DHAVE_AESNI
 else
 	CFLAGS += -DNO_RDRND -DNO_AES
-	HAVE_RDRNDAES = 0
 endif
 endif
 
