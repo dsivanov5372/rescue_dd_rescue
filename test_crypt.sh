@@ -158,6 +158,7 @@ for alg in $TESTALGS; do
 		ENG="$ENG aesni"
 	fi
 	if test "$HAVE_OPENSSL" = "0"; then ENG=`echo $ENG | sed 's/ openssl//'`; fi
+	if test "$HAVE_RDRNDAES" = "0"; then ENG=`echo $ENG | sed 's/ aesni//'`; fi
 	echo "** Alg $alg engines $ENG **"
 	for engine in $ENG; do
 		enc_dec_compare dd_rescue $alg "" pass=PASSWORD:pbkdf2 $engine
