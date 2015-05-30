@@ -11,6 +11,7 @@ AC_CHECK_FUNCS([ffs ffsl basename fallocate64 splice getopt_long open64 pread pr
 AC_CHECK_LIB(dl,dlsym)
 AC_CHECK_LIB(fallocate,linux_fallocate64)
 AC_CHECK_LIB(lzo2,lzo1x_1_compress)
+AC_CHECK_LIB(crypto,EVP_aes_192_ctr)
 
 dnl @synopsis CC_FLAGS_CHECK [compiler flags] 
 dnl @summary check whether compiler supports given C flags or not 
