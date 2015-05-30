@@ -208,8 +208,10 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			else if (!strcmp(param+7, "aesni"))
 				state->engine = AESNI_Methods;
 #endif
+#ifdef HAVE_LIBCRYPTO
 			else if (!strcmp(param+7, "openssl"))
 				state->engine = AES_OSSL_Methods;
+#endif
 			else {
 				FPLOG(FATAL, "Engine %s unknown, specify aesni/aes_c/openssl\n",
 					param+7);
