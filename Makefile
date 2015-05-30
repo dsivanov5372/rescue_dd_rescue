@@ -46,7 +46,7 @@ else
   HAVE_LZO=0
 endif
 
-ifeq ($(shell grep 'HAVE_OPENSSL_EVP_H 1' config.h >/dev/null 2>&1 && echo 1), 1)
+ifeq ($(shell grep 'HAVE_LIBCRYPTO 1' config.h >/dev/null 2>&1 && echo 1), 1)
   OTHTARGETS += pbkdf2
   AES_OSSL_PO = aes_ossl.po
   AES_OSSL_O = aes_ossl.o
@@ -512,7 +512,7 @@ check_aes: $(TARGETS) test_aes
 
 check_crypt: $(TARGETS)
 	# TODO: Move previous cases into script ...
-	./test_crypt.sh
+	HAVE_LZO=$(HAVE_LZO) ./test_crypt.sh
 	# Holes (all)
 	# Reverse (CTR, ECB)
 	# Chain with lzo, hash (all)

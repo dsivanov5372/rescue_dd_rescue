@@ -30,8 +30,7 @@ else
   TESTALGS="$ECB_ALGS $CBC_ALGS $CTR_ALGS"
 fi
 
-echo "We will eat a lot of entropy ... hopefully you have some!"
-echo " Otherwise we might hang :-("
+echo "We will eat a lot of entropy ... hopefully you have some left afterwards!"
 
 # MAIN TEST
 # Reverse (CTR, ECB)
@@ -62,6 +61,7 @@ cmp dd_rescue3.cmp2 dd_rescue3.cmp3 || exit 4
 #rm -f dd_rescue3 dd_rescue3.enc dd_rescue3.enc.old dd_rescue3.cmp dd_rescue3.cmp2 dd_rescue3.cmp3
 
 # Chain with lzo, hash (all)
+if test "$HAVE_LZO" = "1"; then
 echo "*** Plugin chains ... ***"
 $VG ./dd_rescue -pqt -L ./libddr_hash.so=sha256:outnm=,./libddr_lzo.so=compr,./libddr_hash.so=sha256:output,./libddr_crypt.so=enc:AES192-CTR:keygen:ivgen:weakrnd:keysfile:ivsfile,./libddr_hash.so=sha256:outnm= dd_rescue3 dd_rescue3.enc || exit 1
 sha256sum -c CHECKSUMS.sha256 || exit 4
@@ -70,6 +70,7 @@ sha256sum -c CHECKSUMS.sha256 || exit 4
 cmp dd_rescue3.cmp dd_rescue3 || exit 3
 cat CHECKSUMS.sha256
 ls -lAF dd_rescue3*
+fi
 
 # Various ways to pass in keys/IVs
 
