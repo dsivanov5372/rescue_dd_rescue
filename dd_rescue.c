@@ -1345,7 +1345,35 @@ int cleanup()
 	return real_cleanup(eptrs.opts, eptrs.fstate, eptrs.progress, eptrs.dpopts, eptrs.dpstate);
 }
 
+int l2(unsigned int l)
+{
+	int r = 0;
+	int allset = l&1 ? 1: 0;
+	while(l >>= 1) {
+		if (!(l&1))
+			allset = 0;
+		++r;
+	}
+	//printf("%i\n", r+allset);
+	return r+allset;
+}
+
 ssize_t fill_rand(void *bf, size_t ln)
+{
+	const char rand_bits = l2(RAND_MAX);
+	const char rand_bytes = rand_bits/8;
+	unsigned int i;
+	for (i = 0; i < ln; i+= rand_bytes) {
+		unsigned int r = rand();
+		// Use extra bits ...
+		if (rand_bits > 16)
+			r ^= r>>16;
+		memcpy(bf+i, &r, i+rand_bytes>ln? ln-i: rand_bytes);
+	}
+	return ln;
+}
+
+ssize_t fill_rand_old(void *bf, size_t ln)
 {
 	unsigned int i;
 	int* rbuf = (int*)bf;
