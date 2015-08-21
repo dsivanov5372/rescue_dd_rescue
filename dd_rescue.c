@@ -1474,7 +1474,7 @@ static inline ssize_t mypread(int fd, void* bf, size_t sz, loff_t off,
 			return frandom_bytes_inv(dst->prng_state, (unsigned char*) bf, sz);
 	}
 	/* Handle fault injection here */
-	int fault = in_fault_list(read_faults, (fst->ipos-op->init_ipos)/op->hardbs, (fst->ipos+sz-op->init_ipos)/op->hardbs);
+	int fault = in_fault_list(read_faults, (fst->ipos-op->init_ipos)/op->hardbs, (fst->ipos+(loff_t)sz-op->init_ipos)/op->hardbs);
 	if (fault) {
 		if (op->verbose)
 			fplog(stderr, DEBUG, "Inject read fault @ %li\n",
