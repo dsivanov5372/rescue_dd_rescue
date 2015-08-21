@@ -814,12 +814,18 @@ better to have predictable failures for the program to deal with. So there
 is a fault injection framework.
 .br
 Specifying
-.B -F\ 5w/1,17r/3,42r/-1,80r/0
+.B -F\ 5w/1,17r/3,42r/-1,80-84r/0
 on the command-line will result in in the 5th block (counted in hardblocksize)
 will fail to be written once (from which dd_rescue should recover, as it
 tries a second time for failed writes), block no 17 will fail to be read 3 times,
-block no 42 will read fine once, but then fail afterwards, whereas block 80
-is completely unreadable (will fail infinite times).
+block no 42 will read fine once, but then fail afterwards, whereas blocks 80
+through 83 are completely unreadable (will fail infinite times). Note that
+the range excludes the last block (80-84 means 4 blocks starting @ 80).
+.br
+Block offets are always counted in absolute positions, so starting in
+the middle of a file with -s or reverse copying won't affect the absolue
+position that is hit with the fault injection. (This has changed since
+1.98.)
 
 .SH BUGS/LIMITATIONS
 The source code does use the 64bit functions provided by glibc for file

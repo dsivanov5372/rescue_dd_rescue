@@ -243,7 +243,7 @@ LISTDECL(charp);
 LISTTYPE(charp) *freenames;
 
 typedef struct _fault_in {
-	loff_t off;
+	loff_t off, off2;
 	int rep;
 } fault_in_t;
 
@@ -1436,21 +1436,25 @@ int in_fault_list(LISTTYPE(fault_in_t) *faults, off_t off1, off_t off2)
 	LISTFOREACH(faults, faultiter) {
 		fault_in_t *fault = &LISTDATA(faultiter);
 #if 0
-		fplog(stderr, DEBUG, "Match %li/%i in [%li,%li]\n",
-			(long)fault->off, fault->rep, (long)off1, (long)off2);
+		fplog(stderr, DEBUG, "Match %li-%i/%i in [%li,%li]: ",
+			(long)fault->off, (long)fault->off2, fault->rep, (long)off1, (long)off2);
 #endif
-		if (fault->off >= off1 && fault->off < off2 && fault->rep) {
-			if (fault->rep < 0) {
-				if (!++fault->rep)
-					fault->rep = 15;
-				continue;
-			} else {
-				--fault->rep;
-				if (!hit)
-					hit = fault->off-off1+1;
-			}
+		if (!fault->rep || off1 >= fault->off2 || off2 <= fault->off)
+			continue;
+		/* We have a hit! */
+		if (fault->rep < 0) {
+			if (!++fault->rep)
+				fault->rep = 15;
+			continue;
+		} else {
+			--fault->rep;
+			if (!hit)
+				hit = 1+(fault->off>off1? fault->off-off1: 0);
 		}
 	}
+#if 0
+	fplog(stderr, NOHDR, "%i\n", hit);
+#endif
 	return hit;
 }
 
@@ -1474,7 +1478,7 @@ static inline ssize_t mypread(int fd, void* bf, size_t sz, loff_t off,
 			return frandom_bytes_inv(dst->prng_state, (unsigned char*) bf, sz);
 	}
 	/* Handle fault injection here */
-	int fault = in_fault_list(read_faults, (fst->ipos-op->init_ipos)/op->hardbs, (fst->ipos+(loff_t)sz-op->init_ipos)/op->hardbs);
+	int fault = in_fault_list(read_faults, fst->ipos/op->hardbs, (fst->ipos+(loff_t)sz)/op->hardbs);
 	if (fault) {
 		if (op->verbose)
 			fplog(stderr, DEBUG, "Inject read fault @ %li\n",
@@ -1495,7 +1499,7 @@ static inline ssize_t mypwrite(int fd, void* bf, size_t sz, loff_t off,
 {
 	/* TODO: Handle plugin output here ... */
 	/* Handle fault injection here */
-	int fault = in_fault_list(write_faults, (fst->opos-op->init_opos)/op->hardbs, (fst->opos+sz-op->init_opos)/op->hardbs);
+	int fault = in_fault_list(write_faults, fst->opos/op->hardbs, (fst->opos+(loff_t)sz)/op->hardbs);
 	if (fault) {
 		if (op->verbose)
 			fplog(stderr, DEBUG, "Inject write fault @ %li\n",
@@ -2359,7 +2363,7 @@ void printlonghelp()
 	fprintf(stderr, "         -f         force: skip some sanity checks (def=no),\n");
 	fprintf(stderr, "         -p         preserve: preserve ownership, perms, times, attrs (def=no),\n");
 	fprintf(stderr, "         -Y oname   Secondary output file (multiple possible),\n");
-	fprintf(stderr, "         -F offr/rep[,offw/rep[,...]]  fault injection (hardbs off) read/write\n");
+	fprintf(stderr, "         -F off[-off]r/rep[,off[-off]w/rep[,...]]  fault injection (hardbs off) r/w\n");
 	fprintf(stderr, "         -q         quiet operation,\n");
 	fprintf(stderr, "         -v         verbose operation,\n");
 	fprintf(stderr, "         -c 0/1     switch off/on colors (def=auto),\n");
@@ -2552,11 +2556,17 @@ void populate_faultlists(const char* arg, opt_t *op)
 		char rw;
 		fault_in_t fault;
 		fault.off = 0L;
+		fault.off2 = 0L;
 		int err = sscanf(arg, "%lu%c/%i", (unsigned long*)&fault.off, &rw, &fault.rep);
 		if (err != 3) {
-			fplog(stderr, FATAL, "Could not parse fault spec %s\n", arg);
-			exit(11);
-		}
+			int err = sscanf(arg, "%lu-%lu%c/%i", (unsigned long*)&fault.off, 
+					 (unsigned long*)&fault.off2, &rw, &fault.rep);
+			if (err != 4) {
+				fplog(stderr, FATAL, "Could not parse fault spec %s\n", arg);
+				exit(11);
+			}
+		} else
+			fault.off2 = fault.off+1;
 		if (fault.rep == 0)
 			fault.rep = INT_MAX;
 		if (rw == 'r')
