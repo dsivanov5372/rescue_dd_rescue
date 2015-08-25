@@ -47,6 +47,7 @@ size_t find_nonzero_arm6(const unsigned char *blk, const size_t ln)
 	"5:				\n"
 	"	sub %0, #4		\n"
 #ifdef __ARM_FEATURE_CLZ
+//#if defined(__ARM_ARCH_7A__) || defined(__ARM_ARCH_6__)
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 	"	rev r5, r5		\n"
 #endif
