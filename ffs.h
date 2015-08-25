@@ -92,6 +92,15 @@ static int myffsl_c(unsigned long val)
 /** Find last (highest) bit set in word val, returns a val b/w __WORDSIZE and 1, 0 if no bit is set */
 static int myflsl(unsigned long val)
 {
+#ifdef __aarch64__
+	asm volatile(
+	"	rbit %0, %0	\n"
+	: "=r"(val)
+	: "0"(val)
+	);
+	val = myffsl(val);
+	return val? 65-val: 0;
+#else
 	int res = __WORDSIZE;
 	if (!val)
 		return 0;
@@ -116,6 +125,7 @@ static int myflsl(unsigned long val)
 		mask <<= shift;
 	}
 	return res;
+#endif
 }
 #endif
 
