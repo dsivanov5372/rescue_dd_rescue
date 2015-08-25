@@ -60,7 +60,6 @@ size_t find_nonzero_arm8(const unsigned char *blk, const size_t ln)
 //#ifndef __ARMEB__				/* Little endian bitmasks */
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 	"	rev x13, x13		\n"
-//#else
 #endif
 	"	clz x12, x13		\n"
 	"	add %0, %0, x12, lsr#3	\n"

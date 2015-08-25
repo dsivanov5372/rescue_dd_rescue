@@ -46,6 +46,13 @@ size_t find_nonzero_arm6(const unsigned char *blk, const size_t ln)
 	"	mov r5, r4		\n"
 	"5:				\n"
 	"	sub %0, #4		\n"
+#ifdef __ARM_FEATURE_CLZ
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+	"	rev r5, r5		\n"
+#endif
+	"	clz r4, r5		\n"
+	"	add %0, %0, r4, lsr#3	\n"
+#else
 //#ifndef __ARMEB__				/* Little endian bitmasks */
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 	"	tst r5, #0xff		\n"
@@ -66,6 +73,7 @@ size_t find_nonzero_arm6(const unsigned char *blk, const size_t ln)
 #endif
 	"	bne 10f			\n"
 	"	add %0, #1		\n"	
+#endif
 	"10:				\n"
 	: "=r"(res)
 	: "0"(blk), "r"(end)
