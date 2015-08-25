@@ -75,6 +75,7 @@ void probe_avx2(); void probe_sse42(); void probe_rdrand(); void probe_aesni();
 #define have_sse2 0
 #define have_sse42 0
 #define have_aesni 0
+#define have_arm8crypto 0
 #define ARCH_DECLS
 #define ARCH_DETECT do {} while (0)
 #define FIND_NONZERO_OPT(x,y) find_nonzero_arm6(x,y)
@@ -88,18 +89,21 @@ void probe_avx2(); void probe_sse42(); void probe_rdrand(); void probe_aesni();
 #define have_sse2 0
 #define have_sse42 0
 #define have_aesni 0
-#define ARCH_DECLS
-#define ARCH_DETECT do {} while (0)
+extern char have_arm8crypto;
+void probe_arm8crypto();
+#define ARCH_DECLS char have_arm8crypto
+#define ARCH_DETECT have_arm8crypto = detect("aes", probe_armv8crypto)
 #define FIND_NONZERO_OPT(x,y) find_nonzero_arm8(x,y)
 #define OPT_STR "arm8"
 #define OPT_STR2 "arm8"
 
 #else	/* other CPU arch */
-#define have_ldmia 0
+#define have_arm 0
 #define have_avx2 0
 #define have_sse2 0
 #define have_sse42 0
 #define have_aesni 0
+#define have_arm8crypto 0
 #define FIND_NONZERO_OPT(x,y) find_nonzero_c(x,y)
 #define ARCH_DECLS
 #define ARCH_DETECT do {} while (0)

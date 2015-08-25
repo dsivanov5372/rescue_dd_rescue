@@ -107,6 +107,19 @@ size_t find_nonzero_arm8(const unsigned char *blk, const size_t ln)
 	: "x10", "x11", "x12", "x13");
 	return res-blk;
 }
+
+void probe_arm8crypto()
+{
+	char res[16];
+	memset(res, 0, 16);
+	asm volatile(
+	"	eor v0.16b, v0.16b, v0.16b	\n"
+	"	aese %0.16b, v0.16b		\n"
+	: "=v"(res)
+	:
+	: "v0");
+}
+
 #else
 #warning no point compiling this on non-ARM arch
 #endif
