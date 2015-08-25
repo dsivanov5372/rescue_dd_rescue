@@ -128,6 +128,7 @@ ifeq ($(MACH),arm)
 endif
 ifeq ($(MACH),aarch64)
 	OBJECTS2 = find_nonzero_arm64.o
+	CFLAGS += -march=armv8-a+crypto
 endif
 
 OS = $(shell uname)

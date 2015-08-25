@@ -110,14 +110,13 @@ size_t find_nonzero_arm8(const unsigned char *blk, const size_t ln)
 
 void probe_arm8crypto()
 {
-	char res[16];
-	memset(res, 0, 16);
 	asm volatile(
 	"	eor v0.16b, v0.16b, v0.16b	\n"
-	"	aese %0.16b, v0.16b		\n"
-	: "=v"(res)
+	"	eor v1.16b, v1.16b, v1.16b	\n"
+	"	aese v1.16b, v0.16b		\n"
 	:
-	: "v0");
+	:
+	: "v0", "v1");
 }
 
 #else

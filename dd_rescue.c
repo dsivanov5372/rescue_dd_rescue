@@ -2279,6 +2279,10 @@ void printversion()
 		fprintf(stderr, "aes ");
 #endif
 #endif
+#ifdef __aarch64__
+	if (have_arm8crypto)
+		fprintf(stderr, "aes ");
+#endif
 	fprintf(stderr, "%s", OPT_STR);
 	fprintf(stderr, ")\n");
 	fprintf(stderr, "dd_rescue is free software. It's protected by the terms of GNU GPL v2 or v3\n");
