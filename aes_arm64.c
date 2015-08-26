@@ -56,6 +56,16 @@ static inline u32 ror32(u32 in, u32 rv)
 	return in;
 }
 
+static inline u32 ror32_8(u32 in)
+{
+	asm volatile (
+	"	ror	%w[out], %w[in], #8	\n"
+	: [out] "=r"(in)
+	: [in] "0"(in)
+	);
+	return in;
+}
+
 static inline u32 aes_sbox(u32 in)
 {
 	u32 ret;
@@ -99,7 +109,7 @@ int AES_ARM8_KeySetupEnc(u32 rk[/*4*(Nr + 1)*/], const u8 cipherKey[], int keyBi
 		u32* rki = rk+i*keyln32;
 		u32* rko = rk+keyln32;
 
-		rko[0] = ror32(aes_sbox(rki[keyln32-1]), 8) ^ rcon[i] ^ rki[0];
+		rko[0] = ror32_8(aes_sbox(rki[keyln32-1])) ^ rcon[i] ^ rki[0];
 		rko[1] = rko[0] ^ rki[1];
 		rko[2] = rko[1] ^ rki[2];
 		rko[3] = rko[2] ^ rki[3];
@@ -129,18 +139,18 @@ inline void AES_ARM8_EKey_DKey(const u32* ekey,
 			   int rounds)
 {
 	int i;
-	memcpy(dkey, ekey+rounds*16, 16);
+	memcpy(dkey, ekey+rounds*4, 16);
 	for (i = 1, rounds--; rounds > 0; i++, rounds--) {
 		asm volatile(
 		"	ld1	{v0.16b}, %1	\n"
 		"	aesimc	v1.16b, v0.16b	\n"
 		"	st1	{v1.16b}, %0	\n"
-		: "=Q"(dkey[i*16])
-		: "Q"(ekey[rounds*16])
+		: "=Q"(dkey[i*4])
+		: "Q"(ekey[rounds*4])
 		: "v0", "v1"
 		);
 	}
-	memcpy(dkey+16*i, ekey, 16);
+	memcpy(dkey+4*i, ekey, 16);
 }
 
 /**
@@ -151,7 +161,7 @@ inline void AES_ARM8_EKey_DKey(const u32* ekey,
 int AES_ARM8_KeySetupDec(u32 rk[/*4*(Nr + 1)*/], const u8 cipherKey[], int keyBits, int rounds)
 {
 	/* TODO: Use secmem */
-	u32 ekey[20*16];
+	u32 ekey[20*4];
 	/* expand the cipher key: */
 	int Nr = AES_ARM8_KeySetupEnc(ekey, cipherKey, keyBits, rounds);
 	AES_ARM8_EKey_DKey(ekey, rk, Nr);
