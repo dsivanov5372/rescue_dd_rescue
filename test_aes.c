@@ -279,14 +279,32 @@ int main(int argc, char *argv[])
 	//OPENSSL_init();
 	printf("===> AES tests/benchmark (%i) PAD_ZERO <===\n", DEF_LN);
 	TEST_ENGINES(DEF_LN, PAD_ZERO, PAD_ZERO);
+	if (ret) {
+		fprintf(stderr, " ************* %i inconsistencies found\n", ret);
+		secmem_release(crypto);
+		return ret;
+	}
 	printf("===> AES tests/benchmark (%i) PAD_ZERO <===\n", DEF_LN-SHIFT);
 	TEST_ENGINES(DEF_LN-SHIFT, PAD_ZERO, PAD_ZERO);
+	if (ret) {
+		fprintf(stderr, " ************* %i inconsistencies found\n", ret);
+		secmem_release(crypto);
+		return ret;
+	}
 	printf("\n===> AES tests/benchmark (%i) PAD_ALWAYS <===\n", DEF_LN);
 	TEST_ENGINES(DEF_LN, PAD_ALWAYS, PAD_ALWAYS);
+	if (ret) {
+		fprintf(stderr, " ************* %i inconsistencies found\n", ret);
+		secmem_release(crypto);
+		return ret;
+	}
 	printf("===> AES tests/benchmark (%i) PAD_ALWAYS <===\n", DEF_LN-SHIFT);
 	TEST_ENGINES(DEF_LN-SHIFT, PAD_ALWAYS, PAD_ALWAYS);
-	if (ret)
-		abort();
+	if (ret) {
+		fprintf(stderr, " ************* %i inconsistencies found\n", ret);
+		secmem_release(crypto);
+		return ret;
+	}
 	printf("\n===> AES tests/benchmark (%i) PAD_ASNEEDED <===\n", DEF_LN);
 	TEST_ENGINES(DEF_LN, PAD_ASNEEDED, PAD_ASNEEDED);
 	printf("===> AES tests/benchmark (%i) PAD_ASNEEDED <===\n", DEF_LN-SHIFT);
