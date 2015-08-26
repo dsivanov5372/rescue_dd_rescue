@@ -46,15 +46,6 @@ void AES_ARM8_Decrypt(const u8 *rkeys/*[16*(Nr + 1)]*/, uint Nr, const u8 ct[16]
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-static inline u32 ror32(u32 in, u32 rv)
-{
-	asm volatile (
-	"	ror	%w[out], %w[in], %w[rot]	\n"
-	: [out] "=r"(in)
-	: [in] "0"(in), [rot] "r"(rv)
-	);
-	return in;
-}
 
 static inline u32 ror32_8(u32 in)
 {
@@ -115,19 +106,19 @@ int AES_ARM8_KeySetupEnc(u32 rk[/*4*(Nr + 1)*/], const u8 cipherKey[], int keyBi
 		rko[3] = rko[2] ^ rki[3];
 		
 		if (keyBits == 192) {
-			if (3*i/2 >= rounds)
+			if (3*(i+1)/2 >= rounds)
 				return rounds;
 			rko[4] = rko[3] ^ rki[4];
 			rko[5] = rko[4] ^ rki[5];
 		} else if (keyBits == 256) {
-			if (2*i >= rounds)
+			if (2*i+2 >= rounds)
 				return rounds;
 			rko[4] = aes_sbox(rko[3]) ^ rki[4];
 			rko[5] = rko[4] ^ rki[5];
 			rko[6] = rko[5] ^ rki[6];
 			rko[7] = rko[6] ^ rki[7];
 		} else if (keyBits == 128) {
-			if (i >= rounds-1)
+			if (i+1 >= rounds)
 				return rounds;
 		} 
 	}
