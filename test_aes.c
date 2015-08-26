@@ -50,6 +50,10 @@ void fillval(unsigned char* bf, ssize_t ln, unsigned int val)
 #include "aesni.h"
 #endif
 
+#ifdef HAVE_AES_ARM64
+#include "aes_arm64.h"
+#endif
+
 #include "aes_c.h"
 
 #ifdef HAVE_OPENSSL_EVP_H
@@ -223,9 +227,19 @@ int test_alg(const char* prefix, ciph_desc_t *alg, uchar *key, uchar *in, ssize_
 #define TEST_AESNI(LN, EPAD, DPAD) do {} while(0)
 #endif
 
+#ifdef HAVE_AES_ARM64
+#define TEST_AES_ARM64(LN, EPAD, DPAD)			\
+	alg = findalg(AES_ARM8_Methods, testalg);	\
+	if (alg)					\
+		ret += test_alg("ARM64", alg, key, in, LN, EPAD, DPAD, rep)
+#else
+#define TEST_AES_ARM64(LN, EPAD, DPAD) do {} while(0)
+#endif
+
 
 #define TEST_ENGINES(LN, EPAD, DPAD)			\
 	TEST_AESNI(LN, EPAD, DPAD);			\
+	TEST_AES_ARM64(LN, EPAD, DPAD);			\
 	alg = findalg(AES_C_Methods, testalg);		\
 	if (alg) 					\
 		ret += test_alg("AES_C", alg, key, in, LN, EPAD, DPAD, rep);	\

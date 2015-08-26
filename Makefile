@@ -128,7 +128,10 @@ ifeq ($(MACH),arm)
 endif
 ifeq ($(MACH),aarch64)
 	OBJECTS2 = find_nonzero_arm64.o
-	CFLAGS += -march=armv8-a+crypto
+	AES_ARM64_O = aes_arm64.o
+	AES_ARM64_PO = aes_arm64.po
+	#CFLAGS += -march=armv8-a+crypto
+	CFLAGS += -DHAVE_AES_ARM64
 endif
 
 OS = $(shell uname)
@@ -189,7 +192,7 @@ libddr_lzo.so: libddr_lzo.po
 libddr_null.so: libddr_null.po
 	$(CC) -shared -o $@ $^
 
-libddr_crypt.so: libddr_crypt.po aes.po aes_c.po $(AESNI_PO) $(AES_OSSL_PO) pbkdf2.po sha256.po checksum_file.po secmem.po random.po find_nonzero.po $(POBJECTS2)
+libddr_crypt.so: libddr_crypt.po aes.po aes_c.po $(AESNI_PO) $(AES_ARM64_PO) $(AES_OSSL_PO) pbkdf2.po sha256.po checksum_file.po secmem.po random.po find_nonzero.po $(POBJECTS2)
 	$(CC) -shared -o $@ $^ $(CRYPTOLIB) $(EXTRA_LDFLAGS)
 
 find_nonzero.o: find_nonzero.c $(FNZ_HEADERS) config.h
@@ -203,6 +206,9 @@ find_nonzero_sse2.o: find_nonzero_sse2.c $(FNZ_HEADERS) config.h
 
 find_nonzero_arm.o: find_nonzero_arm.c $(FNZ_HEADERS) config.h
 	$(CC) $(CFLAGS_OPT) -fpie -c $< 
+
+find_nonzero_arm64.o: find_nonzero_arm64.c $(FNZ_HEADERS) config.h
+	$(CC) $(CFLAGS_OPT) -march=armv8-a+crypto -fpie -c $< 
 
 find_nonzero_main.o: find_nonzero.c $(FNZ_HEADERS) config.h
 	$(CC) $(CFLAGS_OPT) -fpie -o $@ -c $< -DTEST 
@@ -281,14 +287,20 @@ fiemap: fiemap.c fiemap.h fstrim.h config.h fstrim.o
 pbkdf2: ossl_pbkdf2.c
 	$(CC) $(CFLAGS) -fpie -o $@ $< $(CRYPTOLIB)
 
-test_aes: test_aes.c $(AESNI_O) aes_c.o secmem.o sha256.o $(AES_OSSL_O) aes.o aesni.h config.h
-	$(CC) $(CFLAGS) -fpie $(DEF) -o $@ $< $(AESNI_O) aes_c.o secmem.o sha256.o $(AES_OSSL_O) aes.o $(CRYPTOLIB)
+test_aes: test_aes.c $(AESNI_O) $(AES_ARM64_O) aes_c.o secmem.o sha256.o $(AES_OSSL_O) aes.o aesni.h aes_arm64.h config.h
+	$(CC) $(CFLAGS) -fpie $(DEF) -o $@ $< $(AESNI_O) $(AES_ARM64_O) aes_c.o secmem.o sha256.o $(AES_OSSL_O) aes.o $(CRYPTOLIB)
 
 aesni.o: aesni.c aesni.h aes.h sha256.h config.h
 	$(CC) $(CFLAGS) -fpie -O3 -maes -msse4.1 -c $<
 
 aesni.po: aesni.c aesni.h aes.h sha256.h config.h
 	$(CC) $(CFLAGS) -fPIC -O3 -maes -msse4.1 -c $< -o $@
+
+aes_arm64.o: aes_arm64.c aes_arm64.h aes.h sha256.h config.h
+	$(CC) $(CFLAGS) -fpie -O3 -march=armv8-a+crypto -c $<
+
+aes_arm64.po: aes_arm64.c aes_arm64.h aes.h sha256.h config.h
+	$(CC) $(CFLAGS) -fPIC -O3 -march=armv8-a+crypto -c $< -o $@
 
 aes_c.o: aes_c.c aes_c.h aes.h sha256.h config.h
 	$(CC) $(CFLAGS) -fpie $(FULL_UNROLL) -O3 -c $<

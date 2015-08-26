@@ -41,10 +41,10 @@ typedef unsigned char u8;
 typedef unsigned short u16;
 typedef unsigned int u32;
 
-int rijndaelKeySetupEnc(u32 rk[/*4*(Nr + 1)*/], const u8 cipherKey[], int keyBits, int rounds);
-int rijndaelKeySetupDec(u32 rk[/*4*(Nr + 1)*/], const u8 cipherKey[], int keyBits, int rounds);
-void rijndaelEncrypt(const u8 *rkeys/*[16*(Nr + 1)]*/, uint Nr, const u8 pt[16], u8 ct[16]);
-void rijndaelDecrypt(const u8 *rkeys/*[16*(Nr + 1)]*/, uint Nr, const u8 ct[16], u8 pt[16]);
+int AES_ARM8_KeySetupEnc(u32 rk[/*4*(Nr + 1)*/], const u8 cipherKey[], int keyBits, int rounds);
+int AES_ARM8_KeySetupDec(u32 rk[/*4*(Nr + 1)*/], const u8 cipherKey[], int keyBits, int rounds);
+void AES_ARM8_Encrypt(const u8 *rkeys/*[16*(Nr + 1)]*/, uint Nr, const u8 pt[16], u8 ct[16]);
+void AES_ARM8_Decrypt(const u8 *rkeys/*[16*(Nr + 1)]*/, uint Nr, const u8 ct[16], u8 pt[16]);
 
 
 /*	$NetBSD: rijndael-alg-fst.c,v 1.6 2003/07/15 11:00:40 itojun Exp $
@@ -465,7 +465,7 @@ static void rijndaelKeySetupEncPF()
  *
  * @return	the number of rounds for the given cipher key size.
  */
-int rijndaelKeySetupEnc(u32 rk[/*4*(Nr + 1)*/], const u8 cipherKey[], int keyBits, int rounds)
+int AES_ARM8_KeySetupEnc(u32 rk[/*4*(Nr + 1)*/], const u8 cipherKey[], int keyBits, int rounds)
 {
 	int i = 0;
 	u32 temp;
@@ -559,13 +559,13 @@ static void rijndaelKeySetupDecPF()
  *
  * @return	the number of rounds for the given cipher key size.
  */
-int rijndaelKeySetupDec(u32 rk[/*4*(Nr + 1)*/], const u8 cipherKey[], int keyBits, int rounds)
+int AES_ARM8_KeySetupDec(u32 rk[/*4*(Nr + 1)*/], const u8 cipherKey[], int keyBits, int rounds)
 {
 	int Nr, i, j;
 	register u32 temp;
 
 	/* expand the cipher key: */
-	Nr = rijndaelKeySetupEnc(rk, cipherKey, keyBits, rounds);
+	Nr = AES_ARM8_KeySetupEnc(rk, cipherKey, keyBits, rounds);
 	/* invert the order of the round keys: */
 	for (i = 0, j = 4 * Nr; i < j; i += 4, j -= 4) {
 		temp = rk[i];
@@ -614,168 +614,37 @@ static void rijndaelEncryptPF()
 		__builtin_prefetch(Te4+k, 0, 3);
 }
 
-void rijndaelEncrypt(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 pt[16], u8 ct[16])
+void AES_ARM8_Encrypt(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 pt[16], u8 ct[16])
 {
-	register u32 s0, s1, s2, s3, t0, t1, t2, t3;
-#ifndef FULL_UNROLL
-	int r;
-#endif /* ?FULL_UNROLL */
-	const u32 *rk = (u32*)rkeys;
-	
-	/*
-	     * map byte array block to cipher state
-	     * and add initial round key:
-	     */
-	s0 = GETU32(pt     ) ^ rk[0];
-	s1 = GETU32(pt +  4) ^ rk[1];
-	s2 = GETU32(pt +  8) ^ rk[2];
-	s3 = GETU32(pt + 12) ^ rk[3];
-	/* Unrolled version: We only support 10, 12, 14, 15, 16, or 18 rounds.
-	 * The standard version supports arbitrary number of rounds
-	 */
-#ifdef FULL_UNROLL
-	/* round 1: */
-	t0 = Te0[s0 >> 24] ^ Te1[(s1 >> 16) & 0xff] ^ Te2[(s2 >> 8) & 0xff] ^ Te3[s3 & 0xff] ^ rk[4];
-	t1 = Te0[s1 >> 24] ^ Te1[(s2 >> 16) & 0xff] ^ Te2[(s3 >> 8) & 0xff] ^ Te3[s0 & 0xff] ^ rk[5];
-	t2 = Te0[s2 >> 24] ^ Te1[(s3 >> 16) & 0xff] ^ Te2[(s0 >> 8) & 0xff] ^ Te3[s1 & 0xff] ^ rk[6];
-	t3 = Te0[s3 >> 24] ^ Te1[(s0 >> 16) & 0xff] ^ Te2[(s1 >> 8) & 0xff] ^ Te3[s2 & 0xff] ^ rk[7];
-	/* round 2: */
-	s0 = Te0[t0 >> 24] ^ Te1[(t1 >> 16) & 0xff] ^ Te2[(t2 >> 8) & 0xff] ^ Te3[t3 & 0xff] ^ rk[8];
-	s1 = Te0[t1 >> 24] ^ Te1[(t2 >> 16) & 0xff] ^ Te2[(t3 >> 8) & 0xff] ^ Te3[t0 & 0xff] ^ rk[9];
-	s2 = Te0[t2 >> 24] ^ Te1[(t3 >> 16) & 0xff] ^ Te2[(t0 >> 8) & 0xff] ^ Te3[t1 & 0xff] ^ rk[10];
-	s3 = Te0[t3 >> 24] ^ Te1[(t0 >> 16) & 0xff] ^ Te2[(t1 >> 8) & 0xff] ^ Te3[t2 & 0xff] ^ rk[11];
-	/* round 3: */
-	t0 = Te0[s0 >> 24] ^ Te1[(s1 >> 16) & 0xff] ^ Te2[(s2 >> 8) & 0xff] ^ Te3[s3 & 0xff] ^ rk[12];
-	t1 = Te0[s1 >> 24] ^ Te1[(s2 >> 16) & 0xff] ^ Te2[(s3 >> 8) & 0xff] ^ Te3[s0 & 0xff] ^ rk[13];
-	t2 = Te0[s2 >> 24] ^ Te1[(s3 >> 16) & 0xff] ^ Te2[(s0 >> 8) & 0xff] ^ Te3[s1 & 0xff] ^ rk[14];
-	t3 = Te0[s3 >> 24] ^ Te1[(s0 >> 16) & 0xff] ^ Te2[(s1 >> 8) & 0xff] ^ Te3[s2 & 0xff] ^ rk[15];
-	/* round 4: */
-	s0 = Te0[t0 >> 24] ^ Te1[(t1 >> 16) & 0xff] ^ Te2[(t2 >> 8) & 0xff] ^ Te3[t3 & 0xff] ^ rk[16];
-	s1 = Te0[t1 >> 24] ^ Te1[(t2 >> 16) & 0xff] ^ Te2[(t3 >> 8) & 0xff] ^ Te3[t0 & 0xff] ^ rk[17];
-	s2 = Te0[t2 >> 24] ^ Te1[(t3 >> 16) & 0xff] ^ Te2[(t0 >> 8) & 0xff] ^ Te3[t1 & 0xff] ^ rk[18];
-	s3 = Te0[t3 >> 24] ^ Te1[(t0 >> 16) & 0xff] ^ Te2[(t1 >> 8) & 0xff] ^ Te3[t2 & 0xff] ^ rk[19];
-	/* round 5: */
-	t0 = Te0[s0 >> 24] ^ Te1[(s1 >> 16) & 0xff] ^ Te2[(s2 >> 8) & 0xff] ^ Te3[s3 & 0xff] ^ rk[20];
-	t1 = Te0[s1 >> 24] ^ Te1[(s2 >> 16) & 0xff] ^ Te2[(s3 >> 8) & 0xff] ^ Te3[s0 & 0xff] ^ rk[21];
-	t2 = Te0[s2 >> 24] ^ Te1[(s3 >> 16) & 0xff] ^ Te2[(s0 >> 8) & 0xff] ^ Te3[s1 & 0xff] ^ rk[22];
-	t3 = Te0[s3 >> 24] ^ Te1[(s0 >> 16) & 0xff] ^ Te2[(s1 >> 8) & 0xff] ^ Te3[s2 & 0xff] ^ rk[23];
-	/* round 6: */
-	s0 = Te0[t0 >> 24] ^ Te1[(t1 >> 16) & 0xff] ^ Te2[(t2 >> 8) & 0xff] ^ Te3[t3 & 0xff] ^ rk[24];
-	s1 = Te0[t1 >> 24] ^ Te1[(t2 >> 16) & 0xff] ^ Te2[(t3 >> 8) & 0xff] ^ Te3[t0 & 0xff] ^ rk[25];
-	s2 = Te0[t2 >> 24] ^ Te1[(t3 >> 16) & 0xff] ^ Te2[(t0 >> 8) & 0xff] ^ Te3[t1 & 0xff] ^ rk[26];
-	s3 = Te0[t3 >> 24] ^ Te1[(t0 >> 16) & 0xff] ^ Te2[(t1 >> 8) & 0xff] ^ Te3[t2 & 0xff] ^ rk[27];
-	/* round 7: */
-	t0 = Te0[s0 >> 24] ^ Te1[(s1 >> 16) & 0xff] ^ Te2[(s2 >> 8) & 0xff] ^ Te3[s3 & 0xff] ^ rk[28];
-	t1 = Te0[s1 >> 24] ^ Te1[(s2 >> 16) & 0xff] ^ Te2[(s3 >> 8) & 0xff] ^ Te3[s0 & 0xff] ^ rk[29];
-	t2 = Te0[s2 >> 24] ^ Te1[(s3 >> 16) & 0xff] ^ Te2[(s0 >> 8) & 0xff] ^ Te3[s1 & 0xff] ^ rk[30];
-	t3 = Te0[s3 >> 24] ^ Te1[(s0 >> 16) & 0xff] ^ Te2[(s1 >> 8) & 0xff] ^ Te3[s2 & 0xff] ^ rk[31];
-	/* round 8: */
-	s0 = Te0[t0 >> 24] ^ Te1[(t1 >> 16) & 0xff] ^ Te2[(t2 >> 8) & 0xff] ^ Te3[t3 & 0xff] ^ rk[32];
-	s1 = Te0[t1 >> 24] ^ Te1[(t2 >> 16) & 0xff] ^ Te2[(t3 >> 8) & 0xff] ^ Te3[t0 & 0xff] ^ rk[33];
-	s2 = Te0[t2 >> 24] ^ Te1[(t3 >> 16) & 0xff] ^ Te2[(t0 >> 8) & 0xff] ^ Te3[t1 & 0xff] ^ rk[34];
-	s3 = Te0[t3 >> 24] ^ Te1[(t0 >> 16) & 0xff] ^ Te2[(t1 >> 8) & 0xff] ^ Te3[t2 & 0xff] ^ rk[35];
-	/* round 9: */
-	t0 = Te0[s0 >> 24] ^ Te1[(s1 >> 16) & 0xff] ^ Te2[(s2 >> 8) & 0xff] ^ Te3[s3 & 0xff] ^ rk[36];
-	t1 = Te0[s1 >> 24] ^ Te1[(s2 >> 16) & 0xff] ^ Te2[(s3 >> 8) & 0xff] ^ Te3[s0 & 0xff] ^ rk[37];
-	t2 = Te0[s2 >> 24] ^ Te1[(s3 >> 16) & 0xff] ^ Te2[(s0 >> 8) & 0xff] ^ Te3[s1 & 0xff] ^ rk[38];
-	t3 = Te0[s3 >> 24] ^ Te1[(s0 >> 16) & 0xff] ^ Te2[(s1 >> 8) & 0xff] ^ Te3[s2 & 0xff] ^ rk[39];
-	if (Nr == 10)
-		goto done;
-	/* round 10: */
-	s0 = Te0[t0 >> 24] ^ Te1[(t1 >> 16) & 0xff] ^ Te2[(t2 >> 8) & 0xff] ^ Te3[t3 & 0xff] ^ rk[40];
-	s1 = Te0[t1 >> 24] ^ Te1[(t2 >> 16) & 0xff] ^ Te2[(t3 >> 8) & 0xff] ^ Te3[t0 & 0xff] ^ rk[41];
-	s2 = Te0[t2 >> 24] ^ Te1[(t3 >> 16) & 0xff] ^ Te2[(t0 >> 8) & 0xff] ^ Te3[t1 & 0xff] ^ rk[42];
-	s3 = Te0[t3 >> 24] ^ Te1[(t0 >> 16) & 0xff] ^ Te2[(t1 >> 8) & 0xff] ^ Te3[t2 & 0xff] ^ rk[43];
-	/* round 11: */
-	t0 = Te0[s0 >> 24] ^ Te1[(s1 >> 16) & 0xff] ^ Te2[(s2 >> 8) & 0xff] ^ Te3[s3 & 0xff] ^ rk[44];
-	t1 = Te0[s1 >> 24] ^ Te1[(s2 >> 16) & 0xff] ^ Te2[(s3 >> 8) & 0xff] ^ Te3[s0 & 0xff] ^ rk[45];
-	t2 = Te0[s2 >> 24] ^ Te1[(s3 >> 16) & 0xff] ^ Te2[(s0 >> 8) & 0xff] ^ Te3[s1 & 0xff] ^ rk[46];
-	t3 = Te0[s3 >> 24] ^ Te1[(s0 >> 16) & 0xff] ^ Te2[(s1 >> 8) & 0xff] ^ Te3[s2 & 0xff] ^ rk[47];
-	if (Nr == 12)
-		goto done;
-	/* round 12: */
-	s0 = Te0[t0 >> 24] ^ Te1[(t1 >> 16) & 0xff] ^ Te2[(t2 >> 8) & 0xff] ^ Te3[t3 & 0xff] ^ rk[48];
-	s1 = Te0[t1 >> 24] ^ Te1[(t2 >> 16) & 0xff] ^ Te2[(t3 >> 8) & 0xff] ^ Te3[t0 & 0xff] ^ rk[49];
-	s2 = Te0[t2 >> 24] ^ Te1[(t3 >> 16) & 0xff] ^ Te2[(t0 >> 8) & 0xff] ^ Te3[t1 & 0xff] ^ rk[50];
-	s3 = Te0[t3 >> 24] ^ Te1[(t0 >> 16) & 0xff] ^ Te2[(t1 >> 8) & 0xff] ^ Te3[t2 & 0xff] ^ rk[51];
-	/* round 13: */ 
-	t0 = Te0[s0 >> 24] ^ Te1[(s1 >> 16) & 0xff] ^ Te2[(s2 >> 8) & 0xff] ^ Te3[s3 & 0xff] ^ rk[52];
-	t1 = Te0[s1 >> 24] ^ Te1[(s2 >> 16) & 0xff] ^ Te2[(s3 >> 8) & 0xff] ^ Te3[s0 & 0xff] ^ rk[53];
-	t2 = Te0[s2 >> 24] ^ Te1[(s3 >> 16) & 0xff] ^ Te2[(s0 >> 8) & 0xff] ^ Te3[s1 & 0xff] ^ rk[54];
-	t3 = Te0[s3 >> 24] ^ Te1[(s0 >> 16) & 0xff] ^ Te2[(s1 >> 8) & 0xff] ^ Te3[s2 & 0xff] ^ rk[55];
-	if (Nr == 14)
-       		goto done;
-	/* round 14: */
-	s0 = Te0[t0 >> 24] ^ Te1[(t1 >> 16) & 0xff] ^ Te2[(t2 >> 8) & 0xff] ^ Te3[t3 & 0xff] ^ rk[56];
-	s1 = Te0[t1 >> 24] ^ Te1[(t2 >> 16) & 0xff] ^ Te2[(t3 >> 8) & 0xff] ^ Te3[t0 & 0xff] ^ rk[57];
-	s2 = Te0[t2 >> 24] ^ Te1[(t3 >> 16) & 0xff] ^ Te2[(t0 >> 8) & 0xff] ^ Te3[t1 & 0xff] ^ rk[58];
-	s3 = Te0[t3 >> 24] ^ Te1[(t0 >> 16) & 0xff] ^ Te2[(t1 >> 8) & 0xff] ^ Te3[t2 & 0xff] ^ rk[59];
-	if (Nr == 15) {
-		t0 = s0; t1 = s1; t2 = s2; t3 = s3;
-		goto done;
-	}
-	/* round 15: */ 
-	t0 = Te0[s0 >> 24] ^ Te1[(s1 >> 16) & 0xff] ^ Te2[(s2 >> 8) & 0xff] ^ Te3[s3 & 0xff] ^ rk[60];
-	t1 = Te0[s1 >> 24] ^ Te1[(s2 >> 16) & 0xff] ^ Te2[(s3 >> 8) & 0xff] ^ Te3[s0 & 0xff] ^ rk[61];
-	t2 = Te0[s2 >> 24] ^ Te1[(s3 >> 16) & 0xff] ^ Te2[(s0 >> 8) & 0xff] ^ Te3[s1 & 0xff] ^ rk[62];
-	t3 = Te0[s3 >> 24] ^ Te1[(s0 >> 16) & 0xff] ^ Te2[(s1 >> 8) & 0xff] ^ Te3[s2 & 0xff] ^ rk[63];
-	if (Nr == 16)
-		goto done;
-	/* round 16: */
-	s0 = Te0[t0 >> 24] ^ Te1[(t1 >> 16) & 0xff] ^ Te2[(t2 >> 8) & 0xff] ^ Te3[t3 & 0xff] ^ rk[64];
-	s1 = Te0[t1 >> 24] ^ Te1[(t2 >> 16) & 0xff] ^ Te2[(t3 >> 8) & 0xff] ^ Te3[t0 & 0xff] ^ rk[65];
-	s2 = Te0[t2 >> 24] ^ Te1[(t3 >> 16) & 0xff] ^ Te2[(t0 >> 8) & 0xff] ^ Te3[t1 & 0xff] ^ rk[66];
-	s3 = Te0[t3 >> 24] ^ Te1[(t0 >> 16) & 0xff] ^ Te2[(t1 >> 8) & 0xff] ^ Te3[t2 & 0xff] ^ rk[67];
-	/* round 17: */ 
-	t0 = Te0[s0 >> 24] ^ Te1[(s1 >> 16) & 0xff] ^ Te2[(s2 >> 8) & 0xff] ^ Te3[s3 & 0xff] ^ rk[68];
-	t1 = Te0[s1 >> 24] ^ Te1[(s2 >> 16) & 0xff] ^ Te2[(s3 >> 8) & 0xff] ^ Te3[s0 & 0xff] ^ rk[69];
-	t2 = Te0[s2 >> 24] ^ Te1[(s3 >> 16) & 0xff] ^ Te2[(s0 >> 8) & 0xff] ^ Te3[s1 & 0xff] ^ rk[70];
-	t3 = Te0[s3 >> 24] ^ Te1[(s0 >> 16) & 0xff] ^ Te2[(s1 >> 8) & 0xff] ^ Te3[s2 & 0xff] ^ rk[71];
-	assert(Nr == 18);
-done:
-	rk += Nr << 2;
-#else   /* !FULL_UNROLL */
-	/*
-	     * Nr - 1 full rounds:
-	     */
-	r = Nr >> 1;
-	for (;;) {
-		t0 = Te0[(s0 >> 24)] ^ Te1[(s1 >> 16) & 0xff] ^ Te2[(s2 >> 8) & 0xff] ^ Te3[(s3) & 0xff] ^ rk[4];
-		t1 = Te0[(s1 >> 24)] ^ Te1[(s2 >> 16) & 0xff] ^ Te2[(s3 >> 8) & 0xff] ^ Te3[(s0) & 0xff] ^ rk[5];
-		t2 = Te0[(s2 >> 24)] ^ Te1[(s3 >> 16) & 0xff] ^ Te2[(s0 >> 8) & 0xff] ^ Te3[(s1) & 0xff] ^ rk[6];
-		t3 = Te0[(s3 >> 24)] ^ Te1[(s0 >> 16) & 0xff] ^ Te2[(s1 >> 8) & 0xff] ^ Te3[(s2) & 0xff] ^ rk[7];
-
-		rk += 8;
-		if (--r == 0 && !(Nr%2)) 
-			break;
-
-		s0 = Te0[(t0 >> 24)] ^ Te1[(t1 >> 16) & 0xff] ^ Te2[(t2 >> 8) & 0xff] ^ Te3[(t3) & 0xff] ^ rk[0];
-		s1 = Te0[(t1 >> 24)] ^ Te1[(t2 >> 16) & 0xff] ^ Te2[(t3 >> 8) & 0xff] ^ Te3[(t0) & 0xff] ^ rk[1];
-		s2 = Te0[(t2 >> 24)] ^ Te1[(t3 >> 16) & 0xff] ^ Te2[(t0 >> 8) & 0xff] ^ Te3[(t1) & 0xff] ^ rk[2];
-		s3 = Te0[(t3 >> 24)] ^ Te1[(t0 >> 16) & 0xff] ^ Te2[(t1 >> 8) & 0xff] ^ Te3[(t2) & 0xff] ^ rk[3];
-
-		if (Nr%2 && r == 0) {
-			t0 = s0; t1 = s1; t2 = s2; t3 = s3;
-			rk += 4;
-			break;
-		}
-	}
-#endif  /* ?FULL_UNROLL */
-	/* apply last round and
-	 * map cipher state to byte array block:
-	 */
-	s0 = (Te4[(t0 >> 24)] & 0xff000000) ^ (Te4[(t1 >> 16) & 0xff] & 0x00ff0000) ^
-	     (Te4[(t2 >> 8) & 0xff] & 0x0000ff00) ^ (Te4[(t3) & 0xff] & 0x000000ff) ^ rk[0];
-	PUTU32(ct, s0);
-	s1 = (Te4[(t1 >> 24)] & 0xff000000) ^ (Te4[(t2 >> 16) & 0xff] & 0x00ff0000) ^
-	     (Te4[(t3 >> 8) & 0xff] & 0x0000ff00) ^ (Te4[(t0) & 0xff] & 0x000000ff) ^ rk[1];
-	PUTU32(ct + 4, s1);
-	s2 = (Te4[(t2 >> 24)] & 0xff000000) ^ (Te4[(t3 >> 16) & 0xff] & 0x00ff0000) ^
-	     (Te4[(t0 >> 8) & 0xff] & 0x0000ff00) ^ (Te4[(t1) & 0xff] & 0x000000ff) ^ rk[2];
-	PUTU32(ct + 8, s2);
-	s3 = (Te4[(t3 >> 24)] & 0xff000000) ^ (Te4[(t0 >> 16) & 0xff] & 0x00ff0000) ^
-	     (Te4[(t1 >> 8) & 0xff] & 0x0000ff00) ^ (Te4[(t2) & 0xff] & 0x000000ff) ^ rk[3];
-	PUTU32(ct + 12, s3);
+	asm volatile(
+	"	ld1	{v0.4s}, [%0]		\n"
+	"	ld1	{v1.16b}, [%1], #16	\n"
+	"	ld1	{v2.16b}, [%1], #16	\n"
+	"	subs	%2, %2, #2		\n" 
+	".align 4				\n"
+	"1:					\n"
+	"	aese	v0.16b, v1.16b		\n"			
+	"	aesmc	v0.16b, v0.16b		\n"
+	"	ld1	{v1.16b}, [%1], #16	\n"
+	"	b.mi	2f			\n"
+	"	subs	%2, %2, #2		\n"
+	"	aese	v0.16b, v2.16b		\n"
+	"	aesmc	v0.16b, v0.16b		\n"
+	"	ld1	{v2.16b}, [%1], #16	\n"
+	"	b.ne	1b			\n"
+	"					\n"
+	"	aese	v0.16b, v1.16b		\n"
+	"	eor	v0.16b, v0.16b, v2.16b	\n"
+	"	b	3f			\n"
+	"2:					\n"
+	"	aese	v0.16b, v2.16b		\n"
+	"	eor	v0.16b, v0.16b, v1.16b	\n"
+	"3:					\n"
+	"	st1	{v0.4s}, [%3]		\n"
+	:
+	: "r" (pt), "r" (rkeys), "r" (Nr), "r" (ct)
+	: "v0", "v1", "v2"
+	);
 	return;
 }
 
@@ -795,7 +664,7 @@ static void rijndaelDecryptPF()
 }
 
 
-void rijndaelDecrypt(const u8 *rkeys /*const u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 ct[16], u8 pt[16])
+void AES_ARM8_Decrypt(const u8 *rkeys /*const u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 ct[16], u8 pt[16])
 {
 	register u32 s0, s1, s2, s3, t0, t1, t2, t3;
 #ifndef FULL_UNROLL
@@ -958,10 +827,10 @@ done:
 
 
 #define DECL_KEYSETUP(MODE, BITS)	\
-void AES_C_KeySetup_##BITS##_##MODE(const uchar *usrkey, uchar *rkeys, uint rounds)	\
+void AES_ARM8_KeySetup_##BITS##_##MODE(const uchar *usrkey, uchar *rkeys, uint rounds)	\
 {											\
 	rijndaelKeySetup##MODE##PF();							\
-	rijndaelKeySetup##MODE((u32*)rkeys, usrkey, BITS, rounds);			\
+	AES_ARM8_KeySetup##MODE((u32*)rkeys, usrkey, BITS, rounds);			\
 }
 
 DECL_KEYSETUP(Enc, 128);
@@ -971,36 +840,36 @@ DECL_KEYSETUP(Dec, 192);
 DECL_KEYSETUP(Enc, 256);
 DECL_KEYSETUP(Dec, 256);
 
-#define AES_C_Encrypt_Blk rijndaelEncrypt
-#define AES_C_Decrypt_Blk rijndaelDecrypt
+#define AES_ARM8_Encrypt_Blk AES_ARM8_Encrypt
+#define AES_ARM8_Decrypt_Blk AES_ARM8_Decrypt
 
-int  AES_C_ECB_Encrypt(const uchar* rkeys, uint rounds, uchar *iv, uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen)
+int  AES_ARM8_ECB_Encrypt(const uchar* rkeys, uint rounds, uchar *iv, uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen)
 {
 	rijndaelEncryptPF();
-	return AES_Gen_ECB_Enc(AES_C_Encrypt_Blk, rkeys, rounds, pad, in, out, len, olen);
+	return AES_Gen_ECB_Enc(AES_ARM8_Encrypt_Blk, rkeys, rounds, pad, in, out, len, olen);
 }
-int  AES_C_ECB_Decrypt(const uchar* rkeys, uint rounds, uchar *iv, uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen)
+int  AES_ARM8_ECB_Decrypt(const uchar* rkeys, uint rounds, uchar *iv, uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen)
 {
 	rijndaelDecryptPF();
-	return AES_Gen_ECB_Dec(AES_C_Decrypt_Blk, rkeys, rounds, pad, in, out, len, olen);
+	return AES_Gen_ECB_Dec(AES_ARM8_Decrypt_Blk, rkeys, rounds, pad, in, out, len, olen);
 }
 
-int  AES_C_CBC_Encrypt(const uchar* rkeys, uint rounds, uchar *iv, uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen)
+int  AES_ARM8_CBC_Encrypt(const uchar* rkeys, uint rounds, uchar *iv, uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen)
 {
 	rijndaelEncryptPF();
-	return AES_Gen_CBC_Enc(AES_C_Encrypt_Blk, rkeys, rounds, iv, pad, in, out, len, olen);
+	return AES_Gen_CBC_Enc(AES_ARM8_Encrypt_Blk, rkeys, rounds, iv, pad, in, out, len, olen);
 }
-int  AES_C_CBC_Decrypt(const uchar* rkeys, uint rounds, uchar *iv, uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen)
+int  AES_ARM8_CBC_Decrypt(const uchar* rkeys, uint rounds, uchar *iv, uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen)
 {
 	rijndaelDecryptPF();
-	return AES_Gen_CBC_Dec(AES_C_Decrypt_Blk, rkeys, rounds, iv, pad, in, out, len, olen);
+	return AES_Gen_CBC_Dec(AES_ARM8_Decrypt_Blk, rkeys, rounds, iv, pad, in, out, len, olen);
 }
 
-int  AES_C_CTR_Crypt(const uchar* rkeys, uint rounds, uchar *ctr, uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen)
+int  AES_ARM8_CTR_Crypt(const uchar* rkeys, uint rounds, uchar *ctr, uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen)
 {
 	rijndaelEncryptPF();
 	*olen = len;
-	return AES_Gen_CTR_Crypt(AES_C_Encrypt_Blk, rkeys, rounds, ctr, in, out, len);
+	return AES_Gen_CTR_Crypt(AES_ARM8_Encrypt_Blk, rkeys, rounds, ctr, in, out, len);
 }
 
 /* Double de/encryption methods */
@@ -1008,11 +877,11 @@ int  AES_C_CTR_Crypt(const uchar* rkeys, uint rounds, uchar *ctr, uint pad, cons
 #include "sha256.h"
 
 static inline
-void AES_C_KeySetupX2_Bits_Enc(const uchar *usrkey, uchar *rkeys, uint rounds, uint bits)
+void AES_ARM8_KeySetupX2_Bits_Enc(const uchar *usrkey, uchar *rkeys, uint rounds, uint bits)
 {
 	rijndaelKeySetupEncPF();
 	assert(0 == rounds%2);
-	rijndaelKeySetupEnc((u32*)rkeys, usrkey, bits, rounds/2);
+	AES_ARM8_KeySetupEnc((u32*)rkeys, usrkey, bits, rounds/2);
 	/* Second half: Calc sha256 from usrkey and expand */
 	hash_t hv;
 	sha256_init(&hv);
@@ -1021,17 +890,17 @@ void AES_C_KeySetupX2_Bits_Enc(const uchar *usrkey, uchar *rkeys, uint rounds, u
 	uchar usrkey2[32];
 	sha256_beout(usrkey2, &hv);
 	sha256_init(&hv);
-	rijndaelKeySetupEnc((u32*)(rkeys+16+8*rounds), usrkey2, bits, rounds/2);
+	AES_ARM8_KeySetupEnc((u32*)(rkeys+16+8*rounds), usrkey2, bits, rounds/2);
 	memset(usrkey2, 0, 32);
 	asm("":::"memory");
 }
 
 static inline
-void AES_C_KeySetupX2_Bits_Dec(const uchar* usrkey, uchar *rkeys, uint rounds, uint bits)
+void AES_ARM8_KeySetupX2_Bits_Dec(const uchar* usrkey, uchar *rkeys, uint rounds, uint bits)
 {
 	rijndaelKeySetupDecPF();
 	assert(0 == rounds%2);
-	rijndaelKeySetupDec((u32*)rkeys, usrkey, bits, rounds/2);
+	AES_ARM8_KeySetupDec((u32*)rkeys, usrkey, bits, rounds/2);
 	/* Second half: Calc sha256 from usrkey and expand */
 	hash_t hv;
 	sha256_init(&hv);
@@ -1040,15 +909,15 @@ void AES_C_KeySetupX2_Bits_Dec(const uchar* usrkey, uchar *rkeys, uint rounds, u
 	uchar usrkey2[32];
 	sha256_beout(usrkey2, &hv);
 	sha256_init(&hv);
-	rijndaelKeySetupDec((u32*)(rkeys+16+8*rounds), usrkey2, bits, rounds/2);
+	AES_ARM8_KeySetupDec((u32*)(rkeys+16+8*rounds), usrkey2, bits, rounds/2);
 	memset(usrkey2, 0, 32);
 	asm("":::"memory");
 }
 
 #define DECL_KEYSETUP2(MODE, BITS)	\
-void AES_C_KeySetupX2_##BITS##_##MODE(const uchar *usrkey, uchar *rkeys, uint rounds)	\
+void AES_ARM8_KeySetupX2_##BITS##_##MODE(const uchar *usrkey, uchar *rkeys, uint rounds)	\
 {											\
-	AES_C_KeySetupX2_Bits_##MODE(usrkey, rkeys, rounds, BITS);			\
+	AES_ARM8_KeySetupX2_Bits_##MODE(usrkey, rkeys, rounds, BITS);			\
 }
 
 DECL_KEYSETUP2(Enc, 128);
@@ -1059,133 +928,133 @@ DECL_KEYSETUP2(Enc, 256);
 DECL_KEYSETUP2(Dec, 256);
 
 inline
-void AES_C_Encrypt_BlkX2(const uchar* rkeys, uint rounds, const uchar in[16], uchar out[16])
+void AES_ARM8_Encrypt_BlkX2(const uchar* rkeys, uint rounds, const uchar in[16], uchar out[16])
 {
-	rijndaelEncrypt(rkeys, rounds/2, in, out);
-	rijndaelEncrypt(rkeys+16+8*rounds, rounds/2, out, out);
+	AES_ARM8_Encrypt(rkeys, rounds/2, in, out);
+	AES_ARM8_Encrypt(rkeys+16+8*rounds, rounds/2, out, out);
 }
 inline
-void AES_C_Decrypt_BlkX2(const uchar* rkeys, uint rounds, const uchar in[16], uchar out[16])
+void AES_ARM8_Decrypt_BlkX2(const uchar* rkeys, uint rounds, const uchar in[16], uchar out[16])
 {
-	rijndaelDecrypt(rkeys+16+8*rounds, rounds/2, in, out);
-	rijndaelDecrypt(rkeys, rounds/2, out, out);
+	AES_ARM8_Decrypt(rkeys+16+8*rounds, rounds/2, in, out);
+	AES_ARM8_Decrypt(rkeys, rounds/2, out, out);
 }
 
-int  AES_C_ECB_EncryptX2(const uchar* rkeys, uint rounds, uchar *iv, uint pad,
+int  AES_ARM8_ECB_EncryptX2(const uchar* rkeys, uint rounds, uchar *iv, uint pad,
 			 const uchar *in, uchar *out, ssize_t len, ssize_t *olen)
 {
 	rijndaelEncryptPF();
-	return AES_Gen_ECB_Enc(AES_C_Encrypt_BlkX2, rkeys, rounds, pad, in, out, len, olen);
+	return AES_Gen_ECB_Enc(AES_ARM8_Encrypt_BlkX2, rkeys, rounds, pad, in, out, len, olen);
 }
-int  AES_C_ECB_DecryptX2(const uchar* rkeys, uint rounds, uchar *iv, uint pad,
+int  AES_ARM8_ECB_DecryptX2(const uchar* rkeys, uint rounds, uchar *iv, uint pad,
 			 const uchar *in, uchar *out, ssize_t len, ssize_t *olen)
 {
 	rijndaelDecryptPF();
-	return AES_Gen_ECB_Dec(AES_C_Decrypt_BlkX2, rkeys, rounds, pad, in, out, len, olen);
+	return AES_Gen_ECB_Dec(AES_ARM8_Decrypt_BlkX2, rkeys, rounds, pad, in, out, len, olen);
 }
 
-int  AES_C_CBC_EncryptX2(const uchar* rkeys, uint rounds, uchar *iv, uint pad,
+int  AES_ARM8_CBC_EncryptX2(const uchar* rkeys, uint rounds, uchar *iv, uint pad,
 			 const uchar *in, uchar *out, ssize_t len, ssize_t *olen)
 {
 	rijndaelEncryptPF();
-	return AES_Gen_CBC_Enc(AES_C_Encrypt_BlkX2, rkeys, rounds, iv, pad, in, out, len, olen);
+	return AES_Gen_CBC_Enc(AES_ARM8_Encrypt_BlkX2, rkeys, rounds, iv, pad, in, out, len, olen);
 }
-int  AES_C_CBC_DecryptX2(const uchar* rkeys, uint rounds, uchar *iv, uint pad,
+int  AES_ARM8_CBC_DecryptX2(const uchar* rkeys, uint rounds, uchar *iv, uint pad,
 			 const uchar *in, uchar *out, ssize_t len, ssize_t *olen)
 {
 	rijndaelDecryptPF();
-	return AES_Gen_CBC_Dec(AES_C_Decrypt_BlkX2, rkeys, rounds, iv, pad, in, out, len, olen);
+	return AES_Gen_CBC_Dec(AES_ARM8_Decrypt_BlkX2, rkeys, rounds, iv, pad, in, out, len, olen);
 }
 
-int  AES_C_CTR_CryptX2(const uchar* rkeys, uint rounds, uchar *ctr, uint pad,
+int  AES_ARM8_CTR_CryptX2(const uchar* rkeys, uint rounds, uchar *ctr, uint pad,
 			const uchar *in, uchar *out, ssize_t len, ssize_t *olen)
 {
 	rijndaelEncryptPF();
 	*olen = len;
-	return AES_Gen_CTR_Crypt(AES_C_Encrypt_BlkX2, rkeys, rounds, ctr, in, out, len);
+	return AES_Gen_CTR_Crypt(AES_ARM8_Encrypt_BlkX2, rkeys, rounds, ctr, in, out, len);
 }
 
-ciph_desc_t AES_C_Methods[] = {{"AES128-ECB"  , 128, 10, 16, 11*16, &aes_stream_ecb, 
-					AES_C_KeySetup_128_Enc, AES_C_KeySetup_128_Dec,
-					AES_C_ECB_Encrypt, AES_C_ECB_Decrypt, AES_Gen_Release},
+ciph_desc_t AES_ARM8_Methods[] = {{"AES128-ECB"  , 128, 10, 16, 11*16, &aes_stream_ecb, 
+					AES_ARM8_KeySetup_128_Enc, AES_ARM8_KeySetup_128_Dec,
+					AES_ARM8_ECB_Encrypt, AES_ARM8_ECB_Decrypt, AES_Gen_Release},
 			       {"AES128-CBC"  , 128, 10, 16, 11*16, &aes_stream_cbc,
-					AES_C_KeySetup_128_Enc, AES_C_KeySetup_128_Dec,
-					AES_C_CBC_Encrypt, AES_C_CBC_Decrypt, AES_Gen_Release},
+					AES_ARM8_KeySetup_128_Enc, AES_ARM8_KeySetup_128_Dec,
+					AES_ARM8_CBC_Encrypt, AES_ARM8_CBC_Decrypt, AES_Gen_Release},
 			       {"AES128-CTR"  , 128, 10, 16, 11*16, &aes_stream_ctr,
-					AES_C_KeySetup_128_Enc, AES_C_KeySetup_128_Enc,
-					AES_C_CTR_Crypt, AES_C_CTR_Crypt, AES_Gen_Release},
+					AES_ARM8_KeySetup_128_Enc, AES_ARM8_KeySetup_128_Enc,
+					AES_ARM8_CTR_Crypt, AES_ARM8_CTR_Crypt, AES_Gen_Release},
 			       {"AES192-ECB"  , 192, 12, 16, 13*16, &aes_stream_ecb,
-					AES_C_KeySetup_192_Enc, AES_C_KeySetup_192_Dec,
-					AES_C_ECB_Encrypt, AES_C_ECB_Decrypt, AES_Gen_Release},
+					AES_ARM8_KeySetup_192_Enc, AES_ARM8_KeySetup_192_Dec,
+					AES_ARM8_ECB_Encrypt, AES_ARM8_ECB_Decrypt, AES_Gen_Release},
 			       {"AES192-CBC"  , 192, 12, 16, 13*16, &aes_stream_cbc,
-					AES_C_KeySetup_192_Enc, AES_C_KeySetup_192_Dec,
-					AES_C_CBC_Encrypt, AES_C_CBC_Decrypt, AES_Gen_Release},
+					AES_ARM8_KeySetup_192_Enc, AES_ARM8_KeySetup_192_Dec,
+					AES_ARM8_CBC_Encrypt, AES_ARM8_CBC_Decrypt, AES_Gen_Release},
 			       {"AES192-CTR"  , 192, 12, 16, 13*16, &aes_stream_ctr,
-					AES_C_KeySetup_192_Enc, AES_C_KeySetup_192_Enc,
-					AES_C_CTR_Crypt, AES_C_CTR_Crypt, AES_Gen_Release},
+					AES_ARM8_KeySetup_192_Enc, AES_ARM8_KeySetup_192_Enc,
+					AES_ARM8_CTR_Crypt, AES_ARM8_CTR_Crypt, AES_Gen_Release},
 			       {"AES256-ECB"  , 256, 14, 16, 15*16, &aes_stream_ecb,
-					AES_C_KeySetup_256_Enc, AES_C_KeySetup_256_Dec,
-					AES_C_ECB_Encrypt, AES_C_ECB_Decrypt, AES_Gen_Release},
+					AES_ARM8_KeySetup_256_Enc, AES_ARM8_KeySetup_256_Dec,
+					AES_ARM8_ECB_Encrypt, AES_ARM8_ECB_Decrypt, AES_Gen_Release},
 			       {"AES256-CBC"  , 256, 14, 16, 15*16, &aes_stream_cbc,
-					AES_C_KeySetup_256_Enc, AES_C_KeySetup_256_Dec,
-					AES_C_CBC_Encrypt, AES_C_CBC_Decrypt, AES_Gen_Release},
+					AES_ARM8_KeySetup_256_Enc, AES_ARM8_KeySetup_256_Dec,
+					AES_ARM8_CBC_Encrypt, AES_ARM8_CBC_Decrypt, AES_Gen_Release},
 			       {"AES256-CTR"  , 256, 14, 16, 15*16, &aes_stream_ctr,
-					AES_C_KeySetup_256_Enc, AES_C_KeySetup_256_Enc,
-					AES_C_CTR_Crypt, AES_C_CTR_Crypt, AES_Gen_Release},
+					AES_ARM8_KeySetup_256_Enc, AES_ARM8_KeySetup_256_Enc,
+					AES_ARM8_CTR_Crypt, AES_ARM8_CTR_Crypt, AES_Gen_Release},
 			       {"AES128+-ECB" , 128, 12, 16, 13*16, &aes_stream_ecb,
-					AES_C_KeySetup_128_Enc, AES_C_KeySetup_128_Dec,
-					AES_C_ECB_Encrypt, AES_C_ECB_Decrypt, AES_Gen_Release},
+					AES_ARM8_KeySetup_128_Enc, AES_ARM8_KeySetup_128_Dec,
+					AES_ARM8_ECB_Encrypt, AES_ARM8_ECB_Decrypt, AES_Gen_Release},
 			       {"AES128+-CBC" , 128, 12, 16, 13*16, &aes_stream_cbc,
-					AES_C_KeySetup_128_Enc, AES_C_KeySetup_128_Dec,
-					AES_C_CBC_Encrypt, AES_C_CBC_Decrypt, AES_Gen_Release},
+					AES_ARM8_KeySetup_128_Enc, AES_ARM8_KeySetup_128_Dec,
+					AES_ARM8_CBC_Encrypt, AES_ARM8_CBC_Decrypt, AES_Gen_Release},
 			       {"AES128+-CTR" , 128, 12, 16, 13*16, &aes_stream_ctr,
-					AES_C_KeySetup_128_Enc, AES_C_KeySetup_128_Enc,
-					AES_C_CTR_Crypt, AES_C_CTR_Crypt, AES_Gen_Release},
+					AES_ARM8_KeySetup_128_Enc, AES_ARM8_KeySetup_128_Enc,
+					AES_ARM8_CTR_Crypt, AES_ARM8_CTR_Crypt, AES_Gen_Release},
 			       {"AES192+-ECB" , 192, 15, 16, 16*16, &aes_stream_ecb,
-					AES_C_KeySetup_192_Enc, AES_C_KeySetup_192_Dec,
-					AES_C_ECB_Encrypt, AES_C_ECB_Decrypt, AES_Gen_Release},
+					AES_ARM8_KeySetup_192_Enc, AES_ARM8_KeySetup_192_Dec,
+					AES_ARM8_ECB_Encrypt, AES_ARM8_ECB_Decrypt, AES_Gen_Release},
 			       {"AES192+-CBC" , 192, 15, 16, 16*16, &aes_stream_cbc,
-					AES_C_KeySetup_192_Enc, AES_C_KeySetup_192_Dec,
-					AES_C_CBC_Encrypt, AES_C_CBC_Decrypt, AES_Gen_Release},
+					AES_ARM8_KeySetup_192_Enc, AES_ARM8_KeySetup_192_Dec,
+					AES_ARM8_CBC_Encrypt, AES_ARM8_CBC_Decrypt, AES_Gen_Release},
 			       {"AES192+-CTR" , 192, 15, 16, 16*16, &aes_stream_ctr,
-					AES_C_KeySetup_192_Enc, AES_C_KeySetup_192_Enc,
-					AES_C_CTR_Crypt, AES_C_CTR_Crypt, AES_Gen_Release},
+					AES_ARM8_KeySetup_192_Enc, AES_ARM8_KeySetup_192_Enc,
+					AES_ARM8_CTR_Crypt, AES_ARM8_CTR_Crypt, AES_Gen_Release},
 			       {"AES256+-ECB" , 256, 18, 16, 19*16, &aes_stream_ecb,
-					AES_C_KeySetup_256_Enc, AES_C_KeySetup_256_Dec,
-					AES_C_ECB_Encrypt, AES_C_ECB_Decrypt, AES_Gen_Release},
+					AES_ARM8_KeySetup_256_Enc, AES_ARM8_KeySetup_256_Dec,
+					AES_ARM8_ECB_Encrypt, AES_ARM8_ECB_Decrypt, AES_Gen_Release},
 			       {"AES256+-CBC" , 256, 18, 16, 19*16, &aes_stream_cbc,
-					AES_C_KeySetup_256_Enc, AES_C_KeySetup_256_Dec,
-					AES_C_CBC_Encrypt, AES_C_CBC_Decrypt, AES_Gen_Release},
+					AES_ARM8_KeySetup_256_Enc, AES_ARM8_KeySetup_256_Dec,
+					AES_ARM8_CBC_Encrypt, AES_ARM8_CBC_Decrypt, AES_Gen_Release},
 			       {"AES256+-CTR" , 256, 18, 16, 19*16, &aes_stream_ctr,
-					AES_C_KeySetup_256_Enc, AES_C_KeySetup_256_Enc,
-					AES_C_CTR_Crypt, AES_C_CTR_Crypt, AES_Gen_Release},
+					AES_ARM8_KeySetup_256_Enc, AES_ARM8_KeySetup_256_Enc,
+					AES_ARM8_CTR_Crypt, AES_ARM8_CTR_Crypt, AES_Gen_Release},
 			       {"AES128x2-ECB", 128, 20, 16, 22*16, &aes_stream_ecb,
-					AES_C_KeySetupX2_128_Enc, AES_C_KeySetupX2_128_Dec,
-					AES_C_ECB_EncryptX2, AES_C_ECB_DecryptX2, AES_Gen_Release},
+					AES_ARM8_KeySetupX2_128_Enc, AES_ARM8_KeySetupX2_128_Dec,
+					AES_ARM8_ECB_EncryptX2, AES_ARM8_ECB_DecryptX2, AES_Gen_Release},
 			       {"AES128x2-CBC", 128, 20, 16, 22*16, &aes_stream_cbc,
-					AES_C_KeySetupX2_128_Enc, AES_C_KeySetupX2_128_Dec,
-					AES_C_CBC_EncryptX2, AES_C_CBC_DecryptX2, AES_Gen_Release},
+					AES_ARM8_KeySetupX2_128_Enc, AES_ARM8_KeySetupX2_128_Dec,
+					AES_ARM8_CBC_EncryptX2, AES_ARM8_CBC_DecryptX2, AES_Gen_Release},
 			       {"AES128x2-CTR", 128, 20, 16, 22*16, &aes_stream_ctr,
-					AES_C_KeySetupX2_128_Enc, AES_C_KeySetupX2_128_Enc,
-					AES_C_CTR_CryptX2, AES_C_CTR_CryptX2, AES_Gen_Release},
+					AES_ARM8_KeySetupX2_128_Enc, AES_ARM8_KeySetupX2_128_Enc,
+					AES_ARM8_CTR_CryptX2, AES_ARM8_CTR_CryptX2, AES_Gen_Release},
 			       {"AES192x2-ECB", 192, 24, 16, 26*16, &aes_stream_ecb,
-					AES_C_KeySetupX2_192_Enc, AES_C_KeySetupX2_192_Dec,
-					AES_C_ECB_EncryptX2, AES_C_ECB_DecryptX2, AES_Gen_Release},
+					AES_ARM8_KeySetupX2_192_Enc, AES_ARM8_KeySetupX2_192_Dec,
+					AES_ARM8_ECB_EncryptX2, AES_ARM8_ECB_DecryptX2, AES_Gen_Release},
 			       {"AES192x2-CBC", 192, 24, 16, 26*16, &aes_stream_cbc,
-					AES_C_KeySetupX2_192_Enc, AES_C_KeySetupX2_192_Dec,
-					AES_C_CBC_EncryptX2, AES_C_CBC_DecryptX2, AES_Gen_Release},
+					AES_ARM8_KeySetupX2_192_Enc, AES_ARM8_KeySetupX2_192_Dec,
+					AES_ARM8_CBC_EncryptX2, AES_ARM8_CBC_DecryptX2, AES_Gen_Release},
 			       {"AES192x2-CTR", 192, 24, 16, 26*16, &aes_stream_ctr,
-					AES_C_KeySetupX2_192_Enc, AES_C_KeySetupX2_192_Enc,
-					AES_C_CTR_CryptX2, AES_C_CTR_CryptX2, AES_Gen_Release},
+					AES_ARM8_KeySetupX2_192_Enc, AES_ARM8_KeySetupX2_192_Enc,
+					AES_ARM8_CTR_CryptX2, AES_ARM8_CTR_CryptX2, AES_Gen_Release},
 			       {"AES256x2-ECB", 256, 28, 16, 30*16, &aes_stream_ecb,
-					AES_C_KeySetupX2_256_Enc, AES_C_KeySetupX2_256_Dec,
-					AES_C_ECB_EncryptX2, AES_C_ECB_DecryptX2, AES_Gen_Release},
+					AES_ARM8_KeySetupX2_256_Enc, AES_ARM8_KeySetupX2_256_Dec,
+					AES_ARM8_ECB_EncryptX2, AES_ARM8_ECB_DecryptX2, AES_Gen_Release},
 			       {"AES256x2-CBC", 256, 28, 16, 30*16, &aes_stream_cbc,
-					AES_C_KeySetupX2_256_Enc, AES_C_KeySetupX2_256_Dec,
-					AES_C_CBC_EncryptX2, AES_C_CBC_DecryptX2, AES_Gen_Release},
+					AES_ARM8_KeySetupX2_256_Enc, AES_ARM8_KeySetupX2_256_Dec,
+					AES_ARM8_CBC_EncryptX2, AES_ARM8_CBC_DecryptX2, AES_Gen_Release},
 			       {"AES256x2-CTR", 256, 28, 16, 30*16, &aes_stream_ctr,
-					AES_C_KeySetupX2_256_Enc, AES_C_KeySetupX2_256_Enc,
-					AES_C_CTR_CryptX2, AES_C_CTR_CryptX2, AES_Gen_Release},
+					AES_ARM8_KeySetupX2_256_Enc, AES_ARM8_KeySetupX2_256_Enc,
+					AES_ARM8_CTR_CryptX2, AES_ARM8_CTR_CryptX2, AES_Gen_Release},
 			      { NULL, /* ... */}
 };
 
