@@ -107,7 +107,7 @@ int AES_ARM8_KeySetupEnc(u32 rk[/*4*(Nr + 1)*/], const u8 cipherKey[], int keyBi
 	}
 	for (i = 0; i < sizeof(rcon); ++i) {
 		u32* rki = rk+i*keyln32;
-		u32* rko = rk+keyln32;
+		u32* rko = rki+keyln32;
 
 		rko[0] = ror32_8(aes_sbox(rki[keyln32-1])) ^ rcon[i] ^ rki[0];
 		rko[1] = rko[0] ^ rki[1];
@@ -174,19 +174,15 @@ void AES_ARM8_Encrypt(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 
 	asm volatile(
 	"	ld1	{v0.16b}, [%4]		\n"
 	"	ld1	{v1.4s, v2.4s}, [%0], #32	\n"
-	"//	rev32	v1.16b, v1.16b		\n"
-	"//	rev32	v2.16b, v2.16b		\n"
 	"	eor	v0.16b, v0.16b, v1.16b	\n"
 	"	subs	%1, %1, #3		\n"
 	".align 4				\n"
 	"1:					\n"
 	"	ld1	{v1.4s}, [%0], #16	\n"
-	"//	rev32	v1.16b, v1.16b		\n"
 	"	aese	v0.16b, v2.16b		\n"
 	"	aesmc	v0.16b, v0.16b		\n"
 	"	b.eq	2f			\n"
 	"	ld1	{v2.4s}, [%0], #16	\n"
-	"//	rev32	v2.16b, v2.16b		\n"
 	"	subs	%1, %1, #2		\n"
 	"	aese	v0.16b, v1.16b		\n"
 	"	aesmc	v0.16b, v0.16b		\n"
@@ -213,19 +209,15 @@ void AES_ARM8_Decrypt(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 
 	asm volatile(
 	"	ld1	{v0.16b}, [%4]		\n"
 	"	ld1	{v1.4s, v2.4s}, [%0], #32	\n"
-	"//	rev32	v1.16b, v1.16b		\n"
-	"//	rev32	v2.16b, v2.16b		\n"
 	"	eor	v0.16b, v0.16b, v1.16b	\n"
 	"	subs	%1, %1, #3		\n"
 	".align 4				\n"
 	"1:					\n"
 	"	ld1	{v1.4s}, [%0], #16	\n"
-	"//	rev32	v1.16b, v1.16b		\n"
 	"	aesd	v0.16b, v2.16b		\n"
 	"	aesimc	v0.16b, v0.16b		\n"
 	"	b.eq	2f			\n"
 	"	ld1	{v2.4s}, [%0], #16	\n"
-	"//	rev32	v2.16b, v2.16b		\n"
 	"	subs	%1, %1, #2		\n"
 	"	aesd	v0.16b, v1.16b		\n"
 	"	aesimc	v0.16b, v0.16b		\n"
