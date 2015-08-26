@@ -170,33 +170,36 @@ int AES_ARM8_KeySetupDec(u32 rk[/*4*(Nr + 1)*/], const u8 cipherKey[], int keyBi
 
 void AES_ARM8_Encrypt(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 pt[16], u8 ct[16])
 {
-	//const u8 *rk = rkeys;
+	u8 *rk = (u8*)rkeys;
+	uint dummy1;
 	asm volatile(
-	"	ld1	{v0.16b}, [%4]		\n"
-	"	ld1	{v1.4s, v2.4s}, [%0], #32	\n"
-	"	eor	v0.16b, v0.16b, v1.16b	\n"
-	"	subs	%1, %1, #3		\n"
+	"	ld1	{v0.16b}, [%[pt]]	\n"
+	"	ld1	{v1.4s, v2.4s}, [%[rk]], #32	\n"
+	"//	eor	v0.16b, v0.16b, v1.16b	\n"
+	"	subs	%w[nr], %w[nr], #2	\n"
 	".align 4				\n"
 	"1:					\n"
-	"	ld1	{v1.4s}, [%0], #16	\n"
-	"	aese	v0.16b, v2.16b		\n"
-	"	aesmc	v0.16b, v0.16b		\n"
-	"	b.eq	2f			\n"
-	"	ld1	{v2.4s}, [%0], #16	\n"
-	"	subs	%1, %1, #2		\n"
 	"	aese	v0.16b, v1.16b		\n"
 	"	aesmc	v0.16b, v0.16b		\n"
+	"	ld1	{v1.4s}, [%[rk]], #16	\n"
+	"	b.eq	2f			\n"
+	"	subs	%w[nr], %w[nr], #2	\n"
+	"	aese	v0.16b, v2.16b		\n"
+	"	aesmc	v0.16b, v0.16b		\n"
+	"	ld1	{v2.4s}, [%[rk]], #16	\n"
 	"	b.pl	1b			\n"
 	"					\n"
-	"	aese	v0.16b, v2.16b		\n"
+	"	aese	v0.16b, v1.16b		\n"
+	"	eor	v0.16b, v0.16b, v2.16b	\n"	
 	"	b	3f			\n"
 	"2:					\n"
-	"	aese	v0.16b, v1.16b		\n"
+	"	aese	v0.16b, v2.16b		\n"
+	"	eor	v0.16b, v0.16b, v1.16b	\n"	
 	"3:					\n"
-	"	st1	{v0.16b}, [%5]		\n"
-	: "=r" (rkeys), "=r" (Nr)
-	: "0" (rkeys), "1" (Nr), "r" (pt), "r" (ct)
-	: "v0", "v1", "v2"
+	"	st1	{v0.16b}, [%[ct]]	\n"
+	: [rk] "=r" (rk), [nr] "=r" (dummy1)
+	: "0" (rkeys), "1" (Nr), [pt] "r" (pt), [ct] "r" (ct)
+	: "v0", "v1", "v2", "cc"
 	);
 	//printf("%i rounds left, %li rounds\n", Nr, (rkeys-rk)/16);
 	return;
@@ -205,33 +208,36 @@ void AES_ARM8_Encrypt(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 
 
 void AES_ARM8_Decrypt(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 ct[16], u8 pt[16])
 {
-	//const u8 *rk = rkeys;
+	u8 *rk = (u8*)rkeys;
+	uint dummy1;
 	asm volatile(
-	"	ld1	{v0.16b}, [%4]		\n"
-	"	ld1	{v1.4s, v2.4s}, [%0], #32	\n"
-	"	eor	v0.16b, v0.16b, v1.16b	\n"
-	"	subs	%1, %1, #3		\n"
+	"	ld1	{v0.16b}, [%[ct]]	\n"
+	"	ld1	{v1.4s, v2.4s}, [%[rk]], #32	\n"
+	"//	eor	v0.16b, v0.16b, v1.16b	\n"
+	"	subs	%w[nr], %w[nr], #2	\n"
 	".align 4				\n"
 	"1:					\n"
-	"	ld1	{v1.4s}, [%0], #16	\n"
-	"	aesd	v0.16b, v2.16b		\n"
-	"	aesimc	v0.16b, v0.16b		\n"
-	"	b.eq	2f			\n"
-	"	ld1	{v2.4s}, [%0], #16	\n"
-	"	subs	%1, %1, #2		\n"
 	"	aesd	v0.16b, v1.16b		\n"
 	"	aesimc	v0.16b, v0.16b		\n"
+	"	ld1	{v1.4s}, [%[rk]], #16	\n"
+	"	b.eq	2f			\n"
+	"	subs	%w[nr], %w[nr], #2	\n"
+	"	aesd	v0.16b, v2.16b		\n"
+	"	aesimc	v0.16b, v0.16b		\n"
+	"	ld1	{v2.4s}, [%[rk]], #16	\n"
 	"	b.pl	1b			\n"
 	"					\n"
-	"	aesd	v0.16b, v2.16b		\n"
+	"	aesd	v0.16b, v1.16b		\n"
+	"	eor	v0.16b, v0.16b, v2.16b	\n"
 	"	b	3f			\n"
 	"2:					\n"
-	"	aesd	v0.16b, v1.16b		\n"
+	"	aesd	v0.16b, v2.16b		\n"
+	"	eor	v0.16b, v0.16b, v1.16b	\n"
 	"3:					\n"
-	"	st1	{v0.16b}, [%5]		\n"
-	: "=r" (rkeys), "=r" (Nr)
-	: "0" (rkeys), "1" (Nr), "r" (ct), "r" (pt)
-	: "v0", "v1", "v2"
+	"	st1	{v0.16b}, [%[pt]]	\n"
+	: [rk] "=r" (rk), [nr] "=r" (dummy1)
+	: "0" (rkeys), "1" (Nr), [ct] "r" (ct), [pt] "r" (pt)
+	: "v0", "v1", "v2", "cc"
 	);
 	//printf("%i rounds left, %li rounds\n", Nr, (rkeys-rk)/16);
 	return;
