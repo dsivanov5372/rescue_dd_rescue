@@ -8,8 +8,9 @@
 #include <sys/syscall.h>
 #include <sys/types.h>
 #ifdef HAVE_ENDIAN_H
-#include <endian.h>
+# include <endian.h>
 #endif
+
 #define __KERNEL__
 #include <asm/unistd.h>
 #ifdef __NR_fallocate

@@ -37,15 +37,19 @@
 #  ifdef HAVE_FFSL
 #   define myffsl(x) ffsl(x)
 #  elif defined(__i386__) || defined(__x86_64__)
+#   define NEED_FFSL_C 1
 #   define myffsl(x) (have_sse42? myffsl_sse42(x): myffsl_c(x))
 #  else 
+#   define NEED_FFSL_C 1
 #   define myffsl(x) myffsl_c(x)
 #  endif
 # endif
 #elif defined(__i386__) || defined(__x86_64__)
+# define NEED_FFSL_C 1
 # define myffs(x) (have_sse42? myffs_sse42(x): myffs_c(x))
 # define myffsl(x) (have_sse42? myffsl_sse42(x): myffsl_c(x))
 #else
+# define NEED_FFSL_C 1
 # define myffs(x) myffsl_c(x)
 # define myffsl(x) myffsl_c(x)
 #endif
@@ -57,7 +61,8 @@
 # error Need to define __WORDSIZE
 #endif
 
-#ifndef HAVE_FFS
+//#ifndef HAVE_FFS
+#ifdef NEED_FFSL_C
 /** Find first (lowest) bit set in word val, returns a val b/w 1 and __WORDSIZE, 0 if no bit is set */
 static int myffsl_c(unsigned long val)
 {

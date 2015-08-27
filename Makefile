@@ -1,7 +1,7 @@
 # Makefile for dd_rescue
 # (c) garloff@suse.de, 99/10/09, GNU GPL
 
-VERSION = 1.98
+VERSION = 1.99
 
 DESTDIR = 
 

@@ -137,6 +137,7 @@
 #else
 # ifdef HAVE_FALLOCATE64
 #  include <linux/falloc.h>
+typedef off64_t __off64_t;
 # endif
 #endif
 
@@ -2438,10 +2439,11 @@ void breakhandler(int sig)
 
 unsigned char* zalloc_aligned_buf(unsigned int bs, unsigned char**obuf)
 {
-	unsigned char *ptr;
-#if defined (__DragonFly__) || defined(__NetBSD__) || defined(__BIONIC__)
+	unsigned char *ptr = 0;
+//#if defined (__DragonFly__) || defined(__NetBSD__) || defined(__BIONIC__)
+#ifdef HAVE_VALLOC
 	ptr = plug_max_slack_pre%pagesize? 0: (unsigned char*)valloc(bs + plug_max_slack_pre + plug_max_slack_post);
-#else
+#elif defined(HAVE_POSIX_MEMALIGN)
 	void *mp;
 	if (plug_max_slack_pre%pagesize || posix_memalign(&mp, pagesize, bs + plug_max_slack_pre + plug_max_slack_post))
 		ptr = 0;

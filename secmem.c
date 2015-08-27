@@ -10,6 +10,9 @@
 #include <unistd.h>
 #include <errno.h>
 #include <sys/mman.h>
+#ifdef HAVE_MALLOC_H
+# include <malloc.h>
+#endif
 
 static unsigned char *optr;
 static unsigned int pagesize;
@@ -22,10 +25,11 @@ sec_fields* secmem_init()
 #warning Cant determine pagesize, setting to 4kiB
 	pagesize = 4096;
 #endif  
-	unsigned char *ptr;
-#if defined (__DragonFly__) || defined(__NetBSD__) || defined(__BIONIC__)
+	unsigned char *ptr = 0;
+#ifdef HAVE_VALLOC
+//#if defined (__DragonFly__) || defined(__NetBSD__) || defined(__BIONIC__)
 	ptr = (unsigned char*)valloc(pagesize);
-#else
+#elif defined(HAVE_POSIX_MEMALIGN)
 	void *mp;
 	if (posix_memalign(&mp, pagesize, pagesize))
 		ptr = 0;

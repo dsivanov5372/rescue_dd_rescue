@@ -6,6 +6,10 @@
 #ifndef _SECMEM_H
 #define _SECMEM_H
 
+#ifdef HAVE_CONFIG_H
+# include "config.h"
+#endif
+
 typedef struct _roundkey {
 	unsigned char data[16];
 } roundkey;
