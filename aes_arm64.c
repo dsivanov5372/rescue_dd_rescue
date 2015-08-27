@@ -353,6 +353,51 @@ void AES_ARM8_Decrypt4(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8
 	return;
 }
 
+void AES_ARM8_Encrypt_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 pt[16], u8 ct[16], u8 iv[16])
+{
+	u8 *rk = (u8*)rkeys;
+	uint dummy1;
+	unsigned long long inc1[] = {0ULL, 1ULL};
+	asm volatile(
+	"	ld1	{v2.16b}, [%[iv]]	\n"
+	"	ld1	{v0.4s, v1.4s}, [%[rk]], #32	\n"
+	"	ld1	{v4.2d}, %[inc]	\n"
+	"	rev64	v2.16b, v2.16b		\n"
+	"	add	v4.2d, v2.2d, v4.2d	\n"
+	"	rev64	v2.16b, v2.16b		\n"
+	"	rev64	v4.16b, v4.16b		\n"
+	"	ld1	{v3.16b}, [%[pt]]	\n"
+	"	st1	{v4.16b}, [%[iv]]	\n"
+	"	subs	%w[nr], %w[nr], #2	\n"
+	".align 4				\n"
+	"1:					\n"
+	"	aese	v2.16b, v0.16b		\n"
+	"	aesmc	v2.16b, v2.16b		\n"
+	"	ld1	{v0.4s}, [%[rk]], #16	\n"
+	"	b.eq	2f			\n"
+	"	subs	%w[nr], %w[nr], #2	\n"
+	"	aese	v2.16b, v1.16b		\n"
+	"	aesmc	v2.16b, v2.16b		\n"
+	"	ld1	{v1.4s}, [%[rk]], #16	\n"
+	"	b.pl	1b			\n"
+	"					\n"
+	"	aese	v2.16b, v0.16b		\n"
+	"	eor	v2.16b, v2.16b, v1.16b	\n"	
+	"	b	3f			\n"
+	"2:					\n"
+	"	aese	v2.16b, v1.16b		\n"
+	"	eor	v2.16b, v2.16b, v0.16b	\n"	
+	"3:					\n"
+	"	eor	v3.16b, v3.16b, v2.16b	\n"	
+	"	st1	{v3.16b}, [%[ct]]	\n"
+	: [rk] "=r" (rk), [nr] "=r" (dummy1)
+	: "0" (rkeys), "1" (Nr), [pt] "r" (pt), [ct] "r" (ct), [iv] "r" (iv), [inc] "Q" (inc1)
+	: "v0", "v1", "v2", "v3", "v4", "cc"
+	);
+	//printf("%i rounds left, %li rounds\n", Nr, (rkeys-rk)/16);
+	return;
+}
+
 void AES_ARM8_Encrypt4_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 pt[64], u8 ct[64], u8 iv[16])
 {
 	u8 *rk = (u8*)rkeys;
@@ -451,40 +496,78 @@ DECL_KEYSETUP(Dec, 256);
 #define AES_ARM8_Decrypt_Blk AES_ARM8_Decrypt
 #define AES_ARM8_Encrypt_4Blk AES_ARM8_Encrypt4
 #define AES_ARM8_Decrypt_4Blk AES_ARM8_Decrypt4
+#define AES_ARM8_Encrypt_Blk_CTR AES_ARM8_Encrypt_CTR
 #define AES_ARM8_Encrypt_4Blk_CTR AES_ARM8_Encrypt4_CTR
+
+#define CLR_NEON3				\
+	asm volatile(				\
+	" eor v0.16b,v0.16b,v0.16b	\n"	\
+	" eor v1.16b,v1.16b,v1.16b	\n"	\
+	" eor v2.16b,v2.16b,v2.16b	\n"	\
+	::: "v0", "v1", "v2")
+
+#define CLR_NEON6				\
+	asm volatile(				\
+	" eor v0.16b,v0.16b,v0.16b	\n"	\
+	" eor v1.16b,v1.16b,v1.16b	\n"	\
+	" eor v2.16b,v2.16b,v2.16b	\n"	\
+	" eor v3.16b,v3.16b,v3.16b	\n"	\
+	" eor v4.16b,v4.16b,v4.16b	\n"	\
+	" eor v5.16b,v5.16b,v5.16b	\n"	\
+	::: "v0", "v1", "v2", "v3", "v4", "v5")
+
+#define CLR_NEON11				\
+	asm volatile(				\
+	" eor v0.16b,v0.16b,v0.16b	\n"	\
+	" eor v1.16b,v1.16b,v1.16b	\n"	\
+	" eor v2.16b,v2.16b,v2.16b	\n"	\
+	" eor v3.16b,v3.16b,v3.16b	\n"	\
+	" eor v4.16b,v4.16b,v4.16b	\n"	\
+	" eor v5.16b,v5.16b,v5.16b	\n"	\
+	" eor v6.16b,v6.16b,v6.16b	\n"	\
+	" eor v7.16b,v7.16b,v7.16b	\n"	\
+	" eor v8.16b,v8.16b,v8.16b	\n"	\
+	" eor v9.16b,v9.16b,v9.16b	\n"	\
+	" eor v10.16b,v10.16b,v10.16b	\n"	\
+	::: "v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10")
 
 int  AES_ARM8_ECB_Encrypt(const uchar* rkeys, uint rounds, uchar *iv, uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen)
 {
-	return AES_Gen_ECB_Enc4(AES_ARM8_Encrypt_4Blk, AES_ARM8_Encrypt_Blk, 
+	int r = AES_Gen_ECB_Enc4(AES_ARM8_Encrypt_4Blk, AES_ARM8_Encrypt_Blk, 
 				rkeys, rounds, pad, in, out, len, olen);
+	CLR_NEON6;
+	return r;
 }
 int  AES_ARM8_ECB_Decrypt(const uchar* rkeys, uint rounds, uchar *iv, uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen)
 {
-	return AES_Gen_ECB_Dec4(AES_ARM8_Decrypt_4Blk, AES_ARM8_Decrypt_Blk, 
+	int r = AES_Gen_ECB_Dec4(AES_ARM8_Decrypt_4Blk, AES_ARM8_Decrypt_Blk, 
 				rkeys, rounds, pad, in, out, len, olen);
+	CLR_NEON6;
+	return r;
 }
 
 int  AES_ARM8_CBC_Encrypt(const uchar* rkeys, uint rounds, uchar *iv, uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen)
 {
-	return AES_Gen_CBC_Enc(AES_ARM8_Encrypt_Blk, 
+	int r = AES_Gen_CBC_Enc(AES_ARM8_Encrypt_Blk, 
 				rkeys, rounds, iv, pad, in, out, len, olen);
+	CLR_NEON3;
+	return r;
 }
 int  AES_ARM8_CBC_Decrypt(const uchar* rkeys, uint rounds, uchar *iv, uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen)
 {
-	return AES_Gen_CBC_Dec4(AES_ARM8_Decrypt_4Blk, AES_ARM8_Decrypt_Blk, 
+	int r = AES_Gen_CBC_Dec4(AES_ARM8_Decrypt_4Blk, AES_ARM8_Decrypt_Blk, 
 				rkeys, rounds, iv, pad, in, out, len, olen);
+	CLR_NEON6;
+	return r;
 }
 
 int  AES_ARM8_CTR_Crypt(const uchar* rkeys, uint rounds, uchar *ctr, uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen)
 {
 	*olen = len;
-#if 0
-	return AES_Gen_CTR_Crypt4(AES_ARM8_Encrypt_4Blk, AES_ARM8_Encrypt_Blk, 
-				  rkeys, rounds, ctr, in, out, len);
-#else
-	return AES_Gen_CTR_Crypt_Opt(AES_ARM8_Encrypt_4Blk_CTR, AES_ARM8_Encrypt_Blk, 
+	int r = AES_Gen_CTR_Crypt_Opt(AES_ARM8_Encrypt_4Blk_CTR, AES_ARM8_Encrypt_Blk_CTR, 
 				     rkeys, rounds, ctr, in, out, len);
-#endif
+	CLR_NEON11;
+	return r;
 }
 
 /* Double de/encryption methods */

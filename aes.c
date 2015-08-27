@@ -193,6 +193,8 @@ int  AES_Gen_CBC_Enc(AES_Crypt_Blk_fn *cryptfn,
 		cryptfn(rkeys, rounds, iv, output);
 		//memcpy(iv, output, 16);
 		*olen += 16-(len&15);
+		memset(in, 0, 16);
+		asm("":::"memory");
 	}
 	return (pad == PAD_ALWAYS || (len&15))? 16-(len&15): 0;
 }
@@ -211,6 +213,8 @@ int  AES_Gen_CBC_Dec(AES_Crypt_Blk_fn *cryptfn,
 		memcpy(iv, input, 16);
 		len -= 16; input += 16; output += 16;
 	}
+	memset(ebf, 0, 16);
+	asm("":::"memory");
 	if (pad)
 		return dec_fix_olen_pad(olen, pad, output);
 	else
@@ -240,6 +244,8 @@ int  AES_Gen_CBC_Dec4(AES_Crypt_Blk_fn *cryptfn4,
 		memcpy(iv, input, 16);
 		len -= 16; input += 16; output += 16;
 	}
+	memset(ebf, 0, 64);
+	asm("":::"memory");
 	if (pad)
 		return dec_fix_olen_pad(olen, pad, output);
 	else
@@ -296,6 +302,7 @@ int  AES_Gen_CTR_Crypt(AES_Crypt_Blk_fn *cryptfn,
 {
 	//assert(pad == 0);
 	//*olen = len;
+	// TODO: secmem?
 	uchar eblk[16];
 	while (len >= 16) {
 		cryptfn(rkeys, rounds, ctr, eblk);
@@ -311,14 +318,15 @@ int  AES_Gen_CTR_Crypt(AES_Crypt_Blk_fn *cryptfn,
 		//be_inc(ctr+8);	
 		xor16(eblk, in, in);
 		memcpy(output, in, len&15);
+		memset(in, 0, 16);
 	}
 	memset(eblk, 0, 16);
 	asm("":::"memory");
 	return 0;
 }
 
-int  AES_Gen_CTR_Crypt_Opt(AES_Crypt_CTR_4Blk_fn *cryptfn4c,
-			AES_Crypt_Blk_fn *cryptfn,
+int  AES_Gen_CTR_Crypt_Opt(AES_Crypt_CTR_Blk_fn *cryptfn4c,
+			AES_Crypt_CTR_Blk_fn *cryptfnc,
 			const uchar *rkeys, uint rounds,
 			uchar *ctr, /* uint pad, */
 			const uchar *input, uchar *output,
@@ -326,30 +334,30 @@ int  AES_Gen_CTR_Crypt_Opt(AES_Crypt_CTR_4Blk_fn *cryptfn4c,
 {
 	//assert(pad == 0);
 	//*olen = len;
-	// TODO: Use secmem
-	uchar eblk[16];
 	while (len >= 64) {
 		cryptfn4c(rkeys, rounds, input, output, ctr);
 		len -= 64;
 		input += 64; output += 64;
 	}
 	while (len >= 16) {
-		cryptfn(rkeys, rounds, ctr, eblk);
-		be_inc(ctr+8);	
-		xor16(eblk, input, output);
+		cryptfnc(rkeys, rounds, input, output, ctr);
 		len -= 16;
 		input += 16; output += 16;
 	}
 	if (len) {
+		// TODO: Use secmem
 		uchar in[16];
+		uchar eblk[16];
+		uchar octr[16];
+		memcpy(octr, ctr, 16);
 		fill_blk(input, in, len, 0 /*pad*/);
-		cryptfn(rkeys, rounds, ctr, eblk);
-		//be_inc(ctr+8);	
-		xor16(eblk, in, in);
-		memcpy(output, in, len&15);
+		cryptfnc(rkeys, rounds, in, eblk, ctr);
+		memcpy(output, eblk, len&15);
+		memset(in, 0, 16);
+		memcpy(ctr, octr, 16);
+		memset(eblk, 0, 16);
+		asm("":::"memory");
 	}
-	memset(eblk, 0, 16);
-	asm("":::"memory");
 	return 0;
 }
 
