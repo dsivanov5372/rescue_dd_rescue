@@ -30,6 +30,9 @@
 #ifdef HAVE_AESNI
 #include "aesni.h"
 #endif
+#ifdef HAVE_AES_ARM64
+#include "aes_arm64.h"
+#endif
 
 #include <stdlib.h>
 #include <string.h>
@@ -183,6 +186,14 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		state->engine = AESNI_Methods;
 	else
 #endif
+#ifdef HAVE_AES_ARM64
+#ifdef MAY_AES_ARM64
+	have_arm8crypto = detect2("aes", probe_arm8crypto);
+#endif
+	if (have_arm8crypto)
+		state->engine = AES_ARM8_Methods;
+	else
+#endif
 		state->engine = AES_C_Methods;
 	while (param) {
 		char* next = strchr(param, ':');
@@ -204,6 +215,10 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		else if (!memcmp(param, "engine=", 7)) {
 			if (!strcmp(param+7, "aes_c"))
 				state->engine = AES_C_Methods;
+#ifdef HAVE_AES_ARM64
+			else if (!strcmp(param+7, "aesarm64"))
+				state->engine = AES_ARM8_Methods;
+#endif
 #ifdef HAVE_AESNI
 			else if (!strcmp(param+7, "aesni"))
 				state->engine = AESNI_Methods;
@@ -213,7 +228,7 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 				state->engine = AES_OSSL_Methods;
 #endif
 			else {
-				FPLOG(FATAL, "Engine %s unknown, specify aesni/aes_c/openssl\n",
+				FPLOG(FATAL, "Engine %s unknown, specify aesni/aesarm64/aes_c/openssl\n",
 					param+7);
 				--err;
 				param = next;

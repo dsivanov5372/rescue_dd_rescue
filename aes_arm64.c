@@ -362,13 +362,13 @@ void AES_ARM8_Encrypt_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const
 	unsigned long long inc1[] = {0ULL, 1ULL};
 	asm volatile(
 	"	ld1	{v2.16b}, [%[iv]]	\n"
-	"	ld1	{v0.4s, v1.4s}, [%[rk]], #32	\n"
 	"	ld1	{v4.2d}, %[inc]	\n"
+	"	ld1	{v0.4s, v1.4s}, [%[rk]], #32	\n"
+	"	ld1	{v3.16b}, [%[pt]]	\n"
 	"	rev64	v2.16b, v2.16b		\n"
 	"	add	v4.2d, v2.2d, v4.2d	\n"
 	"	rev64	v2.16b, v2.16b		\n"
 	"	rev64	v4.16b, v4.16b		\n"
-	"	ld1	{v3.16b}, [%[pt]]	\n"
 	"	st1	{v4.16b}, [%[iv]]	\n"
 	"	subs	%w[nr], %w[nr], #2	\n"
 	".align 4				\n"
@@ -407,8 +407,9 @@ void AES_ARM8_Encrypt4_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, cons
 	unsigned long long inc1[] = {0ULL, 1ULL};
 	asm volatile(
 	"	ld1	{v2.16b}, [%[iv]]	\n"
-	"	ld1	{v0.4s, v1.4s}, [%[rk]], #32	\n"
 	"	ld1	{v10.2d}, %[inc]	\n"
+	"	ld1	{v0.4s, v1.4s}, [%[rk]], #32	\n"
+	"	ld1	{v6.16b-v9.16b}, [%[pt]]\n"
 	"	rev64	v2.16b, v2.16b		\n"
 	"	add	v3.2d, v2.2d, v10.2d	\n"
 	"	add	v4.2d, v3.2d, v10.2d	\n"
@@ -419,9 +420,8 @@ void AES_ARM8_Encrypt4_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, cons
 	"	rev64	v4.16b, v4.16b		\n"
 	"	rev64	v5.16b, v5.16b		\n"
 	"	rev64	v10.16b, v10.16b	\n"
-	"	ld1	{v6.16b-v9.16b}, [%[pt]]\n"
-	"//	prfm	PLDL1STRM, [%[pt],#64]	\n"
 	"	st1	{v10.16b}, [%[iv]]	\n"
+	"	//prfm	PLDL1STRM, [%[pt],#64]	\n"
 	"	subs	%w[nr], %w[nr], #2	\n"
 	".align 4				\n"
 	"1:					\n"
