@@ -54,6 +54,8 @@ extern stream_dsc_t aes_stream_ecb, aes_stream_cbc, aes_stream_ctr;
 typedef void (Key_Setup_fn)(const uchar* usrkey, uchar* rkeys, uint rounds); 
 typedef void (AES_Crypt_Blk_fn)(const uchar* rkeys, uint rounds, 
 			    const uchar* input, uchar* output);
+typedef void (AES_Crypt_CTR_4Blk_fn)(const uchar* rkeys, uint rounds, 
+			    const uchar* input, uchar* output, uchar* iv);
 typedef int  (Crypt_IV_fn) (const uchar* rkeys, uint rounds,
 			    uchar *iv /* [16] */, uint pad,
 			    const uchar* input, uchar* output,
@@ -119,6 +121,12 @@ int  AES_Gen_CTR_Crypt(AES_Crypt_Blk_fn *cryptfn,
 			const uchar *input, uchar *output,
 			ssize_t len/*, ssize_t *olen unused */);
 int  AES_Gen_CTR_Crypt4(AES_Crypt_Blk_fn *cryptfn4,
+			AES_Crypt_Blk_fn *cryptfn,
+			const uchar *rkeys, uint rounds,
+			uchar *ctr, /* uint pad unused ,*/
+			const uchar *input, uchar *output,
+			ssize_t len/*, ssize_t *olen unused */);
+int  AES_Gen_CTR_Crypt_Opt(AES_Crypt_CTR_4Blk_fn *cryptfn4c,
 			AES_Crypt_Blk_fn *cryptfn,
 			const uchar *rkeys, uint rounds,
 			uchar *ctr, /* uint pad unused ,*/

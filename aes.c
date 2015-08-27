@@ -317,6 +317,42 @@ int  AES_Gen_CTR_Crypt(AES_Crypt_Blk_fn *cryptfn,
 	return 0;
 }
 
+int  AES_Gen_CTR_Crypt_Opt(AES_Crypt_CTR_4Blk_fn *cryptfn4c,
+			AES_Crypt_Blk_fn *cryptfn,
+			const uchar *rkeys, uint rounds,
+			uchar *ctr, /* uint pad, */
+			const uchar *input, uchar *output,
+			ssize_t len/*, ssize_t *olen */)
+{
+	//assert(pad == 0);
+	//*olen = len;
+	// TODO: Use secmem
+	uchar eblk[16];
+	while (len >= 64) {
+		cryptfn4c(rkeys, rounds, input, output, ctr);
+		len -= 64;
+		input += 64; output += 64;
+	}
+	while (len >= 16) {
+		cryptfn(rkeys, rounds, ctr, eblk);
+		be_inc(ctr+8);	
+		xor16(eblk, input, output);
+		len -= 16;
+		input += 16; output += 16;
+	}
+	if (len) {
+		uchar in[16];
+		fill_blk(input, in, len, 0 /*pad*/);
+		cryptfn(rkeys, rounds, ctr, eblk);
+		//be_inc(ctr+8);	
+		xor16(eblk, in, in);
+		memcpy(output, in, len&15);
+	}
+	memset(eblk, 0, 16);
+	asm("":::"memory");
+	return 0;
+}
+
 int  AES_Gen_CTR_Crypt4(AES_Crypt_Blk_fn *cryptfn4,
 			AES_Crypt_Blk_fn *cryptfn,
 			const uchar *rkeys, uint rounds,
