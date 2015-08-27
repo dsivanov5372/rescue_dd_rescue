@@ -584,7 +584,7 @@ void AESNI_ECB_Decrypt_old(const unsigned char* in, unsigned char* out,
 }
 
 
-inline
+static inline
 int  AESNI_ECB_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt, int enc,
 			  const unsigned char* key, unsigned int rounds,
 			  unsigned int pad,
@@ -698,7 +698,7 @@ void AESNI_ECB_Decrypt(const unsigned char* key, unsigned int rounds,
 }
 #endif
 
-inline
+static inline
 int AESNI_CBC_Encrypt_Tmpl(crypt_blk_fn *encrypt,
 			const unsigned char* key, unsigned int rounds,
 			unsigned char* iv, unsigned int pad,
@@ -745,7 +745,7 @@ int AESNI_CBC_Encrypt(	const unsigned char* key, unsigned int rounds,
 	return AESNI_CBC_Encrypt_Tmpl(Encrypt_Block, key, rounds, iv, pad, in, out, len, olen);
 }
 
-inline
+static inline
 int  AESNI_CBC_Decrypt_Tmpl(crypt_4blks_fn *decrypt4, crypt_blk_fn *decrypt,
 			const unsigned char* key, unsigned int rounds,
 			unsigned char* iv, unsigned int pad,
@@ -855,7 +855,7 @@ void AESNI_CTR_Prep(const unsigned char* iv, unsigned char* ctr, unsigned long l
 #endif
 }
 
-inline
+static inline
 int AESNI_CTR_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt,
 			 const unsigned char* key, unsigned int rounds,
 		 	 unsigned char* ctr,
