@@ -83,6 +83,15 @@ as it provides both superior performance and avoids some of the cache
 timing attacks that the lookup tables used in discrete implementations
 may be prone to. This engine supports all algorithms.
 .TP 4
+.BR engine=aesarm64
+This will use an own AES implementation using the AESv8 crypto extensions of
+the ARMv8 (AArch64 = ARM 64bit) architecture (available on CPUs/SOCs based on 
+ARM's Cortex A53,A57,A72 or Qualcomm's Kryo or Apple's A7x or newer designs). 
+If possible, this should be used,
+as it provides both superior performance and avoids some of the cache
+timing attacks that the lookup tables used in discrete implementations
+may be prone to. This engine supports all algorithms.
+.TP 4
 .BR engine=aes_c
 This uses an AES implementation in C which is based on the rijndael
 reference code. It is available on all CPUs and supports all algorithms.
@@ -99,7 +108,9 @@ other engines provide.
 .PP
 The engines are used in this order if available, which means that 
 .I aesni
-will be used by default on x86 if supported and 
+will be used by default on x86 if supported,
+.I aesarm64
+will be used on ARMv8 and
 .I aes_c
 by default on all other platforms.
 .
@@ -459,8 +470,6 @@ possibly also threefish).
 .br
 Stronger function to derive keys/IVs from passwords than pbkdf2.
 .br
-Support for AES acceleration for ARMv8.
-.br
 Support for other streaming modes (XTS, GCM, ...)
 .br
 Store IV in xattr
@@ -508,6 +517,8 @@ The x86 AESNI optmized AES implementation has been inspired by
 an intel whitepaper from 2009:
 https://software.intel.com/sites/default/files/article/165683/aes-wp-2012-09-22-v01.pdf
 .br
+The ARMv8 AES support has been inspired by studying openSSL assembly as well
+as Linaro's in-kernel implementation.
 . 
 .SH COPYRIGHT
 This plugin is under the same license as dd_rescue: The GNU General 
@@ -515,6 +526,8 @@ Public License (GPL) v2 or v3 - at your option.
 .
 .SH HISTORY
 ddr_crypt plugin was first introduced with dd_rescue 1.98 (May 2015).
+.br.
+Version 1.99 brought support for ARMv8 crypto acceleration.
 .PP
 Some additional information can be found on
 .br
