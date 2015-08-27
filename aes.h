@@ -79,7 +79,19 @@ int  AES_Gen_ECB_Enc(AES_Crypt_Blk_fn *cryptfn,
 		     /* uchar *iv unused ,*/ uint pad,
 		     const uchar *input, uchar *output,
 		     ssize_t len, ssize_t *olen);
+int  AES_Gen_ECB_Enc4(AES_Crypt_Blk_fn *cryptfn4,
+		     AES_Crypt_Blk_fn *cryptfn,
+		     const uchar* rkeys, uint rounds,
+		     /* uchar *iv unused ,*/ uint pad,
+		     const uchar *input, uchar *output,
+		     ssize_t len, ssize_t *olen);
 int  AES_Gen_ECB_Dec(AES_Crypt_Blk_fn *cryptfn,
+		     const uchar* rkeys, uint rounds,
+		     /* char *iv unused ,*/ uint pad,
+		     const uchar *input, uchar *output,
+		     ssize_t len, ssize_t *olen);
+int  AES_Gen_ECB_Dec4(AES_Crypt_Blk_fn *cryptfn4,
+		     AES_Crypt_Blk_fn *cryptfn,
 		     const uchar* rkeys, uint rounds,
 		     /* char *iv unused ,*/ uint pad,
 		     const uchar *input, uchar *output,
@@ -89,7 +101,14 @@ int  AES_Gen_CBC_Enc(AES_Crypt_Blk_fn *cryptfn,
 		     uchar *iv, uint pad,
 		     const uchar *input, uchar *output,
 		     ssize_t len, ssize_t *olen);
+/* no CBC_Enc4 - we have data dependencies */
 int  AES_Gen_CBC_Dec(AES_Crypt_Blk_fn *cryptfn,
+		     const uchar* rkeys, uint rounds,
+		     uchar *iv, uint pad,
+		     const uchar *input, uchar *output,
+		     ssize_t len, ssize_t *olen);
+int  AES_Gen_CBC_Dec4(AES_Crypt_Blk_fn *cryptfn4,
+		     AES_Crypt_Blk_fn *cryptfn,
 		     const uchar* rkeys, uint rounds,
 		     uchar *iv, uint pad,
 		     const uchar *input, uchar *output,
@@ -99,9 +118,16 @@ int  AES_Gen_CTR_Crypt(AES_Crypt_Blk_fn *cryptfn,
 			uchar *ctr, /* uint pad unused ,*/
 			const uchar *input, uchar *output,
 			ssize_t len/*, ssize_t *olen unused */);
+int  AES_Gen_CTR_Crypt4(AES_Crypt_Blk_fn *cryptfn4,
+			AES_Crypt_Blk_fn *cryptfn,
+			const uchar *rkeys, uint rounds,
+			uchar *ctr, /* uint pad unused ,*/
+			const uchar *input, uchar *output,
+			ssize_t len/*, ssize_t *olen unused */);
 
 void AES_Gen_CTR_Prep(const uchar *nonce /*[16]*/, uchar *ctr/*[16]*/, unsigned long long ival);
 void AES_Gen_Release(uchar *rkeys, uint rounds);
+void fill_blk(const uchar *in, uchar bf[16], ssize_t len, uint pad);
 int  dec_fix_olen_pad(ssize_t *olen, uint pad, const uchar *output);
 
 ciph_desc_t *findalg(ciph_desc_t* list, const char* nm);

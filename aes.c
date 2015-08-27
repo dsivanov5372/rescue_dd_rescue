@@ -20,6 +20,20 @@ void xor16(const uchar x1[16], const uchar x2[16], uchar xout[16])
 		*(ulong*)(xout+i) = *(ulong*)(x1+i) ^ *(ulong*)(x2+i);
 }
 
+void xor48(const uchar x1[48], const uchar x2[48], uchar xout[48])
+{
+	uint i;
+	for (i = 0; i < 48; i+=sizeof(ulong))
+		*(ulong*)(xout+i) = *(ulong*)(x1+i) ^ *(ulong*)(x2+i);
+}
+
+void xor64(const uchar x1[64], const uchar x2[64], uchar xout[64])
+{
+	uint i;
+	for (i = 0; i < 64; i+=sizeof(ulong))
+		*(ulong*)(xout+i) = *(ulong*)(x1+i) ^ *(ulong*)(x2+i);
+}
+
 /* PKCS padding */
 void fill_blk(const uchar *in, uchar bf[16], ssize_t len, uint pad)
 {
@@ -38,6 +52,30 @@ int  AES_Gen_ECB_Enc(AES_Crypt_Blk_fn *cryptfn,
 		     ssize_t len, ssize_t *olen)
 {
 	*olen = len;
+	while (len >= 16) {
+		cryptfn(rkeys, rounds, input, output);
+		len -= 16; input += 16; output += 16;
+	}
+	if (len || pad == PAD_ALWAYS) {
+		uchar in[16];
+		fill_blk(input, in, len, pad);
+		cryptfn(rkeys, rounds, in, output);
+		*olen += 16-(len&15);
+	}
+	return (pad == PAD_ALWAYS || (len&15))? 16-(len&15): 0;
+}
+
+int  AES_Gen_ECB_Enc4(AES_Crypt_Blk_fn *cryptfn4, AES_Crypt_Blk_fn *cryptfn,
+		     const uchar* rkeys, uint rounds,
+		     /* uchar *iv,*/ uint pad,
+		     const uchar *input, uchar *output,
+		     ssize_t len, ssize_t *olen)
+{
+	*olen = len;
+	while (len >= 64) {
+		cryptfn4(rkeys, rounds, input, output);
+		len -= 64; input += 64; output += 64;
+	}
 	while (len >= 16) {
 		cryptfn(rkeys, rounds, input, output);
 		len -= 16; input += 16; output += 16;
@@ -112,6 +150,28 @@ int  AES_Gen_ECB_Dec(AES_Crypt_Blk_fn *cryptfn,
 		return 0;
 }
 
+int  AES_Gen_ECB_Dec4(AES_Crypt_Blk_fn *cryptfn4,
+		     AES_Crypt_Blk_fn *cryptfn,
+		     const uchar* rkeys, uint rounds,
+		     /* uchar* iv,*/ uint pad,
+		     const uchar *input, uchar *output,
+		     ssize_t len, ssize_t *olen)
+{
+	*olen = len;
+	while (len >= 64) {
+		cryptfn4(rkeys, rounds, input, output);
+		len -= 64; input += 64; output += 64;
+	}
+	while (len > 0) {
+		cryptfn(rkeys, rounds, input, output);
+		len -= 16; input += 16; output += 16;
+	}
+	if (pad) 
+		return dec_fix_olen_pad(olen, pad, output);
+	else
+		return 0;
+}
+
 
 int  AES_Gen_CBC_Enc(AES_Crypt_Blk_fn *cryptfn,
 		     const uchar* rkeys, uint rounds,
@@ -157,6 +217,35 @@ int  AES_Gen_CBC_Dec(AES_Crypt_Blk_fn *cryptfn,
 		return 0;
 }
 
+int  AES_Gen_CBC_Dec4(AES_Crypt_Blk_fn *cryptfn4,
+		     AES_Crypt_Blk_fn *cryptfn,
+		     const uchar* rkeys, uint rounds,
+		     uchar *iv, uint pad,
+		     const uchar *input, uchar *output,
+		     ssize_t len, ssize_t *olen)
+{
+	/* TODO: Use secmem */
+	uchar ebf[64];
+	*olen = len;
+	while (len >= 64) {
+		cryptfn4(rkeys, rounds, input, ebf);
+		xor16(iv, ebf, output);
+		xor48(input, ebf+16, output+16);
+		memcpy(iv, input+48, 16);
+		len -= 64; input += 64; output += 64;
+	}
+	while (len > 0) {
+		cryptfn(rkeys, rounds, input, ebf);
+		xor16(iv, ebf, output);
+		memcpy(iv, input, 16);
+		len -= 16; input += 16; output += 16;
+	}
+	if (pad)
+		return dec_fix_olen_pad(olen, pad, output);
+	else
+		return 0;
+}
+
 
 /* Use 12 bits from nonce, initialize rest with counter */
 void AES_Gen_CTR_Prep(const uchar *nonce /*[16]*/, uchar *ctr /*[16]*/, unsigned long long ival)
@@ -178,6 +267,27 @@ void be_inc(uchar ctr[8])
 	} while (i && !ctr[i]);
 }
 
+static inline 
+void be_inc4(uchar ctr[8])
+{
+	int i;
+	for (i = 7; i >= 0; --i) {
+		uchar ov = ctr[i];
+		ctr[i] = ov+4;
+		if (ov < 0xfc)
+			return;
+	}
+}
+
+static inline 
+void be4_inc4(uchar ctr[64])
+{
+	be_inc4(ctr+8);
+	be_inc4(ctr+24);
+	be_inc4(ctr+40);
+	be_inc4(ctr+56);
+}
+
 int  AES_Gen_CTR_Crypt(AES_Crypt_Blk_fn *cryptfn,
 			const uchar *rkeys, uint rounds,
 			uchar *ctr, /* uint pad, */
@@ -187,6 +297,85 @@ int  AES_Gen_CTR_Crypt(AES_Crypt_Blk_fn *cryptfn,
 	//assert(pad == 0);
 	//*olen = len;
 	uchar eblk[16];
+	while (len >= 16) {
+		cryptfn(rkeys, rounds, ctr, eblk);
+		be_inc(ctr+8);	
+		xor16(eblk, input, output);
+		len -= 16;
+		input += 16; output += 16;
+	}
+	if (len) {
+		uchar in[16];
+		fill_blk(input, in, len, 0 /*pad*/);
+		cryptfn(rkeys, rounds, ctr, eblk);
+		//be_inc(ctr+8);	
+		xor16(eblk, in, in);
+		memcpy(output, in, len&15);
+	}
+	memset(eblk, 0, 16);
+	asm("":::"memory");
+	return 0;
+}
+
+int  AES_Gen_CTR_Crypt4(AES_Crypt_Blk_fn *cryptfn4,
+			AES_Crypt_Blk_fn *cryptfn,
+			const uchar *rkeys, uint rounds,
+			uchar *ctr, /* uint pad, */
+			const uchar *input, uchar *output,
+			ssize_t len/*, ssize_t *olen */)
+{
+	//assert(pad == 0);
+	//*olen = len;
+	// TODO: Use secmem
+	uchar eblk[64];
+	uchar cblk[64];
+#if 0
+	if (len >= 64) {
+		memcpy(cblk, ctr, 16);
+		be_inc(ctr+8);
+		memcpy(cblk+16, ctr, 16);
+		be_inc(ctr+8);
+		memcpy(cblk+32, ctr, 16);
+		be_inc(ctr+8);
+		memcpy(cblk+48, ctr, 16);
+	} 
+	while (len >= 128) {
+		cryptfn4(rkeys, rounds, cblk, eblk);
+		be4_inc4(cblk);
+		xor64(eblk, input, output);
+		len -= 64;
+		input += 64; output += 64;
+	}
+	if (len >= 64) {
+		cryptfn4(rkeys, rounds, cblk, eblk);
+		be_inc4(cblk+8);
+		xor64(eblk, input, output);
+		memcpy(ctr+8, cblk+8, 8);
+		len -= 64;
+		input += 64; output += 64;
+	}
+#else
+	if (len >= 64) {
+		memcpy(cblk, ctr, 8);
+		memcpy(cblk+16, ctr, 8);
+		memcpy(cblk+32, ctr, 8);
+		memcpy(cblk+48, ctr, 8);
+	}
+	while (len >= 64) {
+		memcpy(cblk+ 8, ctr+8, 8);
+		be_inc(ctr+8);
+		memcpy(cblk+24, ctr+8, 8);
+		be_inc(ctr+8);
+		memcpy(cblk+40, ctr+8, 8);
+		be_inc(ctr+8);
+		memcpy(cblk+56, ctr+8, 8);
+		cryptfn4(rkeys, rounds, cblk, eblk);
+		be_inc(ctr+8);
+		xor64(eblk, input, output);
+		len -= 64;
+		input += 64; output += 64;
+	}
+#endif	
 	while (len >= 16) {
 		cryptfn(rkeys, rounds, ctr, eblk);
 		be_inc(ctr+8);	
