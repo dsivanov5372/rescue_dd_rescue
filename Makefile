@@ -34,6 +34,9 @@ COMPILER = $(shell $(CC) --version | head -n1)
 ID = $(shell git describe --tags || cat REL-ID)
 DEFINES = -DVERSION=\"$(VERSION)\"  -D__COMPILER__="\"$(COMPILER)\"" -DID=\"$(ID)\" # -DPLUGSEARCH="\"$(LIBDIR)\""
 OUT = -o dd_rescue
+PIC = -fPIC
+PIE = -fPIE
+LDPIE = -pie
 
 LZOP = $(shell type -p lzop || type -P true)
 HAVE_SHA256SUM = $(shell type -p sha256sum >/dev/null && echo 1 || echo 0)
@@ -156,30 +159,45 @@ configure: configure.in
 config.h.in: configure.in
 	autoheader
 
+# TODO: Use automated dependency generation
+
+# These need optimization
 frandom.o: frandom.c frandom.h config.h ddr_ctrl.h
-	$(CC) $(CFLAGS_OPT) -fPIE -c $<
+	$(CC) $(CFLAGS_OPT) $(PIE) -c $<
 
 fmt_no.o: fmt_no.c fmt_no.h config.h ddr_ctrl.h
-	$(CC) $(CFLAGS_OPT) -fPIE -c $<
-
-%.o: %.c %.h config.h ddr_ctrl.h
-	$(CC) $(CFLAGS) -fPIE -c $<
-
-%.po: %.c ddr_plugin.h config.h ddr_ctrl.h md5.h sha256.h sha512.h sha1.h hash.h find_nonzero.h
-	$(CC) $(CFLAGS) -fPIC -o $@ -c $<
+	$(CC) $(CFLAGS_OPT) $(PIE) -c $<
 
 md5.po: md5.c md5.h hash.h config.h
-	$(CC) $(CFLAGS_OPT) -fPIC -o $@ -c $<
+	$(CC) $(CFLAGS_OPT) $(PIC) -o $@ -c $<
 
 sha256.po: sha256.c sha256.h hash.h config.h
-	$(CC) $(CFLAGS_OPT) -fPIC -o $@ -c $<
+	$(CC) $(CFLAGS_OPT) $(PIC) -o $@ -c $<
 
 sha512.po: sha512.c sha512.h hash.h config.h
-	$(CC) $(CFLAGS_OPT) -fPIC -o $@ -c $<
+	$(CC) $(CFLAGS_OPT) $(PIC) -o $@ -c $<
 
 sha1.po: sha1.c sha1.h hash.h config.h
-	$(CC) $(CFLAGS_OPT) -fPIC -o $@ -c $<
+	$(CC) $(CFLAGS_OPT) $(PIC) -o $@ -c $<
 
+# Default rules
+%.o: %.c %.h config.h ddr_ctrl.h
+	$(CC) $(CFLAGS) $(PIE) -c $<
+
+%.o: %.c config.h ddr_ctrl.h
+	$(CC) $(CFLAGS) $(PIE) -c $<
+
+%.po: %.c %.h ddr_plugin.h config.h ddr_ctrl.h md5.h sha256.h sha512.h sha1.h hash.h find_nonzero.h
+	$(CC) $(CFLAGS) $(PIC) -o $@ -c $<
+
+%.po: %.c ddr_plugin.h config.h ddr_ctrl.h md5.h sha256.h sha512.h sha1.h hash.h find_nonzero.h
+	$(CC) $(CFLAGS) $(PIC) -o $@ -c $<
+
+# Use stack protector for libddr_lzo ...
+libddr_lzo.po: libddr_lzo.c ddr_plugin.h config.h ddr_ctrl.h 
+	$(CC) $(CFLAGS) $(PIC) -fstack-protector -o $@ -c $<
+
+# The plugins
 libddr_hash.so: libddr_hash.po md5.po sha256.po sha512.po sha1.po pbkdf2.po checksum_file.po
 	$(CC) -shared -o $@ $^ $(EXTRA_LDFLAGS)
 
@@ -195,63 +213,68 @@ libddr_null.so: libddr_null.po
 libddr_crypt.so: libddr_crypt.po aes.po aes_c.po $(AESNI_PO) $(AES_ARM64_PO) $(AES_OSSL_PO) pbkdf2.po sha256.po checksum_file.po secmem.po random.po find_nonzero.po $(POBJECTS2)
 	$(CC) -shared -o $@ $^ $(CRYPTOLIB) $(EXTRA_LDFLAGS)
 
+# More special compiler flags
 find_nonzero.o: find_nonzero.c $(FNZ_HEADERS) config.h
-	$(CC) $(CFLAGS_OPT) -fPIE -c $< $(SSE)
+	$(CC) $(CFLAGS_OPT) $(PIE) -c $< $(SSE)
 
 find_nonzero_avx.o: find_nonzero_avx.c $(FNZ_HEADERS) config.h
-	$(CC) $(CFLAGS_OPT) -fPIE -mavx2 -c $<
+	$(CC) $(CFLAGS_OPT) $(PIE) -mavx2 -c $<
 
 find_nonzero_sse2.o: find_nonzero_sse2.c $(FNZ_HEADERS) config.h
-	$(CC) $(CFLAGS_OPT) -fPIE -msse2 -c $<
+	$(CC) $(CFLAGS_OPT) $(PIE) -msse2 -c $<
 
 find_nonzero_arm.o: find_nonzero_arm.c $(FNZ_HEADERS) config.h
-	$(CC) $(CFLAGS_OPT) -fPIE -c $<
+	$(CC) $(CFLAGS_OPT) $(PIE) -c $<
 
 find_nonzero_arm64.o: find_nonzero_arm64.c $(FNZ_HEADERS) config.h
-	$(CC) $(CFLAGS_OPT) -march=armv8-a+crypto -fPIE -c $< 
+	$(CC) $(CFLAGS_OPT) -march=armv8-a+crypto $(PIE) -c $< 
 
 find_nonzero_main.o: find_nonzero.c $(FNZ_HEADERS) config.h
-	$(CC) $(CFLAGS_OPT) -fPIE -o $@ -c $< -DTEST 
+	$(CC) $(CFLAGS_OPT) $(PIE) -o $@ -c $< -DTEST 
 
 ffs_sse42.o: ffs_sse42.c ffs.h archdep.h config.h
-	$(CC) $(CFLAGS_OPT) -fPIE -msse4.2 -c $<
+	$(CC) $(CFLAGS_OPT) $(PIE) -msse4.2 -c $<
 
 rdrand.o: rdrand.c archdep.h
-	$(CC) $(CFLAGS) -fPIE -mrdrnd -maes -c $<
+	$(CC) $(CFLAGS) $(PIE) -mrdrnd -maes -c $<
 
 rdrand.po: rdrand.c archdep.h
-	$(CC) $(CFLAGS) -fPIC -mrdrnd -maes -o $@ -c $<
+	$(CC) $(CFLAGS) $(PIC) -mrdrnd -maes -o $@ -c $<
 
+# Special dd_rescue variants
 libfalloc: dd_rescue.c $(HEADERS) $(OBJECTS) $(OBJECTS2)
-	$(CC) $(CFLAGS) -fPIE -pie -DNO_LIBDL $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2) -lfallocate
+	$(CC) $(CFLAGS) $(PIE) $(LDPIE) -DNO_LIBDL $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2) -lfallocate
 
 libfalloc-static: dd_rescue.c $(HEADERS) $(OBJECTS) $(OBJECTS2)
-	$(CC) $(CFLAGS) -fPIE -pie -DNO_LIBDL $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2) $(LIBDIR)/libfallocate.a
+	$(CC) $(CFLAGS) $(PIE) $(LDPIE) -DNO_LIBDL $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2) $(LIBDIR)/libfallocate.a
 
+# This is the default built
 dd_rescue: dd_rescue.c $(HEADERS) $(OBJECTS) $(OBJECTS2)
-	$(CC) $(CFLAGS) -fPIE -pie $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2) -ldl $(EXTRA_LDFLAGS)
+	$(CC) $(CFLAGS) $(PIE) $(LDPIE) $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2) -ldl $(EXTRA_LDFLAGS)
 
+# Test programs 
 md5: md5.c md5.h hash.h config.h
-	$(CC) $(CFLAGS_OPT) -fPIE -pie -DMD5_MAIN -o $@ $<
+	$(CC) $(CFLAGS_OPT) $(PIE) $(LDPIE) -DMD5_MAIN -o $@ $<
 
 sha256: sha256.c sha256.h hash.h config.h
-	$(CC) $(CFLAGS_OPT) -fPIE -pie -DSHA256_MAIN -o $@ $<
+	$(CC) $(CFLAGS_OPT) $(PIE) $(LDPIE) -DSHA256_MAIN -o $@ $<
 
 sha224: sha256
 	ln -sf sha256 sha224
 
 sha512: sha512.c sha512.h hash.h config.h
-	$(CC) $(CFLAGS_OPT) -fPIE -pie -DSHA512_MAIN -o $@ $<
+	$(CC) $(CFLAGS_OPT) $(PIE) $(LDPIE) -DSHA512_MAIN -o $@ $<
 	
 sha384: sha512
 	ln -sf sha512 sha384
 
 sha1: sha1.c sha1.h hash.h config.h
-	$(CC) $(CFLAGS_OPT) -fPIE -pie -DSHA1_MAIN -o $@ $<
+	$(CC) $(CFLAGS_OPT) $(PIE) $(LDPIE) -DSHA1_MAIN -o $@ $<
 
 fuzz_lzo: fuzz_lzo.o
-	$(CC) -o $@ -pie $^ -llzo2
+	$(CC) -o $@ $(LDPIE) $^ -llzo2
 
+# More dd_rescue variants
 libfalloc-dl: dd_rescue
 
 nolib: dd_rescue.c $(HEADERS) $(OBJECTS) $(OBJECTS2)
@@ -263,6 +286,7 @@ nocolor: dd_rescue.c $(HEADERS) $(OBJECTS) $(OBJECTS2)
 static: dd_rescue.c $(HEADERS) $(OBJECTS)
 	$(CC) $(CFLAGS) -DNO_LIBDL -DNO_LIBFALLOCATE -static $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2)
 
+# Special pseudo targets
 strip: $(TARGETS) $(LIBTARGETS)
 	strip -S $^
 
@@ -272,41 +296,43 @@ strip-all: $(OTHTARGETS)
 clean:
 	rm -f $(TARGETS) $(OTHTARGETS) $(OBJECTS) $(OBJECTS2) core test log *.o *.po *.cmp *.enc *.enc.old CHECKSUMS.* SALTS.* KEYS.* IVS.*
 
+# More test programs
 find_nonzero: find_nonzero_main.o $(OBJECTS2)
-	$(CC) $(CFLAGS_OPT) -fPIE -pie -o $@ $^ 
+	$(CC) $(CFLAGS_OPT) $(PIE) $(LDPIE) -o $@ $^ 
 
 fmt_no: fmt_no.c fmt_no.h
-	$(CC) $(CFLAGS) -fPIE -pie -o $@ $< -DTEST
+	$(CC) $(CFLAGS) $(PIE) $(LDPIE) -o $@ $< -DTEST
 
 file_zblock: file_zblock.c $(FNZ_HEADERS) config.h find_nonzero.o $(OBJECTS2)
-	$(CC) $(CFLAGS) -fPIE -pie -o $@ $< find_nonzero.o $(OBJECTS2)
+	$(CC) $(CFLAGS) $(PIE) $(LDPIE) -o $@ $< find_nonzero.o $(OBJECTS2)
 
 fiemap: fiemap.c fiemap.h fstrim.h config.h fstrim.o
-	$(CC) $(CFLAGS) -fPIE -pie -DTEST_FIEMAP -o $@ $< fstrim.o
+	$(CC) $(CFLAGS) $(PIE) $(LDPIE) -DTEST_FIEMAP -o $@ $< fstrim.o
 
 pbkdf2: ossl_pbkdf2.c
-	$(CC) $(CFLAGS) -fPIE -pie -o $@ $< $(CRYPTOLIB)
+	$(CC) $(CFLAGS) $(PIE) $(LDPIE) -o $@ $< $(CRYPTOLIB)
 
 test_aes: test_aes.c $(AESNI_O) $(AES_ARM64_O) aes_c.o secmem.o sha256.o $(AES_OSSL_O) aes.o aesni.h aes_arm64.h config.h
-	$(CC) $(CFLAGS) -fPIE -pie $(DEF) -o $@ $< $(AESNI_O) $(AES_ARM64_O) aes_c.o secmem.o sha256.o $(AES_OSSL_O) aes.o $(CRYPTOLIB)
+	$(CC) $(CFLAGS) $(PIE) $(LDPIE) $(DEF) -o $@ $< $(AESNI_O) $(AES_ARM64_O) aes_c.o secmem.o sha256.o $(AES_OSSL_O) aes.o $(CRYPTOLIB)
 
+# Special optimized versions
 aesni.o: aesni.c aesni.h aes.h sha256.h config.h
-	$(CC) $(CFLAGS) -fPIE -O3 -maes -msse4.1 -c $<
+	$(CC) $(CFLAGS) $(PIE) -O3 -maes -msse4.1 -c $<
 
 aesni.po: aesni.c aesni.h aes.h sha256.h config.h
-	$(CC) $(CFLAGS) -fPIC -O3 -maes -msse4.1 -c $< -o $@
+	$(CC) $(CFLAGS) $(PIC) -O3 -maes -msse4.1 -c $< -o $@
 
 aes_arm64.o: aes_arm64.c aes_arm64.h aes.h sha256.h config.h
-	$(CC) $(CFLAGS) -fPIE -O3 -march=armv8-a+crypto -c $<
+	$(CC) $(CFLAGS) $(PIE) -O3 -march=armv8-a+crypto -c $<
 
 aes_arm64.po: aes_arm64.c aes_arm64.h aes.h sha256.h config.h
-	$(CC) $(CFLAGS) -fPIC -O3 -march=armv8-a+crypto -c $< -o $@
+	$(CC) $(CFLAGS) $(PIC) -O3 -march=armv8-a+crypto -c $< -o $@
 
 aes_c.o: aes_c.c aes_c.h aes.h sha256.h config.h
-	$(CC) $(CFLAGS) -fPIE $(FULL_UNROLL) -O3 -c $<
+	$(CC) $(CFLAGS) $(PIE) $(FULL_UNROLL) -O3 -c $<
 
 aes_ossl.o: aes_ossl.c aes_ossl.h aes.h sha256.h config.h
-	$(CC) $(CFLAGS) -fPIE -O3 -c $<
+	$(CC) $(CFLAGS) $(PIE) -O3 -c $<
 
 distclean: clean
 	rm -f *~ config.h config.h.in config.status config.log configure REL-ID
