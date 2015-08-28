@@ -187,14 +187,24 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	else
 #endif
 #ifdef HAVE_AES_ARM64
-#ifdef MAY_AES_ARM64
+/* FIXME: Why is this only needed on BIONIC?
+ * Does libdl automatically consolidate aliased symbols?
+ */
+#ifdef __BIONIC__ //MAY_AES_ARM64
 	have_arm8crypto = detect2("aes", probe_arm8crypto);
 #endif
-	if (have_arm8crypto)
+	if (have_arm8crypto) {
 		state->engine = AES_ARM8_Methods;
-	else
+		if (opt->verbose)
+			FPLOG(INFO, "Using ARMv8 crypto extensions\n");
+	} else {
+		if (opt->verbose)
+			FPLOG(INFO, "Using C crypto implementation\n");
 #endif
 		state->engine = AES_C_Methods;
+#ifdef HAVE_AES_ARM64
+	}
+#endif
 	while (param) {
 		char* next = strchr(param, ':');
 		if (next)
