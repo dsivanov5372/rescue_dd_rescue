@@ -47,9 +47,16 @@ size_t find_nonzero_arm6(const unsigned char *blk, const size_t ln)
 	"5:				\n"
 	"	sub %0, #4		\n"
 #ifdef __ARM_FEATURE_CLZ
-//#if defined(__ARM_ARCH_7A__) || defined(__ARM_ARCH_6__)
 #if __BYTE_ORDER == __LITTLE_ENDIAN
+#if defined(__ARM_ARCH_7A__) || defined(__ARM_ARCH_6__)
 	"	rev r5, r5		\n"
+#else
+#warning open code rev for ARMv5
+	"	eor r4,r5,r5, ror #16	\n"
+	"	bic r4,r4,#0x00FF0000	\n"
+	"	mov r5,r5,ror #8	\n"
+	"	eor r5,r5,r4, lsr #8	\n"
+#endif
 #endif
 	"	clz r4, r5		\n"
 	"	add %0, %0, r4, lsr#3	\n"
