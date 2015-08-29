@@ -179,12 +179,14 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	state->pad = PAD_ALWAYS;
 	state->saltlen = -1;
 #ifdef HAVE_AESNI
-#ifdef MAY_AESNI
+#ifdef __BIONIC__ //MAY_AESNI
 	have_aesni = detect2("aes", probe_aesni);
 #endif
-	if (have_aesni)
+	if (have_aesni) { 
 		state->engine = AESNI_Methods;
-	else
+		if (opt->verbose)
+			FPLOG(INFO, "Default to use AESNI crypto extensions\n");
+	} else {
 #endif
 #ifdef HAVE_AES_ARM64
 /* FIXME: Why is this only needed on BIONIC?
@@ -196,13 +198,13 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	if (have_arm8crypto) {
 		state->engine = AES_ARM8_Methods;
 		if (opt->verbose)
-			FPLOG(INFO, "Using ARMv8 crypto extensions\n");
+			FPLOG(INFO, "Default to use ARMv8 crypto extensions\n");
 	} else {
-		if (opt->verbose)
-			FPLOG(INFO, "Using C crypto implementation\n");
 #endif
+		if (opt->verbose)
+			FPLOG(INFO, "Default to use C crypto implementation\n");
 		state->engine = AES_C_Methods;
-#ifdef HAVE_AES_ARM64
+#if defined(HAVE_AES_ARM64) || defined(HAVE_AESNI)
 	}
 #endif
 	while (param) {
