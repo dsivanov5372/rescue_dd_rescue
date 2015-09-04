@@ -6,6 +6,7 @@
  */
 
 #include "aes.h"
+#include "secmem.h"
 
 #include <string.h>
 #include <netinet/in.h>
@@ -187,14 +188,14 @@ int  AES_Gen_CBC_Enc(AES_Crypt_Blk_fn *cryptfn,
 		len -= 16; input += 16; output += 16;
 	}
 	if (len || pad == PAD_ALWAYS) {
-		uchar in[16];
+		uchar *in = crypto->blkbuf1;
 		fill_blk(input, in, len, pad);
 		xor16(iv, in, iv);
 		cryptfn(rkeys, rounds, iv, output);
 		//memcpy(iv, output, 16);
 		*olen += 16-(len&15);
-		memset(in, 0, 16);
-		asm("":::"memory");
+		//memset(in, 0, 16);
+		//asm("":::"memory");
 	}
 	return (pad == PAD_ALWAYS || (len&15))? 16-(len&15): 0;
 }
@@ -205,7 +206,7 @@ int  AES_Gen_CBC_Dec(AES_Crypt_Blk_fn *cryptfn,
 		     const uchar *input, uchar *output,
 		     ssize_t len, ssize_t *olen)
 {
-	uchar ebf[16];
+	uchar *ebf = crypto->blkbuf1;
 	*olen = len;
 	while (len > 0) {
 		cryptfn(rkeys, rounds, input, ebf);
@@ -213,8 +214,8 @@ int  AES_Gen_CBC_Dec(AES_Crypt_Blk_fn *cryptfn,
 		memcpy(iv, input, 16);
 		len -= 16; input += 16; output += 16;
 	}
-	memset(ebf, 0, 16);
-	asm("":::"memory");
+	//memset(ebf, 0, 16);
+	//asm("":::"memory");
 	if (pad)
 		return dec_fix_olen_pad(olen, pad, output);
 	else
@@ -229,7 +230,7 @@ int  AES_Gen_CBC_Dec4(AES_Crypt_Blk_fn *cryptfn4,
 		     ssize_t len, ssize_t *olen)
 {
 	/* TODO: Use secmem */
-	uchar ebf[64];
+	uchar *ebf = crypto->blkbuf2;
 	*olen = len;
 	while (len >= 64) {
 		cryptfn4(rkeys, rounds, input, ebf);
@@ -244,8 +245,8 @@ int  AES_Gen_CBC_Dec4(AES_Crypt_Blk_fn *cryptfn4,
 		memcpy(iv, input, 16);
 		len -= 16; input += 16; output += 16;
 	}
-	memset(ebf, 0, 64);
-	asm("":::"memory");
+	//memset(ebf, 0, 64);
+	//asm("":::"memory");
 	if (pad)
 		return dec_fix_olen_pad(olen, pad, output);
 	else
@@ -302,8 +303,7 @@ int  AES_Gen_CTR_Crypt(AES_Crypt_Blk_fn *cryptfn,
 {
 	//assert(pad == 0);
 	//*olen = len;
-	// TODO: secmem?
-	uchar eblk[16];
+	uchar *eblk = crypto->blkbuf2;
 	while (len >= 16) {
 		cryptfn(rkeys, rounds, ctr, eblk);
 		be_inc(ctr+8);	
@@ -312,16 +312,16 @@ int  AES_Gen_CTR_Crypt(AES_Crypt_Blk_fn *cryptfn,
 		input += 16; output += 16;
 	}
 	if (len) {
-		uchar in[16];
+		uchar *in = crypto->blkbuf1;
 		fill_blk(input, in, len, 0 /*pad*/);
 		cryptfn(rkeys, rounds, ctr, eblk);
 		//be_inc(ctr+8);	
 		xor16(eblk, in, in);
-		memcpy(output, in, len&15);
-		memset(in, 0, 16);
+		//memcpy(output, in, len&15);
+		//memset(in, 0, 16);
 	}
-	memset(eblk, 0, 16);
-	asm("":::"memory");
+	//memset(eblk, 0, 16);
+	//asm("":::"memory");
 	return 0;
 }
 
@@ -345,18 +345,18 @@ int  AES_Gen_CTR_Crypt_Opt(AES_Crypt_CTR_Blk_fn *cryptfn4c,
 		input += 16; output += 16;
 	}
 	if (len) {
-		// TODO: Use secmem
-		uchar in[16];
-		uchar eblk[16];
+		uchar *in = crypto->blkbuf1;
+		uchar *eblk = crypto->blkbuf2;
+		// Do we really need to uncount the last incomplete block?
 		uchar octr[16];
 		memcpy(octr, ctr, 16);
 		fill_blk(input, in, len, 0 /*pad*/);
 		cryptfnc(rkeys, rounds, in, eblk, ctr);
 		memcpy(output, eblk, len&15);
-		memset(in, 0, 16);
+		//memset(in, 0, 16);
 		memcpy(ctr, octr, 16);
-		memset(eblk, 0, 16);
-		asm("":::"memory");
+		//memset(eblk, 0, 16);
+		//asm("":::"memory");
 	}
 	return 0;
 }
@@ -371,7 +371,7 @@ int  AES_Gen_CTR_Crypt4(AES_Crypt_Blk_fn *cryptfn4,
 	//assert(pad == 0);
 	//*olen = len;
 	// TODO: Use secmem
-	uchar eblk[64];
+	uchar *eblk = crypto->blkbuf2;
 	uchar cblk[64];
 #if 0
 	if (len >= 64) {
@@ -428,15 +428,15 @@ int  AES_Gen_CTR_Crypt4(AES_Crypt_Blk_fn *cryptfn4,
 		input += 16; output += 16;
 	}
 	if (len) {
-		uchar in[16];
+		uchar *in = crypto->blkbuf1;
 		fill_blk(input, in, len, 0 /*pad*/);
 		cryptfn(rkeys, rounds, ctr, eblk);
 		//be_inc(ctr+8);	
 		xor16(eblk, in, in);
 		memcpy(output, in, len&15);
 	}
-	memset(eblk, 0, 16);
-	asm("":::"memory");
+	//memset(eblk, 0, 16);
+	//asm("":::"memory");
 	return 0;
 }
 

@@ -1017,12 +1017,10 @@ void AES_C_KeySetupX2_Bits_Enc(const uchar *usrkey, uchar *rkeys, uint rounds, u
 	hash_t hv;
 	sha256_init(&hv);
 	sha256_calc(usrkey, bits/8, bits/8, &hv);
-	/* FIXME: Use secmem */
-	uchar usrkey2[32];
-	sha256_beout(usrkey2, &hv);
+	sha256_beout(crypto->userkey2, &hv);
 	sha256_init(&hv);
-	rijndaelKeySetupEnc((u32*)(rkeys+16+8*rounds), usrkey2, bits, rounds/2);
-	memset(usrkey2, 0, 32);
+	rijndaelKeySetupEnc((u32*)(rkeys+16+8*rounds), crypto->userkey2, bits, rounds/2);
+	//memset(crypto->userkey2, 0, 32);
 	asm("":::"memory");
 }
 
@@ -1036,12 +1034,10 @@ void AES_C_KeySetupX2_Bits_Dec(const uchar* usrkey, uchar *rkeys, uint rounds, u
 	hash_t hv;
 	sha256_init(&hv);
 	sha256_calc(usrkey, bits/8, bits/8, &hv);
-	/* FIXME: Use secmem */
-	uchar usrkey2[32];
-	sha256_beout(usrkey2, &hv);
+	sha256_beout(crypto->userkey2, &hv);
 	sha256_init(&hv);
-	rijndaelKeySetupDec((u32*)(rkeys+16+8*rounds), usrkey2, bits, rounds/2);
-	memset(usrkey2, 0, 32);
+	rijndaelKeySetupDec((u32*)(rkeys+16+8*rounds), crypto->userkey2, bits, rounds/2);
+	//memset(crypto->userkey2, 0, 32);
 	asm("":::"memory");
 }
 

@@ -316,22 +316,22 @@ test_aes: test_aes.c $(AESNI_O) $(AES_ARM64_O) aes_c.o secmem.o sha256.o $(AES_O
 	$(CC) $(CFLAGS) $(PIE) $(LDPIE) $(DEF) -o $@ $< $(AESNI_O) $(AES_ARM64_O) aes_c.o secmem.o sha256.o $(AES_OSSL_O) aes.o $(CRYPTOLIB)
 
 # Special optimized versions
-aesni.o: aesni.c aesni.h aes.h sha256.h config.h
+aesni.o: aesni.c aesni.h aes.h sha256.h secmem.h config.h
 	$(CC) $(CFLAGS) $(PIE) -O3 -maes -msse4.1 -c $<
 
-aesni.po: aesni.c aesni.h aes.h sha256.h config.h
+aesni.po: aesni.c aesni.h aes.h sha256.h secmem.h config.h
 	$(CC) $(CFLAGS) $(PIC) -O3 -maes -msse4.1 -c $< -o $@
 
-aes_arm64.o: aes_arm64.c aes_arm64.h aes.h sha256.h config.h
+aes_arm64.o: aes_arm64.c aes_arm64.h aes.h sha256.h secmem.h config.h
 	$(CC) $(CFLAGS) $(PIE) -O3 -march=armv8-a+crypto -c $<
 
-aes_arm64.po: aes_arm64.c aes_arm64.h aes.h sha256.h config.h
+aes_arm64.po: aes_arm64.c aes_arm64.h aes.h sha256.h secmem.h config.h
 	$(CC) $(CFLAGS) $(PIC) -O3 -march=armv8-a+crypto -c $< -o $@
 
-aes_c.o: aes_c.c aes_c.h aes.h sha256.h config.h
+aes_c.o: aes_c.c aes_c.h aes.h sha256.h secmem.h config.h
 	$(CC) $(CFLAGS) $(PIE) $(FULL_UNROLL) -O3 -c $<
 
-aes_ossl.o: aes_ossl.c aes_ossl.h aes.h sha256.h config.h
+aes_ossl.o: aes_ossl.c aes_ossl.h aes.h sha256.h secmem.h config.h
 	$(CC) $(CFLAGS) $(PIE) -O3 -c $<
 
 distclean: clean

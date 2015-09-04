@@ -1030,11 +1030,11 @@ void AESNI_##BITS##_##MODE##Key_ExpansionX2_r(const uchar *usrkey, uchar* rkeys,
 	hash_t hv;							\
 	sha256_init(&hv);						\
 	sha256_calc(usrkey, BITS/8, BITS/8, &hv);			\
-	uchar usrkey2[32];						\
-	sha256_beout(usrkey2, &hv);					\
+	sha256_beout(crypto->userkey2, &hv);				\
 	sha256_init(&hv);						\
-	AESNI_##BITS##_##MODE##Key_Expansion_r(usrkey2, rkeys+16+8*rounds, rounds/2);	\
-	memset(usrkey2, 0, 32);						\
+	AESNI_##BITS##_##MODE##Key_Expansion_r(crypto->userkey2, rkeys+16+8*rounds, rounds/2);	\
+	/*memset(crypto->userkey2, 0, 32);*/				\
+	sha256_init(&hv);						\
 	asm("":::"memory");						\
 }
 
