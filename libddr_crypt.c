@@ -95,7 +95,7 @@ typedef struct _crypt_state {
 	char weakrnd;
 } crypt_state;
 
-/* FIXME HACK!!! aesni currently assumes avail of global crypto symbol to point to sec_fields ... */
+/* aes modules rely on avail of global crypto symbol to point to sec_fields ... */
 sec_fields *crypto;
 
 const char *crypt_help = "The crypt plugin for dd_rescue de/encrypts data copied on the fly.\n"
@@ -174,7 +174,7 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	state->opts = (opt_t*)opt;
 	state->enc = -1;
 	state->sec = secmem_init();
-	crypto = state->sec;	// HACK for aesni
+	crypto = state->sec;
 	assert(state->sec);
 	state->pad = PAD_ALWAYS;
 	state->saltlen = -1;

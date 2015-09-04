@@ -311,7 +311,6 @@ inline void AESNI_EKey_DKey(const unsigned char* ekey,
 }
 
 
-/* FIXME: need to find better way to address secure scratch space (xkeys) */
 void AESNI_128_DKey_Expansion_r(const unsigned char *userkey,
 				unsigned char *dkey,
 				unsigned int rounds)
@@ -320,7 +319,6 @@ void AESNI_128_DKey_Expansion_r(const unsigned char *userkey,
 	AESNI_EKey_DKey((unsigned char*)crypto->xkeys, dkey, rounds);
 }
 
-/* FIXME: need to find better way to address secure scratch space (xkeys) */
 void AESNI_192_DKey_Expansion_r(const unsigned char *userkey,
 				unsigned char *dkey,
 				unsigned int rounds)
@@ -329,7 +327,6 @@ void AESNI_192_DKey_Expansion_r(const unsigned char *userkey,
 	AESNI_EKey_DKey((unsigned char*)crypto->xkeys, dkey, rounds);
 }
 
-/* FIXME: need to find better way to address secure scratch space (xkeys) */
 void AESNI_256_DKey_Expansion_r(const unsigned char *userkey,
 				unsigned char *dkey,
 				unsigned int rounds)

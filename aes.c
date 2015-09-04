@@ -229,7 +229,6 @@ int  AES_Gen_CBC_Dec4(AES_Crypt_Blk_fn *cryptfn4,
 		     const uchar *input, uchar *output,
 		     ssize_t len, ssize_t *olen)
 {
-	/* TODO: Use secmem */
 	uchar *ebf = crypto->blkbuf2;
 	*olen = len;
 	while (len >= 64) {
@@ -370,7 +369,6 @@ int  AES_Gen_CTR_Crypt4(AES_Crypt_Blk_fn *cryptfn4,
 {
 	//assert(pad == 0);
 	//*olen = len;
-	// TODO: Use secmem
 	uchar *eblk = crypto->blkbuf2;
 	uchar cblk[64];
 #if 0

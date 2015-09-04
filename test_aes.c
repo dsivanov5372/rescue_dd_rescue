@@ -148,8 +148,7 @@ int test_alg(const char* prefix, ciph_desc_t *alg, uchar *key, uchar *in, ssize_
 	++tested;
 	printf("* %s %s (%i, %i, %i) pad %i/%i", prefix, alg->name, alg->keylen, alg->rounds, alg->ctx_size, epad, dpad);
 	printf("\nEKey setup: ");
-	/* TODO: Use secmem ... */
-	uchar *rkeys = (uchar*)malloc(alg->ctx_size);
+	uchar *rkeys = (uchar*)crypto->ekeys;	//malloc(alg->ctx_size);
 	BENCH(alg->enc_key_setup(key, rkeys, alg->rounds); if (alg->release) alg->release(rkeys, alg->rounds), rep, 16*(1+alg->rounds));
 	alg->enc_key_setup(key, rkeys, alg->rounds);
 	printf("\nEncrypt   : ");
@@ -205,7 +204,7 @@ int test_alg(const char* prefix, ciph_desc_t *alg, uchar *key, uchar *in, ssize_
 		abort();
 	if (alg->release)
 		alg->release(rkeys, alg->rounds);
-	free(rkeys);
+	//free(rkeys);
 	return err;
 }
 
