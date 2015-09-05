@@ -61,13 +61,13 @@ static inline u32 aes_sbox(u32 in)
 {
 	u32 ret;
 	asm volatile (
-	"	dup 	v1.4s, %r[in]		\n"
-	"	movi	v0.16b, #0		\n"
-	"	aese	v0.16b, v1.16b		\n"
-	"	umov	%r[out], v0.4s[0]		\n"
+	"	vdup 	q1, %r[in]		\n"
+	"	vmovi	q0, #0			\n"
+	"	aese	q0, q1			\n"
+	"	vumov	%r[out], q0[0]		\n"
 	: [out] "=r"(ret)
 	: [in] "r"(in)
-	: "v0", "v1"
+	: "q0", "q1"
 	);
 	return ret;
 }
@@ -133,12 +133,12 @@ inline void AES_ARM8_EKey_DKey(const u32* ekey,
 	memcpy(dkey, ekey+rounds*4, 16);
 	for (i = 1, rounds--; rounds > 0; i++, rounds--) {
 		asm volatile(
-		"	ld1	{v0.16b}, %1	\n"
-		"	aesimc	v1.16b, v0.16b	\n"
-		"	st1	{v1.16b}, %0	\n"
+		"	vld1	{q0}, %1	\n"
+		"	aesimc	q1, q0		\n"
+		"	vst1	{q1}, %0	\n"
 		: "=Q"(dkey[i*4])
 		: "Q"(ekey[rounds*4])
-		: "v0", "v1"
+		: "q0", "q1"
 		);
 	}
 	memcpy(dkey+4*i, ekey, 16);
@@ -162,33 +162,33 @@ void AES_ARM8_Encrypt(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 
 	u8 *rk = (u8*)rkeys;
 	uint dummy1;
 	asm volatile(
-	"	ld1	{v0.16b}, [%[pt]]	\n"
-	"	ld1	{v1.4s, v2.4s}, [%[rk]], #32	\n"
-	"//	eor	v0.16b, v0.16b, v1.16b	\n"
+	"	vld1	{q0}, [%[pt]]		\n"
+	"	vld1	{q1, q2}, [%[rk]], #32	\n"
+	"//	veor	q0, q0, q1		\n"
 	"	subs	%r[nr], %r[nr], #2	\n"
 	".align 4				\n"
 	"1:					\n"
-	"	aese	v0.16b, v1.16b		\n"
-	"	aesmc	v0.16b, v0.16b		\n"
-	"	ld1	{v1.4s}, [%[rk]], #16	\n"
-	"	b.eq	2f			\n"
+	"	aese	q0, q1			\n"
+	"	aesmc	q0, q0			\n"
+	"	vld1	{q1}, [%[rk]], #16	\n"
+	"	beq	2f			\n"
 	"	subs	%r[nr], %r[nr], #2	\n"
-	"	aese	v0.16b, v2.16b		\n"
-	"	aesmc	v0.16b, v0.16b		\n"
-	"	ld1	{v2.4s}, [%[rk]], #16	\n"
-	"	b.pl	1b			\n"
+	"	aese	q0, q2			\n"
+	"	aesmc	q0, q0			\n"
+	"	vld1	{q2}, [%[rk]], #16	\n"
+	"	bpl	1b			\n"
 	"					\n"
-	"	aese	v0.16b, v1.16b		\n"
-	"	eor	v0.16b, v0.16b, v2.16b	\n"	
+	"	aese	q0, q1			\n"
+	"	veor	q0, q0, q2		\n"	
 	"	b	3f			\n"
 	"2:					\n"
-	"	aese	v0.16b, v2.16b		\n"
-	"	eor	v0.16b, v0.16b, v1.16b	\n"	
+	"	aese	q0, q2			\n"
+	"	veor	q0, q0, q1		\n"	
 	"3:					\n"
-	"	st1	{v0.16b}, [%[ct]]	\n"
+	"	vst1	{q0}, [%[ct]]		\n"
 	: [rk] "=r" (rk), [nr] "=r" (dummy1)
 	: "0" (rkeys), "1" (Nr), [pt] "r" (pt), [ct] "r" (ct)
-	: "v0", "v1", "v2", "cc"
+	: "q0", "q1", "q2", "cc"
 	);
 	//printf("%i rounds left, %li rounds\n", Nr, (rkeys-rk)/16);
 	return;
@@ -203,31 +203,31 @@ void AES_ARM8_Decrypt(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 
 	asm volatile(
 	"	ld1	{v0.16b}, [%[ct]]	\n"
 	"	ld1	{v1.4s, v2.4s}, [%[rk]], #32	\n"
-	"//	eor	v0.16b, v0.16b, v1.16b	\n"
+	"//	veor	v0.16b, v0.16b, v1.16b	\n"
 	"	subs	%r[nr], %r[nr], #2	\n"
 	".align 4				\n"
 	"1:					\n"
 	"	aesd	v0.16b, v1.16b		\n"
 	"	aesimc	v0.16b, v0.16b		\n"
 	"	ld1	{v1.4s}, [%[rk]], #16	\n"
-	"	b.eq	2f			\n"
+	"	beq	2f			\n"
 	"	subs	%r[nr], %r[nr], #2	\n"
 	"	aesd	v0.16b, v2.16b		\n"
 	"	aesimc	v0.16b, v0.16b		\n"
 	"	ld1	{v2.4s}, [%[rk]], #16	\n"
-	"	b.pl	1b			\n"
+	"	bpl	1b			\n"
 	"					\n"
 	"	aesd	v0.16b, v1.16b		\n"
-	"	eor	v0.16b, v0.16b, v2.16b	\n"
+	"	veor	v0.16b, v0.16b, v2.16b	\n"
 	"	b	3f			\n"
 	"2:					\n"
 	"	aesd	v0.16b, v2.16b		\n"
-	"	eor	v0.16b, v0.16b, v1.16b	\n"
+	"	veor	v0.16b, v0.16b, v1.16b	\n"
 	"3:					\n"
 	"	st1	{v0.16b}, [%[pt]]	\n"
 	: [rk] "=r" (rk), [nr] "=r" (dummy1)
 	: "0" (rkeys), "1" (Nr), [ct] "r" (ct), [pt] "r" (pt)
-	: "v0", "v1", "v2", "cc"
+	: "q0", "q1", "q2", "cc"
 	);
 	//printf("%i rounds left, %li rounds\n", Nr, (rkeys-rk)/16);
 	return;
@@ -253,7 +253,7 @@ void AES_ARM8_Encrypt4(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8
 	"	aesmc	v4.16b, v4.16b		\n"
 	"	aesmc	v5.16b, v5.16b		\n"
 	"	ld1	{v0.4s}, [%[rk]], #16	\n"
-	"	b.eq	2f			\n"
+	"	beq	2f			\n"
 	"	subs	%r[nr], %r[nr], #2	\n"
 	"	aese	v2.16b, v1.16b		\n"
 	"	aese	v3.16b, v1.16b		\n"
@@ -264,31 +264,31 @@ void AES_ARM8_Encrypt4(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8
 	"	aesmc	v4.16b, v4.16b		\n"
 	"	aesmc	v5.16b, v5.16b		\n"
 	"	ld1	{v1.4s}, [%[rk]], #16	\n"
-	"	b.pl	1b			\n"
+	"	bpl	1b			\n"
 	"					\n"
 	"	aese	v2.16b, v0.16b		\n"
 	"	aese	v3.16b, v0.16b		\n"
 	"	aese	v4.16b, v0.16b		\n"
 	"	aese	v5.16b, v0.16b		\n"
-	"	eor	v2.16b, v2.16b, v1.16b	\n"	
-	"	eor	v3.16b, v3.16b, v1.16b	\n"	
-	"	eor	v4.16b, v4.16b, v1.16b	\n"	
-	"	eor	v5.16b, v5.16b, v1.16b	\n"	
+	"	veor	v2.16b, v2.16b, v1.16b	\n"	
+	"	veor	v3.16b, v3.16b, v1.16b	\n"	
+	"	veor	v4.16b, v4.16b, v1.16b	\n"	
+	"	veor	v5.16b, v5.16b, v1.16b	\n"	
 	"	b	3f			\n"
 	"2:					\n"
 	"	aese	v2.16b, v1.16b		\n"
 	"	aese	v3.16b, v1.16b		\n"
 	"	aese	v4.16b, v1.16b		\n"
 	"	aese	v5.16b, v1.16b		\n"
-	"	eor	v2.16b, v2.16b, v0.16b	\n"	
-	"	eor	v3.16b, v3.16b, v0.16b	\n"	
-	"	eor	v4.16b, v4.16b, v0.16b	\n"	
-	"	eor	v5.16b, v5.16b, v0.16b	\n"	
+	"	veor	v2.16b, v2.16b, v0.16b	\n"	
+	"	veor	v3.16b, v3.16b, v0.16b	\n"	
+	"	veor	v4.16b, v4.16b, v0.16b	\n"	
+	"	veor	v5.16b, v5.16b, v0.16b	\n"	
 	"3:					\n"
 	"	st1	{v2.16b-v5.16b}, [%[ct]]	\n"
 	: [rk] "=r" (rk), [nr] "=r" (dummy1)
 	: "0" (rkeys), "1" (Nr), [pt] "r" (pt), [ct] "r" (ct)
-	: "v0", "v1", "v2", "v3", "v4", "v5", "cc"
+	: "q0", "q1", "q2", "q3", "q4", "q5", "cc"
 	);
 	//printf("%i rounds left, %li rounds\n", Nr, (rkeys-rk)/16);
 	return;
@@ -314,7 +314,7 @@ void AES_ARM8_Decrypt4(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8
 	"	aesimc	v4.16b, v4.16b		\n"
 	"	aesimc	v5.16b, v5.16b		\n"
 	"	ld1	{v0.4s}, [%[rk]], #16	\n"
-	"	b.eq	2f			\n"
+	"	beq	2f			\n"
 	"	subs	%r[nr], %r[nr], #2	\n"
 	"	aesd	v2.16b, v1.16b		\n"
 	"	aesd	v3.16b, v1.16b		\n"
@@ -325,31 +325,31 @@ void AES_ARM8_Decrypt4(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8
 	"	aesimc	v4.16b, v4.16b		\n"
 	"	aesimc	v5.16b, v5.16b		\n"
 	"	ld1	{v1.4s}, [%[rk]], #16	\n"
-	"	b.pl	1b			\n"
+	"	bpl	1b			\n"
 	"					\n"
 	"	aesd	v2.16b, v0.16b		\n"
 	"	aesd	v3.16b, v0.16b		\n"
 	"	aesd	v4.16b, v0.16b		\n"
 	"	aesd	v5.16b, v0.16b		\n"
-	"	eor	v2.16b, v2.16b, v1.16b	\n"
-	"	eor	v3.16b, v3.16b, v1.16b	\n"
-	"	eor	v4.16b, v4.16b, v1.16b	\n"
-	"	eor	v5.16b, v5.16b, v1.16b	\n"
+	"	veor	v2.16b, v2.16b, v1.16b	\n"
+	"	veor	v3.16b, v3.16b, v1.16b	\n"
+	"	veor	v4.16b, v4.16b, v1.16b	\n"
+	"	veor	v5.16b, v5.16b, v1.16b	\n"
 	"	b	3f			\n"
 	"2:					\n"
 	"	aesd	v2.16b, v1.16b		\n"
 	"	aesd	v3.16b, v1.16b		\n"
 	"	aesd	v4.16b, v1.16b		\n"
 	"	aesd	v5.16b, v1.16b		\n"
-	"	eor	v2.16b, v2.16b, v0.16b	\n"
-	"	eor	v3.16b, v3.16b, v0.16b	\n"
-	"	eor	v4.16b, v4.16b, v0.16b	\n"
-	"	eor	v5.16b, v5.16b, v0.16b	\n"
+	"	veor	v2.16b, v2.16b, v0.16b	\n"
+	"	veor	v3.16b, v3.16b, v0.16b	\n"
+	"	veor	v4.16b, v4.16b, v0.16b	\n"
+	"	veor	v5.16b, v5.16b, v0.16b	\n"
 	"3:					\n"
 	"	st1	{v2.16b-v5.16b}, [%[pt]]	\n"
 	: [rk] "=r" (rk), [nr] "=r" (dummy1)
 	: "0" (rkeys), "1" (Nr), [ct] "r" (ct), [pt] "r" (pt)
-	: "v0", "v1", "v2", "cc"
+	: "q0", "q1", "q2", "q3", "q4", "q5", "cc"
 	);
 	//printf("%i rounds left, %li rounds\n", Nr, (rkeys-rk)/16);
 	return;
@@ -376,25 +376,25 @@ void AES_ARM8_Encrypt_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const
 	"	aese	v2.16b, v0.16b		\n"
 	"	aesmc	v2.16b, v2.16b		\n"
 	"	ld1	{v0.4s}, [%[rk]], #16	\n"
-	"	b.eq	2f			\n"
+	"	beq	2f			\n"
 	"	subs	%r[nr], %r[nr], #2	\n"
 	"	aese	v2.16b, v1.16b		\n"
 	"	aesmc	v2.16b, v2.16b		\n"
 	"	ld1	{v1.4s}, [%[rk]], #16	\n"
-	"	b.pl	1b			\n"
+	"	bpl	1b			\n"
 	"					\n"
 	"	aese	v2.16b, v0.16b		\n"
-	"	eor	v2.16b, v2.16b, v1.16b	\n"	
+	"	veor	v2.16b, v2.16b, v1.16b	\n"	
 	"	b	3f			\n"
 	"2:					\n"
 	"	aese	v2.16b, v1.16b		\n"
-	"	eor	v2.16b, v2.16b, v0.16b	\n"	
+	"	veor	v2.16b, v2.16b, v0.16b	\n"	
 	"3:					\n"
-	"	eor	v3.16b, v3.16b, v2.16b	\n"	
+	"	veor	v3.16b, v3.16b, v2.16b	\n"	
 	"	st1	{v3.16b}, [%[ct]]	\n"
 	: [rk] "=r" (rk), [nr] "=r" (dummy1)
 	: "0" (rkeys), "1" (Nr), [pt] "r" (pt), [ct] "r" (ct), [iv] "r" (iv), [inc] "Q" (inc1)
-	: "v0", "v1", "v2", "v3", "v4", "cc"
+	: "q0", "q1", "q2", "q3", "q4", "cc"
 	);
 	//printf("%i rounds left, %li rounds\n", Nr, (rkeys-rk)/16);
 	return;
@@ -406,21 +406,21 @@ void AES_ARM8_Encrypt4_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, cons
 	uint dummy1;
 	unsigned long long inc1[] = {0ULL, 1ULL};
 	asm volatile(
-	"	ld1	{v2.16b}, [%[iv]]	\n"
-	"	ld1	{v10.2d}, %[inc]	\n"
-	"	ld1	{v0.4s, v1.4s}, [%[rk]], #32	\n"
-	"	ld1	{v6.16b-v9.16b}, [%[pt]]\n"
-	"	rev64	v2.16b, v2.16b		\n"
-	"	add	v3.2d, v2.2d, v10.2d	\n"
-	"	add	v4.2d, v3.2d, v10.2d	\n"
-	"	add	v5.2d, v4.2d, v10.2d	\n"
-	"	add	v10.2d, v5.2d, v10.2d	\n"
-	"	rev64	v2.16b, v2.16b		\n"
-	"	rev64	v3.16b, v3.16b		\n"
-	"	rev64	v4.16b, v4.16b		\n"
-	"	rev64	v5.16b, v5.16b		\n"
-	"	rev64	v10.16b, v10.16b	\n"
-	"	st1	{v10.16b}, [%[iv]]	\n"
+	"	vld1	{v2.16b}, [%[iv]]	\n"
+	"	vld1	{v10.2d}, %[inc]	\n"
+	"	vld1	{v0.4s, v1.4s}, [%[rk]], #32	\n"
+	"	vld1	{v6.16b-v9.16b}, [%[pt]]\n"
+	"	vrev64	v2.16b, v2.16b		\n"
+	"	vadd	v3.2d, v2.2d, v10.2d	\n"
+	"	vadd	v4.2d, v3.2d, v10.2d	\n"
+	"	vadd	v5.2d, v4.2d, v10.2d	\n"
+	"	vadd	v10.2d, v5.2d, v10.2d	\n"
+	"	vrev64	v2.16b, v2.16b		\n"
+	"	vrev64	v3.16b, v3.16b		\n"
+	"	vrev64	v4.16b, v4.16b		\n"
+	"	vrev64	v5.16b, v5.16b		\n"
+	"	vrev64	v10.16b, v10.16b	\n"
+	"	vst1	{v10.16b}, [%[iv]]	\n"
 	"	//prfm	PLDL1STRM, [%[pt],#64]	\n"
 	"	subs	%r[nr], %r[nr], #2	\n"
 	".align 4				\n"
@@ -433,8 +433,8 @@ void AES_ARM8_Encrypt4_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, cons
 	"	aesmc	v3.16b, v3.16b		\n"
 	"	aesmc	v4.16b, v4.16b		\n"
 	"	aesmc	v5.16b, v5.16b		\n"
-	"	ld1	{v0.4s}, [%[rk]], #16	\n"
-	"	b.eq	2f			\n"
+	"	vld1	{v0.4s}, [%[rk]], #16	\n"
+	"	beq	2f			\n"
 	"	subs	%r[nr], %r[nr], #2	\n"
 	"	aese	v2.16b, v1.16b		\n"
 	"	aese	v3.16b, v1.16b		\n"
@@ -444,36 +444,36 @@ void AES_ARM8_Encrypt4_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, cons
 	"	aesmc	v3.16b, v3.16b		\n"
 	"	aesmc	v4.16b, v4.16b		\n"
 	"	aesmc	v5.16b, v5.16b		\n"
-	"	ld1	{v1.4s}, [%[rk]], #16	\n"
-	"	b.pl	1b			\n"
+	"	vld1	{v1.4s}, [%[rk]], #16	\n"
+	"	bpl	1b			\n"
 	"					\n"
 	"	aese	v2.16b, v0.16b		\n"
 	"	aese	v3.16b, v0.16b		\n"
 	"	aese	v4.16b, v0.16b		\n"
 	"	aese	v5.16b, v0.16b		\n"
-	"	eor	v2.16b, v2.16b, v1.16b	\n"	
-	"	eor	v3.16b, v3.16b, v1.16b	\n"	
-	"	eor	v4.16b, v4.16b, v1.16b	\n"	
-	"	eor	v5.16b, v5.16b, v1.16b	\n"	
+	"	veor	v2.16b, v2.16b, v1.16b	\n"	
+	"	veor	v3.16b, v3.16b, v1.16b	\n"	
+	"	veor	v4.16b, v4.16b, v1.16b	\n"	
+	"	veor	v5.16b, v5.16b, v1.16b	\n"	
 	"	b	3f			\n"
 	"2:					\n"
 	"	aese	v2.16b, v1.16b		\n"
 	"	aese	v3.16b, v1.16b		\n"
 	"	aese	v4.16b, v1.16b		\n"
 	"	aese	v5.16b, v1.16b		\n"
-	"	eor	v2.16b, v2.16b, v0.16b	\n"	
-	"	eor	v3.16b, v3.16b, v0.16b	\n"	
-	"	eor	v4.16b, v4.16b, v0.16b	\n"	
-	"	eor	v5.16b, v5.16b, v0.16b	\n"	
+	"	veor	v2.16b, v2.16b, v0.16b	\n"	
+	"	veor	v3.16b, v3.16b, v0.16b	\n"	
+	"	veor	v4.16b, v4.16b, v0.16b	\n"	
+	"	veor	v5.16b, v5.16b, v0.16b	\n"	
 	"3:					\n"
-	"	eor	v6.16b, v6.16b, v2.16b	\n"	
-	"	eor	v7.16b, v7.16b, v3.16b	\n"	
-	"	eor	v8.16b, v8.16b, v4.16b	\n"	
-	"	eor	v9.16b, v9.16b, v5.16b	\n"	
-	"	st1	{v6.16b-v9.16b}, [%[ct]]	\n"
+	"	veor	v6.16b, v6.16b, v2.16b	\n"	
+	"	veor	v7.16b, v7.16b, v3.16b	\n"	
+	"	veor	v8.16b, v8.16b, v4.16b	\n"	
+	"	veor	v9.16b, v9.16b, v5.16b	\n"	
+	"	vst1	{v6.16b-v9.16b}, [%[ct]]	\n"
 	: [rk] "=r" (rk), [nr] "=r" (dummy1)
 	: "0" (rkeys), "1" (Nr), [pt] "r" (pt), [ct] "r" (ct), [iv] "r" (iv), [inc] "Q" (inc1)
-	: "v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "cc"
+	: "q0", "q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8", "q9", "q10", "cc"
 	);
 	//printf("%i rounds left, %li rounds\n", Nr, (rkeys-rk)/16);
 	return;
@@ -502,37 +502,37 @@ DECL_KEYSETUP(Dec, 256);
 #define AES_ARM8_Encrypt_Blk_CTR AES_ARM8_Encrypt_CTR
 #define AES_ARM8_Encrypt_4Blk_CTR AES_ARM8_Encrypt4_CTR
 
-#define CLR_NEON3				\
-	asm volatile(				\
-	" eor v0.16b,v0.16b,v0.16b	\n"	\
-	" eor v1.16b,v1.16b,v1.16b	\n"	\
-	" eor v2.16b,v2.16b,v2.16b	\n"	\
-	::: "v0", "v1", "v2")
+#define CLR_NEON3			\
+	asm volatile(			\
+	" veor q0,q0,q0		\n"	\
+	" veor q1,q1,q1		\n"	\
+	" veor q2,q2,q2		\n"	\
+	::: "q0", "q1", "q2")
 
-#define CLR_NEON6				\
-	asm volatile(				\
-	" eor v0.16b,v0.16b,v0.16b	\n"	\
-	" eor v1.16b,v1.16b,v1.16b	\n"	\
-	" eor v2.16b,v2.16b,v2.16b	\n"	\
-	" eor v3.16b,v3.16b,v3.16b	\n"	\
-	" eor v4.16b,v4.16b,v4.16b	\n"	\
-	" eor v5.16b,v5.16b,v5.16b	\n"	\
-	::: "v0", "v1", "v2", "v3", "v4", "v5")
+#define CLR_NEON6			\
+	asm volatile(			\
+	" veor q0,q0,q0		\n"	\
+	" veor q1,q1,q1		\n"	\
+	" veor q2,q2,q2		\n"	\
+	" veor q3,q3,q3		\n"	\
+	" veor q4,q4,q4		\n"	\
+	" veor q5,q5,q5		\n"	\
+	::: "q0", "q1", "q2", "q3", "q4", "q5")
 
-#define CLR_NEON11				\
-	asm volatile(				\
-	" eor v0.16b,v0.16b,v0.16b	\n"	\
-	" eor v1.16b,v1.16b,v1.16b	\n"	\
-	" eor v2.16b,v2.16b,v2.16b	\n"	\
-	" eor v3.16b,v3.16b,v3.16b	\n"	\
-	" eor v4.16b,v4.16b,v4.16b	\n"	\
-	" eor v5.16b,v5.16b,v5.16b	\n"	\
-	" eor v6.16b,v6.16b,v6.16b	\n"	\
-	" eor v7.16b,v7.16b,v7.16b	\n"	\
-	" eor v8.16b,v8.16b,v8.16b	\n"	\
-	" eor v9.16b,v9.16b,v9.16b	\n"	\
-	" eor v10.16b,v10.16b,v10.16b	\n"	\
-	::: "v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10")
+#define CLR_NEON11			\
+	asm volatile(			\
+	" veor q0,q0,q0		\n"	\
+	" veor q1,q1,q1		\n"	\
+	" veor q2,q2,q2		\n"	\
+	" veor q3,q3,q3		\n"	\
+	" veor q4,q4,q4		\n"	\
+	" veor q5,q5,q5		\n"	\
+	" veor q6,q6,q6		\n"	\
+	" veor q7,q7,q7		\n"	\
+	" veor q8,q8,q8		\n"	\
+	" veor q9,q9,q9		\n"	\
+	" veor q10,q10,q10	\n"	\
+	::: "q0", "q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8", "q9", "q10")
 
 int  AES_ARM8_ECB_Encrypt(const uchar* rkeys, uint rounds, uchar *iv, uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen)
 {

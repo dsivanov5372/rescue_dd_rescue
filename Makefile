@@ -329,10 +329,10 @@ aes_arm64.po: aes_arm64.c aes_arm64.h aes.h sha256.h secmem.h config.h
 	$(CC) $(CFLAGS) $(PIC) -O3 -march=armv8-a+crypto -c $< -o $@
 
 aes_arm32.o: aes_arm32.c aes_arm64.h aes.h sha256.h secmem.h config.h
-	$(CC) $(CFLAGS) $(PIE) -O3 -march=armv7+crypt+neon  -c $<
+	$(CC) $(CFLAGS) $(PIE) -O3 -march=armv7-a -mfpu=crypto-neon-fp-armv8 -c $<
 
 aes_arm32.po: aes_arm32.c aes_arm64.h aes.h sha256.h secmem.h config.h
-	$(CC) $(CFLAGS) $(PIC) -O3 -march=armv7+crypto+neon -c $< -o $@
+	$(CC) $(CFLAGS) $(PIC) -O3 -march=armv7-a -mfpu=crypto-neon-fp-armv8 -c $< -o $@
 
 aes_c.o: aes_c.c aes_c.h aes.h sha256.h secmem.h config.h
 	$(CC) $(CFLAGS) $(PIE) $(FULL_UNROLL) -O3 -c $<
