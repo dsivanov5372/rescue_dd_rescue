@@ -349,7 +349,7 @@ void AES_ARM8_Decrypt4(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8
 	"	st1	{v2.16b-v5.16b}, [%[pt]]	\n"
 	: [rk] "=r" (rk), [nr] "=r" (dummy1)
 	: "0" (rkeys), "1" (Nr), [ct] "r" (ct), [pt] "r" (pt)
-	: "v0", "v1", "v2", "cc"
+	: "v0", "v1", "v2", "v3", "v4", "v5", "cc"
 	);
 	//printf("%i rounds left, %li rounds\n", Nr, (rkeys-rk)/16);
 	return;
