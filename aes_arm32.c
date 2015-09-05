@@ -239,7 +239,8 @@ void AES_ARM8_Encrypt4(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8
 	u8 *rk = (u8*)rkeys;
 	uint dummy1;
 	asm volatile(
-	"	vld1.8	{q2-q5}, [%[pt]]	\n"
+	"	vld1.8	{q2,q3}, [%[pt]]!	\n"
+	"	vld1.8	{q4,q5}, [%[pt]]	\n"
 	"	vld1.8	{q0, q1}, [%[rk]]!	\n"
 	"//	prfm	PLDL1STRM, [%[pt],#64]	\n"
 	"	subs	%r[nr], %r[nr], #2	\n"
@@ -286,7 +287,8 @@ void AES_ARM8_Encrypt4(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8
 	"	veor	q4, q4, q0		\n"	
 	"	veor	q5, q5, q0		\n"	
 	"3:					\n"
-	"	vst1.8	{q2-q5}, [%[ct]]	\n"
+	"	vst1.8	{q2,q3}, [%[ct]]!	\n"
+	"	vst1.8	{q4,q5}, [%[ct]]	\n"
 	: [rk] "=r" (rk), [nr] "=r" (dummy1)
 	: "0" (rkeys), "1" (Nr), [pt] "r" (pt), [ct] "r" (ct)
 	: "q0", "q1", "q2", "q3", "q4", "q5", "cc"
@@ -300,7 +302,8 @@ void AES_ARM8_Decrypt4(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8
 	u8 *rk = (u8*)rkeys;
 	uint dummy1;
 	asm volatile(
-	"	vld1.8	{q2-q5}, [%[ct]]	\n"
+	"	vld1.8	{q2,q3}, [%[ct]]!	\n"
+	"	vld1.8	{q4,q5}, [%[ct]]	\n"
 	"	vld1.8	{q0, q1}, [%[rk]]!	\n"
 	"//	prfm	PLDL1STRM, [%[ct],#64]	\n"
 	"	subs	%r[nr], %r[nr], #2	\n"
@@ -347,7 +350,8 @@ void AES_ARM8_Decrypt4(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8
 	"	veor	q4, q4, q0		\n"
 	"	veor	q5, q5, q0		\n"
 	"3:					\n"
-	"	vst1.8	{q2-q5}, [%[pt]]	\n"
+	"	vst1.8	{q2,q3}, [%[pt]]!	\n"
+	"	vst1.8	{q4,q5}, [%[pt]]	\n"
 	: [rk] "=r" (rk), [nr] "=r" (dummy1)
 	: "0" (rkeys), "1" (Nr), [ct] "r" (ct), [pt] "r" (pt)
 	: "q0", "q1", "q2", "q3", "q4", "q5", "cc"
@@ -366,10 +370,10 @@ void AES_ARM8_Encrypt_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const
 	"	vld1.64	{q4}, %[inc]		\n"
 	"	vld1.8	{q0, q1}, [%[rk]]!	\n"
 	"	vld1.8	{q3}, [%[pt]]		\n"
-	"	vrev64	q2, q2			\n"
-	"	vadd.64	q4, q2, q4		\n"
-	"	vrev64	q2, q2			\n"
-	"	vrev64	q4, q4			\n"
+	"	vrev64.8	q2, q2		\n"
+	"	vadd.i64	q4, q2, q4	\n"
+	"	vrev64.8	q2, q2		\n"
+	"	vrev64.8	q4, q4		\n"
 	"	vst1.64	{q4}, [%[iv]]		\n"
 	"	subs	%r[nr], %r[nr], #2	\n"
 	".align 4				\n"
@@ -410,17 +414,18 @@ void AES_ARM8_Encrypt4_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, cons
 	"	vld1.64	{q2}, [%[iv]]		\n"
 	"	vld1.64	{q10}, %[inc]		\n"
 	"	vld1.8	{q0, q1}, [%[rk]]!	\n"
-	"	vld1.8	{q6-q9}, [%[pt]]	\n"
-	"	vrev64	q2, q2			\n"
-	"	vadd.64	q3, q2, q10		\n"
-	"	vadd.64	q4, q3, q10		\n"
-	"	vadd.64	q5, q4, q10		\n"
-	"	vadd.64	q10, q5, q10		\n"
-	"	vrev64	q2, q2			\n"
-	"	vrev64	q3, q3			\n"
-	"	vrev64	q4, q4			\n"
-	"	vrev64	q5, q5			\n"
-	"	vrev64	q10, q10		\n"
+	"	vld1.8	{q6,q7}, [%[pt]]!	\n"
+	"	vld1.8	{q8,q9}, [%[pt]]	\n"
+	"	vrev64.8	q2, q2		\n"
+	"	vadd.i64	q3, q2, q10	\n"
+	"	vadd.i64	q4, q3, q10	\n"
+	"	vadd.i64	q5, q4, q10	\n"
+	"	vadd.i64	q10, q5, q10	\n"
+	"	vrev64.8	q2, q2		\n"
+	"	vrev64.8	q3, q3		\n"
+	"	vrev64.8	q4, q4		\n"
+	"	vrev64.8	q5, q5		\n"
+	"	vrev64.8	q10, q10	\n"
 	"	vst1.64	{q10}, [%[iv]]		\n"
 	"	//prfm	PLDL1STRM, [%[pt],#64]	\n"
 	"	subs	%r[nr], %r[nr], #2	\n"
@@ -471,7 +476,8 @@ void AES_ARM8_Encrypt4_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, cons
 	"	veor	q7, q7, q3		\n"	
 	"	veor	q8, q8, q4		\n"	
 	"	veor	q9, q9, q5		\n"	
-	"	vst1.8	{q6-q9}, [%[ct]]	\n"
+	"	vst1.8	{q6,q7}, [%[ct]]!	\n"
+	"	vst1.8	{q8,q9}, [%[ct]]	\n"
 	: [rk] "=r" (rk), [nr] "=r" (dummy1)
 	: "0" (rkeys), "1" (Nr), [pt] "r" (pt), [ct] "r" (ct), [iv] "r" (iv), [inc] "Q" (inc1)
 	: "q0", "q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8", "q9", "q10", "cc"
