@@ -193,7 +193,11 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
  * Does libdl automatically consolidate aliased symbols?
  */
 #ifdef __BIONIC__ //MAY_AES_ARM64
+#ifdef (__aarch64__)
 	have_arm8crypto = detect2("aes", probe_arm8crypto);
+#else
+	have_arm8crypto = detect2("aes", probe_arm8crypto_32);
+#endif
 #endif
 	if (have_arm8crypto) {
 		state->engine = AES_ARM8_Methods;

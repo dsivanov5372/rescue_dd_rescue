@@ -128,12 +128,14 @@ endif
 MACH := $(shell uname -m |sed 's/armv[0-9a-z]*/arm/')
 ifeq ($(MACH),arm)
 	OBJECTS2 = find_nonzero_arm.o
+	AES_ARM64_O = aes_arm32.o
+	AES_ARM64_PO = aes_arm32.po
+	CFLAGS += -DHAVE_AES_ARM64
 endif
 ifeq ($(MACH),aarch64)
 	OBJECTS2 = find_nonzero_arm64.o
 	AES_ARM64_O = aes_arm64.o
 	AES_ARM64_PO = aes_arm64.po
-	#CFLAGS += -march=armv8-a+crypto
 	CFLAGS += -DHAVE_AES_ARM64
 endif
 

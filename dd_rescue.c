@@ -2280,7 +2280,7 @@ void printversion()
 		fprintf(stderr, "aes ");
 #endif
 #endif
-#ifdef __aarch64__
+#if defined(__aarch64__) || defined(__arm__)
 	if (have_arm8crypto)
 		fprintf(stderr, "aes ");
 #endif
