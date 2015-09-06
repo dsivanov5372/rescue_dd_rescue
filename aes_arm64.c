@@ -366,11 +366,11 @@ void AES_ARM8_Encrypt_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const
 	"	ld1	{v0.4s, v1.4s}, [%[rk]], #32	\n"
 	"	ld1	{v3.16b}, [%[pt]]	\n"
 	"	rev64	v2.16b, v2.16b		\n"
+	"	subs	%w[nr], %w[nr], #2	\n"
 	"	add	v4.2d, v2.2d, v4.2d	\n"
 	"	rev64	v2.16b, v2.16b		\n"
 	"	rev64	v4.16b, v4.16b		\n"
 	"	st1	{v4.16b}, [%[iv]]	\n"
-	"	subs	%w[nr], %w[nr], #2	\n"
 	".align 4				\n"
 	"1:					\n"
 	"	aese	v2.16b, v0.16b		\n"
@@ -411,6 +411,7 @@ void AES_ARM8_Encrypt4_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, cons
 	"	ld1	{v0.4s, v1.4s}, [%[rk]], #32	\n"
 	"	ld1	{v6.16b-v9.16b}, [%[pt]]\n"
 	"	rev64	v2.16b, v2.16b		\n"
+	"	subs	%w[nr], %w[nr], #2	\n"
 	"	add	v3.2d, v2.2d, v10.2d	\n"
 	"	add	v4.2d, v3.2d, v10.2d	\n"
 	"	add	v5.2d, v4.2d, v10.2d	\n"
@@ -422,7 +423,6 @@ void AES_ARM8_Encrypt4_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, cons
 	"	rev64	v10.16b, v10.16b	\n"
 	"	st1	{v10.16b}, [%[iv]]	\n"
 	"	//prfm	PLDL1STRM, [%[pt],#64]	\n"
-	"	subs	%w[nr], %w[nr], #2	\n"
 	".align 4				\n"
 	"1:					\n"
 	"	aese	v2.16b, v0.16b		\n"
@@ -483,7 +483,8 @@ void AES_ARM8_EncryptX2_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, con
 {
 	u8 *rk = (u8*)rkeys;
 	uint dummy1;
-	uint halfr = Nr/2;
+	assert(Nr > 4 && !(Nr%2));
+	uint halfnr = Nr/2;
 	unsigned long long inc1[] = {0ULL, 1ULL};
 	asm volatile(
 	"	ld1	{v2.16b}, [%[iv]]	\n"
@@ -526,7 +527,7 @@ void AES_ARM8_EncryptX2_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, con
 	"	eor	v3.16b, v3.16b, v2.16b	\n"
 	"	st1	{v3.16b}, [%[ct]]	\n"
 	: [rk] "=r" (rk), [nr] "=r" (dummy1)
-	: "0" (rkeys), "1" (halfr), [pt] "r" (pt), [ct] "r" (ct), [iv] "r" (iv), [inc] "Q" (inc1)
+	: "0" (rkeys), "1" (halfnr), [pt] "r" (pt), [ct] "r" (ct), [iv] "r" (iv), [inc] "Q" (inc1)
 	: "v0", "v1", "v2", "v3", "v4", "w5", "cc"
 	);
 	//printf("%i rounds left, %li rounds\n", Nr, (rkeys-rk)/16);
@@ -537,6 +538,7 @@ void AES_ARM8_Encrypt4X2_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, co
 {
 	u8 *rk = (u8*)rkeys;
 	uint dummy1;
+	assert(Nr > 4 && !(Nr%2));
 	uint halfnr = Nr/2;
 	unsigned long long inc1[] = {0ULL, 1ULL};
 	asm volatile(
