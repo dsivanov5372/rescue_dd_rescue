@@ -212,7 +212,7 @@ libddr_lzo.so: libddr_lzo.po
 libddr_null.so: libddr_null.po
 	$(CC) -shared -o $@ $^
 
-libddr_crypt.so: libddr_crypt.po aes.po aes_c.po $(AESNI_PO) $(AES_ARM64_PO) $(AES_OSSL_PO) pbkdf2.po sha256.po checksum_file.po secmem.po random.po find_nonzero.po $(POBJECTS2)
+libddr_crypt.so: libddr_crypt.po aes.po aes_c.po $(AESNI_PO) $(AES_ARM64_PO) $(AES_OSSL_PO) pbkdf2.po sha256.po pbkdf_ossl.po md5.po checksum_file.po secmem.po random.po find_nonzero.po $(POBJECTS2)
 	$(CC) -shared -o $@ $^ $(CRYPTOLIB) $(EXTRA_LDFLAGS)
 
 # More special compiler flags

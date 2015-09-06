@@ -51,6 +51,7 @@ int pbkdf_ossl(hashalg_t *hash, unsigned char* pwd,  int plen,
 			memcpy(iv, &hv+klen-off, MIN(hash->hashln-klen+off, ivlen));
 		}
 		off += hash->hashln;
+		++cnt;
 	}
 	memset(hbuf, 0, hash->hashln+plen+slen);
 	asm("":::"memory");

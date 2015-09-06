@@ -20,7 +20,9 @@
 #include "aes.h"
 #include "hash.h"
 #include "pbkdf2.h"
+#include "pbkdf_ossl.h"
 #include "sha256.h"
+#include "md5.h"
 #include "secmem.h"
 #include "checksum_file.h"
 #include "random.h"
@@ -93,6 +95,7 @@ typedef struct _crypt_state {
 	char sxattr, sxfallback;
 #endif
 	char weakrnd;
+	char opbkdf;
 } crypt_state;
 
 /* aes modules rely on avail of global crypto symbol to point to sec_fields ... */
@@ -109,7 +112,7 @@ const char *crypt_help = "The crypt plugin for dd_rescue de/encrypts data copied
 #ifdef HAVE_ATTR_XATTR_H
 		"\t:saltxattr[=xattr_name]:sxfallback\n"
 #endif
-		"\t:pbkdf2[=INT]:debug:bench[mark]:skiphole:weakrnd\n"
+		"\t:pbkdf2[=INT]:opbkdf:debug:bench[mark]:skiphole:weakrnd\n"
 		" Use algorithm=help to get a list of supported crypt algorithms\n";
 
 /* TODO: 
@@ -362,6 +365,8 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			state->pbkdf2r = atol(param+7);
 		else if (!strcmp(param, "pbkdf2"))
 			state->pbkdf2r = 17000;
+		else if (!strcmp(param, "opbkdf"))
+			state->opbkdf = 1;
 		else if (!strcmp(param, "skiphole"))
 			state->skiphole = 1;
 		else if (!strcmp(param, "weakrnd"))
@@ -876,14 +881,23 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 				if (write_keyfile(state, keynm, encnm, state->sec->userkey1, state->alg->keylen/8, 0600, 1, 0))
 					return -1;
 		} else if (state->pset) {	/* (c) */
-			if (!state->pbkdf2r) {
+			if (!state->pbkdf2r && !state->opbkdf) {
 				FPLOG(FATAL, "Need to specify pbkdf2[=INT] to generate key/IV from pass/salt\n", NULL);
 				return -1;
 			}
-			/* Do pbkdf2 stuff to generate key */
-			hashalg_t sha256_halg = SHA256_HALG_T;
-			int err = pbkdf2(&sha256_halg, state->sec->passphr, 128, state->sec->salt, 8, 
-					 state->pbkdf2r, state->sec->userkey1, state->alg->keylen/8);
+			int err;
+			if (!state->opbkdf) {
+				/* Do pbkdf2 stuff to generate key */
+				hashalg_t sha256_halg = SHA256_HALG_T;
+				err = pbkdf2(&sha256_halg, state->sec->passphr, 128, state->sec->salt, 8,
+					     state->pbkdf2r, state->sec->userkey1, state->alg->keylen/8);
+			} else {
+				hashalg_t md5_halg = MD5_HALG_T;
+				err = pbkdf_ossl(&md5_halg, state->sec->passphr, strlen((char*)state->sec->passphr),
+						 state->sec->salt, 8, 1,
+						 state->sec->userkey1, state->alg->keylen/8,
+						 state->sec->nonce1, BLKSZ);
+			}
 			if (err) {
 				FPLOG(FATAL, "Key generation with pass+salt failed!\n", NULL);
 				return -1;
@@ -930,20 +944,22 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 				if (write_keyfile(state, ivsnm, encnm, state->sec->nonce1, BLKSZ, 0640, 1, 0))
 					return -1;
 		} else if (state->pset) {
-			assert(state->pbkdf2r);
+			assert(state->pbkdf2r || state->opbkdf);
 			if (!state->kset && !state->kgen && !opt->quiet)
 				FPLOG(INFO, "Generate KEY and IV from same passwd/salt\n", NULL);
-			/* Do pbkdf2 stuff to generate key */
-			hashalg_t sha256_halg = SHA256_HALG_T;
-			/* FIXME: Should use different p/s? */
-			const unsigned char* xorb = (const unsigned char*) "Hdo7DHk. 9dEaj*/B=psdGsf,yM4#q)1<tW_J%";
-			memxor(state->sec->salt, xorb, BLKSZ);
-			int err = pbkdf2(&sha256_halg, state->sec->passphr, 128, state->sec->salt, 8, 
-					 state->pbkdf2r/3, state->sec->nonce1, BLKSZ);
-			memxor(state->sec->salt, xorb, BLKSZ);
-			if (err) {
-				FPLOG(FATAL, "IV generation with pass+salt failed!\n", NULL);
-				return -1;
+			if (!state->opbkdf) {
+				/* Do pbkdf2 stuff to generate key */
+				hashalg_t sha256_halg = SHA256_HALG_T;
+				/* FIXME: Should use different p/s? */
+				const unsigned char* xorb = (const unsigned char*) "Hdo7DHk. 9dEaj*/B=psdGsf,yM4#q)1<tW_J%";
+				memxor(state->sec->salt, xorb, BLKSZ);
+				int err = pbkdf2(&sha256_halg, state->sec->passphr, 128, state->sec->salt, 8,
+						 state->pbkdf2r/3, state->sec->nonce1, BLKSZ);
+				memxor(state->sec->salt, xorb, BLKSZ);
+				if (err) {
+					FPLOG(FATAL, "IV generation with pass+salt failed!\n", NULL);
+					return -1;
+				}
 			}
 			/* Write to ivsfile if requested */
 			if (state->ivf)
