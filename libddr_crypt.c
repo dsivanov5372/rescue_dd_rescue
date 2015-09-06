@@ -794,13 +794,15 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	/* 5th: Salt possibilities:
 	 * (.) We may not need a salt as user opted to specify/read/generate key+IV ...
 	 * (a) It's been set already via salt=, saltfd=, salthex=, saltfile= (sset is set)
-	 * (b) We can read it from saltsfile (SALT.$ALG)
-	 * (c) It needs to be generated via prng (sgen)
-	 * (d) Nothing: Generate from file name and length
+	 * (b) We use openSSL compat and find a valid Salted__ header
+	 * (c) We can read it from saltsfile (SALT.$ALG) or from xattr
+	 * (d) It needs to be generated via prng (sgen)
+	 * (e) Nothing: Generate from file name and length
 	 */
 
 	if (needsalt) {
 
+		/* 5d */
 		if (state->sgen) {
 			random_bytes(state->sec->salt, 8, 0);
 			state->sset = 1;
@@ -808,8 +810,24 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 				FPLOG(WARN, "Generated salt not written anywhere?\n", NULL);
 		}
 
+		/* 5b: Decoding with openssl salt: Try reading */
+		if (state->opbkdf && !state->enc) {
+			char buf[16];
+			int fd = open(opt->iname, O_RDONLY);
+			if (fd > 0 && read(fd, buf, 16) == 16)
+				if (!memcmp(buf, "Salted__", 8)) {
+					memcpy(state->sec->salt, buf+8, 8);
+					state->sset = 1;
+					((opt_t*)opt)->init_ipos += 16; 
+					((fstate_t*)fst)->ipos += 16;
+				}
+			if (fd > 0)
+				close(fd);
+		}
+
+		/* 5c */
 #ifdef HAVE_ATTR_XATTR_H
-		/* TODO: Try getting salt from xattr */
+		/* Try getting salt from xattr */
 		if (!state->sset && state->sxattr && !get_xattr(state) && !state->enc)
 			state->sxattr = 0;
 #endif
@@ -827,7 +845,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			free(sfnm);
 		}
 
-		/* 5d: salt: derive from outnm */
+		/* 5e: salt: derive from outnm */
 		if (!state->sset) {
 			if (!strcmp(encnm, "-")) {
 				FPLOG(FATAL, "Can't initialize salt from name -\n", NULL);
@@ -851,7 +869,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 				return -1;
 		}
 #ifdef HAVE_ATTR_XATTR_H
-		/* TODO: Write salt to xattr */
+		/* Write salt to xattr */
 		if (state->sxattr && state->enc && set_xattr(state)) {
 			if (state->sxfallback)
 				state->saltf = 1;
@@ -900,6 +918,9 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 						 state->sec->salt, 8, 1,
 						 state->sec->userkey1, state->alg->keylen/8,
 						 state->sec->nonce1, BLKSZ);
+				/* OpenSSL overwrites the last our bytes with the counter */
+				if (state->alg->stream->type == STP_CTR)
+					memset(state->sec->nonce1+BLKSZ-4, 0, 4);
 			}
 			if (err) {
 				FPLOG(FATAL, "Key generation with pass+salt failed!\n", NULL);
@@ -994,7 +1015,19 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 		hexout(state->sec->charbuf1, state->sec->nonce1, BLKSZ);
 		FPLOG(DEBUG, " IV: %s\n", state->sec->charbuf1);
 	}
-	
+	/* Write Salted__ header */
+	if (state->opbkdf && state->enc) {
+		char buf[16];
+		strcpy(buf, "Salted__");
+		memcpy(buf+8, state->sec->salt, 8);
+		int fd = open(opt->oname, O_RDWR | O_CREAT, 0640);
+		if (fd > 0 && write(fd, buf, 16) == 16) {
+			((opt_t*)opt)->init_opos += 16;
+			((fstate_t*)fst)->opos += 16;
+		}
+		if (fd > 0)
+			close(fd);
+	}
 	/* OK, now we can prepare en/decryption */
 	if (state->enc)
 		state->alg->enc_key_setup(state->sec->userkey1, state->sec->ekeys->data, state->alg->rounds);
@@ -1004,10 +1037,15 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	state->lastpos = state->enc? opt->init_opos: opt->init_ipos;
 	/* IV */
 	if (state->alg->stream->iv_prep)
-		state->alg->stream->iv_prep(state->sec->nonce1, state->sec->iv1.data, state->lastpos/BLKSZ);
+		state->alg->stream->iv_prep(state->sec->nonce1, state->sec->iv1.data,
+					    state->lastpos/BLKSZ-state->opbkdf);
 	else
 		memcpy(state->sec->iv1.data, state->sec->nonce1, BLKSZ);
 
+	if (state->debug) {
+		hexout(state->sec->charbuf1, state->sec->iv1.data, BLKSZ);
+		FPLOG(DEBUG, " IV: %s\n", state->sec->charbuf1);
+	}
 	/* No need to keep key/passphr in memory */
 	memset(state->sec->userkey1, 0, state->alg->keylen/8);
 	memset(state->sec->passphr, 0, 128);
@@ -1070,7 +1108,8 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 	if (currpos != state->lastpos) {
 		if (state->alg->stream->seek_blk) {	/* CTR and ECB */
 			if (state->alg->stream->iv_prep)
-				state->alg->stream->iv_prep(state->sec->nonce1, state->sec->iv1.data, currpos/BLKSZ);
+				state->alg->stream->iv_prep(state->sec->nonce1, state->sec->iv1.data,
+							    currpos/BLKSZ-state->opbkdf);
 			if (state->debug)
 				FPLOG(INFO, "Adjusted offset %li -> %li (%i)\n", (unsigned long)state->lastpos,
 					(unsigned int)currpos, (unsigned int)currpos/BLKSZ);
@@ -1132,7 +1171,8 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 		if (!zero) {
 			/* Fix up after skipped holes */
 			if (skipped && state->alg->stream->iv_prep) {
-				state->alg->stream->iv_prep(state->sec->nonce1, state->sec->iv1.data, (currpos+i)/BLKSZ);
+				state->alg->stream->iv_prep(state->sec->nonce1, state->sec->iv1.data,
+							    (currpos+i)/BLKSZ-state->opbkdf);
 				skipped = 0;
 			}
 			err = crypt(keys, state->alg->rounds, state->sec->iv1.data,
@@ -1164,7 +1204,8 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 	}
 	/* Fix up after skipped holes */
 	if (skipped && state->alg->stream->iv_prep) {
-		state->alg->stream->iv_prep(state->sec->nonce1, state->sec->iv1.data, (currpos+i)/BLKSZ);
+		state->alg->stream->iv_prep(state->sec->nonce1, state->sec->iv1.data,
+					    (currpos+i)/BLKSZ-state->opbkdf);
 		skipped = 0;
 	}
 	/* Copy remainder (incomplete block) into buffer */
