@@ -123,6 +123,16 @@ if openssl enc -aes-192-cbc -K 4d20e517cd98ff130ac160dcb4177ef1ab4e8f9501bc6e1d 
   rm -f dd_rescue.enc.o
 fi
 # Add Salted__ tests ...
+if openssl enc -aes-192-ctr -pass pass:PASWD -S f61059ec2d87a410 -in dd_rescue -out dd_rescue.enc.o; then
+  enc_dec_compare dd_rescue AES192-CTR "" pass=PASWD:salthex=f61059ec2d87a410:opbkdf
+  cmp dd_rescue.enc dd_rescue.enc.o || exit 4
+fi
+if openssl enc -aes-192-cbc -pass pass:PASWD -S f61059ec2d87a410 -in dd_rescue -out dd_rescue.enc.o; then
+  enc_dec_compare dd_rescue AES192-CBC "" pass=PASWD:salthex=f61059ec2d87a410:opbkdf
+  cmp dd_rescue.enc dd_rescue.enc.o || exit 4
+  rm -f dd_rescue.enc.o
+fi
+# Add Salted__ tests ...
 
 
 echo "*** Algorithms ... ***"
@@ -143,7 +153,8 @@ enc_dec_compare dd_rescue AES192-CTR saltgen pass=PWD_:pbkdf2:saltfile=SALT
 # Use random numbers and write to xattr, fall back to saltsfile
 enc_dec_compare dd_rescue AES192-CTR saltgen pass=PSWD:pbkdf2:saltxattr:sxfallback
 
-HAVE_AESNI=`grep " aes " /proc/cpuinfo 2>/dev/null`
+HAVE_AESNI=`grep " sse4 " /proc/cpuinfo 2>/dev/null | grep " aes " 2>/dev/null`
+HAVE_AESARM=`grep " pmull " /proc/cpuinfo 2>/dev/null`
 if test -n "$TESTALGS"; then
   echo "*** Engines comparison ***"
 fi
@@ -158,6 +169,9 @@ for alg in $TESTALGS; do
 	esac
 	if test -n "$HAVE_AESNI"; then
 		ENG="$ENG aesni"
+	fi
+	if test -n "$HAVE_AESARM"; then
+		ENG="$ENG aesarm64"
 	fi
 	if test "$HAVE_OPENSSL" = "0"; then ENG=`echo $ENG | sed 's/ openssl//'`; fi
 	if test "$HAVE_RDRNDAES" = "0"; then ENG=`echo $ENG | sed 's/ aesni//'`; fi
