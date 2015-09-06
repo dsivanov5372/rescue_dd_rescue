@@ -316,7 +316,7 @@ int  AES_Gen_CTR_Crypt(AES_Crypt_Blk_fn *cryptfn,
 		cryptfn(rkeys, rounds, ctr, eblk);
 		//be_inc(ctr+8);	
 		xor16(eblk, in, in);
-		//memcpy(output, in, len&15);
+		memcpy(output, in, len&15);
 		//memset(in, 0, 16);
 	}
 	//memset(eblk, 0, 16);
@@ -347,13 +347,14 @@ int  AES_Gen_CTR_Crypt_Opt(AES_Crypt_CTR_Blk_fn *cryptfn4c,
 		uchar *in = crypto->blkbuf1;
 		uchar *eblk = crypto->blkbuf2;
 		// Do we really need to uncount the last incomplete block?
-		uchar octr[16];
-		memcpy(octr, ctr, 16);
+		/* FIXME: This is inconsistent, but irrelevant for now */
+		//uchar octr[16];
+		//memcpy(octr, ctr, 16);
 		fill_blk(input, in, len, 0 /*pad*/);
 		cryptfnc(rkeys, rounds, in, eblk, ctr);
 		memcpy(output, eblk, len&15);
 		//memset(in, 0, 16);
-		memcpy(ctr, octr, 16);
+		//memcpy(ctr, octr, 16);
 		//memset(eblk, 0, 16);
 		//asm("":::"memory");
 	}
