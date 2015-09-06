@@ -97,6 +97,7 @@ typedef struct _crypt_state {
 	char weakrnd;
 	char opbkdf;
 	char outkeyiv;
+	char ctrbug198;
 } crypt_state;
 
 /* aes modules rely on avail of global crypto symbol to point to sec_fields ... */
@@ -113,7 +114,7 @@ const char *crypt_help = "The crypt plugin for dd_rescue de/encrypts data copied
 #ifdef HAVE_ATTR_XATTR_H
 		"\t:saltxattr[=xattr_name]:sxfallback\n"
 #endif
-		"\t:pbkdf2[=INT]:opbkdf:debug:bench[mark]:skiphole:weakrnd:outkeyiv\n"
+		"\t:pbkdf2[=INT]:opbkdf:debug:bench[mark]:skiphole:weakrnd:outkeyiv:ctrbug198\n"
 		" Use algorithm=help to get a list of supported crypt algorithms\n";
 
 /* TODO: 
@@ -374,6 +375,8 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			state->weakrnd = 1;
 		else if (!strcmp(param, "outkeyiv"))
 			state->outkeyiv = 1;
+		else if (!strcmp(param, "ctrbug198"))
+			state->ctrbug198 = 1;
 		/* Hmmm, ok, let's support algname without alg= */
 		else {
 			err += set_alg(state, param);
@@ -918,9 +921,6 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 						 state->sec->salt, 8, 1,
 						 state->sec->userkey1, state->alg->keylen/8,
 						 state->sec->nonce1, BLKSZ);
-				/* OpenSSL overwrites the last our bytes with the counter */
-				if (state->alg->stream->type == STP_CTR)
-					memset(state->sec->nonce1+BLKSZ-4, 0, 4);
 			}
 			if (err) {
 				FPLOG(FATAL, "Key generation with pass+salt failed!\n", NULL);
@@ -1035,6 +1035,9 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 		state->alg->dec_key_setup(state->sec->userkey1, state->sec->dkeys->data, state->alg->rounds);
 	/* Prepare for hole detection */
 	state->lastpos = state->enc? opt->init_opos: opt->init_ipos;
+	/* Bug compat for 1.98 */
+	if (state->ctrbug198 && state->alg->stream->type == STP_CTR)
+		memset(state->sec->nonce1+BLKSZ-4, 0, 4);
 	/* IV */
 	if (state->alg->stream->iv_prep)
 		state->alg->stream->iv_prep(state->sec->nonce1, state->sec->iv1.data,

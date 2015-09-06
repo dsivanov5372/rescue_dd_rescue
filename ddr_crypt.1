@@ -435,24 +435,26 @@ to be used for key generation. Don't use it if you want security.
 Files that are encrypted with openssl enc where you specify
 the key (with -K) and the IV (with -iv) result in the same
 output that ddr_crypt generates for -ECB and -CBC modes.
-Currently, -CTR produces a different output. openssl does zero
-out the last 32bit of the IV (to replace it with the counter),
-whereas ddr_crypt currently does not do that and just adds the
-counter to the start value (defined by the last 64bits ...).
-So to be compatible, you need to zero out the last 32bits
-of the IV you pass to ddr_crypt. (An option to do this
-automatically may be implemented in a future version of
-ddr_crypt.)
+ddr_crypt uses a 64bit counter in -CTR modes.
 .P
-ddr_crypt does not currently support the way that openssl
-prefixes files with Salted__ and a salt when using password
-and salt for key and IV generation.
+With the option
+.B opbkdf
+ddr_crypt also reads/writes the openSSL Salted__ header to
+be compatible with openssl. This function needs more testing
+and better error handling though.
 .
 .SH BUGS/LIMITATIONS
 .SS Maturity
 The plugin is new as of dd_rescue 1.98. Do not yet rely on data
 saved with ddr_crypt as the only backup for valuable data. Also
 expect some changes to ddr_crypt in the not too distant future. 
+.P
+Due to an issue in ddr_crypt's initialization of the IV for
+CTR mode, the last 32bits would always be zeroed out prior
+to adding the counter. This has been fixed in 1.99.
+It order to be compatible with 1.98, the option
+.B ctrbug198
+can be specified on the command line.
 .br
 .
 .SS Security
