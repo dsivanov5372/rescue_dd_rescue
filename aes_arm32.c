@@ -671,6 +671,8 @@ int  AES_ARM8_CTR_CryptX2(const uchar* rkeys, uint rounds, uchar *ctr, uint pad,
 {
 	*olen = len;
 	return AES_Gen_CTR_Crypt(AES_ARM8_Encrypt_BlkX2, rkeys, rounds, ctr, in, out, len);
+	/* TODO: Create optimized version */
+	//return AES_Gen_CTR_Crypt(AES_ARM8_Encrypt_BlkX2, rkeys, rounds, ctr, in, out, len);
 }
 
 ciph_desc_t AES_ARM8_Methods[] = {{"AES128-ECB"  , 128, 10, 16, 11*16, &aes_stream_ecb, 

@@ -634,34 +634,60 @@ void AES_ARM8_Decrypt_BlkX2(const uchar* rkeys, uint rounds, const uchar in[16],
 	AES_ARM8_Decrypt(rkeys+16+8*rounds, rounds/2, in, out);
 	AES_ARM8_Decrypt(rkeys, rounds/2, out, out);
 }
+inline
+void AES_ARM8_Encrypt_4BlkX2(const uchar* rkeys, uint rounds, const uchar in[64], uchar out[64])
+{
+	AES_ARM8_Encrypt4(rkeys, rounds/2, in, out);
+	AES_ARM8_Encrypt4(rkeys+16+8*rounds, rounds/2, out, out);
+}
+inline
+void AES_ARM8_Decrypt_4BlkX2(const uchar* rkeys, uint rounds, const uchar in[64], uchar out[64])
+{
+	AES_ARM8_Decrypt4(rkeys+16+8*rounds, rounds/2, in, out);
+	AES_ARM8_Decrypt4(rkeys, rounds/2, out, out);
+}
+
 
 int  AES_ARM8_ECB_EncryptX2(const uchar* rkeys, uint rounds, uchar *iv, uint pad,
 			 const uchar *in, uchar *out, ssize_t len, ssize_t *olen)
 {
-	return AES_Gen_ECB_Enc(AES_ARM8_Encrypt_BlkX2, rkeys, rounds, pad, in, out, len, olen);
+	//int r = AES_Gen_ECB_Enc(AES_ARM8_Encrypt_BlkX2, rkeys, rounds, pad, in, out, len, olen);
+	int r = AES_Gen_ECB_Enc4(AES_ARM8_Encrypt_4BlkX2, AES_ARM8_Encrypt_BlkX2,
+				 rkeys, rounds, pad, in, out, len, olen);
+	CLR_NEON6;
+	return r;
 }
 int  AES_ARM8_ECB_DecryptX2(const uchar* rkeys, uint rounds, uchar *iv, uint pad,
 			 const uchar *in, uchar *out, ssize_t len, ssize_t *olen)
 {
-	return AES_Gen_ECB_Dec(AES_ARM8_Decrypt_BlkX2, rkeys, rounds, pad, in, out, len, olen);
+	int r = AES_Gen_ECB_Dec(AES_ARM8_Decrypt_BlkX2, rkeys, rounds, pad, in, out, len, olen);
+	CLR_NEON6;
+	return r;
 }
 
 int  AES_ARM8_CBC_EncryptX2(const uchar* rkeys, uint rounds, uchar *iv, uint pad,
 			 const uchar *in, uchar *out, ssize_t len, ssize_t *olen)
 {
-	return AES_Gen_CBC_Enc(AES_ARM8_Encrypt_BlkX2, rkeys, rounds, iv, pad, in, out, len, olen);
+	int r = AES_Gen_CBC_Enc(AES_ARM8_Encrypt_BlkX2, rkeys, rounds, iv, pad, in, out, len, olen);
+	CLR_NEON3;
+	return r;
 }
 int  AES_ARM8_CBC_DecryptX2(const uchar* rkeys, uint rounds, uchar *iv, uint pad,
 			 const uchar *in, uchar *out, ssize_t len, ssize_t *olen)
 {
-	return AES_Gen_CBC_Dec(AES_ARM8_Decrypt_BlkX2, rkeys, rounds, iv, pad, in, out, len, olen);
+	int r = AES_Gen_CBC_Dec(AES_ARM8_Decrypt_BlkX2, rkeys, rounds, iv, pad, in, out, len, olen);
+	CLR_NEON6;
+	return r;
 }
 
 int  AES_ARM8_CTR_CryptX2(const uchar* rkeys, uint rounds, uchar *ctr, uint pad,
 			const uchar *in, uchar *out, ssize_t len, ssize_t *olen)
 {
 	*olen = len;
-	return AES_Gen_CTR_Crypt(AES_ARM8_Encrypt_BlkX2, rkeys, rounds, ctr, in, out, len);
+	// TODO: Create optimized version
+	int r = AES_Gen_CTR_Crypt(AES_ARM8_Encrypt_BlkX2, rkeys, rounds, ctr, in, out, len);
+	CLEAR_NEON11;
+	return r;
 }
 
 ciph_desc_t AES_ARM8_Methods[] = {{"AES128-ECB"  , 128, 10, 16, 11*16, &aes_stream_ecb, 
