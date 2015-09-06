@@ -110,11 +110,11 @@ const char *crypt_help = "The crypt plugin for dd_rescue de/encrypts data copied
 		"\t:ivhex=HEX:ivfd=[x]INT[@INT@INT]:ivfile=NAME[@INT@INT]:ivgen:ivsfile\n"
 		"\t:pass=STR:passfd=[x]INT[@INT@INT]:passfile=NAME[@INT@INT]\n"
 		"\t:salt=STR:salthex=HEX:saltfd=[x]INT[@INT@INT]:saltfile=NAME[@INT@INT]\n"
-		"\t:saltlen=INT:saltgen:saltsfile\n"
+		"\t:saltlen=INT:saltgen:saltsfile"
 #ifdef HAVE_ATTR_XATTR_H
-		"\t:saltxattr[=xattr_name]:sxfallback\n"
+		":saltxattr[=xattr_name]:sxfallback"
 #endif
-		"\t:pbkdf2[=INT]:opbkdf:debug:bench[mark]:skiphole:weakrnd:outkeyiv:ctrbug198\n"
+		"\n\t:pbkdf2[=INT]:opbkdf:debug:bench[mark]:skiphole:weakrnd:outkeyiv:ctrbug198\n"
 		" Use algorithm=help to get a list of supported crypt algorithms\n";
 
 /* TODO: 

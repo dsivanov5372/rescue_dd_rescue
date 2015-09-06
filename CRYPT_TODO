@@ -4,5 +4,4 @@ TODO for crypt/hash
 - More hash algs, e.g. SHA3 (Keccak), SKEIN,...
 - crypt with hash: GCM (and others?), XTS mode
 - ARMv8 asm for hash
-- openssl compat (Salted__ format)
 - Assym crypto support ???
