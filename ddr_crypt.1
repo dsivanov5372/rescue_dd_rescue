@@ -151,6 +151,9 @@ when it is used.
 The
 .B debug
 paramter makes the ddr_crypt module output some debugging information.
+With
+.B outkeyiv
+the key and IV will be output.
 The
 .B benchmark
 parameter will result in reporting the en/decryption speed.
@@ -251,6 +254,12 @@ or
 The latter format allows overriding the number of iterations for
 key generation. (IV generation will be done with a third again.)
 .P
+For compatibility with openssl, key and IV can also be derived
+using an openssl compatible key derivation function with
+.B opbkdf .
+Note that this is not recommended; only one round of md5 hashing
+is used which makes brute-forcing very effective.
+.P
 The salt can be derived automatically from the name (and length)
 of the encrypted file; this allows to work with just one password
 to be memorized. However, be aware that file size or name changes
@@ -259,7 +268,8 @@ render your encrypted file undecryptable. If there is a risk of this
 to happen, rather memorize one salt per file (or better save key
 and IV using keysfile and ivsfile options or save the salt using
 saltsfile or saltxattr, see below). Remember that file names
-are case sensitive (as always with Un*x).
+are case sensitive (as always with Un*x). Of course the keysfile
+needs to be well protected from being read by unauthorized persons.
 .P
 Password and salt can be specified with a string
 .B pass=
@@ -366,19 +376,17 @@ unknown to an attacker and only used once.
 .br
 The latter can't be stressed enough: Don't ever use the same key/IV
 combination for two files. Mathematically spoken:
-c1 = r1 XOR p1
+c1 = r1 XOR p1 and
 c2 = r2 XOR p2
 (c = ciphertext, r = AES random numbers, p = plaintext).
 With r == r1 == r2, it can be trivally seen that the attacker can calculate
 c1 XOR c2 = r XOR p1 XOR r XOR p2 = p1 XOR p2. If the plaintext of one of
 the files is partially known, so is the other.
 .P
-The CTR mode has more nice properties: It allows random access (the
+The CTR mode has more nice properties: It allows random access as the
 AES random numbers (belonging to a key/IV comination) with a certain 
-offset can directly calculated and the last block does not require padding,
-as partial blocks can be processed.
-directly calculated and the last block does not require padding,
-as partial blocks can be processed.
+offset can be directly calculated and the last block does not require
+padding, as partial blocks can be processed.
 .P
 The author of this documents prefers CTR stream mode and ensures
 that keys/IVs are not reused.
@@ -526,7 +534,7 @@ Public License (GPL) v2 or v3 - at your option.
 .
 .SH HISTORY
 ddr_crypt plugin was first introduced with dd_rescue 1.98 (May 2015).
-.br.
+.br
 Version 1.99 brought support for ARMv8 crypto acceleration.
 .PP
 Some additional information can be found on
