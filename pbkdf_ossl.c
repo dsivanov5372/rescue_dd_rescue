@@ -48,7 +48,7 @@ int pbkdf_ossl(hashalg_t *hash, unsigned char* pwd,  int plen,
 			memcpy(iv+off-klen, &hv, MIN(hash->hashln, ivlen+klen-off));
 		else {
 			memcpy(key+off, &hv, klen-off);
-			memcpy(iv, &hv+klen-off, MIN(hash->hashln-klen+off, ivlen));
+			memcpy(iv, (unsigned char*)&hv+klen-off, MIN(hash->hashln-klen+off, ivlen));
 		}
 		off += hash->hashln;
 		++cnt;
