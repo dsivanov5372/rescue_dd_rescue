@@ -830,14 +830,14 @@ void AESNI_CTR_Prep_2(const unsigned char* iv, const unsigned char* nonce,
 /* CTR is big-endian */
 void AESNI_CTR_Prep(const unsigned char* iv, unsigned char* ctr, unsigned long long val)
 {
-	__m128i BSWAP_EPI64, VAL, MSK, tmp;
+	__m128i BSWAP_EPI64, VAL, tmp/*, MSK*/;
 	VAL = _mm_set_epi64x(val, 0);
-	MSK = _mm_set_epi32(0xffffffff, 0, 0xffffffff, 0xffffffff);
+	//MSK = _mm_set_epi32(0xffffffff, 0, 0xffffffff, 0xffffffff);
 	BSWAP_EPI64 = _mm_setr_epi8(7,6,5,4,3,2,1,0,15,14,13,12,11,10,9,8); 
 	
 	tmp = _mm_loadu_si128((__m128i*)iv);
 	tmp = _mm_shuffle_epi8(tmp, BSWAP_EPI64);
-	tmp = _mm_and_si128(tmp, MSK);
+	//tmp = _mm_and_si128(tmp, MSK);
 	tmp = _mm_add_epi64(tmp, VAL);
 	_mm_storeu_si128((__m128i*)ctr, tmp);
 #ifdef DEBUG_CBLK_SETUP
