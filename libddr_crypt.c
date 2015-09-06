@@ -96,6 +96,7 @@ typedef struct _crypt_state {
 #endif
 	char weakrnd;
 	char opbkdf;
+	char outkeyiv;
 } crypt_state;
 
 /* aes modules rely on avail of global crypto symbol to point to sec_fields ... */
@@ -112,7 +113,7 @@ const char *crypt_help = "The crypt plugin for dd_rescue de/encrypts data copied
 #ifdef HAVE_ATTR_XATTR_H
 		"\t:saltxattr[=xattr_name]:sxfallback\n"
 #endif
-		"\t:pbkdf2[=INT]:opbkdf:debug:bench[mark]:skiphole:weakrnd\n"
+		"\t:pbkdf2[=INT]:opbkdf:debug:bench[mark]:skiphole:weakrnd:outkeyiv\n"
 		" Use algorithm=help to get a list of supported crypt algorithms\n";
 
 /* TODO: 
@@ -371,6 +372,8 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			state->skiphole = 1;
 		else if (!strcmp(param, "weakrnd"))
 			state->weakrnd = 1;
+		else if (!strcmp(param, "outkeyiv"))
+			state->outkeyiv = 1;
 		/* Hmmm, ok, let's support algname without alg= */
 		else {
 			err += set_alg(state, param);
@@ -984,6 +987,13 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 		/* Save to IVs file */
 		if (write_keyfile(state, ivsnm, encnm, state->sec->nonce1, BLKSZ, 0640, 1, 0))
 			return -1;
+
+	if (state->outkeyiv) {
+		hexout(state->sec->charbuf1, state->sec->userkey1, state->alg->keylen/8);
+		FPLOG(DEBUG, "Key: %s\n", state->sec->charbuf1);
+		hexout(state->sec->charbuf1, state->sec->nonce1, BLKSZ);
+		FPLOG(DEBUG, " IV: %s\n", state->sec->charbuf1);
+	}
 	
 	/* OK, now we can prepare en/decryption */
 	if (state->enc)
