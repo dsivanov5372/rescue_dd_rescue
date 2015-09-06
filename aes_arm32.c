@@ -61,6 +61,7 @@ static inline u32 aes_sbox(u32 in)
 {
 	u32 ret;
 	asm volatile (
+	"	.fpu crypto-neon-fp-armv8	\n"
 	"	vdup.32	q1, %r[in]		\n"
 	"	veor	q0, q0, q0		\n"
 	"	aese.8	q0, q1			\n"
@@ -133,6 +134,7 @@ inline void AES_ARM8_EKey_DKey(const u32* ekey,
 	memcpy(dkey, ekey+rounds*4, 16);
 	for (i = 1, rounds--; rounds > 0; i++, rounds--) {
 		asm volatile(
+		"	.fpu crypto-neon-fp-armv8	\n"
 		"	vld1.8		{q0}, %1	\n"
 		"	aesimc.8	q1, q0		\n"
 		"	vst1.8		{q1}, %0	\n"
@@ -162,6 +164,7 @@ void AES_ARM8_Encrypt(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 
 	u8 *rk = (u8*)rkeys;
 	uint dummy1;
 	asm volatile(
+	"	.fpu crypto-neon-fp-armv8	\n"
 	"	vld1.8	{q0}, [%[pt]]		\n"
 	"	vld1.8	{q1, q2}, [%[rk]]!	\n"
 	"//	veor	q0, q0, q1		\n"
@@ -201,6 +204,7 @@ void AES_ARM8_Decrypt(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 
 	u8 *rk = (u8*)rkeys;
 	uint dummy1;
 	asm volatile(
+	"	.fpu crypto-neon-fp-armv8	\n"
 	"	vld1.8	{q0}, [%[ct]]		\n"
 	"	vld1.8	{q1, q2}, [%[rk]]!	\n"
 	"//	veor	q0, q0, q1		\n"
@@ -239,6 +243,7 @@ void AES_ARM8_Encrypt4(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8
 	uint dummy1;
 	u8* dum2, dum3;
 	asm volatile(
+	"	.fpu crypto-neon-fp-armv8	\n"
 	"	vld1.8	{q2,q3}, [%[pt]]!	\n"
 	"	vld1.8	{q4,q5}, [%[pt]]	\n"
 	"	vld1.8	{q0, q1}, [%[rk]]!	\n"
