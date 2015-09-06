@@ -88,6 +88,19 @@ size_t find_nonzero_arm6(const unsigned char *blk, const size_t ln)
 	: "r2", "r3", "r4", "r5");
 	return res-blk;
 }
+
+void probe_arm8crypto_32()
+{
+	asm volatile(
+	"	.fpu crypto-neon-fp-armv8	\n"
+	"	veor	q0, q0, q0		\n"
+	"	veor 	q1, q1, q1		\n"
+	"	aese.8	q1, q0			\n"
+	:
+	:
+	: "q0", "q1");
+}
+
 #else
 #warning no point compiling this on non-ARM 32bit arch
 #endif

@@ -73,8 +73,8 @@ size_t find_nonzero_arm8(const unsigned char *blk, const size_t ln)
 void probe_arm8crypto()
 {
 	asm volatile(
-	"	eor v0.16b, v0.16b, v0.16b	\n"
-	"	eor v1.16b, v1.16b, v1.16b	\n"
+	"	movi	v0.16b, #0		\n"
+	"	movi	v1.16b, #0		\n"
 	"	aese v1.16b, v0.16b		\n"
 	:
 	:
@@ -82,5 +82,5 @@ void probe_arm8crypto()
 }
 
 #else
-#warning no point compiling this on non-ARM arch
+#warning no point compiling this on non-ARM64 arch
 #endif

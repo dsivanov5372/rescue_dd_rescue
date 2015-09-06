@@ -504,34 +504,34 @@ DECL_KEYSETUP(Dec, 256);
 
 #define CLR_NEON3				\
 	asm volatile(				\
-	" eor v0.16b,v0.16b,v0.16b	\n"	\
-	" eor v1.16b,v1.16b,v1.16b	\n"	\
-	" eor v2.16b,v2.16b,v2.16b	\n"	\
+	" movi	v0, #0	\n"	\
+	" movi	v1, #0	\n"	\
+	" movi	v2, #0	\n"	\
 	::: "v0", "v1", "v2")
 
 #define CLR_NEON6				\
 	asm volatile(				\
-	" eor v0.16b,v0.16b,v0.16b	\n"	\
-	" eor v1.16b,v1.16b,v1.16b	\n"	\
-	" eor v2.16b,v2.16b,v2.16b	\n"	\
-	" eor v3.16b,v3.16b,v3.16b	\n"	\
-	" eor v4.16b,v4.16b,v4.16b	\n"	\
-	" eor v5.16b,v5.16b,v5.16b	\n"	\
+	" movi	v0, #0	\n"	\
+	" movi	v1, #0	\n"	\
+	" movi	v2, #0	\n"	\
+	" movi	v3, #0	\n"	\
+	" movi	v4, #0	\n"	\
+	" movi	v5, #0	\n"	\
 	::: "v0", "v1", "v2", "v3", "v4", "v5")
 
 #define CLR_NEON11				\
 	asm volatile(				\
-	" eor v0.16b,v0.16b,v0.16b	\n"	\
-	" eor v1.16b,v1.16b,v1.16b	\n"	\
-	" eor v2.16b,v2.16b,v2.16b	\n"	\
-	" eor v3.16b,v3.16b,v3.16b	\n"	\
-	" eor v4.16b,v4.16b,v4.16b	\n"	\
-	" eor v5.16b,v5.16b,v5.16b	\n"	\
-	" eor v6.16b,v6.16b,v6.16b	\n"	\
-	" eor v7.16b,v7.16b,v7.16b	\n"	\
-	" eor v8.16b,v8.16b,v8.16b	\n"	\
-	" eor v9.16b,v9.16b,v9.16b	\n"	\
-	" eor v10.16b,v10.16b,v10.16b	\n"	\
+	" movi	v0, #0	\n"	\
+	" movi	v1, #0	\n"	\
+	" movi	v2, #0	\n"	\
+	" movi	v3, #0	\n"	\
+	" movi	v4, #0	\n"	\
+	" movi	v5, #0	\n"	\
+	" movi	v6, #0	\n"	\
+	" movi	v7, #0	\n"	\
+	" movi	v8, #0	\n"	\
+	" movi	v9, #0	\n"	\
+	" movi	v10, #0	\n"	\
 	::: "v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10")
 
 int  AES_ARM8_ECB_Encrypt(const uchar* rkeys, uint rounds, uchar *iv, uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen)
