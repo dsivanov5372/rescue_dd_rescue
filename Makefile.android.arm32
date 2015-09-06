@@ -1,3 +1,4 @@
+# Build 32bit ARMv5/7 non-PIE executables for API9+ (2.3.4 Gingerbread).
 ASDK = /casa/Hardware/Android/android-ndk-r9c
 CBIN = $(ASDK)/toolchains/arm-linux-androideabi-4.8/prebuilt/linux-$(shell uname -m)/bin
 

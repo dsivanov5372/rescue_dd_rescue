@@ -1,3 +1,4 @@
+# Build 64bit ARMv8 PIE executables for API21+ (5.0 Lollipop).
 ASDK = /casa/Hardware/Android/android-ndk-r10e
 CBIN = $(ASDK)/toolchains/aarch64-linux-android-4.9/prebuilt/linux-$(shell uname -m)/bin
 

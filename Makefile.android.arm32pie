@@ -1,0 +1,72 @@
+# Build 32bit ARMv7/8 PIE executables for API16+ (4.1 JellyBean) with NDK.
+ASDK = /casa/Hardware/Android/android-ndk-r10e
+CBIN = $(ASDK)/toolchains/arm-linux-androideabi-4.8/prebuilt/linux-$(shell uname -m)/bin
+
+CC = $(CBIN)/arm-linux-androideabi-gcc
+
+PLAT = $(ASDK)/platforms/android-16/arch-arm/usr
+INCD = $(PLAT)/include
+LIBD = $(PLAT)/lib
+
+CFLG = -I $(INCD) -D__WORDSIZE=32 -Wno-unused -L$(LIBD)
+ATTR = $(shell ls $(LIBD)/libattr.a)
+
+DEPS = $(wildcard *.c *.h)
+
+PATH = $(shell echo $$PATH)
+
+.phony: config libfalloc libfalloc-static libfalloc-dl nolib nocolor static strip all
+.phony: dd_rescue find_nonzero fmt_no fiemap file_zblock
+
+config.h:
+	ln -sf $(LIBD)/crtbegin_dynamic.o .
+	ln -sf $(LIBD)/crtend_android.o .
+	ln -sf $(LIBD)/crtbegin_so.o .
+	ln -sf $(LIBD)/crtend_so.o .
+	PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" ./configure --host x86-64-linux-gnu
+
+config:
+	rm -f config.h
+	$(MAKE) -f Makefile.android.arm32 config.h
+
+default: $(DEPS) 
+	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm EXTRA_LDFLAGS="$(ATTR)" $@
+
+dd_rescue: $(DEPS) 
+	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm EXTRA_LDFLAGS="$(ATTR)" $@
+
+libfalloc:
+	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm $@
+
+libfalloc-static:
+	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm $@
+
+libfalloc-dl:
+	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm $@
+
+nolib: 
+	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm $@
+
+strip: dd_rescue
+	strip -S dd_rescue libddr_*.so
+
+find_nonzero: $(DEPS)
+	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm $@
+
+file_zblock: $(DEPS)
+	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm $@
+
+fmt_no: $(DEPS)
+	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm $@
+
+fiemap: $(DEPS)
+	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm $@
+
+all: 
+	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm EXTRA_LDFLAGS="$(ATTR)" $@
+
+clean:
+	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm $@
+	rm -f config.h crtbegin_dynamic.o crtend_android.o crtend_so.o crtbegin_so.o
+
+
