@@ -112,6 +112,9 @@ const char *crypt_help = "The crypt plugin for dd_rescue de/encrypts data copied
 		" Parameters: [alg[o[rithm]]=]ALG:enc[rypt]:dec[rypt]:engine=STR:pad=STR\n"
 		"\t:keyhex=HEX:keyfd=[x]INT[@INT@INT]:keyfile=NAME[@INT@INT]:keygen:keysfile\n"
 		"\t:ivhex=HEX:ivfd=[x]INT[@INT@INT]:ivfile=NAME[@INT@INT]:ivgen:ivsfile\n"
+#ifdef HAVE_ATTR_XATTR_H
+		"\t:keyxattr[=xattr_name]:kxfallback:ivxattr[=xattr_name]:ixfallback\n"
+#endif
 		"\t:pass=STR:passfd=[x]INT[@INT@INT]:passfile=NAME[@INT@INT]\n"
 		"\t:salt=STR:salthex=HEX:saltfd=[x]INT[@INT@INT]:saltfile=NAME[@INT@INT]\n"
 		"\t:saltlen=INT:saltgen:saltsfile"
@@ -364,6 +367,20 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			err += set_flag(&state->sxattr, "saltxattr");
 		} else if (!strcmp(param, "sxfallback") || !strcmp(param, "sxfallb"))
 			err += set_flag(&state->sxfallback, "sxfallback");
+		else if (!strcmp(param, "keyxattr"))
+			err += set_flag(&state->kxattr, "keyxattr");
+		else if (!memcmp(param, "keyxattr=", 9)) {
+			state->key_xattr_name = strdup(param+9);
+			err += set_flag(&state->kxattr, "keyxattr");
+		} else if (!strcmp(param, "kxfallback") || !strcmp(param, "kxfallb"))
+			err += set_flag(&state->kxfallback, "kxfallback");
+		else if (!strcmp(param, "ivxattr"))
+			err += set_flag(&state->ixattr, "ivxattr");
+		else if (!memcmp(param, "ivxattr=", 8)) {
+			state->iv_xattr_name = strdup(param+8);
+			err += set_flag(&state->ixattr, "ivxattr");
+		} else if (!strcmp(param, "ixfallback") || !strcmp(param, "ixfallb"))
+			err += set_flag(&state->ixfallback, "ixfallback");
 #endif
 		else if (!memcmp(param, "bench", 5))
 			state->bench = 1;
@@ -706,7 +723,7 @@ int write_keyfile(crypt_state *state, const char* base, const char* name, const 
 #ifdef HAVE_ATTR_XATTR_H
 int get_xattr(crypt_state *state, const char* atrnm,
 		unsigned char* data, int dlen,
-		char fb, char* flag)
+		char fb, char* fbf, char* flag)
 {
 	const char* name = state->opts->iname;
 	int err = 0;
@@ -719,9 +736,13 @@ int get_xattr(crypt_state *state, const char* atrnm,
 	if (itln <= 0) {
 		if (!fb)
 			FPLOG(WARN, "Could not read xattr %s of %s\n", atrnm, name);
+		else if (fbf)
+			*fbf = 1;
 		return -ENOENT;
 	} else if (itln != 2*dlen) {
 		FPLOG(WARN, "Wrong length of xattr %s (expected %i hex chars, got %i) of %s\n", atrnm, 2*dlen, itln, name);
+		if (fb && fbf)
+			*fbf = 1;
 		return -ENOENT;
 	} else {
 		err += parse_hex(data, state->sec->charbuf1, dlen);
@@ -732,7 +753,7 @@ int get_xattr(crypt_state *state, const char* atrnm,
 
 int set_xattr(crypt_state* state, const char* atrnm,
 		unsigned char *data, int dlen,
-		char fb)
+		char fb, char *fbf)
 {
 	const char* name = state->opts->oname;
 	if (!state->enc) {
@@ -754,6 +775,8 @@ int set_xattr(crypt_state* state, const char* atrnm,
 		if (!fb)
 			FPLOG(FATAL, "Failed writing xattr %s for %s: %s\n",
 					atrnm, name, strerror(errno));
+		else if (fbf)
+			*fbf = 1;
 		return -1;
 	}
 	return 0;
@@ -763,41 +786,41 @@ inline int get_salt_xattr(crypt_state* state)
 {
 	return get_xattr(state, state->salt_xattr_name,
 			 state->sec->salt, 8,
-			 state->sxfallback, &state->sset);
+			 state->sxfallback, &state->saltf, &state->sset);
 }
 
 inline int set_salt_xattr(crypt_state* state)
 {
 	return set_xattr(state, state->salt_xattr_name,
-			 state->sec->salt, 8, state->sxfallback);
+			 state->sec->salt, 8, state->sxfallback, &state->saltf);
 }
 
 inline int get_key_xattr(crypt_state* state)
 {
 	return get_xattr(state, state->key_xattr_name,
 			 state->sec->userkey1, state->alg->keylen/8,
-			 state->kxfallback, &state->kset);
+			 state->kxfallback, &state->keyf, &state->kset);
 }
 
 inline int set_key_xattr(crypt_state *state)
 {
 	return set_xattr(state, state->key_xattr_name,
 			 state->sec->userkey1, state->alg->keylen/8,
-			 state->kxfallback);
+			 state->kxfallback, &state->keyf);
 }
 
-inline int get_iv(crypt_state* state)
+inline int get_iv_xattr(crypt_state* state)
 {
 	return get_xattr(state, state->iv_xattr_name,
 			 state->sec->nonce1, BLKSZ,
-			 state->ixfallback, &state->iset);
+			 state->ixfallback, &state->ivf, &state->iset);
 }
 
 inline int set_iv_xattr(crypt_state *state)
 {
 	return set_xattr(state, state->iv_xattr_name,
 			 state->sec->nonce1, BLKSZ,
-			 state->ixfallback);
+			 state->ixfallback, &state->ivf);
 }
 
 
@@ -822,6 +845,14 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	if (state->sxattr && !state->salt_xattr_name) {
 		state->salt_xattr_name = malloc(32);
 		snprintf(state->salt_xattr_name, 32, "user.salt.%s", state->alg->name);
+	}
+	if (state->kxattr && !state->key_xattr_name) {
+		state->key_xattr_name = malloc(32);
+		snprintf(state->key_xattr_name, 32, "user.key.%s", state->alg->name);
+	}
+	if (state->ixattr && !state->iv_xattr_name) {
+		state->iv_xattr_name = malloc(32);
+		snprintf(state->iv_xattr_name, 32, "user.iv.%s", state->alg->name);
 	}
 #endif
 
@@ -890,8 +921,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 		if (!state->sset && state->sxattr && !get_salt_xattr(state) && !state->enc)
 			state->sxattr = 0;
 #endif
-
-		if (!state->sgen && !state->sset && (state->saltf || state->sxfallback)) {
+		if (!state->sgen && !state->sset && state->saltf) {
 			char* sfnm = keyfnm(saltnm, encnm);
 			int off = get_chks(sfnm, encnm, state->sec->charbuf1);
 			/* Failure is NOT fatal */
@@ -930,9 +960,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 #ifdef HAVE_ATTR_XATTR_H
 		/* Write salt to xattr */
 		if (state->sxattr && state->enc && set_salt_xattr(state)) {
-			if (state->sxfallback)
-				state->saltf = 1;
-			else
+			if (!state->sxfallback)
 				return -1;
 		}
 #endif
@@ -982,28 +1010,46 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 				FPLOG(FATAL, "Key generation with pass+salt failed!\n", NULL);
 				return -1;
 			}
+#ifdef HAVE_ATTR_XATTR_H
+			/* Write key to xattr, failure is fatal */
+			if (state->kxattr && state->enc && set_key_xattr(state) && !state->kxfallback)
+				return -1;
+#endif
 			/* Write to keysf if requested */
 			if (state->keyf)
 				if (write_keyfile(state, keynm, encnm, state->sec->userkey1, state->alg->keylen/8, 0600, 1, 0))
 					return -1;
-			
-		} else if (state->keyf) {	/* (d) */
-			/* Read from keyfile */
-			char* kfnm = keyfnm(keynm, encnm);
-			int off = get_chks(kfnm, encnm, state->sec->charbuf1);
-			free(kfnm);
-			/* Fatal if not successful */
-			if (off < 0) {
-				FPLOG(FATAL, "Can't read key for %s from KEYS file!\n", encnm);
+
+		} else {
+#ifdef HAVE_ATTR_XATTR_H
+			if (state->kxattr)
+				get_key_xattr(state);
+#endif
+			if (!state->kset && state->keyf) {
+				/* (d) Read from keyfile */
+				char* kfnm = keyfnm(keynm, encnm);
+				int off = get_chks(kfnm, encnm, state->sec->charbuf1);
+				free(kfnm);
+				/* Fatal if not successful */
+				if (off < 0) {
+					FPLOG(FATAL, "Can't read key for %s from KEYS file!\n", encnm);
+					return -1;
+				}
+				//err += parse_hex_u32((unsigned int*)state->sec->userkey1, state->sec->charbuf1, state->alg->keylen/(8*sizeof(int)));
+				err += parse_hex(state->sec->userkey1, state->sec->charbuf1, state->alg->keylen/8);
+
+			} else if (!state->kset) {	/* Should not happen! */
+				FPLOG(FATAL, "Need to set key\n", NULL);
 				return -1;
 			}
-			//err += parse_hex_u32((unsigned int*)state->sec->userkey1, state->sec->charbuf1, state->alg->keylen/(8*sizeof(int)));
-			err += parse_hex(state->sec->userkey1, state->sec->charbuf1, state->alg->keylen/8);
-		} else {	/* Should not happen! */
-			FPLOG(FATAL, "Need to set key\n", NULL);
-			return -1;
 		}
 	} else {
+#ifdef HAVE_ATTR_XATTR_H
+		if (state->kxattr && set_key_xattr(state) && !state->kxfallback) {
+			FPLOG(FATAL, "Can't save key in xattr");
+			return -1;
+		}
+#endif
 		if (state->keyf)
 			/* Write to keyfile */
 			if (write_keyfile(state, keynm, encnm, state->sec->userkey1, state->alg->keylen/8, 0600, 1, 0))
@@ -1041,30 +1087,47 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 					return -1;
 				}
 			}
+#ifdef HAVE_ATTR_XATTR_H
+			/* Write IV to xattr, failure is not fatal */
+			if (state->ixattr && state->enc)
+			       	set_iv_xattr(state);
+#endif
 			/* Write to ivsfile if requested */
 			if (state->ivf)
 				if (write_keyfile(state, ivsnm, encnm, state->sec->nonce1, BLKSZ, 0640, 1, 0))
 					return -1;
-		} else if (state->ivf) {
-			/* Read IV from ivsfile */
-			char* ivnm = keyfnm(ivsnm, encnm);
-			int off = get_chks(ivsnm, encnm, state->sec->charbuf1);
-			free(ivnm);
-			if (off < 0) {
-				FPLOG(FATAL, "Can't read IV for %s from IVS file!\n", encnm);
+		} else { 
+#ifdef HAVE_ATTR_XATTR_H
+			if (state->ixattr)
+				get_iv_xattr(state);
+#endif
+			if (!state->iset && state->ivf) {
+				/* Read IV from ivsfile */
+				char* ivnm = keyfnm(ivsnm, encnm);
+				int off = get_chks(ivsnm, encnm, state->sec->charbuf1);
+				free(ivnm);
+				if (off < 0) {
+					FPLOG(FATAL, "Can't read IV for %s from IVS file!\n", encnm);
+					return -1;
+				}
+				//err += parse_hex_u32((unsigned int*)state->sec->nonce1, state->sec->charbuf1, BLKSZ/sizeof(int));
+				err += parse_hex(state->sec->nonce1, state->sec->charbuf1, BLKSZ);
+			} else if (!state->iset) {
+				FPLOG(FATAL, "Need to determine IV\n", NULL);
 				return -1;
 			}
-			//err += parse_hex_u32((unsigned int*)state->sec->nonce1, state->sec->charbuf1, BLKSZ/sizeof(int));
-			err += parse_hex(state->sec->nonce1, state->sec->charbuf1, BLKSZ);
-		} else {
-			FPLOG(FATAL, "Need to determine IV\n", NULL);
-			return -1;
-		}
+		 }
 	} else if (state->ivf && state->alg->stream->needs_iv)
 		/* Save to IVs file */
 		if (write_keyfile(state, ivsnm, encnm, state->sec->nonce1, BLKSZ, 0640, 1, 0))
 			return -1;
 
+#ifdef HAVE_ATTR_XATTR_H
+	if (state->ixattr && set_iv_xattr(state) && !state->ixfallback) {
+		FPLOG(FATAL, "Can't save IV in xattr");
+		return -1;
+	}
+#endif
 	if (state->outkeyiv) {
 		hexout(state->sec->charbuf1, state->sec->userkey1, state->alg->keylen/8);
 		FPLOG(DEBUG, "Key: %s\n", state->sec->charbuf1);
@@ -1327,6 +1390,10 @@ int crypt_close(loff_t ooff, void **stat)
 #ifdef HAVE_ATTR_XATTR_H
 	if (state->salt_xattr_name)
 		free(state->salt_xattr_name);
+	if (state->key_xattr_name)
+		free(state->key_xattr_name);
+	if (state->iv_xattr_name)
+		free(state->iv_xattr_name);
 #endif
 	return 0;	
 }
