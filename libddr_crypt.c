@@ -700,7 +700,9 @@ int write_keyfile(crypt_state *state, const char* base, const char* name, const 
 }
 
 #ifdef HAVE_ATTR_XATTR_H
-int get_xattr(crypt_state* state)
+int get_xattr(crypt_state *state, const char* atrnm,
+		unsigned char* data, int dlen,
+		char fb, char* flag)
 {
 	const char* name = state->opts->iname;
 	int err = 0;
@@ -709,26 +711,38 @@ int get_xattr(crypt_state* state)
 	if (state->debug)
 		FPLOG(DEBUG, "Read xattr from output file %s\n", name);
 	/* Longest is 128byte hex for SHA512 (8x64byte numbers -> 8x16 digits) */
-	ssize_t itln = getxattr(name, state->salt_xattr_name, state->sec->charbuf1, 128);
+	ssize_t itln = getxattr(name, atrnm, state->sec->charbuf1, 128);
 	if (itln <= 0) {
-		if (!state->sxfallback ) 
-			FPLOG(WARN, "Salt could not be read from xattr of %s\n", name);
+		if (!fb)
+			FPLOG(WARN, "Could not read xattr %s of %s\n", atrnm, name);
 		return -ENOENT;
-	} else if (itln != 16) {
-		FPLOG(WARN, "Wrong salt length (expected 16 hex chars, got %i)\n", itln);
+	} else if (itln != 2*dlen) {
+		FPLOG(WARN, "Wrong length of xattr %s (expected %i hex chars, got %i) of %s\n", atrnm, 2*dlen, itln, name);
 		return -ENOENT;
 	} else {
-		err += parse_hex(state->sec->salt, state->sec->charbuf1, 8);
-		err += set_flag(&state->sset, "salt");
+		err += parse_hex(data, state->sec->charbuf1, dlen);
+		err += set_flag(flag, atrnm);
 	}
 	return err;
 }
 
-int set_xattr(crypt_state* state)
+inline int get_salt_xattr(crypt_state* state)
+{
+	return get_xattr(state, state->salt_xattr_name,
+			 state->sec->salt, 8,
+			 state->sxfallback, &state->sset);
+}
+
+int set_xattr(crypt_state* state, const char* atrnm,
+		unsigned char *data, int dlen,
+		char fb)
 {
 	const char* name = state->opts->oname;
-	if (state->enc)
-		name = state->opts->oname;
+	if (!state->enc) {
+		FPLOG(WARN, "Not setting xattr %s for %s when not encrypting!\n",
+				atrnm, name);
+		return -1;
+	}
 	/* FIXME: Use same logic as in hash plugin */
 	//if (state->ochg && !state->ichg) {
 	//	name = state->opts->iname;
@@ -738,16 +752,23 @@ int set_xattr(crypt_state* state)
 	//	return -ENOENT;
 	//}
 	if (state->debug)
-		FPLOG(INFO, "Write xattr to input file %s\n", name);
-	if (setxattr(name, state->salt_xattr_name, chartohex(state, state->sec->salt, 8), 16, 0)) {
-		if (!state->sxfallback)
-			FPLOG(FATAL, "Failed writing salt to xattr for %s: %s\n", 
-					name, strerror(errno));
+		FPLOG(INFO, "Write xattr %s to output file %s\n", atrnm, name);
+	if (setxattr(name, atrnm, chartohex(state, data, dlen), 2*dlen, 0)) {
+		if (!fb)
+			FPLOG(FATAL, "Failed writing xattr %s for %s: %s\n",
+					atrnm, name, strerror(errno));
 		return -1;
 	}
 	return 0;
 }
+
+inline int set_salt_xattr(crypt_state* state)
+{
+	return set_xattr(state, state->salt_xattr_name,
+			 state->sec->salt, 8, state->sxfallback);
+}
 #endif
+
 
 int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	     unsigned int totslack_pre, unsigned int totslack_post,
@@ -831,7 +852,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 		/* 5c */
 #ifdef HAVE_ATTR_XATTR_H
 		/* Try getting salt from xattr */
-		if (!state->sset && state->sxattr && !get_xattr(state) && !state->enc)
+		if (!state->sset && state->sxattr && !get_salt_xattr(state) && !state->enc)
 			state->sxattr = 0;
 #endif
 
@@ -873,7 +894,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 		}
 #ifdef HAVE_ATTR_XATTR_H
 		/* Write salt to xattr */
-		if (state->sxattr && state->enc && set_xattr(state)) {
+		if (state->sxattr && state->enc && set_salt_xattr(state)) {
 			if (state->sxfallback)
 				state->saltf = 1;
 			else
