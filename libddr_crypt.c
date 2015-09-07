@@ -93,6 +93,10 @@ typedef struct _crypt_state {
 #if 1 //def HAVE_ATTR_XATTR_H
 	char* salt_xattr_name;
 	char sxattr, sxfallback;
+	char* key_xattr_name;
+	char kxattr, kxfallback;
+	char* iv_xattr_name;
+	char ixattr, ixfallback;
 #endif
 	char weakrnd;
 	char opbkdf;
@@ -670,14 +674,14 @@ char *keyfnm(const char* base, const char *encnm)
 
 char* chartohex(crypt_state *state, const unsigned char* key, const int bytes)
 {
-	assert(bytes < 144);
+	assert(bytes < 72);
 	hexout(state->sec->charbuf1, key, bytes);
 	return state->sec->charbuf1;
 }
 
 char* chartohex_u32(crypt_state *state, const unsigned int* key, const int words)
 {
-	assert(words < 36);
+	assert(words < 18);
 	hexout_u32(state->sec->charbuf1, key, words);
 	return state->sec->charbuf1;
 }
@@ -726,13 +730,6 @@ int get_xattr(crypt_state *state, const char* atrnm,
 	return err;
 }
 
-inline int get_salt_xattr(crypt_state* state)
-{
-	return get_xattr(state, state->salt_xattr_name,
-			 state->sec->salt, 8,
-			 state->sxfallback, &state->sset);
-}
-
 int set_xattr(crypt_state* state, const char* atrnm,
 		unsigned char *data, int dlen,
 		char fb)
@@ -762,11 +759,49 @@ int set_xattr(crypt_state* state, const char* atrnm,
 	return 0;
 }
 
+inline int get_salt_xattr(crypt_state* state)
+{
+	return get_xattr(state, state->salt_xattr_name,
+			 state->sec->salt, 8,
+			 state->sxfallback, &state->sset);
+}
+
 inline int set_salt_xattr(crypt_state* state)
 {
 	return set_xattr(state, state->salt_xattr_name,
 			 state->sec->salt, 8, state->sxfallback);
 }
+
+inline int get_key_xattr(crypt_state* state)
+{
+	return get_xattr(state, state->key_xattr_name,
+			 state->sec->userkey1, state->alg->keylen/8,
+			 state->kxfallback, &state->kset);
+}
+
+inline int set_key_xattr(crypt_state *state)
+{
+	return set_xattr(state, state->key_xattr_name,
+			 state->sec->userkey1, state->alg->keylen/8,
+			 state->kxfallback);
+}
+
+inline int get_iv(crypt_state* state)
+{
+	return get_xattr(state, state->iv_xattr_name,
+			 state->sec->nonce1, BLKSZ,
+			 state->ixfallback, &state->iset);
+}
+
+inline int set_iv_xattr(crypt_state *state)
+{
+	return set_xattr(state, state->iv_xattr_name,
+			 state->sec->nonce1, BLKSZ,
+			 state->ixfallback);
+}
+
+
+
 #endif
 
 
