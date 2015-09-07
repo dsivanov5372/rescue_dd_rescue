@@ -27,7 +27,7 @@ config.h:
 
 config:
 	rm -f config.h
-	$(MAKE) -f Makefile.android.arm32 config.h
+	$(MAKE) -f Makefile.android.arm32pie config.h
 
 default: $(DEPS) 
 	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm EXTRA_LDFLAGS="$(ATTR)" $@
