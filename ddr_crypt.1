@@ -17,7 +17,7 @@ or
 This plugin allows to en/decrypt data on the fly as it is written out
 by
 .B dd_rescue.
-It supports a variant of AES ciphers and uses the hardware acceleration
+It supports a variance of AES ciphers and uses the hardware acceleration
 on x86 (AESNI) and ARMv8 -- if available -- to provide good performance.
 .PP
 This plugin has been written for
@@ -235,6 +235,32 @@ the key/IV from those files and error out upon failure.
 These options combine well with keygen and ivgen on encryption
 (and should be used alone on decryption).
 .
+.SS Extended attributes
+Similar to index files, keys and IVs can also be stored in and
+retrieved from the encrypted file's extended attributes. This can
+be achieved using the options
+.B keyxattr
+and
+.B ivxattr .
+Please review the comments in the main dd_rescue (1) man page for
+general considerations about using extended attributes (xattrs).
+.br
+Note that storing the key in the xattr is normally
+.B not
+a good idea.
+A user who can access the encrypted file can (locally) also read the
+xattrs -- so the privacy by encryption is defeated this way. (Only
+do this if the file itself is only accessible via a remote protocol
+that does not expose the xattrs.)
+.br
+You can specify
+.B kxfallb[ack]
+and
+.B ixfallb[ack]
+in addition if you want ddr_crypt to try using xattrs and falling back
+to keysfile and ivsfile in case the filesystem does not support the
+extended attributes.
+.
 .SS Password based key and IV generation
 Using the same key/IV for many files harms security severly (see
 below in ALGORITHMS). So using a directly specified (non-generated)
@@ -242,9 +268,10 @@ key is not a good idea. However, if you prefer to have something
 memorizable rather than stored, you can use a password and salt
 to generate many keys from one password.
 .P
-The key and IV are derived from an expensive to revert function 
-of password and salt. We use 17000 rounds of pbkdf2() currently
-for the key (and a third for the IV),
+The key and IV are derived from an expensive to compute (and
+even more expensive to revert) function of password and salt.
+By default, ddr_crypt uses 17000 rounds of pbkdf2() for the
+key (and a third for the IV),
 although a more compute intense function (like scrypt) is planned
 for the future. The expensiveness of this function is a protection
 against brute forcing passwords. To use pbkdf2, you need to specify
@@ -258,7 +285,9 @@ For compatibility with openssl, key and IV can also be derived
 using an openssl compatible key derivation function with
 .B opbkdf .
 Note that this is not recommended; only one round of md5 hashing
-is used which makes brute-forcing very effective.
+is used which makes brute-forcing very effective. Using this option
+also has the side-effect of writing (encryption) or parsing
+(decryption) an openSSL style Salted__ header.
 .P
 The salt can be derived automatically from the name (and length)
 of the encrypted file; this allows to work with just one password
@@ -307,11 +336,16 @@ Instead of a salt index file (saltsfile), the salt can also be stored in
 (and retrieved from) an extended attribute. This can be done using the
 .B saltxattr[=xattr_name]
 option. The attribute name is optional and defaults to user.salt.ALGNAME
-(with ALGNAME replaced by the algorithm).
+(with ALGNAME replaced by the algorithm). Since ddr_crypt 1.99, the
+password-based key derivation function (and the number of iterations) is
+also stored and retrieved in the xattr user.pbkdf with this option.
+.br
 It's also possible to try using the xattr feature and fall back to using
-the inxdex file. Use the
+the index file (saltsfile) if your filesystem does not support extended attributes.
+Use the
 .B sxfallback
-option to tell ddr_crypt to do this.
+option to tell ddr_crypt to do this. Note that the pbkdf can not be stored
+(or retrieved) if the fallback actually takes place.
 .br
 See the main dd_rescue (1) man page for a discussion of advantages and
 disadvantages of using extended attributes.
@@ -481,8 +515,6 @@ possibly also threefish).
 Stronger function to derive keys/IVs from passwords than pbkdf2.
 .br
 Support for other streaming modes (XTS, GCM, ...)
-.br
-Store IV in xattr
 .
 .SH EXAMPLES
 .TP
@@ -536,7 +568,10 @@ Public License (GPL) v2 or v3 - at your option.
 ddr_crypt plugin was first introduced with dd_rescue 1.98 (May 2015).
 .br
 Version 1.99 brought support for ARMv8 crypto acceleration and support
-for openssl style key derivation and Salted__ headers.
+for openssl style key derivation and Salted__ headers. It also added storing
+pbkdf related infos in xattrs and added support for storing and retrieving
+keys (not recommended!) and IVs in/from xattrs. A bug with CTR initialization
+was resolved (see ctrbug198 option).
 .PP
 Some additional information can be found on
 .br
