@@ -63,10 +63,17 @@ cmp dd_rescue3.cmp2 dd_rescue3.cmp3 || exit 4
 # Chain with lzo, hash (all)
 if test "$HAVE_LZO" = "1"; then
 echo "*** Plugin chains ... ***"
+SHA256SUM=ˋtype -p sha256sumˋ
 $VG ./dd_rescue -pqt -L ./libddr_hash.so=sha256:outnm=,./libddr_lzo.so=compr,./libddr_hash.so=sha256:output,./libddr_crypt.so=enc:AES192-CTR:keygen:ivgen:weakrnd:keysfile:ivsfile,./libddr_hash.so=sha256:outnm= dd_rescue3 dd_rescue3.enc || exit 1
+if test -n "$SHA256SUM"; then
 sha256sum -c CHECKSUMS.sha256 || exit 4
+else
+echo "WARNING: Cant run sha256sum, binary not found"
+fi
 $VG ./dd_rescue -pqt -L ./libddr_hash.so=sha256:chknm,./libddr_crypt.so=AES192-CTR:dec:keysfile:ivsfile,./libddr_lzo.so=decompr,./libddr_hash.so=sha256:outnm dd_rescue3.enc dd_rescue3.cmp
+if test -n "$SHA256SUM"; then
 sha256sum -c CHECKSUMS.sha256 || exit 4
+fi
 cmp dd_rescue3.cmp dd_rescue3 || exit 3
 cat CHECKSUMS.sha256
 ls -lAF dd_rescue3*
@@ -123,12 +130,12 @@ if openssl enc -aes-192-cbc -K 4d20e517cd98ff130ac160dcb4177ef1ab4e8f9501bc6e1d 
   rm -f dd_rescue.enc.o
 fi
 # Salted__ tests ...
-if openssl enc -aes-192-ctr -pass pass:PASWD -S f61059ec2d87a410 -in dd_rescue -out dd_rescue.enc.o; then
-  enc_dec_compare dd_rescue AES192-CTR "" pass=PASWD:salthex=f61059ec2d87a410:opbkdf
+if openssl enc -aes-192-ctr -pass pass:PASWD -S f61059ec2d87a410 -p -in dd_rescue -out dd_rescue.enc.o; then
+  enc_dec_compare dd_rescue AES192-CTR "" pass=PASWD:salthex=f61059ec2d87a410:opbkdf:outkeyiv
   cmp dd_rescue.enc dd_rescue.enc.o || exit 4
 fi
-if openssl enc -aes-192-cbc -pass pass:PASWD -S f61059ec2d87a410 -in dd_rescue -out dd_rescue.enc.o; then
-  enc_dec_compare dd_rescue AES192-CBC "" pass=PASWD:salthex=f61059ec2d87a410:opbkdf
+if openssl enc -aes-192-cbc -pass pass:PASWD -S f61059ec2d87a410 -p -in dd_rescue -out dd_rescue.enc.o; then
+  enc_dec_compare dd_rescue AES192-CBC "" pass=PASWD:salthex=f61059ec2d87a410:opbkdf:outkeyiv
   cmp dd_rescue.enc dd_rescue.enc.o || exit 4
   rm -f dd_rescue.enc.o
 fi
