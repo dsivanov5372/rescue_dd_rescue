@@ -174,7 +174,7 @@ config.h.in: configure.in
 
 # The headers for x86 intrinsics cause breakage while preprocessing 
 # for dependency generation :-( Workaround ...
-DEP_SSE = -D__AES__ -D__SSE4_1__ -D__SSSE3__ -D__SSE3__ -D__SSE2__
+DEP_SSE = -D__AES__ -D__SSE4_1__ -D__SSSE3__ -D__SSE3__ -D__SSE2__ -D__SSE__ -D__MMX__
 
 # Automated dependency generation
 .dep: Makefile config.h *.h *.c
