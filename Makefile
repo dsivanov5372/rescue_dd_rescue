@@ -26,7 +26,7 @@ LIBTARGETS = libddr_hash.so libddr_MD5.so libddr_null.so libddr_crypt.so
 OTHTARGETS = find_nonzero fiemap file_zblock fmt_no md5 sha256 sha512 sha224 sha384 sha1 test_aes
 OBJECTS = random.o frandom.o fmt_no.o find_nonzero.o 
 FNZ_HEADERS = find_nonzero.h archdep.h ffs.h
-HEADERS = random.h frandom.h fmt_no.h config.h list.h fstrim.h $(FNZ_HEADERS) splice.h fallocate64.h pread64.h ddr_plugin.h
+DDR_HEADERS = config.h random.h frandom.h list.h fmt_no.h find_nonzero.h archdep.h ffs.h fstrim.h ddr_plugin.h ddr_ctrl.h splice.h fallocate64.h pread64.h
 DOCDIR = $(prefix)/share/doc/packages
 INSTASROOT = -o root -g root
 LIB = lib
@@ -157,7 +157,7 @@ endif
 
 TARGETS = $(BINTARGETS) $(LIBTARGETS)
 
-.phony: libfalloc libfalloc-static libfalloc-dl nolib nocolor static strip
+.PHONY: default all libfalloc libfalloc-static libfalloc-dl nolib nocolor static strip dep
 
 default: $(TARGETS)
 
@@ -172,49 +172,52 @@ configure: configure.in
 config.h.in: configure.in
 	autoheader
 
-# TODO: Use automated dependency generation
-.dep: config.h
-	$(CC) $(CFLAGS) $(ARCHFLAGS) -MM *.c >.dep
+# The headers for x86 intrinsics cause breakage while preprocessing 
+# for dependency generation :-( Workaround ...
+DEP_SSE = -D__AES__ -D__SSE4_1__ -D__SSSE3__ -D__SSE3__ -D__SSE2__
+
+# Automated dependency generation
+.dep: Makefile config.h *.h *.c
+	#$(CC) $(CFLAGS) -DGEN_DEP $(ARCHFLAGS) -MM *.c >.dep
+	$(CC) $(CFLAGS) -DGEN_DEP $(DEP_SSE) -MM *.c >.dep
 	sed 's/\.o:/\.po:/' <.dep >.dep2
 	cat .dep2 >> .dep
 	rm .dep2
 
 include .dep
 
+dep:
+	rm -f .dep
+	make .dep
+
 # These need optimization
-frandom.o: frandom.c frandom.h config.h ddr_ctrl.h
+frandom.o:
 	$(CC) $(CFLAGS_OPT) $(PIE) -c $<
 
-fmt_no.o: fmt_no.c fmt_no.h config.h ddr_ctrl.h
+fmt_no.o:
 	$(CC) $(CFLAGS_OPT) $(PIE) -c $<
 
-md5.po: md5.c md5.h hash.h config.h
+md5.po:
 	$(CC) $(CFLAGS_OPT) $(PIC) -o $@ -c $<
 
-sha256.po: sha256.c sha256.h hash.h config.h
+sha256.po:
 	$(CC) $(CFLAGS_OPT) $(PIC) -o $@ -c $<
 
-sha512.po: sha512.c sha512.h hash.h config.h
+sha512.po:
 	$(CC) $(CFLAGS_OPT) $(PIC) -o $@ -c $<
 
-sha1.po: sha1.c sha1.h hash.h config.h
+sha1.po:
 	$(CC) $(CFLAGS_OPT) $(PIC) -o $@ -c $<
 
 # Default rules
-%.o: %.c %.h config.h ddr_ctrl.h
+%.o:
 	$(CC) $(CFLAGS) $(PIE) -c $<
 
-%.o: %.c config.h ddr_ctrl.h
-	$(CC) $(CFLAGS) $(PIE) -c $<
-
-%.po: %.c %.h ddr_plugin.h config.h ddr_ctrl.h md5.h sha256.h sha512.h sha1.h hash.h find_nonzero.h
-	$(CC) $(CFLAGS) $(PIC) -o $@ -c $<
-
-%.po: %.c ddr_plugin.h config.h ddr_ctrl.h md5.h sha256.h sha512.h sha1.h hash.h find_nonzero.h
+%.po:
 	$(CC) $(CFLAGS) $(PIC) -o $@ -c $<
 
 # Use stack protector for libddr_lzo ...
-libddr_lzo.po: libddr_lzo.c ddr_plugin.h config.h ddr_ctrl.h 
+libddr_lzo.po:
 	$(CC) $(CFLAGS) $(PIC) -fstack-protector -o $@ -c $<
 
 # The plugins
@@ -234,42 +237,43 @@ libddr_crypt.so: libddr_crypt.po aes.po aes_c.po $(AESNI_PO) $(AES_ARM64_PO) $(A
 	$(CC) -shared -o $@ $^ $(CRYPTOLIB) $(EXTRA_LDFLAGS)
 
 # More special compiler flags
-find_nonzero.o: find_nonzero.c $(FNZ_HEADERS) config.h
+find_nonzero.o:
 	$(CC) $(CFLAGS_OPT) $(PIE) -c $< $(SSE)
 
-find_nonzero_avx.o: find_nonzero_avx.c $(FNZ_HEADERS) config.h
+find_nonzero_avx.o:
 	$(CC) $(CFLAGS_OPT) $(PIE) -mavx2 -c $<
 
-find_nonzero_sse2.o: find_nonzero_sse2.c $(FNZ_HEADERS) config.h
+find_nonzero_sse2.o:
 	$(CC) $(CFLAGS_OPT) $(PIE) -msse2 -c $<
 
-find_nonzero_arm.o: find_nonzero_arm.c $(FNZ_HEADERS) config.h
+find_nonzero_arm.o:
 	$(CC) $(CFLAGS_OPT) $(PIE) -c $<
 
-find_nonzero_arm64.o: find_nonzero_arm64.c $(FNZ_HEADERS) config.h
+find_nonzero_arm64.o:
 	$(CC) $(CFLAGS_OPT) -march=armv8-a+crypto $(PIE) -c $< 
 
-find_nonzero_main.o: find_nonzero.c $(FNZ_HEADERS) config.h
+find_nonzero_main.o: find_nonzero.c $(FNZ_HEADERS)
 	$(CC) $(CFLAGS_OPT) $(PIE) -o $@ -c $< -DTEST 
 
-ffs_sse42.o: ffs_sse42.c ffs.h archdep.h config.h
+ffs_sse42.o:
 	$(CC) $(CFLAGS_OPT) $(PIE) -msse4.2 -c $<
 
-rdrand.o: rdrand.c archdep.h
+rdrand.o:
 	$(CC) $(CFLAGS) $(PIE) -mrdrnd -maes -c $<
 
-rdrand.po: rdrand.c archdep.h
+rdrand.po:
 	$(CC) $(CFLAGS) $(PIC) -mrdrnd -maes -o $@ -c $<
 
+# TODO: Build binaries from .o file, so we can save some special rules ...
 # Special dd_rescue variants
-libfalloc: dd_rescue.c $(HEADERS) $(OBJECTS) $(OBJECTS2)
+libfalloc: dd_rescue.c $(DDR_HEADERS) $(OBJECTS) $(OBJECTS2)
 	$(CC) $(CFLAGS) $(PIE) $(LDPIE) -DNO_LIBDL $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2) -lfallocate
 
-libfalloc-static: dd_rescue.c $(HEADERS) $(OBJECTS) $(OBJECTS2)
+libfalloc-static: dd_rescue.c $(DDR_HEADERS) $(OBJECTS) $(OBJECTS2)
 	$(CC) $(CFLAGS) $(PIE) $(LDPIE) -DNO_LIBDL $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2) $(LIBDIR)/libfallocate.a
 
 # This is the default built
-dd_rescue: dd_rescue.c $(HEADERS) $(OBJECTS) $(OBJECTS2)
+dd_rescue: dd_rescue.c $(DDR_HEADERS) $(OBJECTS) $(OBJECTS2)
 	$(CC) $(CFLAGS) $(PIE) $(LDPIE) $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2) -ldl $(EXTRA_LDFLAGS)
 
 # Test programs 
@@ -297,13 +301,13 @@ fuzz_lzo: fuzz_lzo.o
 # More dd_rescue variants
 libfalloc-dl: dd_rescue
 
-nolib: dd_rescue.c $(HEADERS) $(OBJECTS) $(OBJECTS2)
+nolib: dd_rescue.c $(DDR_HEADERS) $(OBJECTS) $(OBJECTS2)
 	$(CC) $(CFLAGS) -DNO_LIBDL -DNO_LIBFALLOCATE $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2)
 
-nocolor: dd_rescue.c $(HEADERS) $(OBJECTS) $(OBJECTS2)
+nocolor: dd_rescue.c $(DDR_HEADERS) $(OBJECTS) $(OBJECTS2)
 	$(CC) $(CFLAGS) -DNO_COLORS=1 $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2)
 
-static: dd_rescue.c $(HEADERS) $(OBJECTS)
+static: dd_rescue.c $(DDR_HEADERS) $(OBJECTS)
 	$(CC) $(CFLAGS) -DNO_LIBDL -DNO_LIBFALLOCATE -static $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2)
 
 # Special pseudo targets
@@ -314,7 +318,7 @@ strip-all: $(OTHTARGETS)
 	strip -S $^
 
 clean:
-	rm -f $(TARGETS) $(OTHTARGETS) $(OBJECTS) $(OBJECTS2) core test log *.o *.po *.cmp *.enc *.enc.old CHECKSUMS.* SALTS.* KEYS.* IVS.*
+	rm -f $(TARGETS) $(OTHTARGETS) $(OBJECTS) $(OBJECTS2) core test log *.o *.po *.cmp *.enc *.enc.old CHECKSUMS.* SALTS.* KEYS.* IVS.* .dep
 
 # More test programs
 find_nonzero: find_nonzero_main.o $(OBJECTS2)
@@ -336,28 +340,28 @@ test_aes: test_aes.c $(AESNI_O) $(AES_ARM64_O) aes_c.o secmem.o sha256.o $(AES_O
 	$(CC) $(CFLAGS) $(PIE) $(LDPIE) $(DEF) -o $@ $< $(AESNI_O) $(AES_ARM64_O) aes_c.o secmem.o sha256.o $(AES_OSSL_O) aes.o $(CRYPTOLIB)
 
 # Special optimized versions
-aesni.o: aesni.c aesni.h aes.h sha256.h secmem.h config.h
+aesni.o:
 	$(CC) $(CFLAGS) $(PIE) -O3 -maes -msse4.1 -c $<
 
-aesni.po: aesni.c aesni.h aes.h sha256.h secmem.h config.h
+aesni.po:
 	$(CC) $(CFLAGS) $(PIC) -O3 -maes -msse4.1 -c $< -o $@
 
-aes_arm64.o: aes_arm64.c aes_arm64.h aes.h sha256.h secmem.h config.h
+aes_arm64.o:
 	$(CC) $(CFLAGS) $(PIE) -O3 -march=armv8-a+crypto -c $<
 
-aes_arm64.po: aes_arm64.c aes_arm64.h aes.h sha256.h secmem.h config.h
+aes_arm64.po:
 	$(CC) $(CFLAGS) $(PIC) -O3 -march=armv8-a+crypto -c $< -o $@
 
-aes_arm32.o: aes_arm32.c aes_arm64.h aes.h sha256.h secmem.h config.h
+aes_arm32.o:
 	$(CC) $(CFLAGS) $(PIE) -O3 -march=armv7-a -mfpu=crypto-neon-fp-armv8 -c $<
 
-aes_arm32.po: aes_arm32.c aes_arm64.h aes.h sha256.h secmem.h config.h
+aes_arm32.po:
 	$(CC) $(CFLAGS) $(PIC) -O3 -march=armv7-a -mfpu=crypto-neon-fp-armv8 -c $< -o $@
 
-aes_c.o: aes_c.c aes_c.h aes.h sha256.h secmem.h config.h
+aes_c.o:
 	$(CC) $(CFLAGS) $(PIE) $(FULL_UNROLL) -O3 -c $<
 
-aes_ossl.o: aes_ossl.c aes_ossl.h aes.h sha256.h secmem.h config.h
+aes_ossl.o:
 	$(CC) $(CFLAGS) $(PIE) -O3 -c $<
 
 distclean: clean
