@@ -43,10 +43,10 @@ Pass
 .B help
 to have ddr_crypt output a short list of options.
 .
-.SS Encryption or Deccryption
+.SS Encryption or Decryption
 The crypt dd_rescue plugin (subsequently referred to as just ddr_crypt which
-reflects the variable parts of the filename libddr_crypt.so) need to be told
-whether to encrypt or decyrpt. This is done by specifying
+reflects the variable parts of the file name libddr_crypt.so) need to be told
+whether to encrypt or decrypt. This is done by specifying
 .B enc[rypt]
 or 
 .B dec[rypt]
@@ -64,7 +64,7 @@ Pass
 .BR algo=help 
 to get a list of available algorithms.
 See section ALGORITHMS AND STREAM MODES for a discussion of the options. 
-Note that decryting
+Note that decrypting
 a file can only be successful if the exact same algorithms is chosen as was
 used for encryption. There is no way to tell from an encrypted file which
 algorithm has been chosen.
@@ -96,7 +96,7 @@ may be prone to. This engine supports all algorithms.
 This uses an AES implementation in C which is based on the rijndael
 reference code. It is available on all CPUs and supports all algorithms.
 Some prefetching is done on the tables to make cache timing attacks
-a bit harder, but this is most likely insufficient to thwart sophisitcated
+a bit harder, but this is most likely insufficient to thwart sophisticated
 attackers.
 .TP 4
 .BR engine=openssl
@@ -121,11 +121,11 @@ end to have a full block.
 .TP 4
 .BR pad=zero
 The last block is filled up with zeroes and then encrypted.
-Note that on decyption, these zeroes can't be automatically
+Note that on decryption, these zeroes can't be automatically
 stripped, as the decryptor has no way to tell whether there
 true trailing zeros or whether those had been added by padding.
 This option is thus not recommended for copying files of
-arbitraty length.
+arbitrary length.
 .TP 4
 .BR pad=always
 This uses the PKCS7 scheme used by openssl, appending one to
@@ -136,11 +136,11 @@ larger than the input file. Use this when copying files.
 .BR pad=asneeded
 This is a hybrid between zero and always. This does PKCS7
 padding when the file size does not fill a complete block,
-but does no padding when it does. This meachnism has in the
+but does no padding when it does. This mechanism has in the
 worst case (no pad bytes) a chance of 1/255 to produce an
 incorrect decryption result by wrong unpadding (which means
 that it has an overall chance of misrepresenting the final
-filesize of 1/4080 for arbitrary file sizes). Don't use this
+file size of 1/4080 for arbitrary file sizes). Don't use this
 unless you can deal with such errors (or exclude them)!
 .PP
 Note that the CTR stream mode does NOT require padding and indeed
@@ -150,7 +150,7 @@ when it is used.
 .SS Debugging and Benchmarking
 The
 .B debug
-paramter makes the ddr_crypt module output some debugging information.
+parameter makes the ddr_crypt module output some debugging information.
 With
 .B outkeyiv
 the key and IV will be output.
@@ -168,13 +168,13 @@ and
 .B ivhex=
 on the command line. The argument is interpreted as a hex
 ASCII representation of the key/IV (without leading 0x).
-This way to specifiy keys/IVs should only be used for
+This way to specify keys/IVs should only be used for
 testing - the key will be visible to all local users by looking
 at the command line (unless specific measures are taken to
 lock down access to /proc). Not normally a good idea on a multi-user
 system. ddr_crypt does overwrite the sensitive data with X to make
 the attack a bit harder, but this still leaks the length and 
--- more importantly -- there is still a tiem window where the sensitive
+-- more importantly -- there is still a time window where the sensitive
 data is visible.
 .
 .SS Reading from file of file descriptor
@@ -196,7 +196,7 @@ Alternatively, with
 .B keyfile=
 and 
 .B ivfile=
-a filename to be opened and read from can be specified.
+a file name to be opened and read from can be specified.
 The syntax does support the same optional @OFF@LEN designation,
 but the key and IV will always be read in binary form.
 (See below, Index files for a way to read in hex form.)
@@ -218,7 +218,7 @@ use the next options.
 .SS Index files
 Keys and IVs can be stored as hex strings in index files;
 the file format is the same as the one used in MD5SUMS:
-The hex representation of the key/IV is followed by the filename.
+The hex representation of the key/IV is followed by the file name.
 Obviously, appropriate care needs to be taken to keep those files
 confidential.
 .P
@@ -249,23 +249,24 @@ Note that storing the key in the xattr is normally
 .B not
 a good idea.
 A user who can access the encrypted file can (locally) also read the
-xattrs -- so the privacy by encryption is defeated this way. (Only
-do this if the file itself is only accessible via a remote protocol
-that does not expose the xattrs.)
+xattrs -- so the secrecy normally achieved by encryption is defeated 
+this way. (There may be valid scenarios, though, e.g. when the file
+tself is only accessible via a remote protocol that does not expose
+the xattrs, such as http or DAV or NFS.)
 .br
 You can specify
 .B kxfallb[ack]
 and
 .B ixfallb[ack]
 in addition if you want ddr_crypt to try using xattrs and falling back
-to keysfile and ivsfile in case the filesystem does not support the
+to keysfile and ivsfile in case the file system does not support the
 extended attributes.
 .
 .SS Password based key and IV generation
-Using the same key/IV for many files harms security severly (see
+Using the same key/IV for many files harms security severely (see
 below in ALGORITHMS). So using a directly specified (non-generated)
 key is not a good idea. However, if you prefer to have something
-memorizable rather than stored, you can use a password and salt
+memorable rather than stored, you can use a password and salt
 to generate many keys from one password.
 .P
 The key and IV are derived from an expensive to compute (and
@@ -312,7 +313,7 @@ and
 .B saltfd=
 .B saltfile=
 options with the same possible parameters as above for direct specification
-of key and IV. (Note that the salt is hashed, like when derived from filename
+of key and IV. (Note that the salt is hashed, like when derived from file name
 and length.) The password/passphrase is treated as a string, null-terminated
 and with a trailing CRLF stripped off.
 .br
@@ -320,8 +321,8 @@ The warnings about passing confidential data (here: pass, salt, salthex) on
 the command line apply -- only do it for testing or in a single-user
 environment.
 .P
-If the filename based automatic salt derivation is used, the assumed file
-length for salt generation can be overriden by
+If the file name based automatic salt derivation is used, the assumed file
+length for salt generation can be overridden by
 .B saltlen= .
 .P
 Alternatively, the salts can also be stored and retrieved from an MD5SUMS style
@@ -341,7 +342,7 @@ password-based key derivation function (and the number of iterations) is
 also stored and retrieved in the xattr user.pbkdf with this option.
 .br
 It's also possible to try using the xattr feature and fall back to using
-the index file (saltsfile) if your filesystem does not support extended attributes.
+the index file (saltsfile) if your file system does not support extended attributes.
 Use the
 .B sxfallback
 option to tell ddr_crypt to do this. Note that the pbkdf can not be stored
@@ -353,7 +354,7 @@ disadvantages of using extended attributes.
 .SH ALGORITHMS AND STREAM MODES
 The AES (Rijndael) family of algorithms is considered cryptographically
 safe at the time of writing, as no practicable attacks have been published
-against it. It is up to the reader to judge whether (s)he bellieves that
+against it. It is up to the reader to judge whether (s)he believes that
 the worst criminals or intelligence agencies are significantly ahead
 of common (published) knowledge. In reality, it is typically easier to
 use social engineering or flaws in key handling and random number generation
@@ -392,13 +393,13 @@ The trivial application to a file of arbitrary size is to apply this
 to every block in the file. This is called ECB (electronic codebook)
 mode. This is very insecure ... the same input will always result
 in the same output. Patterns can be easily recognized and known
-plaintext attacks are trivial.
+plain text attacks are trivial.
 .P
 It's better to make the transformation dependent on the previous
 content of the file or the position within it. This is what the
 CBC (chained block cipher) and CTR modes do.
 .P
-The CBC mode has several disadvantages: It can't be parallellized
+The CBC mode has several disadvantages: It can't be parallelized
 (every block depends on all previous blocks for encryption; things
 are better for decryption) and random access is impossible.
 .P 
@@ -413,12 +414,12 @@ combination for two files. Mathematically spoken:
 c1 = r1 XOR p1 and
 c2 = r2 XOR p2
 (c = ciphertext, r = AES random numbers, p = plaintext).
-With r == r1 == r2, it can be trivally seen that the attacker can calculate
+With r == r1 == r2, it can be trivially seen that the attacker can calculate
 c1 XOR c2 = r XOR p1 XOR r XOR p2 = p1 XOR p2. If the plaintext of one of
 the files is partially known, so is the other.
 .P
 The CTR mode has more nice properties: It allows random access as the
-AES random numbers (belonging to a key/IV comination) with a certain 
+AES random numbers (belonging to a key/IV combination) with a certain 
 offset can be directly calculated and the last block does not require
 padding, as partial blocks can be processed.
 .P
@@ -522,7 +523,7 @@ Support for other streaming modes (XTS, GCM, ...)
 encrypts data from
 .IR infile
 with AES256 in CTR mode using a generated (random) key and IV and writes the result to
-.IR outflle
+.IR outfile
 .
 It adds a line to KEYS.AES256-CTR and to IVS.AES256-CTR where the used key
 and IV are written to respectively. (Please ensure that this file is not accessible
@@ -553,7 +554,7 @@ end result.
 Kurt Garloff <kurt@garloff.de>
 .
 .SH CREDITS
-The x86 AESNI optmized AES implementation has been inspired by
+The x86 AESNI optimized AES implementation has been inspired by
 an intel whitepaper from 2009:
 https://software.intel.com/sites/default/files/article/165683/aes-wp-2012-09-22-v01.pdf
 .br

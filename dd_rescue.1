@@ -49,7 +49,7 @@ does not (by default) truncate the output file.
 by default reports on progress, and optionally also writes into a logfile.
 It has a progress bar and gives an estimate for the remaining time.
 .B dd_rescue
-has a wealth of options that influence its behaviour, such as the possibility
+has a wealth of options that influence its behavior, such as the possibility
 to use direct IO for input/output, to use fallocate() to preallocate space
 for the output file, using splice copy (in kernel zerocopy) for efficiency,
 looking for empty blocks to create sparse files, or using a pseudo random
@@ -77,7 +77,7 @@ M -- 1024^2 size units (binary megabytes, MiB)
 .br 
 G -- 1024^3 size units (binary gigabytes, GiB)
 .PP
-The following options may be used to modify the behaviour of 
+The following options may be used to modify the behavior of 
 .B dd_rescue .
 .
 .SS General options
@@ -120,7 +120,7 @@ to ask before overwriting existing files.
 .SS Block sizes
 .TP 8
 .BI \-b\  softbs \fR,\ \fB\-\-softbs= softbs \fR,\ \fB\-\-bs= softbs
-sets the (larger) blocksize to
+sets the (larger) block size to
 .IR softbs  
 bytes.
 .B dd_rescue
@@ -129,7 +129,7 @@ end of the input file or the maximum transfer size has been reached).
 The default value for this is 64k for buffered I/O and 1M for direct I/O.
 .TP 8
 .BI \-B\  hardbs \fR,\ \fB\-\-hardbs= hardbs \fR,\ \fB\-\-block\-size= hardbs
-sets the (smaller) fallback blocksize to
+sets the (smaller) fallback block size to
 .IR hardbs
 bytes. When
 .B dd_rescue
@@ -232,7 +232,7 @@ makes
 abort on any write errors. By default, write errors are ignored.
 This is because for buffered writes, errors can't be detected and
 located reliably anyway. Also, write errors are not often reported
-to userspace, as hard drives e.g. reallocate bad blocks on writes
+to user space, as hard drives e.g. reallocate bad blocks on writes
 and the OS block layer typically also does some retries on write
 operations. Note that 
 .B dd_rescue
@@ -242,12 +242,12 @@ System reporting that no space is left.
 .SS Sparse files and write avoidance
 .TP 8
 .BR \-A ", " \-\-alwayswrite
-changes the behaviour of
+changes the behavior of
 .B dd_rescue
 to write zeroes to the output file when the input file could not
 be read. By default, it just skips over, leaving whatever content
 was in the output file at the file position before. The default
-behaviour may be desired, if e.g. previous copy operations may have
+behavior may be desired, if e.g. previous copy operations may have
 resulted in good data being in place; it may be undesired if the
 output file may contain garbage (or sensitive information) that should
 rather be overwritten with zeroes.
@@ -259,7 +259,7 @@ look for empty blocks (of at least half of
 .IR softbs
 size), i.e. blocks filled with zeroes. Rather than writing those
 zeroes to the output file, it will then skip forward in the output
-file, resulting in a sparse file, saving space in the output filesystem
+file, resulting in a sparse file, saving space in the output file system
 (if it supports sparse files). Note that if the output file does already
 exist and already has data stored at the location where zeroes are skipped
 over, this will result in an incomplete copy in that the output file is
@@ -277,10 +277,10 @@ reading a block (
 sized) from the output file prior to writing it. If it is already identical
 with the data that would be written to it, the writes are actually avoided.
 This option may be useful for devices, where e.g. writes should be avoided
-(e.g. because they may impact the reaining lifetime or because they are very
+(e.g. because they may impact the remaining lifetime or because they are very
 slow compared to reads).
 .
-.SS Other optimizations
+.SS Other optimization
 .TP 8
 .BR \-R ", " \-\-repeat
 tells 
@@ -298,12 +298,12 @@ This option is automatically set, if the input file name equals "/dev/zero".
 instructs
 .B dd_rescue
 to remove the output file after writing to it has completed and issue
-a FITRIM on the filesystem that contains the output file. This makes
+a FITRIM on the file system that contains the output file. This makes
 only sense if writing zeros (or random numbers) as opposed to useful
 content from another file. (dd_rescue will ask for confirmation if
 this is specified with a normal input file and no \-f (\-\-force) is
 used.) This option may be used to ensure that all empty
-blocks of a filesystem are filled with zeros (rather than containing 
+blocks of a file system are filled with zeros (rather than containing 
 fragments of deleted files with possibly sensitive information).
 .br
 The FITRIM ioctl (on Linux) tells the flash storage to consider
@@ -312,16 +312,16 @@ option) by issuing ATA TRIM commands. This will only succeed with
 superuser privileges (but the error can otherwise be safely
 ignored). This is useful to ensure full performance of flash
 memory / SSDs. Note that FITRIM can take a while on large
-filesystems, especially if the filesystems are not mounted with
+file systems, especially if the file systems are not mounted with
 the discard option and have not been trimmed (with e.g. fstrim)
-for a while. Not all filesystems and not all flash-based storage
+for a while. Not all file systems and not all flash-based storage
 support this.
 .TP 8
 .BR \-k ", " \-\-splice
 tells
 .B dd_rescue
 to use the Linux in-kernel zerocopy splice() copy operation rather than
-reading blocks into a userspace buffer. Note that this operation mode
+reading blocks into a user space buffer. Note that this operation mode
 does prevent the support of a number of
 .B dd_rescue
 features that can normally be used, such as falling back to smaller block
@@ -331,11 +331,11 @@ copy. A warning is issued to make the user aware.
 .BR \-P ", " \-\-fallocate
 results in 
 .B dd_rescue
-calling fallocate() on the output file, telling the filesystem how much
+calling fallocate() on the output file, telling the file system how much
 space to preallocate for the output file. (The size is determined by the
 expected last position, as inferred from the input file length and 
 .IR maxxfer
-). On filesystems that support it, this results in them making better
+). On file systems that support it, this results in them making better
 allocation decisions, avoiding fragmentation. (Note that it does not
 make sense to use sparse together with fallocate().)
 .br
@@ -397,9 +397,9 @@ of the data that has been copied in this run.
 instructs 
 .B dd_rescue
 to open
-.IR infie
+.IR infile
 with O_DIRECT, bypassing the kernel buffers. While this option has a negative
-effect on performance (the kernel does readahead for buffered I/O), it will
+effect on performance (the kernel does read-ahead for buffered I/O), it will
 result in errors to be detected more quickly (kernel won't retry) and allows
 for smaller I/O units (hardware sector size, 512bytes for most hard disks).
 .br
@@ -413,7 +413,7 @@ to open
 with O_DIRECT, bypassing kernel buffers. This has a significant negative
 effect on performance, as the program needs to wait for writes to hit the
 disks as opposed to the asynchronous nature of buffered writeback.
-On the flipside, the return status from writing is reliable this
+On the flip side, the return status from writing is reliable this
 way and smaller I/O chunks (hardware sector size, 512bytes) are possible.
 .
 .SS Logging
@@ -438,7 +438,7 @@ the numbers indicate the offset in terms of
 sized blocks. The file format is compatible with that of badblocks.
 Using dd_rescue on a block device (partition) and setting
 .IR hardbs
-to the block size of a filesystem that you want to create, you should
+to the block size of a file system that you want to create, you should
 be able to feed the 
 .IR bbfile
 to mke2fs with the option -l.
@@ -446,7 +446,7 @@ to mke2fs with the option -l.
 .SS Multiple output files
 .TP 8
 .BI \-Y\  ofileX \fR,\ \fB\-\-outfile= ofileX \fR,\ \fB\-\-of= ofileX
-If you want to copy data to multiple filess simultaneously, you can specify
+If you want to copy data to multiple files simultaneously, you can specify
 this option. It can be specified multiple times, so many copies can be made.
 Note that these files are secondary output files; they share file position
 with the primary output file
@@ -471,7 +471,7 @@ Errors when writing to a secondary output file are ignored.
 When you want to overwrite a file, partition or disk with random data,
 using /dev/urandom (on Linux) as input is not a very good idea; the interface
 has not been designed to yield a high bandwidth. It's better to use a
-userspace Pseudo Random Number Generator (PRNG). With option -z / --random,
+user space Pseudo Random Number Generator (PRNG). With option -z / --random,
 the C library's PRNG is used. With -Z / --frandom and the -2/-3/-4 / 
 --shred2/3/4 options, an RC4 based PRNG is used.
 .br
@@ -492,7 +492,7 @@ be different for multiple runs of
 .br
 If 
 .IR RANDSEED
-is not an integer, it's assumed to be a filename from which the seed values
+is not an integer, it's assumed to be a file name from which the seed values
 can be read. 
 .B dd_rescue
 will read 4 or 256 bytes from the file to seed the C library's or the RC4
@@ -504,12 +504,12 @@ indeed hit the file. The last pass for these modes will overwrite the file
 with zeroes. The rationale behind doing this is to make it easier to hide
 that important data may have been overwritten, to make it easier for intelligent
 storage systems (such as SSDs) to recycle the empty blocks and to allow for
-better compression of a filesystem image containing such data.
+better compression of a file system image containing such data.
 .br
 With -2 / --shred2, one pass with RC4 generated PRNG is happening and then
 zeroes are written. With -3 / --shred3, there are two passes with RC4 PRNG
 generated random numbers and a zero pass; the second PRNG pass writes the
-inverse (bitwise reversed) numbers from the first pass. -4 / --shred4 works
+inverse (bit-wise reversed) numbers from the first pass. -4 / --shred4 works
 like -3 / --shred3, with an additional pass with independent random numbers
 as third pass.
 .
@@ -529,7 +529,7 @@ loads plugins plugin1 ... and passes parameters to it. All plugins should suppor
 at least the help parameter and provide information on their usage.
 .br
 Plugins may impose limits on dd_rescue. Plugins that look at the data
-can't work with splice, as this avoids copying data to userspace. Also the
+can't work with splice, as this avoids copying data to user space. Also the
 interface currently does not facilitate reverse direction copy.
 Some plugins may impose further restrictions w.r.t. alignment of data in
 the file or not using sparse detection.
@@ -608,7 +608,7 @@ the command line has the disadvantage that the shell may mistreat some bytes
 as special characters and that the command line may be visible to all logged in
 users on the system.
 .B hmacpwdfd=INT
-sets a filedescriptor from with the secret (password) for HMAC computation will
+sets a file descriptor from with the secret (password) for HMAC computation will
 be read. Specifying 0 means standard input, in which case ddr_hash even prints
 a prompt for you ... Other numbers may be useful if dd_rescue is called from
 another program that opens a pipe to pass the secret.
@@ -638,7 +638,7 @@ parameter. Then a file with OUTNAME will be created and a md5sum/sha256sum/...
 compatible line will be printed to the file. If the file exists and contains
 an entry for the file, it will be updated. If the file exists and does not
 contain an entry for the file, one will be appended. If OUTNAME is omitted, the
-filename CHECKSUMS.alg (or HMACS.alg if HMAC is enabled) will be used (alg 
+file name CHECKSUMS.alg (or HMACS.alg if HMAC is enabled) will be used (alg 
 is replaced by the chosen algorithm).
 If the checksum can't be written, a warning will be printed and the exit code
 of dd_rescue will become non-zero.
@@ -702,13 +702,13 @@ indicating data change as well, in which case there's no file we could
 get the checksum for and thus an error is reported.
 .PP
 If your system supports extended attributes, those have the advantage
-of travelling with the files; thus a rename or copy (with dd_rescue -p)
+of traveling with the files; thus a rename or copy (with dd_rescue -p)
 will maintain the checksum. Checksum files on the other hand can be
 handled everywhere (including the transfer via ftp or http) and can
 be cryptographically signed with PGP/GnuPG.
 .PP
 Please note that the md5 algorithm is NOT recommended any more for
-good protetction against malicious attempts to hide data modification;
+good protection against malicious attempts to hide data modification;
 it's not considered strong enough any more to prevent hash collisions.
 sha1 is better, but the recommendation is to use the SHA-2 family of hashes.
 On 32bit machines, I'd recommend sha256, while on 64bit machines, sha512
@@ -734,7 +734,7 @@ man page for more details.
 The crypt plugin allows to encrypt and decrypt data on the fly.
 It currently supports a variety of AES ciphers.
 See the
-.BR ddr_crpyt (1)
+.BR ddr_crypt (1)
 man page for more details.
 .
 .SH EXIT STATUS
@@ -754,7 +754,7 @@ copies
 to
 .IR outfile
 and does truncate the output file on opening (so deleting any previous data
-in it), copies mode, times, ownerships at the end, uses fallocate to
+in it), copies mode, times, ownership at the end, uses fallocate to
 reserve the space for the output file and uses efficient in kernel splice
 copy method.
 .TP
@@ -771,9 +771,9 @@ overwrites the file
 twice; once with good pseudo random numbers and then with zeroes.
 .TP
 .BI dd_rescue\ \-t\ \-a\ image1.raw\ image2.raw
-copies a filesystem image and looks for empty blocks to create a
-sparse output file to save disk space. (If the source filesystem
-has been used a bit, on that filesystem creating a large file with
+copies a file system image and looks for empty blocks to create a
+sparse output file to save disk space. (If the source file system
+has been used a bit, on that file system creating a large file with
 zeroes and removing it again prior to this operation will result
 in more sectors with zeroes. 
 .BI dd_rescue\ \-u\ /dev/zero\ DUMMY
@@ -789,7 +789,7 @@ with using lzo (lzo1x_1) compression and calculating an md5 hash
 to stdout in the md5sum output format.
 Note that the compress parameter to lzo is not strictly required 
 here; the plugin could have deduced
-it from the filenames. This example shows that you can specify multiple
+it from the file names. This example shows that you can specify multiple
 plugins with multiple parameters; the plugins are forming a filter
 chain. You can specify the same plugin multiple times.
 .TP
@@ -822,8 +822,8 @@ block no 42 will read fine once, but then fail afterwards, whereas blocks 80
 through 83 are completely unreadable (will fail infinite times). Note that
 the range excludes the last block (80-84 means 4 blocks starting @ 80).
 .br
-Block offets are always counted in absolute positions, so starting in
-the middle of a file with -s or reverse copying won't affect the absolue
+Block offsets are always counted in absolute positions, so starting in
+the middle of a file with -s or reverse copying won't affect the absolute
 position that is hit with the fault injection. (This has changed since
 1.98.)
 
@@ -836,7 +836,7 @@ This program has been written using Linux and only tested on a couple of
 Linux systems. People have reported to have successfully used it on
 other Un*xish systems (such as xBSD or M*cOS), but these systems get little
 regular test coverage; so please be advised to test properly (possibly
-using the make check testsuite included with the source distribution) 
+using the make check test suite included with the source distribution) 
 before relying on dd_rescue on non Linux based systems.
 .br
 Currently, the escape sequence for moving the cursor up is hard coded in the
@@ -874,7 +874,7 @@ Please report bugs to me via email.
 The modes for overwriting data with pseudo random numbers to securely
 delete sensitive data on purpose only implement a limited number of
 overwrites. While Peter Gutmann's classic analysis concludes that the
-then current harddisk technology requires more overwrites to be really
+then current hard disk technology requires more overwrites to be really
 secure, the author believes that modern hard disk technology does not
 allow data restoration of sectors that have been overwritten with the
 --shred4 mode. This is in compliance with the recommendations from
@@ -886,16 +886,16 @@ magic. SSDs are doing fancy stuff in their Flash Translation Layer (FTL),
 so this tool might be insufficient to get rid of data. Use 
 SECURITY_ERASE (use hdparm) there or -- if available -- encrypt data with 
 AES256 and safely destroy the key.
-Normal harddisks have a small risk of leaking a few sectors
+Normal hard disks have a small risk of leaking a few sectors
 due to reallocation of flaky sectors.
 .br
 For securely destroying single files, your mileage may vary. The more advanced
-your filesystem, the less likely dd_rescue's destruction will be effective.
-In particular, journalling filesystems may carry old data in the journal.
-Filesystems that do copy-on-write (COW) such as btrfs, are very likely to have
+your file system, the less likely dd_rescue's destruction will be effective.
+In particular, journaling file systems may carry old data in the journal.
+File systems that do copy-on-write (COW) such as btrfs, are very likely to have
 old copies of your supposedly erased file. It might help somewhat to fill the
-filesystems with zeros (dd_rescue -u /dev/zero /path/to/fs/DUMMYNAME) to force
-the filesystem to release and overwrite non-current data after overwriting
+file systems with zeros (dd_rescue -u /dev/zero /path/to/fs/DUMMYNAME) to force
+the file system to release and overwrite non-current data after overwriting
 critical files with random numbers. If you can, better destroy a whole
 partition or disk.
 .
@@ -947,7 +947,7 @@ been present since 1.35 and been enhanced until 1.43.
 We support copying extended attributes since 1.40 using
 libxattr.
 .br
-Removing and (fs)trimming the output file's filesystem
+Removing and (fs)trimming the output file's file system
 exists since 1.41. Support for compilation with bionic
 (Android's C library) with most features enabled also 
 came with 1.41.
