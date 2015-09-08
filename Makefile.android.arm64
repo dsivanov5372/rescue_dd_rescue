@@ -18,7 +18,7 @@ PATH = $(shell echo $$PATH)
 .PHONY: config libfalloc libfalloc-static libfalloc-dl nolib nocolor static strip all clean check test
 
 default: config.h $(DEPS)
-	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=aarch64 EXTRA_LDFLAGS="$(ATTR)" $@
+	$(MAKE) $(MAKEFLAGS) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=aarch64 EXTRA_LDFLAGS="$(ATTR)" $@
 
 crtbegin_so.o: $(LIBD)/crtbegin_so.o
 	ln -sf $(LIBD)/crtbegin_dynamic.o .
@@ -41,7 +41,7 @@ config:
 	$(MAKE) -f Makefile.android.arm64 config.h
 
 dd_rescue libfalloc libfalloc-static libfalloc-dl nolib nocolor static strip all test_aes find_nonzero check: config.h $(DEPS)
-	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=aarch64 EXTRA_LDFLAGS="$(ATTR)" $@
+	$(MAKE) $(MAKEFLAGS) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=aarch64 EXTRA_LDFLAGS="$(ATTR)" $@
 
 clean:
 	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=aarch64 $@
