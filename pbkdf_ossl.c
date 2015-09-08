@@ -1,4 +1,4 @@
-/* openSSL key derivation: pbddf_ossl.c
+/* openSSL key derivation: pbkdf_ossl.c
  * 
  * not recommended; weak and so fast that it can be easily
  * brute-forced. Provided for compatibility.

@@ -792,19 +792,50 @@ int set_xattr(crypt_state* state, const char* atrnm,
 }
 
 /* TODO: Salt: Shouldn't we store and retrieve the kdf as well? 
- * user.kdf=pbkdf2=NR or user.kdf=opbkdf
+ * user.pbkdf=pbkdf2=NR or user.pbkdf=opbkdf
  */
-inline int get_salt_xattr(crypt_state* state)
+int get_salt_xattr(crypt_state* state)
 {
-	return get_xattr(state, state->salt_xattr_name,
+	int r = get_xattr(state, state->salt_xattr_name,
 			 state->sec->salt, 8,
 			 state->sxfallback, &state->saltf, &state->sset);
+	if (!r) {
+		const char* name = state->enc? state->opts->oname: state->opts->iname;
+		ssize_t itln = getxattr(name, "user.pbkdf", state->sec->charbuf1, 128);
+		if (itln <= 0)
+			return r;
+		int rnd = 0;
+		if (sscanf(state->sec->charbuf1, "pbkdf2=%i", &rnd) == 1) {
+			if (rnd != state->pbkdf2r && state->opts->verbose)
+				FPLOG(INFO, "Setting pbkdf2 KDF with %i rounds\n", rnd);
+			state->pbkdf2r = rnd; state->opbkdf = 0;
+		} else if (sscanf(state->sec->charbuf1, "opbkdf") == 0) {
+			if (!state->opbkdf && state->opts->verbose)
+				FPLOG(INFO, "Setting opbkdf\n");
+			state->opbkdf = 1; state->pbkdf2r = 0;
+		} else
+			FPLOG(WARN, "Unknown pbkdf value %s\n", state->sec->charbuf1);
+	}
+	return r;
 }
 
 inline int set_salt_xattr(crypt_state* state)
 {
-	return set_xattr(state, state->salt_xattr_name,
+	int r = set_xattr(state, state->salt_xattr_name,
 			 state->sec->salt, 8, state->sxfallback, &state->saltf);
+	if (!r && state->enc) {
+		const char* name = state->opts->oname;
+		char buf[32];
+		if (state->pbkdf2r)
+			snprintf(buf, 32, "pbkdf2=%i", state->pbkdf2r);
+		else if (state->opbkdf)
+			sprintf(buf, "opbkdf");
+		else
+			abort();
+		if (setxattr(name, "user.pbkdf", buf, strlen(buf)+1, 0) && !state->opts->quiet)
+			FPLOG(WARN, "Huh? Stored salt but could not store pbkdf to xattr\n");
+	}
+	return r;
 }
 
 inline int get_key_xattr(crypt_state* state)
@@ -816,9 +847,13 @@ inline int get_key_xattr(crypt_state* state)
 
 inline int set_key_xattr(crypt_state *state)
 {
-	return set_xattr(state, state->key_xattr_name,
+	int r = set_xattr(state, state->key_xattr_name,
 			 state->sec->userkey1, state->alg->keylen/8,
 			 state->kxfallback, &state->keyf);
+	if (!r && !state->opts->quiet)
+		FPLOG(WARN, "Key stored in xattr of %s is not well protected\n",
+			state->opts->oname);
+	return r;
 }
 
 inline int get_iv_xattr(crypt_state* state)
@@ -997,9 +1032,15 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			/* Write to keysfile or warn ... */
 			if (!state->keyf && !state->kxattr)
 				FPLOG(WARN, "Generated key not written anywhere?\n", NULL);
-			else 
-				if (write_keyfile(state, keynm, encnm, state->sec->userkey1, state->alg->keylen/8, 0600, 1, 0))
+			else {
+#ifdef HAVE_ATTR_XATTR_H
+				/* Write key to xattr, failure is fatal */
+				if (state->kxattr && state->enc && set_key_xattr(state) && !state->kxfallback)
 					return -1;
+#endif
+				if (state->keyf && write_keyfile(state, keynm, encnm, state->sec->userkey1, state->alg->keylen/8, 0600, 1, 0))
+					return -1;
+			}
 		} else if (state->pset) {	/* (c) */
 			if (!state->pbkdf2r && !state->opbkdf) {
 				FPLOG(FATAL, "Need to specify pbkdf2[=INT] to generate key/IV from pass/salt\n", NULL);
@@ -1078,9 +1119,15 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			/* Save IV ... */
 			if (!state->ivf && !state->ixattr)
 				FPLOG(WARN, "Generated IV not saved?\n", NULL);
-			else 
-				if (write_keyfile(state, ivsnm, encnm, state->sec->nonce1, BLKSZ, 0640, 1, 0))
+			else {
+#ifdef HAVE_ATTR_XATTR_H
+				/* Write IV to xattr, failure w/o fb is fatal */
+				if (state->ixattr && state->enc && set_iv_xattr(state) && !state->ixfallback)
 					return -1;
+#endif
+				if (state->ivf && write_keyfile(state, ivsnm, encnm, state->sec->nonce1, BLKSZ, 0640, 1, 0))
+					return -1;
+			}
 		} else if (state->pset) {
 			assert(state->pbkdf2r || state->opbkdf);
 			if (!state->kset && !state->kgen && !opt->quiet)
@@ -1100,9 +1147,9 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 				}
 			}
 #ifdef HAVE_ATTR_XATTR_H
-			/* Write IV to xattr, failure is not fatal */
-			if (state->ixattr && state->enc)
-			       	set_iv_xattr(state);
+			/* Write IV to xattr, failure w/o fb is fatal */
+			if (state->ixattr && state->enc && set_iv_xattr(state) && !state->ixfallback)
+				return -1;
 #endif
 			/* Write to ivsfile if requested */
 			if (state->ivf)

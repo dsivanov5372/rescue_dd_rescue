@@ -473,6 +473,7 @@ check_hmac: $(TARGETS)
 
 	
 check_sha2: $(TARGETS) sha224 sha384
+	rm -f CHECKSUMS.sha256 CHECKSUMS.sha512
 	$(VG) ./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=output:alg=sha224 TEST TEST2 >HASH.TEST
 	sha224sum -c HASH.TEST
 	$(VG) ./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=outnm=:alg=sha256 TEST TEST2 >HASH.TEST
