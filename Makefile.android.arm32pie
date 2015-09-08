@@ -1,6 +1,6 @@
 # Build 32bit ARMv7/8 PIE executables for API16+ (4.1 JellyBean) with NDK.
 ASDK = /casa/Hardware/Android/android-ndk-r10e
-CBIN = $(ASDK)/toolchains/arm-linux-androideabi-4.8/prebuilt/linux-$(shell uname -m)/bin
+CBIN = $(ASDK)/toolchains/arm-linux-androideabi-4.9/prebuilt/linux-$(shell uname -m)/bin
 
 CC = $(CBIN)/arm-linux-androideabi-gcc
 

@@ -1,5 +1,6 @@
 # Makefile for dd_rescue
 # (c) garloff@suse.de, 99/10/09, GNU GPL
+# (c) kurt@garloff.de, 2010 -- 2015, GNU GPL v2 or v3
 
 VERSION = 1.99
 
@@ -75,18 +76,22 @@ endif
 
 MACH := $(shell uname -m | tr A-Z a-z | sed 's/i[3456]86/i386/')
 
+
 ifeq ($(MACH),i386)
 	SSE = "-msse2"
 	#SSE = "-msse2 -funroll-loops"
 	#SSE = "-msse2 -funroll-loops -ftree-vectorize"
+	ARCHFLAGS +=  -msse2
 	OBJECTS2 = find_nonzero_sse2.o 
 ifeq ($(HAVE_SSE42),1)
 	OBJECTS2 += ffs_sse42.o
+	ARCHFLAGS +=  -msse4.2
 else
 	CFLAGS += -DNO_SSE42
 endif
 ifeq ($(HAVE_AVX2),1)
 	OBJECTS2 += find_nonzero_avx.o
+	ARCHFLAGS +=  -mavx2
 else
 	CFLAGS += -DNO_AVX2
 endif
@@ -96,6 +101,7 @@ ifeq ($(HAVE_RDRNDAES),1)
 	AESNI_O = aesni.o
 	AESNI_PO = aesni.po
 	CFLAGS += -DHAVE_AESNI
+	ARCHFLAGS +=  -maes -mrdrnd
 else
 	CFLAGS += -DNO_RDRND -DNO_AES
 endif
@@ -106,11 +112,13 @@ ifeq ($(MACH),x86_64)
 	OBJECTS2 = find_nonzero_sse2.o
 ifeq ($(HAVE_SSE42),1)
 	OBJECTS2 += ffs_sse42.o
+	ARCHFLAGS +=  -msse4.2
 else
 	CFLAGS += -DNO_SSE42
 endif
 ifeq ($(HAVE_AVX2),1)
 	OBJECTS2 += find_nonzero_avx.o
+	ARCHFLAGS +=  -mavx2
 else
 	CFLAGS += -DNO_AVX2
 endif
@@ -120,6 +128,7 @@ ifeq ($(HAVE_RDRNDAES),1)
 	AESNI_O = aesni.o
 	AESNI_PO = aesni.po
 	CFLAGS += -DHAVE_AESNI
+	ARCHFLAGS +=  -maes -mrdrnd
 else
 	CFLAGS += -DNO_RDRND -DNO_AES
 endif
@@ -131,12 +140,14 @@ ifeq ($(MACH),arm)
 	AES_ARM64_O = aes_arm32.o
 	AES_ARM64_PO = aes_arm32.po
 	CFLAGS += -DHAVE_AES_ARM64
+	ARCHFLAGS += -mfpu=crypto-neon-fp-armv8
 endif
 ifeq ($(MACH),aarch64)
 	OBJECTS2 = find_nonzero_arm64.o
 	AES_ARM64_O = aes_arm64.o
 	AES_ARM64_PO = aes_arm64.po
 	CFLAGS += -DHAVE_AES_ARM64
+	ARCHFLAGS += -march=armv8-a+crypto
 endif
 
 OS = $(shell uname)
@@ -162,6 +173,13 @@ config.h.in: configure.in
 	autoheader
 
 # TODO: Use automated dependency generation
+.dep: config.h
+	$(CC) $(CFLAGS) $(ARCHFLAGS) -MM *.c >.dep
+	sed 's/\.o:/\.po:/' <.dep >.dep2
+	cat .dep2 >> .dep
+	rm .dep2
+
+include .dep
 
 # These need optimization
 frandom.o: frandom.c frandom.h config.h ddr_ctrl.h
