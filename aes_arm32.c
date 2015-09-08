@@ -786,25 +786,21 @@ DECL_KEYSETUP2(Dec, 192);
 DECL_KEYSETUP2(Enc, 256);
 DECL_KEYSETUP2(Dec, 256);
 
-inline
 void AES_ARM8_Encrypt_BlkX2(const uchar* rkeys, uint rounds, const uchar in[16], uchar out[16])
 {
 	AES_ARM8_Encrypt(rkeys, rounds/2, in, out);
 	AES_ARM8_Encrypt(rkeys+16+8*rounds, rounds/2, out, out);
 }
-inline
 void AES_ARM8_Decrypt_BlkX2(const uchar* rkeys, uint rounds, const uchar in[16], uchar out[16])
 {
 	AES_ARM8_Decrypt(rkeys+16+8*rounds, rounds/2, in, out);
 	AES_ARM8_Decrypt(rkeys, rounds/2, out, out);
 }
-inline
 void AES_ARM8_Encrypt_4BlkX2(const uchar* rkeys, uint rounds, const uchar in[16], uchar out[16])
 {
 	AES_ARM8_Encrypt4(rkeys, rounds/2, in, out);
 	AES_ARM8_Encrypt4(rkeys+16+8*rounds, rounds/2, out, out);
 }
-inline
 void AES_ARM8_Decrypt_4BlkX2(const uchar* rkeys, uint rounds, const uchar in[16], uchar out[16])
 {
 	AES_ARM8_Decrypt4(rkeys+16+8*rounds, rounds/2, in, out);
