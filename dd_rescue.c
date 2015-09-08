@@ -1481,20 +1481,33 @@ static inline ssize_t mypread(int fd, void* bf, size_t sz, loff_t off,
 			return frandom_bytes_inv(dst->prng_state, (unsigned char*) bf, sz);
 	}
 	/* Handle fault injection here */
-	int fault = in_fault_list(read_faults, fst->ipos/op->hardbs, (fst->ipos+(loff_t)sz)/op->hardbs);
+	int fault = in_fault_list(read_faults, off/op->hardbs, (off+(loff_t)sz)/op->hardbs);
 	if (fault) {
 		if (op->verbose)
-			fplog(stderr, DEBUG, "Inject read fault @ %li\n",
-				(long)((fault-1)*op->hardbs+off));
-		errno = EIO;
-		return -1;
+			fplog(stderr, DEBUG, "Inject read fault @ %li (rd %iblk @ %li*%i)\n",
+				(long)((fault-1)*op->hardbs+off), sz/op->hardbs, off/op->hardbs, op->hardbs);
+		if (!op->reverse && fst->ilen && fst->ipos == fst->ilen) {
+			/* EOF, we can't proceed any further */
+			errno = 0;
+			return 0;
+		} else {
+			errno = EIO;
+			return -1;
+		}
 		// Cloud read and return (fault-1)*op->hardbs bytes ...
 	}
+	/* We won't make progress beyond EOF */
+	ssize_t rd;
 	/* OK, regular read ... */
 	if (fst->i_chr)
-		return read(fd, bf, sz);
+		rd = read(fd, bf, sz);
 	else
-		return pread64(fd, bf, sz, off);
+		rd = pread64(fd, bf, sz, off);
+	if (rd == -1 && !op->reverse && fst->ilen && fst->ipos == fst->ilen) {
+		errno = 0;
+		return 0;
+	} else
+		return rd;
 }
 
 static inline ssize_t mypwrite(int fd, void* bf, size_t sz, loff_t off,
@@ -1870,10 +1883,16 @@ int copyfile_hardbs(const loff_t max, opt_t *op, fstate_t *fst,
 			}					
 			/* Real error on small blocks: Don't retry */
 			fst->nrerr++; 
+			loff_t pos = (op->reverse? fst->ipos - toread: fst->ipos);
 			fplog(stderr, WARN, "read %s (%skiB): %s!\n", 
-			      op->iname, fmt_kiB(fst->ipos, !nocol), strerror(eno));
+			      op->iname, fmt_kiB(pos, !nocol), strerror(eno));
 		
 			errno = 0;
+			/* Adjust toread to not extend beyond EOF if src filesize is known */
+			if (!op->reverse && fst->ilen && fst->ipos+toread > fst->ilen)
+				toread = fst->ilen-fst->ipos;
+			/* Note: This should handle maxxfer as well */
+			/* TODO: Do we need to special case last block on reverse copy as well? */
 			if (op->nosparse || 
 			    (rd > 0 && (!op->sparse || blockiszero(fst->buf, rd, op, rep) < rd))) {
 				ssize_t wr = 0;
@@ -1892,7 +1911,7 @@ int copyfile_hardbs(const loff_t max, opt_t *op, fstate_t *fst,
 				 	*/
 				}
 			}
-			savebb(fst->ipos/op->hardbs, op);
+			savebb(pos/op->hardbs, op);
 			updgraph(1, fst, dop);
 			prg->fxfer += toread; prg->xfer += toread;
 			if (op->reverse) { 
@@ -1905,6 +1924,10 @@ int copyfile_hardbs(const loff_t max, opt_t *op, fstate_t *fst,
 				fplog(stderr, FATAL, "maxerr reached!\n");
 				exit_report(32, op, fst, prg, dop);
 			}
+			/*
+			if (!op->reverse && fst->ilen && fst->ipos == fst->ilen)
+				return errs;
+			 */
 		} else {
 	      		int err = dowrite_retry(rd, op, fst, prg, rep, dop);
 			if (err < 0)
@@ -1973,8 +1996,9 @@ int copyfile_softbs(const loff_t max, opt_t *op, fstate_t *fst,
 				fprintf(stderr, DDR_INFO "problems at ipos %.1fk: %s \n                 fall back to smaller blocksize \n%s%s%s%s",
 				        (double)fstate->ipos/1024, strerror(eno), down, down, down, down);
 				 */
+				loff_t pos = (op->reverse? fst->ipos - toread: fst->ipos);
 				fprintf(stderr, DDR_INFO "problems at ipos %skiB: %s \n               fall back to smaller blocksize \n",
-				        fmt_kiB(fst->ipos, !nocol), strerror(eno));
+				        fmt_kiB(pos, !nocol), strerror(eno));
 				scrollup = 0;
 				printstatus(stderr, logfd, op->hardbs, 1, op, fst, prg, dop);
 			}
