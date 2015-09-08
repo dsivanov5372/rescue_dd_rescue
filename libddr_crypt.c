@@ -819,7 +819,7 @@ int get_salt_xattr(crypt_state* state)
 	return r;
 }
 
-inline int set_salt_xattr(crypt_state* state)
+int set_salt_xattr(crypt_state* state)
 {
 	int r = set_xattr(state, state->salt_xattr_name,
 			 state->sec->salt, 8, state->sxfallback, &state->saltf);
@@ -838,14 +838,14 @@ inline int set_salt_xattr(crypt_state* state)
 	return r;
 }
 
-inline int get_key_xattr(crypt_state* state)
+static inline int get_key_xattr(crypt_state* state)
 {
 	return get_xattr(state, state->key_xattr_name,
 			 state->sec->userkey1, state->alg->keylen/8,
 			 state->kxfallback, &state->keyf, &state->kset);
 }
 
-inline int set_key_xattr(crypt_state *state)
+static inline int set_key_xattr(crypt_state *state)
 {
 	int r = set_xattr(state, state->key_xattr_name,
 			 state->sec->userkey1, state->alg->keylen/8,
@@ -856,14 +856,14 @@ inline int set_key_xattr(crypt_state *state)
 	return r;
 }
 
-inline int get_iv_xattr(crypt_state* state)
+static inline int get_iv_xattr(crypt_state* state)
 {
 	return get_xattr(state, state->iv_xattr_name,
 			 state->sec->nonce1, BLKSZ,
 			 state->ixfallback, &state->ivf, &state->iset);
 }
 
-inline int set_iv_xattr(crypt_state *state)
+static inline int set_iv_xattr(crypt_state *state)
 {
 	return set_xattr(state, state->iv_xattr_name,
 			 state->sec->nonce1, BLKSZ,

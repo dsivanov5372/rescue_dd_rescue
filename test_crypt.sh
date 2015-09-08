@@ -9,10 +9,10 @@ enc_dec_compare()
 	if test -n "$6"; then opt="$6"; else opt="-qptA"; fi
 	echo "Validating enc/decryption $eng $alg $othargs"
 	cp -p $file.enc $file.enc.old 2>/dev/null
-	echo $VG ./dd_rescue $opt -L ./libddr_crypt.so=enc$eng:alg=$alg:$keyargs$othargs $file $file.enc 
-	$VG ./dd_rescue $opt -L ./libddr_crypt.so=enc$eng:alg=$alg:$keyargs$othargs $file $file.enc || exit 1
-	echo $VG ./dd_rescue $opt -L ./libddr_crypt.so=dec$eng:alg=$alg$othargs $file.enc $file.cmp 
-	$VG ./dd_rescue $opt -L ./libddr_crypt.so=dec$eng:alg=$alg$othargs $file.enc $file.cmp || exit 2
+	echo $VG ./dd_rescue $opt -L ./libddr_crypt.so=enc$eng:weakrnd:alg=$alg:$keyargs$othargs $file $file.enc 
+	$VG ./dd_rescue $opt -L ./libddr_crypt.so=enc$eng:weakrnd:alg=$alg:$keyargs$othargs $file $file.enc || exit 1
+	echo $VG ./dd_rescue $opt -L ./libddr_crypt.so=dec$eng:weakrnd:alg=$alg$othargs $file.enc $file.cmp 
+	$VG ./dd_rescue $opt -L ./libddr_crypt.so=dec$eng:weakrnd:alg=$alg$othargs $file.enc $file.cmp || exit 2
 	cmp $file $file.cmp || exit 3
 }
 
@@ -35,13 +35,13 @@ echo "We will eat a lot of entropy ... hopefully you have some left afterwards!"
 # MAIN TEST
 # Reverse (CTR, ECB)
 echo "*** Reverse ***"
-enc_dec_compare_keys dd_rescue AES192-CTR keygen:ivgen:weakrnd "" "" "-qptAr"
-enc_dec_compare_keys dd_rescue AES192-ECB keygen:ivgen:weakrnd "" "" "-qptAr"
+enc_dec_compare_keys dd_rescue AES192-CTR keygen:ivgen "" "" "-qptAr"
+enc_dec_compare_keys dd_rescue AES192-ECB keygen:ivgen "" "" "-qptAr"
 # Appending (CTR, ECB only when block-aligned)
 enc_dec_compare_keys dd_rescue AES192-CTR
-./dd_rescue -qAx -L ./libddr_crypt.so=enc:alg=AES192-CTR:keysfile:ivsfile dd_rescue dd_rescue.enc || exit 1
+./dd_rescue -qAx -L ./libddr_crypt.so=enc:weakrnd:alg=AES192-CTR:keysfile:ivsfile dd_rescue dd_rescue.enc || exit 1
 cat dd_rescue dd_rescue > dd_rescue2
-./dd_rescue -qAp -L ./libddr_crypt.so=dec:alg=AES192-CTR:keysfile:ivsfile dd_rescue.enc dd_rescue.cmp || exit 2
+./dd_rescue -qAp -L ./libddr_crypt.so=dec:weakrnd:alg=AES192-CTR:keysfile:ivsfile dd_rescue.enc dd_rescue.cmp || exit 2
 cmp dd_rescue.cmp dd_rescue2 || exit 3
 rm dd_rescue2
 
@@ -49,13 +49,13 @@ rm dd_rescue2
 echo "*** Holes ***"
 ./dd_rescue -qpt dd_rescue dd_rescue3
 ./dd_rescue -qS 512k dd_rescue dd_rescue3
-enc_dec_compare_keys dd_rescue3 AES192-CTR keygen:ivgen:weakrnd "" "" "-qpt"
-enc_dec_compare_keys dd_rescue3 AES192-CTR keygen:ivgen:weakrnd skiphole "" "-qpt"
+enc_dec_compare_keys dd_rescue3 AES192-CTR keygen:ivgen "" "" "-qpt"
+enc_dec_compare_keys dd_rescue3 AES192-CTR keygen:ivgen skiphole "" "-qpt"
 ./dd_rescue -qt -s 384k -m 128k -S 0 dd_rescue3.cmp dd_rescue3.cmp3
 ./dd_rescue -qm 128k /dev/zero dd_rescue3.cmp2
 cmp dd_rescue3.cmp2 dd_rescue3.cmp3 || exit 4
-enc_dec_compare_keys dd_rescue3 AES192-CTR keygen:ivgen:weakrnd "" "" "-qptr"
-enc_dec_compare_keys dd_rescue3 AES192-CTR keygen:ivgen:weakrnd skiphole "" "-qptr"
+enc_dec_compare_keys dd_rescue3 AES192-CTR keygen:ivgen "" "" "-qptr"
+enc_dec_compare_keys dd_rescue3 AES192-CTR keygen:ivgen skiphole "" "-qptr"
 ./dd_rescue -qt -s 384k -m 128k -S 0 dd_rescue3.cmp dd_rescue3.cmp3
 cmp dd_rescue3.cmp2 dd_rescue3.cmp3 || exit 4
 #rm -f dd_rescue3 dd_rescue3.enc dd_rescue3.enc.old dd_rescue3.cmp dd_rescue3.cmp2 dd_rescue3.cmp3
@@ -70,7 +70,7 @@ sha256sum -c CHECKSUMS.sha256 || exit 4
 else
 echo "WARNING: Cant run sha256sum, binary not found"
 fi
-$VG ./dd_rescue -pqt -L ./libddr_hash.so=sha256:chknm,./libddr_crypt.so=AES192-CTR:dec:keysfile:ivsfile,./libddr_lzo.so=decompr,./libddr_hash.so=sha256:outnm dd_rescue3.enc dd_rescue3.cmp
+$VG ./dd_rescue -pqt -L ./libddr_hash.so=sha256:chknm,./libddr_crypt.so=AES192-CTR:weakrnd:dec:keysfile:ivsfile,./libddr_lzo.so=decompr,./libddr_hash.so=sha256:outnm dd_rescue3.enc dd_rescue3.cmp
 if test -n "$SHA256SUM"; then
 sha256sum -c CHECKSUMS.sha256 || exit 4
 fi
@@ -83,14 +83,14 @@ fi
 
 # Padding variations
 $VG ./dd_rescue -t -m 4100 /dev/urandom . || exit 1
-enc_dec_compare_keys urandom AES192-CBC keygen:ivgen:weakrnd pad=always "" "-qpt"
+enc_dec_compare_keys urandom AES192-CBC keygen:ivgen pad=always "" "-qpt"
 enc_dec_compare_keys urandom AES192-CBC "" pad=asneeded "" "-qpt"
 # For odd sizes, always and asneeded should be identical
 cmp urandom.enc urandom.enc.old || exit 4
 # zero padding does not work well for odd sizes (trailing zeroes)
 #enc_dec_compare_keys urandom AES192-CBC "" pad=zero "" "-qpt"
 # Reverse: Need to use ECB (reverse not possible with CBC)
-enc_dec_compare_keys urandom AES192-ECB keygen:ivgen:weakrnd pad=always "" "-qptr"
+enc_dec_compare_keys urandom AES192-ECB keygen:ivgen pad=always "" "-qptr"
 enc_dec_compare_keys urandom AES192-ECB "" pad=asneeded "" "-qptr"
 # For odd sizes, always and asneeded should be identical
 cmp urandom.enc urandom.enc.old || exit 4
@@ -151,9 +151,9 @@ echo "*** Algorithms ... ***"
 for alg in $TESTALGS; do
 	echo "** $alg **"
 	# Generate key+IV, save to index file and use for decryption
-	enc_dec_compare_keys dd_rescue $alg keygen:ivgen:weakrnd
+	enc_dec_compare_keys dd_rescue $alg keygen:ivgen
 	## Generate key+IV, save to binary files 
-	#enc_dec_compare dd_rescue $alg keygen:ivgen:weakrnd keyfile=KEY:ivfile=IV
+	#enc_dec_compare dd_rescue $alg keygen:ivgen keyfile=KEY:ivfile=IV
 	# Use default salt generation 
 	enc_dec_compare dd_rescue $alg "" pass=PWRD:pbkdf2
 	# Use random numbers and write to index file
