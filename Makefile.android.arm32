@@ -46,7 +46,5 @@ config:
 
 clean:
 	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm LDPIE="" $@
-	rm -f config.h crtbegin_dynamic.o crtend_android.o crtend_so.o crtbegin_so.o
-
-
+	rm -f config.h crtbegin_dynamic.o crtbegin_static.o crtend_android.o crtend_so.o crtbegin_so.o
 
