@@ -152,12 +152,15 @@ for alg in $TESTALGS; do
 	# Use random numbers and write to index file
 	enc_dec_compare dd_rescue $alg saltgen pass=PAWD:pbkdf2:saltsfile
 done
+echo "*** Salt and XAttrs ***"
 # Use random numbers and write to binary file
 enc_dec_compare dd_rescue AES192-CTR saltgen pass=PWD_:pbkdf2:saltfile=SALT
 # Use random numbers and write to xattr, fall back to saltsfile
 enc_dec_compare dd_rescue AES192-CTR saltgen pass=PSWD:pbkdf2:saltxattr:sxfallback
+# Save key and IV to xattrs
+enc_dec_compare dd_rescue AES192-CTR keygen:ivgen keyxattr:kxfallb:ivxattr:ixfallb
 
-HAVE_AESNI=`grep " sse4 " /proc/cpuinfo 2>/dev/null | grep " aes " 2>/dev/null`
+HAVE_AESNI=`grep " sse4" /proc/cpuinfo 2>/dev/null | grep " aes " 2>/dev/null`
 HAVE_AESARM=`grep " pmull " /proc/cpuinfo 2>/dev/null`
 if test -n "$TESTALGS"; then
   echo "*** Engines comparison ***"

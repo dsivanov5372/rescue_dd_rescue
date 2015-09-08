@@ -429,7 +429,7 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		FPLOG(FATAL, "Decrypting with a generated key does not make sense\n", NULL);
 		return -1;
 	}
-	if (!state->pset && !state->kset && !state->keyf && !state->kgen) {
+	if (!state->pset && !state->kset && !state->keyf && !state->kgen && !state->kxattr) {
 		FPLOG(FATAL, "Need to set key or password\n", NULL);
 		--err;
 	}
@@ -730,14 +730,19 @@ int get_xattr(crypt_state *state, const char* atrnm,
 	if (state->enc)
 		name = state->opts->oname;
 	if (state->debug)
-		FPLOG(DEBUG, "Read xattr from output file %s\n", name);
+		FPLOG(DEBUG, "Try to read xattr %s from %s file %s\n", 
+			atrnm, (state->enc? "output": "input"), name);
 	/* Longest is 128byte hex for SHA512 (8x64byte numbers -> 8x16 digits) */
 	ssize_t itln = getxattr(name, atrnm, state->sec->charbuf1, 128);
 	if (itln <= 0) {
 		if (!fb)
 			FPLOG(WARN, "Could not read xattr %s of %s\n", atrnm, name);
-		else if (fbf)
-			*fbf = 1;
+		else {
+			if (state->debug)
+				FPLOG(DEBUG, "Fall back to file\n");
+			if (fbf)
+				*fbf = 1;
+		}
 		return -ENOENT;
 	} else if (itln != 2*dlen) {
 		FPLOG(WARN, "Wrong length of xattr %s (expected %i hex chars, got %i) of %s\n", atrnm, 2*dlen, itln, name);
@@ -770,18 +775,25 @@ int set_xattr(crypt_state* state, const char* atrnm,
 	//	return -ENOENT;
 	//}
 	if (state->debug)
-		FPLOG(INFO, "Write xattr %s to output file %s\n", atrnm, name);
+		FPLOG(INFO, "Try to write xattr %s to output file %s\n", atrnm, name);
 	if (setxattr(name, atrnm, chartohex(state, data, dlen), 2*dlen, 0)) {
 		if (!fb)
 			FPLOG(FATAL, "Failed writing xattr %s for %s: %s\n",
 					atrnm, name, strerror(errno));
-		else if (fbf)
-			*fbf = 1;
+		else {
+			if (state->debug)
+				FPLOG(DEBUG, "Fallback to file\n");
+			if (fbf)
+				*fbf = 1;
+		}
 		return -1;
 	}
 	return 0;
 }
 
+/* TODO: Salt: Shouldn't we store and retrieve the kdf as well? 
+ * user.kdf=pbkdf2=NR or user.kdf=opbkdf
+ */
 inline int get_salt_xattr(crypt_state* state)
 {
 	return get_xattr(state, state->salt_xattr_name,
@@ -983,7 +995,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			/* Do key generation */
 			random_bytes(state->sec->userkey1, state->alg->keylen/8, 1 && !state->weakrnd);
 			/* Write to keysfile or warn ... */
-			if (!state->keyf)
+			if (!state->keyf && !state->kxattr)
 				FPLOG(WARN, "Generated key not written anywhere?\n", NULL);
 			else 
 				if (write_keyfile(state, keynm, encnm, state->sec->userkey1, state->alg->keylen/8, 0600, 1, 0))
@@ -1064,7 +1076,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			if (!opt->quiet)
 				FPLOG(INFO, "Generated IV: %s\n", hexout(iout, state->sec->nonce1, BLKSZ)); 
 			/* Save IV ... */
-			if (!state->ivf)
+			if (!state->ivf && !state->ixattr)
 				FPLOG(WARN, "Generated IV not saved?\n", NULL);
 			else 
 				if (write_keyfile(state, ivsnm, encnm, state->sec->nonce1, BLKSZ, 0640, 1, 0))
@@ -1117,17 +1129,18 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 				return -1;
 			}
 		 }
-	} else if (state->ivf && state->alg->stream->needs_iv)
-		/* Save to IVs file */
-		if (write_keyfile(state, ivsnm, encnm, state->sec->nonce1, BLKSZ, 0640, 1, 0))
-			return -1;
-
+	} else if (state->alg->stream->needs_iv) {
 #ifdef HAVE_ATTR_XATTR_H
-	if (state->ixattr && set_iv_xattr(state) && !state->ixfallback) {
-		FPLOG(FATAL, "Can't save IV in xattr");
-		return -1;
-	}
+		if (state->ixattr && set_iv_xattr(state) && !state->ixfallback) {
+			FPLOG(FATAL, "Can't save IV in xattr");
+			return -1;
+		}
 #endif
+		/* Save to IVs file */
+		if (state->ivf && write_keyfile(state, ivsnm, encnm, state->sec->nonce1, BLKSZ, 0640, 1, 0))
+			return -1;
+	}
+
 	if (state->outkeyiv) {
 		hexout(state->sec->charbuf1, state->sec->userkey1, state->alg->keylen/8);
 		FPLOG(DEBUG, "Key: %s\n", state->sec->charbuf1);
