@@ -15,58 +15,38 @@ DEPS = $(wildcard *.c *.h)
 
 PATH = $(shell echo $$PATH)
 
-.phony: config libfalloc libfalloc-static libfalloc-dl nolib nocolor static strip all
-.phony: dd_rescue find_nonzero fmt_no fiemap file_zblock
+.PHONY: config libfalloc libfalloc-static libfalloc-dl nolib nocolor static strip all clean default
+#.PHONY: dd_rescue find_nonzero fmt_no fiemap file_zblock
 
-config.h:
+default: config.h crtbegin_so.o $(DEPS) 
+	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm EXTRA_LDFLAGS="$(ATTR)" LDPIE="" $@
+
+all test check lib static libfalloc test_aes find_nonzero sha512 sha256 sha1 md5 fiemap file_zblock: config.h crtbegin_so.o $(DEPS)
+	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm EXTRA_LDFLAGS="$(ATTR)" LDPIE="" $@
+
+crtbegin_so.o: $(LIBD)/crtbegin_so.o
 	ln -sf $(LIBD)/crtbegin_dynamic.o .
+	ln -sf $(LIBD)/crtbegin_static.o .
 	ln -sf $(LIBD)/crtend_android.o .
 	ln -sf $(LIBD)/crtbegin_so.o .
 	ln -sf $(LIBD)/crtend_so.o .
+
+config.h: crtbegin_so.o configure config.h.in # Makefile
 	PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" ./configure --host x86-64-linux-gnu
+
+config.h.in: configure.in
+	autoheader
+
+configure: configure.in
+	autoconf
 
 config:
 	rm -f config.h
 	$(MAKE) -f Makefile.android.arm32 config.h
 
-default: $(DEPS) 
-	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm EXTRA_LDFLAGS="$(ATTR)" LDPIE="" $@
-
-dd_rescue: $(DEPS) 
-	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm EXTRA_LDFLAGS="$(ATTR)" LDPIE="" $@
-
-libfalloc:
-	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm LDPIE="" $@
-
-libfalloc-static:
-	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm LDPIE="" $@
-
-libfalloc-dl:
-	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm LDPIE="" $@
-
-nolib: 
-	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm LDPIE="" $@
-
-strip: dd_rescue
-	strip -S dd_rescue libddr_*.so
-
-find_nonzero: $(DEPS)
-	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm LDPIE="" $@
-
-file_zblock: $(DEPS)
-	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm LDPIE="" $@
-
-fmt_no: $(DEPS)
-	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm LDPIE="" $@
-
-fiemap: $(DEPS)
-	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm LDPIE="" $@
-
-all: 
-	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm EXTRA_LDFLAGS="$(ATTR)" LDPIE="" $@
-
 clean:
 	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm LDPIE="" $@
 	rm -f config.h crtbegin_dynamic.o crtend_android.o crtend_so.o crtbegin_so.o
+
 
 
