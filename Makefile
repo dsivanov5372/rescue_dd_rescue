@@ -267,10 +267,10 @@ rdrand.po:
 # TODO: Build binaries from .o file, so we can save some special rules ...
 # Special dd_rescue variants
 libfalloc: dd_rescue.c $(DDR_HEADERS) $(OBJECTS) $(OBJECTS2)
-	$(CC) $(CFLAGS) $(PIE) $(LDPIE) -DNO_LIBDL $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2) -lfallocate
+	$(CC) $(CFLAGS) $(PIE) $(LDPIE) -DNO_LIBDL $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2) -lfallocate $(EXTRA_LDFLAGS)
 
 libfalloc-static: dd_rescue.c $(DDR_HEADERS) $(OBJECTS) $(OBJECTS2)
-	$(CC) $(CFLAGS) $(PIE) $(LDPIE) -DNO_LIBDL $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2) $(LIBDIR)/libfallocate.a
+	$(CC) $(CFLAGS) $(PIE) $(LDPIE) -DNO_LIBDL $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2) $(LIBDIR)/libfallocate.a $(EXTRA_LDFLAGS)
 
 # This is the default built
 dd_rescue: dd_rescue.c $(DDR_HEADERS) $(OBJECTS) $(OBJECTS2)
@@ -305,10 +305,10 @@ nolib: dd_rescue.c $(DDR_HEADERS) $(OBJECTS) $(OBJECTS2)
 	$(CC) $(CFLAGS) -DNO_LIBDL -DNO_LIBFALLOCATE $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2)
 
 nocolor: dd_rescue.c $(DDR_HEADERS) $(OBJECTS) $(OBJECTS2)
-	$(CC) $(CFLAGS) -DNO_COLORS=1 $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2)
+	$(CC) $(CFLAGS) -DNO_COLORS=1 $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2) $(EXTRA_LDFLAGS)
 
 static: dd_rescue.c $(DDR_HEADERS) $(OBJECTS)
-	$(CC) $(CFLAGS) -DNO_LIBDL -DNO_LIBFALLOCATE -static $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2)
+	$(CC) $(CFLAGS) -DNO_LIBDL -DNO_LIBFALLOCATE -static $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2) $(EXTRA_LDFLAGS)
 
 # Special pseudo targets
 strip: $(TARGETS) $(LIBTARGETS)

@@ -652,6 +652,8 @@ void unload_plugins()
 	LISTTREEDEL(ddr_plug_handles, VOIDP);
 	LISTTREEDEL(ddr_plugins, ddr_plugin_t);
 }
+#else
+static void unload_plugins() {};
 #endif
 
 #if defined(HAVE_POSIX_FADVISE) && !defined(HAVE_POSIX_FADVISE64)
@@ -3074,6 +3076,11 @@ int main(int argc, char* argv[])
 		fplog(stderr, FATAL, "Plugins can't handle splice\n");
 		unload_plugins();
 		exit(13);
+	}
+#else
+	if (plugins) {
+		fplog(stderr, FATAL, "Can not handle plugins in static build!\n");
+		exit(12);
 	}
 #endif
 
