@@ -12,7 +12,7 @@
  * License: GNU GPLv2 or v3.
  */
 
-#ifdef _HAVE_CONFIG_H
+#ifdef HAVE_CONFIG_H
 # include "config.h"
 #endif
 #include <lzo/lzo1x.h>
