@@ -37,7 +37,7 @@ crtbegin_so.o: $(LIBD)/crtbegin_so.o
 	ln -sf $(LIBD)/crtend_so.o .
 
 config:
-	rm -f config.h
+	rm -f config.h crt*.o
 	$(MAKE) -f Makefile.android.arm32pie config.h
 
 dd_rescue libfalloc libfalloc-static libfalloc-dl nolib nocolor static strip check test find_nonzero test_aes all: config.h $(DEPS)

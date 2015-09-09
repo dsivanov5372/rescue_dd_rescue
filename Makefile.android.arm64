@@ -37,7 +37,7 @@ configure: configure.in
 	autoconf
 
 config:
-	rm -f config.h
+	rm -f config.h crt*.o
 	$(MAKE) -f Makefile.android.arm64 config.h
 
 dd_rescue libfalloc libfalloc-static libfalloc-dl nolib nocolor static strip all test_aes find_nonzero check: config.h $(DEPS)

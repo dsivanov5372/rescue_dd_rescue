@@ -41,7 +41,7 @@ configure: configure.in
 	autoconf
 
 config:
-	rm -f config.h
+	rm -f config.h crt*.o
 	$(MAKE) -f Makefile.android.arm32 config.h
 
 clean:
