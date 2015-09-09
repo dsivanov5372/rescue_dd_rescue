@@ -5,6 +5,9 @@
  * License: GPL v2 or v3
  */
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
 #include "random.h"
 #include <time.h>
 #include <sys/time.h>
