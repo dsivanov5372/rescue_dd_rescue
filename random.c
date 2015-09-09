@@ -5,9 +5,6 @@
  * License: GPL v2 or v3
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
 #include "random.h"
 #include <time.h>
 #include <sys/time.h>
@@ -18,6 +15,10 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <errno.h>
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+typedef unsigned int __u32;
 #ifdef HAVE_LINUX_RANDOM_H
 #include <linux/random.h>
 #endif
