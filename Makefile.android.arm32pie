@@ -47,4 +47,13 @@ clean:
 	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm $@
 	rm -f config.h crtbegin_dynamic.o crtbegin_static.o crtend_android.o crtend_so.o crtbegin_so.o
 
+TGT = dd_rescue libddr_null.so libddr_lzo.so libddr_hash.so libddr_crypt.so
+TGT_EXTRA = test_aes find_nonzero file_zblock fiemap fuzz_lzo fmt_no md5 sha1 sha256 sha512
+
+move: all
+	# Well, we can strip foreign binaries, luckily
+	strip -S $(TGT) $(TGT_EXTRA)
+	mkdir -p android.arm32pie
+	mv $(TGT) android.arm32pie/
+	mv $(TGT_EXTRA) android.arm32pie/
 
