@@ -218,9 +218,10 @@ dd_rescue has a few nifty features:
   with various AES variants.
   It also brought a fault injection framework, that allows for improving the
   test suite for testing error resilience.
-* Version 1.99 added ARMv8 hardware encryption support and some tweaks to
-  improve compatibility with openSSL. There was also an overhaul of the
-  Makefiles.
+* Version 1.99 added ARMv8 hardware encryption support and an openSSL compatible
+  pbkdf and Salted__ header processing. There was also an overhaul of the
+  Makefiles, a bug fix with the output of error positions in reverse direction
+  copies and the support of ranges in fault injection.
 
 
 Copyright

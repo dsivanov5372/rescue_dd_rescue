@@ -127,6 +127,10 @@
 #include <getopt.h>
 #endif
 
+#ifdef HAVE_SCHED_H
+#include <sched.h>
+#endif
+
 #ifdef NO_LIBFALLOCATE
 # undef HAVE_LIBFALLOCATE
 # undef HAVE_FALLOCATE_H
@@ -1439,8 +1443,9 @@ int in_fault_list(LISTTYPE(fault_in_t) *faults, off_t off1, off_t off2)
 	LISTFOREACH(faults, faultiter) {
 		fault_in_t *fault = &LISTDATA(faultiter);
 #if 0
-		fplog(stderr, DEBUG, "Match %li-%i/%i in [%li,%li]: ",
-			(long)fault->off, (long)fault->off2, fault->rep, (long)off1, (long)off2);
+		fplog(stderr, DEBUG, "Match [%li,%li[ against %li-%i/%i: ",
+			(long)off1, (long)off2,
+			(long)fault->off, (long)fault->off2, fault->rep);
 #endif
 		if (!fault->rep || off1 >= fault->off2 || off2 <= fault->off)
 			continue;
@@ -1456,7 +1461,7 @@ int in_fault_list(LISTTYPE(fault_in_t) *faults, off_t off1, off_t off2)
 		}
 	}
 #if 0
-	fplog(stderr, NOHDR, "%i\n", hit);
+	fplog(stderr, NOHDR, "%i%s\n", hit, (hit?"-1":""));
 #endif
 	return hit;
 }
@@ -1481,11 +1486,13 @@ static inline ssize_t mypread(int fd, void* bf, size_t sz, loff_t off,
 			return frandom_bytes_inv(dst->prng_state, (unsigned char*) bf, sz);
 	}
 	/* Handle fault injection here */
-	int fault = in_fault_list(read_faults, off/op->hardbs, (off+(loff_t)sz)/op->hardbs);
+	int fault = in_fault_list(read_faults, off/op->hardbs,
+				  (off+(loff_t)sz+(loff_t)(op->hardbs-1))/op->hardbs);
 	if (fault) {
 		if (op->verbose)
 			fplog(stderr, DEBUG, "Inject read fault @ %li (rd %iblk @ %li*%i)\n",
-				(long)((fault-1)*op->hardbs+off), sz/op->hardbs, off/op->hardbs, op->hardbs);
+				(long)((fault-1)*op->hardbs+off), (sz+op->hardbs-1)/op->hardbs,
+				off/op->hardbs, op->hardbs);
 		if (!op->reverse && fst->ilen && fst->ipos == fst->ilen) {
 			/* EOF, we can't proceed any further */
 			errno = 0;
@@ -1515,11 +1522,13 @@ static inline ssize_t mypwrite(int fd, void* bf, size_t sz, loff_t off,
 {
 	/* TODO: Handle plugin output here ... */
 	/* Handle fault injection here */
-	int fault = in_fault_list(write_faults, fst->opos/op->hardbs, (fst->opos+(loff_t)sz)/op->hardbs);
+	int fault = in_fault_list(write_faults, off/op->hardbs,
+				  (off+(loff_t)sz+(loff_t)(op->hardbs-1))/op->hardbs);
 	if (fault) {
 		if (op->verbose)
-			fplog(stderr, DEBUG, "Inject write fault @ %li\n",
-				(long)((fault-1)*op->hardbs+off));
+			fplog(stderr, DEBUG, "Inject write fault @ %li (wr %iblk @ %li*%i)\n",
+				(long)((fault-1)*op->hardbs+off), (sz+op->hardbs-1)/op->hardbs,
+				off/op->hardbs, op->hardbs);
 		errno = EIO;
 		return -1;
 		// Cloud write and return (fault-1)*op->hardbs bytes ...
@@ -1804,6 +1813,13 @@ int dowrite_retry(const ssize_t rd, opt_t *op, fstate_t *fst,
 		int adv = 1;
 		fst->buf += wr;
 		fplog(stderr, INFO, "retrying writes with smaller blocks \n");
+		int rc = fsync(fst->odes);
+		if (rc && errno != EINVAL && !fst->o_chr)
+			fplog(stderr, WARN, "sync %s (%sskiB): %s!  \n",
+			      op->oname, fmt_kiB(fst->ipos, !nocol), strerror(errno));
+#ifdef HAVE_SCHED_YIELD	
+		sched_yield();
+#endif
 		if (op->reverse) {
 			fst->buf = oldbuf+rd-op->hardbs;
 			adv = -1;
@@ -1897,6 +1913,7 @@ int copyfile_hardbs(const loff_t max, opt_t *op, fstate_t *fst,
 			    (rd > 0 && (!op->sparse || blockiszero(fst->buf, rd, op, rep) < rd))) {
 				ssize_t wr = 0;
 				memset(fst->buf+rd, 0, toread-rd);
+				/* FIXME: Don't we need dowrite_retry here? */
 				errs += ((wr = writeblock(toread, op, fst, prg, dop)) < 0? -wr: 0);
 				eno = errno;
 				if (wr <= 0 && (eno == ENOSPC 
