@@ -222,6 +222,7 @@ dd_rescue has a few nifty features:
   pbkdf and Salted__ header processing. There was also an overhaul of the
   Makefiles, a bug fix with the output of error positions in reverse direction
   copies and the support of ranges in fault injection.
+  The write retry logic has been cleaned up.
 
 
 Copyright

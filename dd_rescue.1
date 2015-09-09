@@ -229,12 +229,22 @@ bytes have been transferred).
 .BR \-w ", " \-\-abort_we
 makes
 .B dd_rescue
-abort on any write errors. By default, write errors are ignored.
-This is because for buffered writes, errors can't be detected and
-located reliably anyway. Also, write errors are not often reported
-to user space, as hard drives e.g. reallocate bad blocks on writes
-and the OS block layer typically also does some retries on write
-operations. Note that 
+abort on any write errors. By default, on reported write errors,
+.B dd_rescue
+tries to rewrite the blocks with small block size writes, so a small
+failure in a larger block will not cause the whole block not to
+be written. Note that this may be handled similarly by your Operating
+System kernel with buffered writes without the user or dd_rescue noticing;
+the write retry logic in dd_rescue is mostly useful for direct I/O
+writes where write errors can be reliably detected.
+.br
+Write error detection with buffered writes is unreliable; the
+kernel reports success and traces of the failing writeback operations
+later may only appear in your syslog. dd_rescue does try to notice the
+user by calling fsync() and carefully checking the return values of
+fsync() and close() calls.
+.br
+Note that
 .B dd_rescue
 does exit if writes to the output file result in the Operating
 System reporting that no space is left.
