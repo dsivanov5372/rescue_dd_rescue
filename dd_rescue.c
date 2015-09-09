@@ -192,6 +192,7 @@ void* libfalloc = (void*)0;
 #include "pread64.h"
 #endif
 
+#define MIN(a,b) ((a)<(b)? (a): (b))
 
 /* fwd decls */
 int cleanup();
@@ -1272,7 +1273,7 @@ int sync_close(int fd, const char* nm, char chr, opt_t *op, fstate_t *fst)
 	} while(0)
 
 
-ssize_t writeblock(int towrite, opt_t *op, fstate_t *fst, 
+ssize_t writeblock(int towrite, int *shouldwr, opt_t *op, fstate_t *fst,
 		   progress_t *prg, dpopt_t *dop);
 static void advancepos(const ssize_t rd, const ssize_t wr, const ssize_t rwr,
 		       opt_t *op, fstate_t *fst, progress_t *prg);
@@ -1283,7 +1284,7 @@ int real_cleanup(opt_t *op, fstate_t *fst, progress_t *prg,
 	int rc, errs = 0;
 	if (!op->dosplice && !dop->bsim715) {
 		/* EOF notifiction */
-		int fbytes = writeblock(0, op, fst, prg, dop);
+		int fbytes = writeblock(0, &rc, op, fst, prg, dop);
 		if (fbytes >= 0)
 			advancepos(0, fbytes, fbytes, op, fst, prg);
 		else
@@ -1574,7 +1575,11 @@ ssize_t readblock(const int toread,
 	return (/*err == -1? err:*/ rd);
 }
 
-ssize_t writeblock(int towrite,
+/* write a block from fst->buf to fst->odes at fst->opos
+ * also writes to secondary output files
+ * The plugin chain will be called.
+ * return number of written bytes OR negative errno */
+ssize_t writeblock(int towrite, int* shouldwrite,
 		   opt_t *op, fstate_t *fst, progress_t *prg, dpopt_t *dop)
 {
 	ssize_t err, totwr = 0;
@@ -1584,42 +1589,94 @@ ssize_t writeblock(int towrite,
 	int prev_tow;
 	int redo = -1;
 	unsigned char* wbuf;
-	do {	
+	*shouldwrite = 0;
+	do {
 		char retry = fst->o_chr;
 		prev_tow = towrite;
+		/* Plugins can indicate that they could only process a part of the
+		 * input this time by setting redo != -1.
+		 * If so, we advance ipos by what we fed to the plugins, opos by
+		 * what we actually received back and wrote.
+		 * This will be recorded and UNDONE after we are done and redo is
+		 * back to -1.
+		 * This is a hack to ensure that plugins have the illusion of the
+		 * right position in ipos/opos.
+		 */
 	       	wbuf = call_plugins_block(fst->buf, &towrite, eof, &redo, op, fst);
-		if (!wbuf || !towrite) {
-			if (redo != -1) {
-				fst->ipos += prev_tow;
-				adv_ipos += prev_tow;
-			}
-			towrite = 0;
-			continue;
+		/* Move ipos already ... */
+		if (redo != -1) {
+			fst->ipos += prev_tow;
+			adv_ipos += prev_tow;
 		}
+		if (!wbuf)
+			assert(!towrite);
+		/* Nothing to write? Next round (or end if redo == -1) */
+		if (!towrite)
+			continue;
+		*shouldwrite += towrite;
 		/* If sparse detection needs to be redone, it's handled in call_plugins_block() */
 		ssize_t wr = 0;
 		//errno = 0; /* should not be necessary */
 		/* Loop for EINTR/EAGAIN and for incomplete writes that make progress */
 		do {
-			wr += (err = mypwrite(fst->odes, wbuf+wr, towrite-wr, fst->opos+wr-op->reverse*towrite, op, fst, prg));
-			if (err == -1) 
+			wr += (err = mypwrite(fst->odes, wbuf+wr, towrite-wr,
+					      fst->opos+wr-op->reverse*towrite, op, fst, prg));
+			if (err == -1)
 				wr++;
 		} while ((err == -1 && (errno == EINTR || errno == EAGAIN || !retry++))
 		      || (err > 0 && errno == 0 && wr < towrite)
 		      || (err == 0 && !retry++));
-		totwr += wr;
 		//fplog(stderr, DEBUG, "wrote %i/%i orig %i\n", wr, towrite, prev_tow);
 		if (wr < towrite && err != 0) {
-			/* Write error: handle ? .. */
+			/* HANDLE write errors here ... */
 			lasterr = errno;
 			fplog(stderr, (op->abwrerr? FATAL: WARN),
 					"write %s (%skiB): %s\n",
 		      			op->oname, fmt_kiB(fst->opos, !nocol), strerror(errno));
-			if (op->abwrerr) 
+			if (op->abwrerr) {
+				totwr += wr;
 				exit_report(21, op, fst, prg, dop);
+			}
 			fst->nrerr++;
+			if (lasterr != ENXIO && lasterr != EROFS && !fst->o_chr && towrite > op->hardbs) {
+				/* TODO: Write retry */
+				fplog(stderr, INFO, "retrying writes with smaller blocks \n");
+				int rc = fsync(fst->odes);
+				if (rc && errno != EINVAL && !fst->o_chr)
+					fplog(stderr, WARN, "sync %s (%sskiB): %s!  \n",
+					      op->oname, fmt_kiB(fst->ipos, !nocol), strerror(errno));
+#ifdef HAVE_SCHED_YIELD
+				sched_yield();
+#endif
+				wr = 0;
+				loff_t off;
+				if (op->reverse) {
+					for (off = towrite-towrite%op->hardbs; off >= 0; off -= op->hardbs) {
+						do {
+							err = mypwrite(fst->odes, wbuf+off, MIN(op->hardbs, towrite-off),
+									fst->opos+off-op->reverse*towrite, op, fst, prg);
+						} while (err == -1 && (errno == EINTR || errno == EAGAIN));
+						if (err >= 0)
+							wr += err;
+						else
+							lasterr = errno;
+					}
+				} else {
+					for (off = 0; off < towrite; off += op->hardbs) {
+						do {
+							err = mypwrite(fst->odes, wbuf+off, MIN(op->hardbs, towrite-off),
+									fst->opos+off-op->reverse*towrite, op, fst, prg);
+						} while (err == -1 && (errno == EINTR || errno == EAGAIN));
+						if (err >= 0)
+							wr += err;
+						else
+							lasterr = errno;
+					}
+				}
+			}
 		}
-		int oldeno = errno;
+		totwr += wr;
+		/* Handle multiple output files, NO error handling, just reporting */
 		char oldochr = fst->o_chr;
 		LISTTYPE(ofile_t) *of;
 		LISTFOREACH(ofiles, of) {
@@ -1637,21 +1694,21 @@ ssize_t writeblock(int towrite,
 				      oft->name, fmt_kiB(fst->opos, !nocol), strerror(errno));
 		}
 		fst->o_chr = oldochr;
-		errno = oldeno;	
 		if (redo != -1) {
-			fst->ipos += prev_tow;
 			fst->opos += wr;
-			adv_ipos += prev_tow;
 			adv_opos += wr;
 		}
 		towrite = 0;
-		} while (redo != -1);
+	} while (redo != -1);
 	/* Undo opos/ipos changes */
 	fst->ipos -= adv_ipos;
 	fst->opos -= adv_opos;
 	return (lasterr? -lasterr: totwr);
 }
 
+/* Returns the SIZE of the next block to be copied, at max the passed bs,
+ * but maybe smaller due to maxxfer or file positions
+ */
 int blockxfer(const loff_t max, const int bs,
 	      opt_t *op, fstate_t *fst, progress_t *prg)
 {
@@ -1690,7 +1747,11 @@ void exitfatalerr(const int eno, opt_t *op, fstate_t *fst, progress_t *prg, dpop
 	}
 }
 
-/* Update positions after successful copy, rd = progress, wr = really written */
+/* Update positions after successful copy,
+ * rd, wr => updates for read and write positions
+ * 	(should be the same unless some plugin changes the length)
+ * rwr    => really written (successful xfer)
+ */
 static void advancepos(const ssize_t rd, const ssize_t wr, const ssize_t rwr,
 		       opt_t *op, fstate_t *fst, progress_t *prg)
 {
@@ -1716,41 +1777,50 @@ static int is_writeerr_fatal(int err, opt_t *op)
                || (err == EFBIG && !op->reverse));
 }
 
-int weno;
-
-/* Do write, update positions ... 
- * Returns number of successfully written bytes. */
+/* Do write, returns 0 for success, 1 for error, -1 for fatal error
+ * Advances position IF AND ONLY IF return value is NOT negative */
 ssize_t dowrite(const ssize_t rd, opt_t *op, fstate_t *fst, 
 		progress_t *prg, dpopt_t *dop)
 {
 	int err = 0;
 	int fatal = 0;
 	ssize_t wr = 0;
-	weno = 0;
-	errno = 0;
-	err = ((wr = writeblock(rd, op, fst, prg, dop)) < 0 ? -wr: 0);
-	weno = errno;
-
-	if (err && is_writeerr_fatal(weno, op))
+	int shouldwr = 0;
+	err = ((wr = writeblock(rd, &shouldwr, op, fst, prg, dop)) < 0 ? -wr: 0);
+	if (err && is_writeerr_fatal(err, op))
 		++fatal;
 	if (err) {
 		fplog(stderr, WARN, "assumption rd(%i) == wr(%i) failed! \n", rd, wr);
 		fplog(stderr, (fatal? FATAL: WARN),
 			"write %s (%skiB): %s!\n", 
-			op->oname, fmt_kiB(fst->opos/*+wr*/, !nocol), strerror(weno));
-		errno = 0;
-		/* FIXME: This breaks for opts->reverse direction */
-		if (!op->reverse)
-			advancepos(rd, rd, wr, op, fst, prg);
-		else
-			return 0;
-	} else
-		advancepos(rd, wr, wr, op, fst, prg);
-	return wr;
+			op->oname, fmt_kiB(fst->opos/*+wr*/, !nocol), strerror(err));
+		/* No retry at this high level, move on -- this breaks plugins that
+		 * don't handle sparse but what can we do? */
+		if (plug_not_sparse)
+			fplog(stderr, FATAL, "output file will be broken (plugins don't handle sparse)\n");
+		// Advance in case of write errors
+		advancepos(rd, shouldwr, 0, op, fst, prg);
+		return fatal? -1: 1;
+	} else {
+		advancepos(rd, shouldwr, wr, op, fst, prg);
+		if (wr != shouldwr) {
+			fplog(stderr, DEBUG, "Should have written %i, but only %i done\n");
+			return 1;
+		}
+		return 0;
+	}
 }
 
-/* Write rd-sized block at fstate->buf; if opts->sparse is set, check if at least half of the
- * block is empty and if so, move over the opts->sparse pieces ... */
+/* Write rd-sized block at fstate->buf; if op->sparse is set,
+ * check if at least half of the block is empty and if so, move
+ * over the sparse pieces ...
+ * Note that this assumes that it's OK for all plugins to skip
+ * over empty (zeroed) blocks.
+ * This is the case for ddr_null (no surprise) and quite some
+ * effort has gone into ddr_hash to catch up after a hole.
+ * ddr_crypt COULD do it with CTR and skiphole, but this is
+ * not implemented.
+ */
 ssize_t dowrite_sparse(const ssize_t rd, opt_t *op, fstate_t *fst, 
 		       progress_t *prg, repeat_t *rep, dpopt_t *dop)
 {
@@ -1761,7 +1831,6 @@ ssize_t dowrite_sparse(const ssize_t rd, opt_t *op, fstate_t *fst,
 	/* Also simple: Whole block is empty, so just move on */
 	if (zln >= rd) {
 		advancepos(rd, rd, 0, op, fst, prg);
-		weno = 0;
 		return 0;
 	}
 	/* Block is smaller than 2*opts->hardbs and not completely zero, so don't bother optimizing ... */
@@ -1782,72 +1851,23 @@ ssize_t dowrite_sparse(const ssize_t rd, opt_t *op, fstate_t *fst,
 	}
 	/* Check second half */
 	ssize_t zln2 = blockiszero(fst->buf+mid, rd-mid, op, rep);
-	if (zln2 < rd-mid)
+	if (zln2 < rd-mid) // Not empty either, just write ..
 		return dowrite(rd, op, fst, prg, dop);
 	else {
 		ssize_t wr = dowrite(mid, op, fst, prg, dop);
-		//advancepos(mid, wr);
-		if (wr != mid) 
-			return wr;
-		advancepos(rd-mid, wr, 0, op, fst, prg);
+		advancepos(rd-mid, rd-mid, 0, op, fst, prg);
 		return wr;
 	}
 }
 
-/* Do write with retry if rd > opts->hardbs, update positions ... 
- * Returns 0 on success, -1 on fatal error, 1 on normal error. */
-int dowrite_retry(const ssize_t rd, opt_t *op, fstate_t *fst,
-		  progress_t *prg, repeat_t *rep, dpopt_t *dop)
-{
-	int errs = 0;
-	ssize_t wr = dowrite_sparse(rd, op, fst, prg, rep, dop);
-	if (wr == rd || weno == 0)
-		return 0;
-	if ((rd <= (ssize_t)op->hardbs) || (weno != ENOSPC && weno != EFBIG)) {
-		/* No retry, move on */
-		//advancepos(rd-wr, rd-wr, 0, op, fst, prg);
-		return is_writeerr_fatal(weno, op)? -1: 1;
-	} else {
-		ssize_t rwr = wr;
-		unsigned char* oldbuf = fst->buf; 
-		int adv = 1;
-		fst->buf += wr;
-		fplog(stderr, INFO, "retrying writes with smaller blocks \n");
-		int rc = fsync(fst->odes);
-		if (rc && errno != EINVAL && !fst->o_chr)
-			fplog(stderr, WARN, "sync %s (%sskiB): %s!  \n",
-			      op->oname, fmt_kiB(fst->ipos, !nocol), strerror(errno));
-#ifdef HAVE_SCHED_YIELD	
-		sched_yield();
-#endif
-		if (op->reverse) {
-			fst->buf = oldbuf+rd-op->hardbs;
-			adv = -1;
-		}
-		while (rwr < rd) {
-			ssize_t towr = ((ssize_t)op->hardbs > rd-rwr)? rd-rwr: op->hardbs;
-			ssize_t wr2 = dowrite(towr, op, fst, prg, dop);
-			if (is_writeerr_fatal(weno, op)) {
-				fst->buf = oldbuf;
-				return -1;
-			}
-			if (wr2 < towr) {
-				advancepos(towr-wr2, towr-wr2, 0, op, fst, prg);
-				++errs;
-			}
-			rwr += towr; fst->buf += towr*adv;
-		}
-		fst->buf = oldbuf;
-	}
-	return errs;
-}
 
 static int partialwrite(const ssize_t rd, opt_t *op, fstate_t *fst,
 			progress_t *prg, repeat_t *rep, dpopt_t *dop)
 {
 	/* But first: write available data and advance (optimization) */
 	if (rd > 0 && !op->reverse) 
-		return dowrite_retry(rd, op, fst, prg, rep, dop);
+		return dowrite_sparse(rd, op, fst, prg, rep, dop);
+	/* Nothing TBD */
 	return 0;
 }
 
@@ -1912,15 +1932,15 @@ int copyfile_hardbs(const loff_t max, opt_t *op, fstate_t *fst,
 			if (op->nosparse || 
 			    (rd > 0 && (!op->sparse || blockiszero(fst->buf, rd, op, rep) < rd))) {
 				ssize_t wr = 0;
+				int shouldwr = 0;
 				memset(fst->buf+rd, 0, toread-rd);
-				/* FIXME: Don't we need dowrite_retry here? */
-				errs += ((wr = writeblock(toread, op, fst, prg, dop)) < 0? -wr: 0);
+				errs += ((wr = writeblock(toread, &shouldwr, op, fst, prg, dop)) < 0? -wr: 0);
 				eno = errno;
 				if (wr <= 0 && (eno == ENOSPC 
 					   || (eno == EFBIG && !op->reverse))) 
 					return errs;
-				if (toread != wr) {
-					fplog(stderr, WARN, "assumption toread(%i) == wr(%i) failed! \n", toread, wr);	
+				if (shouldwr != wr) {
+					fplog(stderr, WARN, "assumption shouldwr(%i) == wr(%i) failed! \n", shouldwr, wr);
 					/*
 					fplog(stderr, WARN, "%s (%skiB): %s!\n", 
 					      op->oname, fmt_kiB(fst->opos, !nocol), strerror(eno));
@@ -1946,7 +1966,7 @@ int copyfile_hardbs(const loff_t max, opt_t *op, fstate_t *fst,
 				return errs;
 			 */
 		} else {
-	      		int err = dowrite_retry(rd, op, fst, prg, rep, dop);
+			int err = dowrite_sparse(rd, op, fst, prg, rep, dop);
 			if (err < 0)
 				return -err;
 			else
@@ -2054,7 +2074,7 @@ int copyfile_softbs(const loff_t max, opt_t *op, fstate_t *fst,
 				scrollup = 0;
 			}
 		} else {
-	      		err = dowrite_retry(rd, op, fst, prg, rep, dop);
+			err = dowrite_sparse(rd, op, fst, prg, rep, dop);
 			if (err < 0)
 				return -err;
 			else
