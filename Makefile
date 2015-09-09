@@ -251,8 +251,14 @@ find_nonzero_sse2.o:
 find_nonzero_arm.o:
 	$(CC) $(CFLAGS_OPT) $(PIE) -c $<
 
+find_nonzero_arm.po:
+	$(CC) $(CFLAGS_OPT) $(PIC) -o $@ -c $<
+
 find_nonzero_arm64.o:
 	$(CC) $(CFLAGS_OPT) -march=armv8-a+crypto $(PIE) -c $< 
+
+find_nonzero_arm64.po:
+	$(CC) $(CFLAGS_OPT) -march=armv8-a+crypto $(PIC) -o $@ -c $< 
 
 find_nonzero_main.o: find_nonzero.c config.h $(FNZ_HEADERS)
 	$(CC) $(CFLAGS_OPT) $(PIE) -o $@ -c $< -DTEST 
