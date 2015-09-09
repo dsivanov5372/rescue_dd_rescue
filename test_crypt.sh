@@ -58,7 +58,6 @@ enc_dec_compare_keys dd_rescue3 AES192-CTR keygen:ivgen "" "" "-qptr"
 enc_dec_compare_keys dd_rescue3 AES192-CTR keygen:ivgen skiphole "" "-qptr"
 ./dd_rescue -qt -s 384k -m 128k -S 0 dd_rescue3.cmp dd_rescue3.cmp3
 cmp dd_rescue3.cmp2 dd_rescue3.cmp3 || exit 4
-rm -f dd_rescue3 dd_rescue3.enc dd_rescue3.enc.old dd_rescue3.cmp dd_rescue3.cmp2 dd_rescue3.cmp3
 
 # Chain with lzo, hash (all)
 if test "$HAVE_LZO" = "1"; then
@@ -78,7 +77,7 @@ cmp dd_rescue3.cmp dd_rescue3 || exit 3
 cat CHECKSUMS.sha256
 ls -lAF dd_rescue3*
 fi
-rm -f dd_rescue3 dd_rescue3.cmp dd_rescue3.enc CHECKSUMS.sh256
+rm -f dd_rescue3 dd_rescue3.enc dd_rescue3.enc.old dd_rescue3.cmp dd_rescue3.cmp2 dd_rescue3.cmp3
 # Various ways to pass in keys/IVs
 
 # Padding variations
