@@ -63,7 +63,7 @@ rm -f dd_rescue3 dd_rescue3.enc dd_rescue3.enc.old dd_rescue3.cmp dd_rescue3.cmp
 # Chain with lzo, hash (all)
 if test "$HAVE_LZO" = "1"; then
 echo "*** Plugin chains ... ***"
-SHA256SUM=ˋtype -p sha256sumˋ
+SHA256SUM=`type -p sha256sum`
 $VG ./dd_rescue -pqt -L ./libddr_hash.so=sha256:outnm=,./libddr_lzo.so=compr,./libddr_hash.so=sha256:output,./libddr_crypt.so=enc:AES192-CTR:keygen:ivgen:weakrnd:keysfile:ivsfile,./libddr_hash.so=sha256:outnm= dd_rescue3 dd_rescue3.enc || exit 1
 if test -n "$SHA256SUM"; then
 sha256sum -c CHECKSUMS.sha256 || exit 4
