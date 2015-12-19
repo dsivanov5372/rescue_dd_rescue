@@ -85,6 +85,7 @@ ifeq ($(MACH),i386)
 	OBJECTS2 = find_nonzero_sse2.o 
 ifeq ($(HAVE_SSE42),1)
 	OBJECTS2 += ffs_sse42.o
+	POBJECTS2 += ffs_sse42.po
 	ARCHFLAGS +=  -msse4.2
 else
 	CFLAGS += -DNO_SSE42
@@ -112,6 +113,7 @@ ifeq ($(MACH),x86_64)
 	OBJECTS2 = find_nonzero_sse2.o
 ifeq ($(HAVE_SSE42),1)
 	OBJECTS2 += ffs_sse42.o
+	POBJECTS2 += ffs_sse42.po
 	ARCHFLAGS +=  -msse4.2
 else
 	CFLAGS += -DNO_SSE42
@@ -265,6 +267,9 @@ find_nonzero_main.o: find_nonzero.c config.h $(FNZ_HEADERS)
 
 ffs_sse42.o:
 	$(CC) $(CFLAGS_OPT) $(PIE) -msse4.2 -c $<
+
+ffs_sse42.po:
+	$(CC) $(CFLAGS_OPT) $(PIC) -msse4.2 -o $@ -c $<
 
 rdrand.o:
 	$(CC) $(CFLAGS) $(PIE) -mrdrnd -maes -c $<
