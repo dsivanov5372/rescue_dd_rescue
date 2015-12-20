@@ -88,6 +88,9 @@ endif
 ifneq ($(HAVE_RDRND),1)
 	HAVE_RDRND = 0
 endif
+ifneq ($(HAVE_AES),1)
+	HAVE_AES = 0
+endif
 
 
 ifeq ($(MACH),i386)
@@ -604,7 +607,7 @@ check_aes: $(TARGETS) test_aes
 
 check_crypt: $(TARGETS)
 	# TODO: Move previous cases into script ...
-	HAVE_LZO=$(HAVE_LZO) HAVE_OPENSSL=$(HAVE_OPENSSL) HAVE_RDRNDAES=$(HAVE_RDRNDAES) ./test_crypt.sh
+	HAVE_LZO=$(HAVE_LZO) HAVE_OPENSSL=$(HAVE_OPENSSL) HAVE_AES=$(HAVE_AES) ./test_crypt.sh
 	# Holes (all)
 	# Reverse (CTR, ECB)
 	# Chain with lzo, hash (all)
