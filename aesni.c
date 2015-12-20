@@ -17,7 +17,7 @@
 #ifdef DONTMASK
 #define MMCLEAR(xmmreg) xmmreg = _mm_setzero_si128()
 #else
-#define MMCLEAR(xmmreg) asm volatile ("pxor %0, %0 \n" : "=x"(xmmreg): "0"(xmmreg):)
+#define MMCLEAR(xmmreg) asm volatile ("pxor %0, %0 \n" : "=x"(xmmreg): "0"(xmmreg))
 #endif
 
 #define SIZE128 (ssize_t)sizeof(__m128i)
