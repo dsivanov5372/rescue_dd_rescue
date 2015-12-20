@@ -68,13 +68,15 @@ endif
 
 HAVE_AVX2 := $(shell echo "" | $(CC) -mavx2 -xc - 2>&1 | grep unrecognized || echo 1)
 HAVE_SSE42 := $(shell echo "" | $(CC) -msse4.2 -xc - 2>&1 | grep unrecognized || echo 1)
-HAVE_RDRNDAES := $(shell echo "" | $(CC) -mrdrnd -maes -xc - 2>&1 | grep unrecognized || echo 1)
+HAVE_RDRND := $(shell echo "" | $(CC) -mrdrnd -xc - 2>&1 | grep unrecognized || echo 1)
+HAVE_AES := $(shell echo "" | $(CC) -maes -xc - 2>&1 | grep unrecognized || echo 1)
 
 ifneq ($(HAVE_RDRNDAES),1)
 	HAVE_RDRNDAES = 0
 endif
 
 MACH := $(shell uname -m | tr A-Z a-z | sed 's/i[3456]86/i386/')
+
 
 
 ifeq ($(MACH),i386)
@@ -85,10 +87,18 @@ ifeq ($(MACH),i386)
 	OBJECTS2 = find_nonzero_sse2.o 
 ifeq ($(HAVE_SSE42),1)
 	OBJECTS2 += ffs_sse42.o
-	POBJECTS2 += ffs_sse42.po
+	#POBJECTS2 += ffs_sse42.po
 	ARCHFLAGS +=  -msse4.2
 else
 	CFLAGS += -DNO_SSE42
+endif
+ifeq ($(HAVE_AES),1)
+	AESNI_O = aesni.o
+        AESNI_PO = aesni.po
+        CFLAGS += -DHAVE_AESNI
+	ARCHFLAGS += -maes
+else
+	CFLAGS += -DNO_AES
 endif
 ifeq ($(HAVE_AVX2),1)
 	OBJECTS2 += find_nonzero_avx.o
@@ -99,12 +109,9 @@ endif
 ifeq ($(HAVE_RDRNDAES),1)
 	OBJECTS2 += rdrand.o
 	POBJECTS2 += rdrand.po
-	AESNI_O = aesni.o
-	AESNI_PO = aesni.po
-	CFLAGS += -DHAVE_AESNI
-	ARCHFLAGS +=  -maes -mrdrnd
+	ARCHFLAGS +=  -mrdrnd
 else
-	CFLAGS += -DNO_RDRND -DNO_AES
+	CFLAGS += -DNO_RDRND 
 endif
 endif
 
@@ -113,10 +120,18 @@ ifeq ($(MACH),x86_64)
 	OBJECTS2 = find_nonzero_sse2.o
 ifeq ($(HAVE_SSE42),1)
 	OBJECTS2 += ffs_sse42.o
-	POBJECTS2 += ffs_sse42.po
+	#POBJECTS2 += ffs_sse42.po
 	ARCHFLAGS +=  -msse4.2
 else
 	CFLAGS += -DNO_SSE42
+endif
+ifeq ($(HAVE_AES),1)
+	AESNI_O = aesni.o
+        AESNI_PO = aesni.po
+        CFLAGS += -DHAVE_AESNI
+	ARCHFLAGS += -maes
+else
+	CFLAGS += -DNO_AES
 endif
 ifeq ($(HAVE_AVX2),1)
 	OBJECTS2 += find_nonzero_avx.o
@@ -127,19 +142,16 @@ endif
 ifeq ($(HAVE_RDRNDAES),1)
 	OBJECTS2 += rdrand.o
 	POBJECTS2 += rdrand.po
-	AESNI_O = aesni.o
-	AESNI_PO = aesni.po
-	CFLAGS += -DHAVE_AESNI
-	ARCHFLAGS +=  -maes -mrdrnd
+	ARCHFLAGS +=  -mrdrnd
 else
-	CFLAGS += -DNO_RDRND -DNO_AES
+	CFLAGS += -DNO_RDRND 
 endif
 endif
 
 MACH := $(shell uname -m |sed 's/armv[0-9a-z]*/arm/')
 ifeq ($(MACH),arm)
 	OBJECTS2 = find_nonzero_arm.o
-	POBJECTS2 = find_nonzero_arm.po
+	POBJECTS2 = find_nonzero.po find_nonzero_arm.po
 	AES_ARM64_O = aes_arm32.o
 	AES_ARM64_PO = aes_arm32.po
 	CFLAGS += -DHAVE_AES_ARM64
@@ -147,7 +159,7 @@ ifeq ($(MACH),arm)
 endif
 ifeq ($(MACH),aarch64)
 	OBJECTS2 = find_nonzero_arm64.o
-	POBJECTS2 = find_nonzero_arm64.po
+	POBJECTS2 = find_nonzero.po find_nonzero_arm64.po
 	AES_ARM64_O = aes_arm64.o
 	AES_ARM64_PO = aes_arm64.po
 	CFLAGS += -DHAVE_AES_ARM64
@@ -237,7 +249,7 @@ libddr_lzo.so: libddr_lzo.po
 libddr_null.so: libddr_null.po
 	$(CC) -shared -o $@ $^
 
-libddr_crypt.so: libddr_crypt.po aes.po aes_c.po $(AESNI_PO) $(AES_ARM64_PO) $(AES_OSSL_PO) pbkdf2.po sha256.po pbkdf_ossl.po md5.po checksum_file.po secmem.po random.po find_nonzero.po $(POBJECTS2)
+libddr_crypt.so: libddr_crypt.po aes.po aes_c.po $(AESNI_PO) $(AES_ARM64_PO) $(AES_OSSL_PO) pbkdf2.po sha256.po pbkdf_ossl.po md5.po checksum_file.po secmem.po random.po $(POBJECTS2)
 	$(CC) -shared -o $@ $^ $(CRYPTOLIB) $(EXTRA_LDFLAGS)
 
 # More special compiler flags
