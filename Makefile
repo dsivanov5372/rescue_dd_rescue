@@ -38,6 +38,7 @@ OUT = -o dd_rescue
 PIC = -fPIC
 PIE = -fPIE
 LDPIE = -pie
+RDYNAMIC = -rdynamic
 
 LZOP = $(shell type -p lzop || type -P true)
 HAVE_SHA256SUM = $(shell type -p sha256sum >/dev/null && echo 1 || echo 0)
@@ -66,17 +67,27 @@ ifeq ($(CC),wcl386)
   OUT = ""
 endif
 
-HAVE_AVX2 := $(shell echo "" | $(CC) -mavx2 -xc - 2>&1 | grep unrecognized || echo 1)
-HAVE_SSE42 := $(shell echo "" | $(CC) -msse4.2 -xc - 2>&1 | grep unrecognized || echo 1)
-HAVE_RDRND := $(shell echo "" | $(CC) -mrdrnd -xc - 2>&1 | grep unrecognized || echo 1)
-HAVE_AES := $(shell echo "" | $(CC) -maes -xc - 2>&1 | grep unrecognized || echo 1)
-
-ifneq ($(HAVE_RDRNDAES),1)
-	HAVE_RDRNDAES = 0
-endif
-
 MACH := $(shell uname -m | tr A-Z a-z | sed 's/i[3456]86/i386/')
 
+ISX86 := 0
+ifeq ($(MACH),i386)
+  ISX86 := 1
+endif
+ifeq ($(MACH),x86_64)
+  ISX86 := 1
+  LIB = lib64
+endif
+
+ifeq ($(ISX86), 1)
+HAVE_SSE42 := $(shell echo "" | $(CC) -msse4.2 -xc - 2>&1 | grep unrecognized || echo 1)
+HAVE_AES := $(shell echo "" | $(CC) -maes -xc - 2>&1 | grep unrecognized || echo 1)
+HAVE_AVX2 := $(shell echo "" | $(CC) -mavx2 -xc - 2>&1 | grep unrecognized || echo 1)
+HAVE_RDRND := $(shell echo "" | $(CC) -mrdrnd -xc - 2>&1 | grep unrecognized || echo 1)
+endif
+
+ifneq ($(HAVE_RDRND),1)
+	HAVE_RDRND = 0
+endif
 
 
 ifeq ($(MACH),i386)
@@ -84,40 +95,11 @@ ifeq ($(MACH),i386)
 	#SSE = "-msse2 -funroll-loops"
 	#SSE = "-msse2 -funroll-loops -ftree-vectorize"
 	ARCHFLAGS +=  -msse2
-	OBJECTS2 = find_nonzero_sse2.o 
-ifeq ($(HAVE_SSE42),1)
-	OBJECTS2 += ffs_sse42.o
-	#POBJECTS2 += ffs_sse42.po
-	ARCHFLAGS +=  -msse4.2
-else
-	CFLAGS += -DNO_SSE42
-endif
-ifeq ($(HAVE_AES),1)
-	AESNI_O = aesni.o
-        AESNI_PO = aesni.po
-        CFLAGS += -DHAVE_AESNI
-	ARCHFLAGS += -maes
-else
-	CFLAGS += -DNO_AES
-endif
-ifeq ($(HAVE_AVX2),1)
-	OBJECTS2 += find_nonzero_avx.o
-	ARCHFLAGS +=  -mavx2
-else
-	CFLAGS += -DNO_AVX2
-endif
-ifeq ($(HAVE_RDRNDAES),1)
-	OBJECTS2 += rdrand.o
-	POBJECTS2 += rdrand.po
-	ARCHFLAGS +=  -mrdrnd
-else
-	CFLAGS += -DNO_RDRND 
-endif
 endif
 
-ifeq ($(MACH),x86_64)
-	LIB = lib64
+ifeq ($(ISX86),1)
 	OBJECTS2 = find_nonzero_sse2.o
+
 ifeq ($(HAVE_SSE42),1)
 	OBJECTS2 += ffs_sse42.o
 	#POBJECTS2 += ffs_sse42.po
@@ -128,6 +110,8 @@ endif
 ifeq ($(HAVE_AES),1)
 	AESNI_O = aesni.o
         AESNI_PO = aesni.po
+	OBJECTS2 += rdrand.o
+	#POBJECTS2 += rdrand.po find_nonzero.po ffs_sse42.po
         CFLAGS += -DHAVE_AESNI
 	ARCHFLAGS += -maes
 else
@@ -139,9 +123,9 @@ ifeq ($(HAVE_AVX2),1)
 else
 	CFLAGS += -DNO_AVX2
 endif
-ifeq ($(HAVE_RDRNDAES),1)
-	OBJECTS2 += rdrand.o
-	POBJECTS2 += rdrand.po
+ifeq ($(HAVE_RDRND),1)
+	#OBJECTS2 += rdrand.o
+	#POBJECTS2 += rdrand.po
 	ARCHFLAGS +=  -mrdrnd
 else
 	CFLAGS += -DNO_RDRND 
@@ -151,15 +135,16 @@ endif
 MACH := $(shell uname -m |sed 's/armv[0-9a-z]*/arm/')
 ifeq ($(MACH),arm)
 	OBJECTS2 = find_nonzero_arm.o
-	POBJECTS2 = find_nonzero.po find_nonzero_arm.po
+	#POBJECTS2 = find_nonzero.po find_nonzero_arm.po
 	AES_ARM64_O = aes_arm32.o
 	AES_ARM64_PO = aes_arm32.po
 	CFLAGS += -DHAVE_AES_ARM64
 	ARCHFLAGS += -mfpu=crypto-neon-fp-armv8
 endif
 ifeq ($(MACH),aarch64)
+	LIB = lib64
 	OBJECTS2 = find_nonzero_arm64.o
-	POBJECTS2 = find_nonzero.po find_nonzero_arm64.po
+	#POBJECTS2 = find_nonzero.po find_nonzero_arm64.po
 	AES_ARM64_O = aes_arm64.o
 	AES_ARM64_PO = aes_arm64.po
 	CFLAGS += -DHAVE_AES_ARM64
@@ -283,23 +268,31 @@ ffs_sse42.o:
 ffs_sse42.po:
 	$(CC) $(CFLAGS_OPT) $(PIC) -msse4.2 -o $@ -c $<
 
+ifeq ($(HAVE_RDRND),1)
 rdrand.o:
 	$(CC) $(CFLAGS) $(PIE) -mrdrnd -maes -c $<
 
 rdrand.po:
 	$(CC) $(CFLAGS) $(PIC) -mrdrnd -maes -o $@ -c $<
+else
+rdrand.o:
+	$(CC) $(CFLAGS) $(PIE) -maes -c $<
+
+rdrand.po:
+	$(CC) $(CFLAGS) $(PIC) -maes -o $@ -c $<
+endif
 
 # TODO: Build binaries from .o file, so we can save some special rules ...
 # Special dd_rescue variants
 libfalloc: dd_rescue.c $(DDR_HEADERS) $(OBJECTS) $(OBJECTS2)
-	$(CC) $(CFLAGS) $(PIE) $(LDPIE) -DNO_LIBDL $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2) -lfallocate $(EXTRA_LDFLAGS)
+	$(CC) $(CFLAGS) $(PIE) $(LDPIE) -DNO_LIBDL $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2) -lfallocate $(EXTRA_LDFLAGS) $(RDYNAMIC)
 
 libfalloc-static: dd_rescue.c $(DDR_HEADERS) $(OBJECTS) $(OBJECTS2)
-	$(CC) $(CFLAGS) $(PIE) $(LDPIE) -DNO_LIBDL $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2) $(LIBDIR)/libfallocate.a $(EXTRA_LDFLAGS)
+	$(CC) $(CFLAGS) $(PIE) $(LDPIE) -DNO_LIBDL $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2) $(LIBDIR)/libfallocate.a $(EXTRA_LDFLAGS) $(RDYNAMIC)
 
 # This is the default built
 dd_rescue: dd_rescue.c $(DDR_HEADERS) $(OBJECTS) $(OBJECTS2)
-	$(CC) $(CFLAGS) $(PIE) $(LDPIE) $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2) -ldl $(EXTRA_LDFLAGS)
+	$(CC) $(CFLAGS) $(PIE) $(LDPIE) $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2) -ldl $(EXTRA_LDFLAGS) $(RDYNAMIC)
 
 # Test programs 
 md5: md5.c md5.h hash.h config.h
@@ -330,7 +323,7 @@ nolib: dd_rescue.c $(DDR_HEADERS) $(OBJECTS) $(OBJECTS2)
 	$(CC) $(CFLAGS) -DNO_LIBDL -DNO_LIBFALLOCATE $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2)
 
 nocolor: dd_rescue.c $(DDR_HEADERS) $(OBJECTS) $(OBJECTS2)
-	$(CC) $(CFLAGS) -DNO_COLORS=1 $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2) $(EXTRA_LDFLAGS)
+	$(CC) $(CFLAGS) -DNO_COLORS=1 $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2) $(EXTRA_LDFLAGS) $(RDYNAMIC)
 
 static: dd_rescue.c $(DDR_HEADERS) $(OBJECTS)
 	$(CC) $(CFLAGS) -DNO_LIBDL -DNO_LIBFALLOCATE -static $(DEFINES) $< $(OUT) $(OBJECTS) $(OBJECTS2) $(EXTRA_LDFLAGS)

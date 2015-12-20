@@ -191,7 +191,7 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	state->pad = PAD_ALWAYS;
 	state->saltlen = -1;
 #ifdef HAVE_AESNI
-#ifdef __BIONIC__ //MAY_AESNI
+#if 0 //def __BIONIC__ //MAY_AESNI
 	have_aesni = detect2("aes", probe_aesni);
 #endif
 	if (have_aesni) { 
@@ -204,7 +204,7 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 /* FIXME: Why is this only needed on BIONIC?
  * Does libdl automatically consolidate aliased symbols?
  */
-#ifdef __BIONIC__ //MAY_AES_ARM64
+#if 0 //def __BIONIC__ //MAY_AES_ARM64
 #ifdef __aarch64__
 	have_arm8crypto = detect2("aes", probe_arm8crypto);
 #else
