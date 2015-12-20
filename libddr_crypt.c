@@ -190,27 +190,13 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	assert(state->sec);
 	state->pad = PAD_ALWAYS;
 	state->saltlen = -1;
-#ifdef HAVE_AESNI
-#if 0 //def __BIONIC__ //MAY_AESNI
-	have_aesni = detect2("aes", probe_aesni);
-#endif
+#if defined(__x86_64__) || defined(__i386__)
 	if (have_aesni) { 
 		state->engine = AESNI_Methods;
 		if (opt->verbose)
 			FPLOG(INFO, "Default to use AESNI crypto extensions\n");
 	} else {
-#endif
-#ifdef HAVE_AES_ARM64
-/* FIXME: Why is this only needed on BIONIC?
- * Does libdl automatically consolidate aliased symbols?
- */
-#if 0 //def __BIONIC__ //MAY_AES_ARM64
-#ifdef __aarch64__
-	have_arm8crypto = detect2("aes", probe_arm8crypto);
-#else
-	have_arm8crypto = detect2("aes", probe_arm8crypto_32);
-#endif
-#endif
+#elif defined(HAVE_AES_ARM64)
 	if (have_arm8crypto) {
 		state->engine = AES_ARM8_Methods;
 		if (opt->verbose)
