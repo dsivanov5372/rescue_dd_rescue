@@ -5,9 +5,10 @@
  * License: GNU GPL v2 or v3
  */
 
+#include "archdep.h"
+
 #ifdef __RDRND__
 #include <immintrin.h>
-#include "archdep.h"
 #define BSWAP32(x) ((x<<24) | ((x<<8)&0x00ff0000) | ((x>>8)&0x0000ff00) | (x>>24))
 
 unsigned int rdrand32()
@@ -40,6 +41,7 @@ void probe_rdrand()
 	_rdrand32_step(&val);
 	_rdrand_res = val;
 }
+#endif	/* RDRND */
 
 #ifdef __AES__
 #include <wmmintrin.h>
@@ -51,12 +53,10 @@ void probe_aesni()
 	_mm_storeu_si128((__m128i*)_aes_probe_res, x);
 }
 #else 
-# warning compile rdrand with -maes
+# warning please compile rdrand with -maes
 #endif
 
 
-#else 
-# warning compile rdrand with -mrdrnd
 #if 0
 unsigned int rdrand32()
 {
@@ -65,6 +65,4 @@ unsigned int rdrand32()
 	return val;
 }
 #endif
-#endif
-
 
