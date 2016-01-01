@@ -271,7 +271,7 @@ const char* threeup = UP UP UP;
 //const char* down = DOWN;
 const char* right = RIGHT;
 const char* nineright = RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT;
-char *graph;
+char *graph;	/* = NULL */
 
 #ifdef NO_COLORS
 # define RED ""
@@ -743,6 +743,8 @@ static void preparegraph(opt_t *op, fstate_t *fst)
 {
 	if (!fst->ilen || op->init_ipos > fst->ilen)
 		return;
+	if (op->reverse && op->init_ipos-fst->estxfer < 0)
+		return;
 	graph = strdup(":.........................................:");
 	if (op->reverse) {
 		graph[gpos(op->init_ipos, fst->ilen)+1] = '<';
@@ -757,8 +759,12 @@ static void preparegraph(opt_t *op, fstate_t *fst)
 void updgraph(int err, fstate_t *fst, dpopt_t *dop)
 {
 	int off;
+	if (!graph)
+		return;
+	/*
 	if (!fst->ilen || fst->ipos > fst->ilen)
 		return;
+	 */
 	off = gpos(fst->ipos, fst->ilen);
 	if (graph[off] == 'x')
 		return;
