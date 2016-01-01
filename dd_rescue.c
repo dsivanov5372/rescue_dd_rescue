@@ -739,13 +739,14 @@ inline int gpos(loff_t off, loff_t len)
 }
 
 /** Prepare graph */
+static char *sgraph = ":.........................................:";
 static void preparegraph(opt_t *op, fstate_t *fst)
 {
 	if (!fst->ilen || op->init_ipos > fst->ilen)
 		return;
 	if (op->reverse && op->init_ipos-fst->estxfer < 0)
 		return;
-	graph = strdup(":.........................................:");
+	graph = strdup(sgraph);
 	if (op->reverse) {
 		graph[gpos(op->init_ipos, fst->ilen)+1] = '<';
 		graph[gpos(op->init_ipos-fst->estxfer, fst->ilen)-1] = '>';
@@ -758,14 +759,9 @@ static void preparegraph(opt_t *op, fstate_t *fst)
 
 void updgraph(int err, fstate_t *fst, dpopt_t *dop)
 {
-	int off;
 	if (!graph)
 		return;
-	/*
-	if (!fst->ilen || fst->ipos > fst->ilen)
-		return;
-	 */
-	off = gpos(fst->ipos, fst->ilen);
+	const int off = gpos(fst->ipos, fst->ilen);
 	if (graph[off] == 'x')
 		return;
 	if (err)
@@ -786,8 +782,13 @@ void input_length(opt_t *op, fstate_t *fst)
 	if (op->reverse) {
 		if (op->init_ipos)
 			fst->ilen = op->init_ipos;
-		else
+		else {
+			/* FIXME: Shouldn't we set ilen to 0
+			 * at least if !i_chr ?
+			 * Or otherwise correct init_ipos with a warning? */
+			fplog(stderr, WARN, "reverse copy from input file with offset 0\n");
 			fst->ilen = op->maxxfer;
+		}
 	} else
 		fst->ilen = op->init_ipos + op->maxxfer;
 	if (fst->estxfer)
@@ -1022,8 +1023,8 @@ void doprint(FILE* const file, const unsigned int bs, const clock_t cl,
 		sec = sec % 60;
 		updgraph(0, fst, dop);
 		fprintf(file, "             %s %3i%%  %s: %2i:%02i:%02i \n",
-			graph, (int)(100*prg->xfer/fst->estxfer), (in_report? "TOT": "ETA"), 
-			hour, min, sec);
+			graph? graph: sgraph, (int)(100*prg->xfer/fst->estxfer),
+			(in_report? "TOT": "ETA"), hour, min, sec);
 		scrollup = fourup;
 	} else
 		scrollup = threeup;
