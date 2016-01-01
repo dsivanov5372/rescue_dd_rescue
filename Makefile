@@ -432,6 +432,8 @@ check: $(TARGETS) find_nonzero md5 sha1 sha256 sha512
 	cmp dd_rescue.copy dd_rescue.copy2
 	@rm dd_rescue.copy dd_rescue.copy2
 	@rm -f zero zero2
+	$(VG) ./dd_rescue -r -S 1M -m 4k /dev/null zero
+	@rm -f zero
 	@echo "***** dd_rescue sparse tests *****"
 	$(VG) ./dd_rescue -a -m 261k /dev/zero zero
 	du zero
