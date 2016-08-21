@@ -194,6 +194,15 @@ void* libfalloc = (void*)0;
 
 #define MIN(a,b) ((a)<(b)? (a): (b))
 
+#if __WORDSIZE == 64
+#define LL "l"
+#elif __WORDSIZE == 32
+#define LL "ll"
+#else
+#error __WORDSIZE undefined
+#endif
+
+
 /* fwd decls */
 int cleanup();
 
@@ -1054,6 +1063,12 @@ void printstatus(FILE* const file1, FILE* const file2,
 	t2 = difftimetv(&currenttime, &lasttime);
 	cl = clock();
 
+#if 0
+	if (t1 == 0.0)
+		t1 = 0.0001;
+	if (t2 == 0.0)
+		t2 = 0.0001;
+#endif
 	/* Idea: Could save last not printed status and print on err */
 	if (t2 < printint && !sync && !in_report) {
 		if (fst->estxfer)
@@ -2657,6 +2672,9 @@ void populate_faultlists(const char* arg, opt_t *op)
 			arg = ptr+1;
 		else
 			arg = arg+strlen(arg);
+		if (op->verbose)
+			fplog(stderr, DEBUG, "Inject %c fault (%ix) for range %" LL "u-%" LL "u\n",
+				rw, fault.rep, fault.off, fault.off2);
 	}
 	if (op->verbose)
 		fplog(stderr, DEBUG, "Will inject %i/%i faults for read/write\n",
