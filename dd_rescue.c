@@ -3074,11 +3074,8 @@ void sanitize_and_prepare(opt_t *op, dpopt_t *dop, fstate_t *fst, dpstate_t *dst
 		do_fallocate(fst->odes, op->oname, op, fst);
 #endif
 
-	if (op->verbose) {
+	if (op->verbose)
 		printinfo(stderr, op);
-		if (logfd)
-			printinfo(logfd, op);
-	}
 
 	if (dop->bsim715 && op->avoidwrite) {
 		fplog(stderr, WARN, "won't avoid writes for -3\n");
