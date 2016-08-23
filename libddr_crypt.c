@@ -190,7 +190,7 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	assert(state->sec);
 	state->pad = PAD_ALWAYS;
 	state->saltlen = -1;
-#if defined(__x86_64__) || defined(__i386__)
+#if defined(CC_FLAGS_AES) && (defined(__x86_64__) || defined(__i386__))
 	if (have_aesni) { 
 		state->engine = AESNI_Methods;
 		if (opt->verbose)
