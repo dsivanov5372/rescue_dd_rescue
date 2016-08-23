@@ -155,6 +155,10 @@ int main(int argc, char **argv)
 		printf("\n%s\n", fmt_int(0, 1, 1024, l, BOLD, NORM, 1));
 		printf("%s\n",   fmt_int_b(0, 1, 1024, l, BOLD, NORM, 1, 10, 0));
 		printf("0x%s\n\n", fmt_int_b(0, 1, 1024, l, BOLD, NORM, 1, 16, 4));
+		printf("%s\n",   fmt_int_b(0, 0, 1024, l, "", "", 1, 10, 3));
+		printf("%s\n",   fmt_int_b(0, 0, 1024, l, "", "", 0, 10, 3));
+		printf("%s\n",   fmt_int_b(0, 0, 1024, l, BOLD, NORM, 1, 10, 3));
+		printf("%s\n",   fmt_int_b(0, 0, 1024, l, BOLD, NORM, 0, 10, 3));
 	}
 	return 0;
 }

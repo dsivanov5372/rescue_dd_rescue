@@ -412,11 +412,13 @@ install: $(TARGETS)
 	$(INSTALL) $(INSTASROOT) -m 644 dd_rescue.1 ddr_lzo.1 ddr_crypt.1 $(MANDIR)/man1/
 	gzip -9f $(MANDIR)/man1/dd_rescue.1 $(MANDIR)/man1/ddr_lzo.1 $(MANDIR)/man1/ddr_crypt.1
 
-check: $(TARGETS) find_nonzero md5 sha1 sha256 sha512
+check: $(TARGETS) find_nonzero md5 sha1 sha256 sha512 fmt_no
 	@echo "make check ... Pass VG=\"valgrind --options\" to use with valgrind"
 	$(VG) ./dd_rescue --version
 	@echo "***** find_nonzero tests *****"
 	$(VG) ./find_nonzero 2
+	@echo "***** fmt_no tests *****"
+	$(VG) ./fmt_no 1024200
 	@echo "***** dd_rescue tests *****"
 	@rm -f dd_rescue.copy dd_rescue.copy2
 	$(VG) ./dd_rescue -apP dd_rescue dd_rescue.copy
@@ -451,6 +453,7 @@ check: $(TARGETS) find_nonzero md5 sha1 sha256 sha512
 	@echo "***** dd_rescue MD5 plugin tests *****"
 	$(VG) ./md5 /dev/null
 	$(VG) ./md5 /dev/null | md5sum -c
+	$(VG) ./dd_rescue -a -b 16k -l TEST.log -o BB.log -m 32k /dev/zero TEST
 	$(VG) ./dd_rescue -a -b 16k -m 32k /dev/zero TEST
 	$(VG) ./dd_rescue -x -a -b 16k -m32k dd_rescue TEST
 	$(VG) ./dd_rescue -x -a -b 16k -m17k /dev/zero TEST
@@ -465,7 +468,7 @@ check: $(TARGETS) find_nonzero md5 sha1 sha256 sha512
 	if test $(HAVE_SHA256SUM) = 1; then $(MAKE) check_sha2; fi
 	$(VG) ./sha256 /dev/null
 	$(VG) ./sha512 /dev/null
-	rm -f TEST TEST2 HASH.TEST
+	rm -f TEST TEST2 HASH.TEST BB.log TEST.log
 	if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo; fi
 	if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo_algos; fi
 	#if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo_test; fi
@@ -625,6 +628,7 @@ check_fault: $(TARGETS)
 	$(VG) ./dd_rescue -tpv -F 4r/1,6r/1,22r/1 dd_rescue dd_rescue.cmp || true
 	cmp dd_rescue dd_rescue.cmp
 	# Incremental
+	$(VG) ./dd_rescue -tp -F 4r/0,20r/0 -l dd_r.log -o dd_r.bb dd_rescue dd_rescue.cmp || true
 	$(VG) ./dd_rescue -tp -F 4r/0,20r/0 dd_rescue dd_rescue.cmp || true
 	cmp dd_rescue dd_rescue.cmp || true
 	$(VG) ./dd_rescue -p -F 6r/0 dd_rescue dd_rescue.cmp || true
@@ -644,6 +648,7 @@ check_fault: $(TARGETS)
 	# - encryption (check_crypt)
 	# - compression
 	# - checksums
+	rm -f dd_rescue.cmp dd_r.log dd_r.bb
 
 
 make_check_crypt: check_crypt
@@ -661,5 +666,7 @@ make_check_crypt: check_crypt
 	$(VG) ./dd_rescue -tp -L ./libddr_crypt.so=dec:keysfile:ivsfile:alg=AES192+-CTR dd_rescue.enc dd_rescue.dec
 	cat dd_rescue dd_rescue > dd_rescue2
 	cmp dd_rescue2 dd_rescue.dec
+	# Cleanup
+	rm -f dd_rescue2 dd_rescue.dec dd_rescue.enc
 
 
