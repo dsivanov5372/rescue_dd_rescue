@@ -42,6 +42,8 @@ static char fmtbufs[8][64];
  *   we start overwriting buffers. 
  * - The string can't be longer than 64 chars, which should be
  *   enough though to print all possible 64bit ints.
+ * - bold and norm need to be either invisible (boldinvis=1)
+ *   or a single character
  */
 char* fmt_int_b(unsigned char pre, unsigned char post, unsigned int scale,
 	       	loff_t no, const char* bold, const char* norm, 
@@ -81,14 +83,14 @@ char* fmt_int_b(unsigned char pre, unsigned char post, unsigned int scale,
 			/* insert bold */
 			memcpy(fmtbuf+idx-blen, bold, blen);
 			idx -= blen;
-			if (!boldinvis && --pre <= pos+isneg) {
+			if (!boldinvis && pre && --pre <= pos+isneg) {
 				pos++; break;
 			}
 		} else if (norm && !((pos+group) % twogroup)) {
 			/* insert norm */
 			memcpy(fmtbuf+idx-nlen, norm, nlen);
 			idx -= nlen;
-			if (!boldinvis && --pre <= pos+isneg) {
+			if (!boldinvis && pre && --pre <= pos+isneg) {
 				pos++; break;
 			}
 		}
@@ -155,10 +157,10 @@ int main(int argc, char **argv)
 		printf("\n%s\n", fmt_int(0, 1, 1024, l, BOLD, NORM, 1));
 		printf("%s\n",   fmt_int_b(0, 1, 1024, l, BOLD, NORM, 1, 10, 0));
 		printf("0x%s\n\n", fmt_int_b(0, 1, 1024, l, BOLD, NORM, 1, 16, 4));
+		printf("%s\n",   fmt_int_b(0, 0, 1024, l, BOLD, NORM, 1, 10, 3));
+		printf("%s\n\n", fmt_int_b(0, 0, 1024, l, BOLD, NORM, 0, 10, 3));
 		printf("%s\n",   fmt_int_b(0, 0, 1024, l, "", "", 1, 10, 3));
 		printf("%s\n",   fmt_int_b(0, 0, 1024, l, "", "", 0, 10, 3));
-		printf("%s\n",   fmt_int_b(0, 0, 1024, l, BOLD, NORM, 1, 10, 3));
-		printf("%s\n",   fmt_int_b(0, 0, 1024, l, BOLD, NORM, 0, 10, 3));
 	}
 	return 0;
 }
