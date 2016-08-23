@@ -204,7 +204,7 @@ void* libfalloc = (void*)0;
 
 
 /* fwd decls */
-int cleanup();
+int cleanup(char);
 
 struct emerg_ptrs {
 	opt_t *opts;
@@ -721,7 +721,7 @@ static int openfile(const char* const fname, const int flags)
 	if (fdes == -1) {
 		fplog(stderr, FATAL, "open \"%s\" failed: %s\n",
 			fname, strerror(errno));
-		cleanup(); exit(17);
+		cleanup(1); exit(17);
 	}
 	return fdes;
 }
@@ -891,8 +891,7 @@ int output_length(opt_t *op, fstate_t *fst)
 		loff_t newmax = fst->olen - op->init_opos;
 		if (newmax < 0) {
 			fplog(stderr, FATAL, "output position is beyond end of file but -M specified!\n");
-			cleanup();
-			exit(19);
+			cleanup(1); exit(19);
 		}			
 		if (!op->maxxfer || op->maxxfer > newmax) {
 			op->maxxfer = newmax;
@@ -1134,8 +1133,10 @@ void exit_report(int rc, opt_t *op, fstate_t *fst, progress_t *prg, dpopt_t *dop
 {
 	gettimeofday(&currenttime, NULL);
 	printreport(op, fst, prg, dop);
-	cleanup();
+	cleanup(0);
 	fplog(stderr, FATAL, "Not completed fully successfully! \n");
+	if (logfd)
+		fclose(logfd);
 	exit(rc);
 }
 
@@ -1301,7 +1302,7 @@ static void advancepos(const ssize_t rd, const ssize_t wr, const ssize_t rwr,
 		       opt_t *op, fstate_t *fst, progress_t *prg);
 
 int real_cleanup(opt_t *op, fstate_t *fst, progress_t *prg, 
-	 	 dpopt_t *dop, dpstate_t *dst)
+	 	 dpopt_t *dop, dpstate_t *dst, char closelog)
 {
 	int rc, errs = 0;
 	if (!op->dosplice && !dop->bsim715) {
@@ -1323,8 +1324,6 @@ int real_cleanup(opt_t *op, fstate_t *fst, progress_t *prg,
 			++errs;
 		}
 	}
-	if (logfd)
-		fclose(logfd);
 	LISTTYPE(ofile_t) *of;
 	LISTFOREACH(ofiles, of) {
 		ofile_t *oft = &(LISTDATA(of));
@@ -1362,17 +1361,23 @@ int real_cleanup(opt_t *op, fstate_t *fst, progress_t *prg,
 		LISTDATA(onl) = 0;
 	}
 	LISTTREEDEL(freenames, charp);
+	LISTTREEDEL(read_faults, fault_in_t);
+	LISTTREEDEL(write_faults, fault_in_t);
 #if USE_LIBDL
 	if (libfalloc)
 		dlclose(libfalloc);
 	unload_plugins();
 #endif
+	if (logfd && closelog) {
+		fclose(logfd);
+		logfd = 0;
+	}
 	return errs;
 }
 
-int cleanup()
+int cleanup(char closelog)
 {
-	return real_cleanup(eptrs.opts, eptrs.fstate, eptrs.progress, eptrs.dpopts, eptrs.dpstate);
+	return real_cleanup(eptrs.opts, eptrs.fstate, eptrs.progress, eptrs.dpopts, eptrs.dpstate, closelog);
 }
 
 int l2(unsigned int l)
@@ -2302,21 +2307,21 @@ void init_random(opt_t *op, dpopt_t *dop, dpstate_t *dst)
 		if (fd == -1) {
 			fplog(stderr, FATAL, "Could not open \"%s\" for random seed!\n", dop->prng_sfile);
 			/* ERROR */
-			cleanup(); exit(28);
+			cleanup(1); exit(28);
 		}
 		if (dop->prng_libc) {
 			unsigned int* sval = (unsigned int*)sbf;
 			ln = read(fd, sbf, 4);
 			if (ln != 4) {
 				fplog(stderr, FATAL, "failed to read 4 bytes from \"%s\"!\n", dop->prng_sfile);
-				cleanup(); exit(29);
+				cleanup(1); exit(29);
 			}
 			srand(*sval); rand();
 		} else {
 			ln = read(fd, sbf, 256);
 			if (ln != 256) {
 				fplog(stderr, FATAL, "failed to read 256 bytes from \"%s\"!\n", dop->prng_sfile);
-				cleanup(); exit(29);
+				cleanup(1); exit(29);
 			}
 			dst->prng_state = frandom_init(sbf);
 		}
@@ -2516,7 +2521,7 @@ void breakhandler(int sig)
 		fplog(stderr, FATAL, "Caught signal %i \"%s\". Flush and exit immediately!\n",
 		      sig, strsignal(sig));
 		_printreport();
-		cleanup();
+		cleanup(1);
 		signal(sig, SIG_DFL);
 		raise(sig);
 	}
@@ -2544,7 +2549,7 @@ unsigned char* zalloc_aligned_buf(unsigned int bs, unsigned char**obuf)
 		if (!ptr) {
 			fplog(stderr, FATAL, "allocation of buffer of size %li failed!\n", 
 				bs+pagesize+plug_max_slack_pre+plug_max_slack_post);
-			cleanup(); exit(18);
+			cleanup(1); exit(18);
 		}
 		if (obuf)
 			*obuf = ptr;
@@ -2879,7 +2884,7 @@ void sanitize_and_prepare(opt_t *op, dpopt_t *dop, fstate_t *fst, dpstate_t *dst
 
 	if (fst->identical && op->dotrunc && !op->force) {
 		fplog(stderr, FATAL, "infile and outfile are identical and trunc turned on!\n");
-		cleanup(); exit(14);
+		cleanup(1); exit(14);
 	}
 
 	/* Open input and output files */
@@ -2891,7 +2896,7 @@ void sanitize_and_prepare(opt_t *op, dpopt_t *dop, fstate_t *fst, dpstate_t *dst
 		fst->ides = openfile(op->iname, O_RDONLY | op->o_dir_in);
 		if (fst->ides < 0) {
 			fplog(stderr, FATAL, "could not open %s: %s\n", op->iname, strerror(errno));
-			cleanup(); exit(22);
+			cleanup(1); exit(22);
 		}
 	}
 	/* Overwrite? */
@@ -2915,7 +2920,7 @@ void sanitize_and_prepare(opt_t *op, dpopt_t *dop, fstate_t *fst, dpstate_t *dst
 		} while (a != 'Y' && a != 'N');
 		if (a == 'N') {
 			fplog(stderr, FATAL, "exit on user request!\n");
-			cleanup(); exit(23);
+			cleanup(1); exit(23);
 		}
 	}
 	if (fst->o_chr && op->avoidwrite) {
@@ -2931,7 +2936,7 @@ void sanitize_and_prepare(opt_t *op, dpopt_t *dop, fstate_t *fst, dpstate_t *dst
 	/* Sanity checks for op->rmvtrim */
 	if ((fst->o_chr || fst->o_lnk || fst->o_blk) && op->rmvtrim) {
 		fplog(stderr, FATAL, "Can't delete output file when it's not a normal file\n");
-		cleanup(); exit(23);
+		cleanup(1); exit(23);
 	}
 
 	if (op->rmvtrim && !(op->i_repeat || dop->prng_libc || dop->prng_frnd || op->force)) {
@@ -2944,7 +2949,7 @@ void sanitize_and_prepare(opt_t *op, dpopt_t *dop, fstate_t *fst, dpstate_t *dst
 		if (a == 'N') {
 			fplog(stderr, FATAL, "exit on user request!\n");
 			op->rmvtrim = 0;
-			cleanup(); exit(23);
+			cleanup(1); exit(23);
 		}
 	}
 
@@ -2962,7 +2967,7 @@ void sanitize_and_prepare(opt_t *op, dpopt_t *dop, fstate_t *fst, dpstate_t *dst
 
 	if (fst->odes < 0) {
 		fplog(stderr, FATAL, "%s: %s\n", op->oname, strerror(errno));
-		cleanup(); exit(24);
+		cleanup(1); exit(24);
 	}
 
 	if (op->preserve)
@@ -2994,7 +2999,7 @@ void sanitize_and_prepare(opt_t *op, dpopt_t *dop, fstate_t *fst, dpstate_t *dst
 		op->init_ipos = lseek64(fst->ides, 0, SEEK_END);
 		if (op->init_ipos == -1) {
 			fplog(stderr, FATAL, "could not seek to end of file %s!\n", op->iname);
-			perror("dd_rescue"); cleanup(); exit(19);
+			perror("dd_rescue"); cleanup(1); exit(19);
 		}
 		if (op->verbose) 
 			fprintf(stderr, DDR_INFO "ipos set to the end: %skiB\n", 
@@ -3007,7 +3012,7 @@ void sanitize_and_prepare(opt_t *op, dpopt_t *dop, fstate_t *fst, dpstate_t *dst
 			op->init_opos = lseek64(fst->odes, 0, SEEK_END);
 			if (op->init_opos == (loff_t)-1) {
 				fplog(stderr, FATAL, "could not seek to end of file %s!\n", op->oname);
-				perror("dd_rescue"); cleanup(); exit(19);
+				perror("dd_rescue"); cleanup(1); exit(19);
 			}
 			/* if existing empty, assume same position */
 			if (op->init_opos == 0)
@@ -3039,12 +3044,12 @@ void sanitize_and_prepare(opt_t *op, dpopt_t *dop, fstate_t *fst, dpstate_t *dst
 			fplog(stderr, WARN, "ignore non-seekable output with opos != 0 due to --force\n");
 		else {
 			fplog(stderr, FATAL, "outfile not seekable, but opos !=0 requested!\n");
-			cleanup(); exit(19);
+			cleanup(1); exit(19);
 		}
 	}
 	if (fst->i_chr && op->init_ipos != 0) {
 		fplog(stderr, FATAL, "infile not seekable, but ipos !=0 requested!\n");
-		cleanup(); exit(19);
+		cleanup(1); exit(19);
 	}
 		
 	if (op->dosplice) {
@@ -3056,7 +3061,7 @@ void sanitize_and_prepare(opt_t *op, dpopt_t *dop, fstate_t *fst, dpstate_t *dst
 	if (op->noextend || op->extend) {
 		if (output_length(op, fst) == -1) {
 			fplog(stderr, FATAL, "asked to (not) extend output file but can't determine size\n");
-			cleanup(); exit(19);
+			cleanup(1); exit(19);
 		}
 		if (op->extend)
 			op->init_opos += fst->olen;
@@ -3066,7 +3071,7 @@ void sanitize_and_prepare(opt_t *op, dpopt_t *dop, fstate_t *fst, dpstate_t *dst
 	if (op->init_ipos < 0 || op->init_opos < 0) {
 		fplog(stderr, FATAL, "negative position requested (%skiB)\n", 
 			fmt_kiB(op->init_ipos, !nocol));
-		cleanup(); exit(25);
+		cleanup(1); exit(25);
 	}
 
 #if defined(HAVE_FALLOCATE64) || defined(HAVE_LIBFALLOCATE)
@@ -3248,11 +3253,13 @@ int main(int argc, char* argv[])
 	gettimeofday(&currenttime, NULL);
 	printreport(opts, fstate, progress, dpopts);
 	fadvise(1, opts, fstate, progress);
-	err += cleanup();
+	err += cleanup(0);
 	if (int_by == SIGQUIT)
 		++err;
 	if (err && opts->verbose)
 		fplog(stderr, WARN, "There were %i errors! \n", err);
+	if (logfd)
+		fclose(logfd);
 	if (interrupted && int_by != SIGQUIT)
 		return 128+int_by;
 	else
