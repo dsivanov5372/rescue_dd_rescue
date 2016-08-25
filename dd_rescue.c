@@ -1498,12 +1498,6 @@ static inline ssize_t mypread(int fd, void* bf, size_t sz, loff_t off,
 			      opt_t *op, fstate_t *fst, repeat_t *rep, 
 			      dpopt_t *dop, dpstate_t *dst)
 {
-	if (op->i_repeat) {
-		if (rep->i_rep_init)
-			return sz;
-		else
-			rep->i_rep_init = 1;
-	}
 	/* TODO: Handle plugin input here ... */
 	if (dop->prng_libc)
 		return fill_rand(bf, sz);
@@ -1530,6 +1524,13 @@ static inline ssize_t mypread(int fd, void* bf, size_t sz, loff_t off,
 			return -1;
 		}
 		// Cloud read and return (fault-1)*op->hardbs bytes ...
+	}
+	/* Optimization for repeated read from same input */
+	if (op->i_repeat) {
+		if (rep->i_rep_init)
+			return sz;
+		else
+			rep->i_rep_init = 1;
 	}
 	/* We won't make progress beyond EOF */
 	ssize_t rd;
@@ -3256,7 +3257,7 @@ int main(int argc, char* argv[])
 	err += cleanup(0);
 	if (int_by == SIGQUIT)
 		++err;
-	if (err && opts->verbose)
+	if (err && !opts->quiet)
 		fplog(stderr, WARN, "There were %i errors! \n", err);
 	if (logfd)
 		fclose(logfd);
