@@ -43,7 +43,7 @@ static char fmtbufs[8][64];
  * - The string can't be longer than 64 chars, which should be
  *   enough though to print all possible 64bit ints.
  * - bold and norm need to be either invisible (boldinvis=1)
- *   or a single character
+ *   or a single (visible) character or empty/NULL
  */
 char* fmt_int_b(unsigned char pre, unsigned char post, unsigned int scale,
 	       	loff_t no, const char* bold, const char* norm, 
@@ -79,14 +79,14 @@ char* fmt_int_b(unsigned char pre, unsigned char post, unsigned int scale,
 		my_no = (no + scale/2) / scale;
 	for (pos = 0; (pos < pre-isneg || !pre) && (my_no || !pos); ++pos) {
 		unsigned char digit = my_no - base*(my_no/base);
-		if (bold && pos && !(pos % twogroup)) {
+		if (blen && pos && !(pos % twogroup)) {
 			/* insert bold */
 			memcpy(fmtbuf+idx-blen, bold, blen);
 			idx -= blen;
 			if (!boldinvis && pre && --pre <= pos+isneg) {
 				pos++; break;
 			}
-		} else if (norm && !((pos+group) % twogroup)) {
+		} else if (nlen && !((pos+group) % twogroup)) {
 			/* insert norm */
 			memcpy(fmtbuf+idx-nlen, norm, nlen);
 			idx -= nlen;
@@ -161,6 +161,8 @@ int main(int argc, char **argv)
 		printf("%s\n\n", fmt_int_b(0, 0, 1024, l, BOLD, NORM, 0, 10, 3));
 		printf("%s\n",   fmt_int_b(0, 0, 1024, l, "", "", 1, 10, 3));
 		printf("%s\n",   fmt_int_b(0, 0, 1024, l, "", "", 0, 10, 3));
+		printf("%s\n",   fmt_int_b(0, 0, 1024, l, NULL, NULL, 1, 10, 3));
+		printf("%s\n",   fmt_int_b(0, 0, 1024, l, NULL, NULL, 0, 10, 3));
 	}
 	return 0;
 }
