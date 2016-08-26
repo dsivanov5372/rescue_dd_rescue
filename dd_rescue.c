@@ -330,12 +330,12 @@ static char* strsignal(int sig)
 }
 #endif
 
-inline char* fmt_kiB(loff_t no, char col)
+static inline char* fmt_kiB(loff_t no, char col)
 {
 	return fmt_int(0, 1, 1024, no, (col? BOLD: ""), (col? NORM: ""), 1);
 }
 
-inline float difftimetv(const struct timeval* const t2, 
+static inline float difftimetv(const struct timeval* const t2,
 			const struct timeval* const t1)
 {
 	return  (float) (t2->tv_sec  - t1->tv_sec ) +
