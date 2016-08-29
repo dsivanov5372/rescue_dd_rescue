@@ -24,7 +24,7 @@
 static int mypow(int base, int pwr)
 {
 	int i;
-	long pw = 1;
+	int pw = 1;
 	for (i = 0; i < pwr; ++i)
 		pw *= base;
 	return pw;
