@@ -2929,7 +2929,7 @@ void sanitize_and_prepare(opt_t *op, dpopt_t *dop, fstate_t *fst, dpstate_t *dst
 			fplog(stderr, INFO, "turning on repeat (-R) for /dev/zero\n");
 		op->i_repeat = 1;
 		if (op->reverse && !op->init_ipos && op->maxxfer)
-			op->init_ipos = op->maxxfer > op->init_opos? op->init_opos: op->maxxfer;
+			op->init_ipos = (op->init_opos != (loff_t)-INT_MAX && op->maxxfer > op->init_opos)? op->init_opos: op->maxxfer;
 	}
 
 	/* Properly append input basename if output name is dir */
@@ -3072,6 +3072,8 @@ void sanitize_and_prepare(opt_t *op, dpopt_t *dop, fstate_t *fst, dpstate_t *dst
 			/* if existing empty, assume same position */
 			if (op->init_opos == 0)
 				op->init_opos = op->init_ipos;
+			if (op->init_opos == 0 && op->maxxfer && !fst->o_chr)
+				op->init_opos = op->maxxfer;
 			if (op->verbose) 
 				fprintf(stderr, DDR_INFO "opos set to: %skiB\n",
 					fmt_kiB(op->init_opos, !nocol));
