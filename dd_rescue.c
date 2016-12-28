@@ -779,7 +779,7 @@ void updgraph(int err, fstate_t *fst, dpopt_t *dop, opt_t *op)
 		return;
 	}
 	if (relpos > fst->estxfer) {
-		graph[41] = '!';
+		graph[42] = '!';
 		return;
 	}
 	const int off = gpos(relpos, fst->estxfer);
@@ -867,16 +867,17 @@ void input_length(opt_t *op, fstate_t *fst)
 		return;
 	}
 	/* Could not determine transfer len from input file, try output file */
-#ifdef HAVE_SYS_VFSSTAT_H
+#ifdef HAVE_SYS_STATVFS_H
 	/* How much space do we have on output FS? */
-	if (!op->noextend && !fst->oblk && !fst->o_chr) {
+	if (!op->noextend && !fst->o_blk && !fst->o_chr) {
 		struct statvfs svfs;
 		if (!fstatvfs(fst->odes, &svfs)) {
 			uid_t uid = geteuid();
 			ofree = (uid? svfs.f_bavail: svfs.f_bfree) * svfs.f_bsize;
 			if (olen)
 				ofree += (olen - op->init_opos);
-		}
+		} else
+			fplog(stderr, WARN, "statvfs call failed: %s\n", strerror(errno));
 	}
 #endif
 	if (olen) {
@@ -889,7 +890,7 @@ void input_length(opt_t *op, fstate_t *fst)
 		}
 	}
 	if (!fst->estxfer)
-		fst->estxfer = op->maxxfer;
+		fst->estxfer = min3_nonnull(op->maxxfer, ofree, 0);
 	assert(fst->estxfer >= 0);
 	if (fst->estxfer) {
 		preparegraph(op, fst, olen);
