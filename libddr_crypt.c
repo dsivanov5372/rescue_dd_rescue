@@ -893,7 +893,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 		t1 = clock();
 	/* Are we en- or decrypting? */
 	const char* encnm = state->enc? opt->oname: opt->iname;
-	size_t encln = state->enc? opt->init_opos + (opt->reverse? 0: fst->estxfer): fst->ilen;
+	size_t encln = state->enc? opt->init_opos + (opt->reverse? 0: fst->estxfer): fst->fin_ipos;
 	if (state->alg->stream->granul > 1 && state->enc && (state->pad == PAD_ALWAYS || (state->pad == PAD_ASNEEDED && (encln&(BLKSZ-1)))))
 		encln += BLKSZ-(encln&(BLKSZ-1));
 	else
@@ -1260,7 +1260,7 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 	/* FIXME: Hack -- detect last block on decoding to be able to strip padding.
 	 * Cleaner (but more complex) alternative would be to always buffer the last
 	 * 16 bytes and only flush them on receiving eof flag */ 
-	char lastdec = state->enc? 0: (state->finfirst? (fst->ipos == fst->ilen? 1: 0): (fst->ipos+*towr == fst->ilen? 1: 0));
+	char lastdec = state->enc? 0: (state->finfirst? (fst->ipos == fst->fin_ipos? 1: 0): (fst->ipos+*towr == fst->fin_ipos? 1: 0));
 	//char lastencrev = (state->enc && state->rev) ? (fst->opos == fst->init_opos? 1: 0): 0;
 	unsigned char* keys = state->enc? state->sec->ekeys->data: state->sec->dkeys->data;
 	Crypt_IV_fn *crypt = state->enc? state->alg->encrypt: state->alg->decrypt;	

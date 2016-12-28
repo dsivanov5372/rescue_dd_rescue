@@ -752,28 +752,37 @@ static inline int gpos(loff_t off, loff_t len)
 
 /** Prepare graph */
 static char *sgraph = ":.........................................:";
-static void preparegraph(opt_t *op, fstate_t *fst)
+static void preparegraph(opt_t *op, fstate_t *fst, loff_t ifin)
 {
-	if (!fst->ilen || op->init_ipos > fst->ilen)
-		return;
-	if (op->reverse && op->init_ipos-fst->estxfer < 0)
+	if (!fst->estxfer)
 		return;
 	graph = strdup(sgraph);
-	if (op->reverse) {
-		graph[gpos(op->init_ipos, fst->ilen)+1] = '<';
-		graph[gpos(op->init_ipos-fst->estxfer, fst->ilen)-1] = '>';
-
-	} else {
-		graph[gpos(op->init_ipos, fst->ilen)-1] = '>';
-		graph[gpos(op->init_ipos+fst->estxfer, fst->ilen)+1] = '<';
-	}
+	if ((op->reverse && fst->fin_ipos > 0) || (!op->reverse && op->init_ipos > 0))
+		graph[gpos(0, fst->estxfer)-1] = '=';
+	else
+		graph[gpos(0, fst->estxfer)-1] = '>';
+	loff_t finpos = fst->fin_ipos? fst->fin_ipos: fst->fin_opos;
+	if ((op->reverse && op->init_ipos < ifin) || (!op->reverse && finpos < ifin))
+		graph[gpos(fst->estxfer, fst->estxfer)+1] = '=';
+	else
+		graph[gpos(fst->estxfer, fst->estxfer)+1] = '<';
 }
 
-void updgraph(int err, fstate_t *fst, dpopt_t *dop)
+void updgraph(int err, fstate_t *fst, dpopt_t *dop, opt_t *op)
 {
 	if (!graph)
 		return;
-	const int off = gpos(fst->ipos, fst->ilen);
+	const loff_t base = op->reverse? fst->fin_ipos: op->init_ipos;
+	loff_t relpos = fst->ipos - base;
+	if (relpos < 0) {
+		graph[0] = '!';
+		return;
+	}
+	if (relpos > fst->estxfer) {
+		graph[41] = '!';
+		return;
+	}
+	const int off = gpos(relpos, fst->estxfer);
 	if (graph[off] == 'x')
 		return;
 	if (err)
@@ -822,67 +831,72 @@ loff_t file_len(int fd, char *ischr, char* isblk, const char* nm, char quiet, ch
 }
 #endif
 
+static inline loff_t min3_nonnull(loff_t i1, loff_t i2, loff_t i3)
+{
+	loff_t min = i1;
+	if (i2 && (i2 < min || !min))
+		min = i2;
+	if (i3 && (i3 < min || !min))
+		min = i3;
+	return min;
+}
 
-/** Tries to determine size of input file */
+/** Tries to determine size of files */
 void input_length(opt_t *op, fstate_t *fst)
 {
-	struct STAT64 stbuf;
-	fst->estxfer = op->maxxfer;
-	if (op->reverse) {
-		if (op->init_ipos)
-			fst->ilen = op->init_ipos;
-		else {
-			/* FIXME: Shouldn't we set ilen to 0
-			 * at least if !i_chr ?
-			 * Or otherwise correct init_ipos with a warning? */
-			fplog(stderr, WARN, "reverse copy from input file with offset 0\n");
-			fst->ilen = op->maxxfer;
+	char iblk = 0;
+	loff_t ilen, olen, ofree = 0;
+	ilen = file_len(fst->ides, &fst->i_chr, &iblk, op->iname, op->quiet, op->sparse);
+	olen = file_len(fst->odes, &fst->o_chr, &fst->o_blk, op->oname, op->quiet, 1);
+	/* If we have a valid len already, things are easy ... */
+	if (ilen) {
+		if (op->reverse) {
+			fst->estxfer = min3_nonnull(op->init_ipos, olen? op->init_opos: 0, op->maxxfer);
+			fst->fin_ipos = op->init_ipos? op->init_ipos - fst->estxfer: 0;
+			fst->fin_opos = olen && op->init_opos? op->init_opos - fst->estxfer: 0;
+		} else {
+			fst->estxfer = min3_nonnull(ilen-op->init_ipos, olen&&op->noextend? olen-op->init_opos: 0, op->maxxfer);
+			fst->fin_ipos = op->init_ipos + fst->estxfer;
+			fst->fin_opos = olen? op->init_opos + fst->estxfer: 0;
 		}
-	} else
-		fst->ilen = op->init_ipos + op->maxxfer;
-	if (fst->estxfer)
-		preparegraph(op, fst);
-	if (fst->i_chr)
-		return;
-	if (FSTAT64(fst->ides, &stbuf))
-		return;
-	if (S_ISLNK(stbuf.st_mode))
-		return;
-	if (S_ISCHR(stbuf.st_mode)) {
-		fst->i_chr = 1;
+		assert(fst->estxfer > 0);
+		preparegraph(op, fst, ilen);
+		if (!op->quiet)
+			fplog(stderr, INFO, "expect to copy %skiB from %s\n",
+				fmt_kiB(fst->estxfer, !nocol), op->iname);
 		return;
 	}
-	if (S_ISBLK(stbuf.st_mode)) {
-		/* Do magic to figure size of block dev */
-		loff_t p = lseek64(fst->ides, 0, SEEK_CUR);
-		if (p == -1)
-			return;
-		fst->ilen = lseek64(fst->ides, 0, SEEK_END) /* + 1 */;
-		lseek64(fst->ides, p, SEEK_SET);
-	} else {
-		loff_t diff;
-		fst->ilen = stbuf.st_size;
-		if (!fst->ilen)
-			return;
-		diff = fst->ilen - stbuf.st_blocks*512;
-		if (diff >= 4096 && (float)diff/fst->ilen > 0.05 && !op->quiet)
-		       fplog(stderr, INFO, "%s is sparse (%i%%) %s\n", op->iname, (int)(100.0*diff/fst->ilen), (op->sparse? "": ", consider -a"));
+	/* Could not determine transfer len from input file, try output file */
+#ifdef HAVE_SYS_VFSSTAT_H
+	/* How much space do we have on output FS? */
+	if (!op->noextend && !fst->oblk && !fst->o_chr) {
+		struct statvfs svfs;
+		if (!fstatvfs(fst->odes, &svfs)) {
+			uid_t uid = geteuid();
+			ofree = (uid? svfs.f_bavail: svfs.f_bfree) * svfs.f_bsize;
+			if (olen)
+				ofree += (olen - op->init_opos);
+		}
 	}
-	if (!fst->ilen)
-		return;
-	if (!op->reverse)
-		fst->estxfer = fst->ilen - op->init_ipos;
-	else
-		fst->estxfer = op->init_ipos;
-	if (op->maxxfer && fst->estxfer > op->maxxfer)
+#endif
+	if (olen) {
+		if (op->reverse) {
+			fst->estxfer = min3_nonnull(op->init_opos, op->maxxfer, ofree);
+			fst->fin_opos = op->init_opos? op->init_opos - fst->estxfer: 0;
+		} else {
+			fst->estxfer = min3_nonnull(op->noextend? olen-op->init_opos: 0, op->maxxfer, ofree);
+			fst->fin_opos = op->init_opos + fst->estxfer;
+		}
+	}
+	if (!fst->estxfer)
 		fst->estxfer = op->maxxfer;
-	if (fst->estxfer < 0)
-		fst->estxfer = 0;
-	if (!op->quiet)
-		fplog(stderr, INFO, "expect to copy %skiB from %s\n",
-			fmt_kiB(fst->estxfer, !nocol), op->iname);
-	if (!graph)
-		preparegraph(op, fst);
+	assert(fst->estxfer >= 0);
+	if (fst->estxfer) {
+		preparegraph(op, fst, olen);
+		if (!op->quiet)
+			fplog(stderr, INFO, "expect to copy %skiB from %s\n",
+				fmt_kiB(fst->estxfer, !nocol), op->iname);
+	}
 }
 
 int output_length(opt_t *op, fstate_t *fst)
@@ -907,28 +921,28 @@ int output_length(opt_t *op, fstate_t *fst)
 		fst->o_blk = 1;
 		if (p == -1)
 			return -1;
-		fst->olen = lseek64(fst->odes, 0, SEEK_END) + 1;
+		fst->fin_opos = lseek64(fst->odes, 0, SEEK_END) + 1;
 		lseek64(fst->odes, p, SEEK_SET);
 	} else {
 		loff_t diff;
-		fst->olen = stbuf.st_size;
-		if (!fst->olen)
+		fst->fin_opos = stbuf.st_size;
+		if (!fst->fin_opos)
 			return -1;
-		diff = fst->olen - stbuf.st_blocks*512;
-		if (diff >= 4096 && (float)diff/fst->ilen > 0.05 && !op->quiet)
-		       fplog(stderr, INFO, "%s is sparse (%i%%) %s\n", op->oname, (int)(100.0*diff/fst->olen), (op->sparse? "": ", consider -a"));
+		diff = fst->fin_opos - stbuf.st_blocks*512;
+		if (diff >= 4096 && (float)diff/fst->fin_opos > 0.05 && !op->quiet)
+		       fplog(stderr, INFO, "%s is sparse (%i%%) %s\n", op->oname, (int)(100.0*diff/fst->fin_opos), (op->sparse? "": ", consider -a"));
 	}
-	if (!fst->olen)
+	if (!fst->fin_opos)
 		return -1;
 	if (op->extend) {
 		if (op->reverse) {
-			fplog(stderr, INFO, "Advance output pos by ilen %i for reverse extend ...\n", fst->ilen);
-			op->init_opos += fst->ilen;
+			fplog(stderr, INFO, "Advance output pos by ilen %i for reverse extend ...\n", fst->fin_ipos);
+			op->init_opos += fst->fin_ipos;
 		}
 		return 0;
 	}
 	if (!op->reverse) {
-		loff_t newmax = fst->olen - op->init_opos;
+		loff_t newmax = fst->fin_opos - op->init_opos;
 		if (newmax < 0) {
 			fplog(stderr, FATAL, "output position is beyond end of file but -M specified!\n");
 			cleanup(1); exit(19);
@@ -939,10 +953,10 @@ int output_length(opt_t *op, fstate_t *fst)
 				fplog(stderr, INFO, "limit max xfer to %skiB\n",
 					fmt_kiB(op->maxxfer, !nocol));
 		}
-	} else if (op->init_opos > fst->olen) {
+	} else if (op->init_opos > fst->fin_opos) {
 		fplog(stderr, WARN, "change output position %skiB to endpos %skiB due to -M\n",
-			fmt_kiB(op->init_opos, !nocol), fmt_kiB(fst->olen, !nocol));
-		op->init_opos = fst->olen;
+			fmt_kiB(op->init_opos, !nocol), fmt_kiB(fst->fin_opos, !nocol));
+		op->init_opos = fst->fin_opos;
 	}
 	return 0;
 }
@@ -1069,7 +1083,7 @@ void doprint(FILE* const file, const unsigned int bs, const clock_t cl,
 		int hour = sec / 3600;
 		int min = (sec % 3600) / 60;
 		sec = sec % 60;
-		updgraph(0, fst, dop);
+		updgraph(0, fst, dop, op);
 		fprintf(file, "             %s %3i%%  %s: %2i:%02i:%02i \n",
 			graph? graph: sgraph, (int)(100*prg->xfer/fst->estxfer),
 			(in_report? "TOT": "ETA"), hour, min, sec);
@@ -1111,7 +1125,7 @@ void printstatus(FILE* const file1, FILE* const file2,
 	/* Idea: Could save last not printed status and print on err */
 	if (t2 < printint && !sync && !in_report) {
 		if (fst->estxfer)
-			updgraph(0, fst, dop);
+			updgraph(0, fst, dop, op);
 		return;
 	}
 
@@ -1555,7 +1569,7 @@ static inline ssize_t mypread(int fd, void* bf, size_t sz, loff_t off,
 			fplog(stderr, DEBUG, "Inject read fault @ %li (rd %iblk @ %li*%i)\n",
 				(long)((fault-1)*op->hardbs+off), (sz+op->hardbs-1)/op->hardbs,
 				off/op->hardbs, op->hardbs);
-		if (!op->reverse && fst->ilen && fst->ipos == fst->ilen) {
+		if (!op->reverse && fst->fin_ipos && fst->ipos == fst->fin_ipos) {
 			/* EOF, we can't proceed any further */
 			errno = 0;
 			return 0;
@@ -1579,7 +1593,7 @@ static inline ssize_t mypread(int fd, void* bf, size_t sz, loff_t off,
 		rd = read(fd, bf, sz);
 	else
 		rd = pread64(fd, bf, sz, off);
-	if (rd == -1 && !op->reverse && fst->ilen && fst->ipos == fst->ilen) {
+	if (rd == -1 && !op->reverse && fst->fin_ipos && fst->ipos == fst->fin_ipos) {
 		errno = 0;
 		return 0;
 	} else
@@ -1993,8 +2007,8 @@ int copyfile_hardbs(const loff_t max, opt_t *op, fstate_t *fst,
 		
 			errno = 0;
 			/* Adjust toread to not extend beyond EOF if src filesize is known */
-			if (!op->reverse && fst->ilen && fst->ipos+toread > fst->ilen)
-				toread = fst->ilen-fst->ipos;
+			if (!op->reverse && fst->fin_ipos && fst->ipos+toread > fst->fin_ipos)
+				toread = fst->fin_ipos-fst->ipos;
 			/* Note: This should handle maxxfer as well */
 			/* TODO: Do we need to special case last block on reverse copy as well? */
 			if (op->nosparse || 
@@ -2017,7 +2031,7 @@ int copyfile_hardbs(const loff_t max, opt_t *op, fstate_t *fst,
 				}
 			}
 			savebb(pos/op->hardbs, op);
-			updgraph(1, fst, dop);
+			updgraph(1, fst, dop, op);
 			prg->fxfer += toread; prg->xfer += toread;
 			if (op->reverse) { 
 				fst->ipos -= toread; fst->opos -= toread; 
@@ -2030,7 +2044,7 @@ int copyfile_hardbs(const loff_t max, opt_t *op, fstate_t *fst,
 				exit_report(32, op, fst, prg, dop);
 			}
 			/*
-			if (!op->reverse && fst->ilen && fst->ipos == fst->ilen)
+			if (!op->reverse && fst->fin_ipos && fst->ipos == fst->fin_ipos)
 				return errs;
 			 */
 		} else {
@@ -2602,7 +2616,7 @@ unsigned char* zalloc_aligned_buf(unsigned int bs, unsigned char**obuf)
 	return ptr;
 }
 
-/** Heuristic: strings starting with - or a digit are numbers, ev.thing else a ffstate->ilename. A pure "-" is a ffstate->ilename. */
+/** Heuristic: strings starting with - or a digit are numbers, ev.thing else a filename. A pure "-" is a filename. */
 int is_filename(char* arg)
 {
 	if (!arg)
@@ -2639,7 +2653,7 @@ const char* retstrdupcat3(const char* dir, char dirsep, const char* inm)
 }
 		
 
-/** Fix output ffstate->ilename if it's a directory */
+/** Fix output filename if it's a directory */
 const char* dirappfile(const char* onm, opt_t *op)
 {
 	size_t oln = strlen(onm);
@@ -3105,7 +3119,7 @@ void sanitize_and_prepare(opt_t *op, dpopt_t *dop, fstate_t *fst, dpstate_t *dst
 			cleanup(1); exit(19);
 		}
 		if (op->extend)
-			op->init_opos += fst->olen;
+			op->init_opos += fst->fin_opos;
 	}
 	input_length(op, fst);
 
