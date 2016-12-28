@@ -741,7 +741,7 @@ static void check_seekable(const int fd, char *ischr, const char* msg)
 }
 
 /** Calc position in graph */
-inline int gpos(loff_t off, loff_t len)
+static inline int gpos(loff_t off, loff_t len)
 {
 	static const int glen = 40; //strlen(graph) - 2;
 	return 1+(glen*off/len);
