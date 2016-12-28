@@ -783,6 +783,50 @@ void updgraph(int err, fstate_t *fst, dpopt_t *dop)
 	}
 }
 
+#if 0
+/* Maximum amount of bytes that can be read from input file */
+loff_t input_max(opt_t *op, fstate_t *fst)
+{
+	struct STAT64 stbuf;
+	/* No length */
+	if (fst->i_chr)
+		return 0;
+	/* Reverse: We can't read neg offsets */
+	if (op->reverse)
+		return op->init_ipos;
+	/* Can't determine any more info */
+	if (FSTAT64(fst->ides, &stbuf))
+		return 0;
+	/* TODO: Follow link */
+	if (S_ISLNK(stbuf.st_mode))
+		return;
+	/* char device */
+	if (S_ISCHR(stbuf.st_mode)) {
+		fst->i_chr = 1;
+		return 0;
+	}
+	/* Block device */
+	if (S_ISBLK(stbuf.st_mode)) {
+		/* Do magic to figure size of block dev */
+		loff_t l, p = lseek64(fst->ides, 0, SEEK_CUR);
+		if (p == -1)
+			return 0;
+		l = lseek64(fst->ides, 0, SEEK_END) /* + 1 */;
+		lseek64(fst->ides, p, SEEK_SET);
+		return l - op->init_ipos;
+	}
+	loff_t l, diff;
+	l = stbuf.st_size;
+	if (!l)
+		return 0;
+	diff = l - stbuf.st_blocks*512;
+	if (diff >= 4096 && (float)diff/l > 0.05 && !op->quiet)
+	       fplog(stderr, INFO, "%s is sparse (%i%%) %s\n", op->iname, (int)(100.0*diff/l), (op->sparse? "": ", consider -a"));
+	return l - op->init_ipos
+}
+#endif
+
+
 /** Tries to determine size of input file */
 void input_length(opt_t *op, fstate_t *fst)
 {
