@@ -46,7 +46,7 @@ typedef struct _fstate_t {
 	loff_t ipos, opos;
 	int ides, odes;
 	unsigned char *buf, *buf2, *origbuf, *origbuf2;
-	loff_t ilen, olen, estxfer;
+	loff_t fin_ipos, fin_opos, estxfer;
 	char i_chr, o_chr, o_blk, o_lnk;
 	int nrerr;
 	char identical;

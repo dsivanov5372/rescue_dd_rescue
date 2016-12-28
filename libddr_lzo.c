@@ -784,7 +784,10 @@ int check_blklen_and_next(lzo_state *state, fstate_t *fst,
 #if __BYTE_ORDER == __BIG_ENDIAN
 #define HTONL(x) x
 #else
-#define HTONL(x) ((x<<24)&0xff000000) | ((x<<8)&0x00ff0000) | ((x>>8)&0x0000ff00) | ((x>>24)&0x000000ff)
+#define HTONL(x) (((((x) & 0xFF)) << 24) | \
+		  ((((x) & 0xFF00)) << 8) | \
+		  ((((x) & 0xFF0000)) >> 8) | \
+		  ((((x) & 0xFF000000)) >> 24))
 #endif
 
 unsigned char* lzo_search_hdr(fstate_t *fst, unsigned char* bf, int *towr,
