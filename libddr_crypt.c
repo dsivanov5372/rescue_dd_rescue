@@ -1260,7 +1260,7 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 	/* FIXME: Hack -- detect last block on decoding to be able to strip padding.
 	 * Cleaner (but more complex) alternative would be to always buffer the last
 	 * 16 bytes and only flush them on receiving eof flag */ 
-	char lastdec = state->enc? 0: (state->finfirst? (fst->ipos == fst->fin_ipos? 1: 0): (fst->ipos+*towr == fst->fin_ipos? 1: 0));
+	char lastdec = state->enc? 0: (state->finfirst? (fst->ipos == state->opts->init_ipos? 1: 0): (fst->ipos+*towr == fst->fin_ipos? 1: 0));
 	//char lastencrev = (state->enc && state->rev) ? (fst->opos == fst->init_opos? 1: 0): 0;
 	unsigned char* keys = state->enc? state->sec->ekeys->data: state->sec->dkeys->data;
 	Crypt_IV_fn *crypt = state->enc? state->alg->encrypt: state->alg->decrypt;	

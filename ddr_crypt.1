@@ -123,7 +123,7 @@ end to have a full block.
 The last block is filled up with zeroes and then encrypted.
 Note that on decryption, these zeroes can't be automatically
 stripped, as the decryptor has no way to tell whether there
-true trailing zeros or whether those had been added by padding.
+are true trailing zeros or whether those had been added by padding.
 This option is thus not recommended for copying files of
 arbitrary length.
 .TP 4
@@ -131,7 +131,8 @@ arbitrary length.
 This uses the PKCS7 scheme used by openssl, appending one to
 sixteen bytes with the number of bytes to discard when
 decrypting. This is always safe, but always makes the output file
-larger than the input file. Use this when copying files.
+larger than the input file. Use this when copying files. This
+is the default.
 .TP 4
 .BR pad=asneeded
 This is a hybrid between zero and always. This does PKCS7
