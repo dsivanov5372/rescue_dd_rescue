@@ -195,13 +195,16 @@ void* libfalloc = (void*)0;
 #define MIN(a,b) ((a)<(b)? (a): (b))
 
 #if __WORDSIZE == 64
-#define LL "l"
+# define LL "l"
 #elif __WORDSIZE == 32
-#define LL "ll"
+# define LL "ll"
 #else
-#error __WORDSIZE undefined
+# error __WORDSIZE undefined
 #endif
 
+#ifdef HAVE_SYS_STATVFS_H
+# include <sys/statvfs.h>
+#endif
 
 /* fwd decls */
 int cleanup(char);
@@ -783,46 +786,39 @@ void updgraph(int err, fstate_t *fst, dpopt_t *dop)
 	}
 }
 
-#if 0
-/* Maximum amount of bytes that can be read from input file */
-loff_t input_max(opt_t *op, fstate_t *fst)
+#if 1
+loff_t file_len(int fd, char *ischr, char* isblk, const char* nm, char quiet, char sparse)
 {
 	struct STAT64 stbuf;
-	/* No length */
-	if (fst->i_chr)
+	if (*ischr)
 		return 0;
-	/* Reverse: We can't read neg offsets */
-	if (op->reverse)
-		return op->init_ipos;
-	/* Can't determine any more info */
-	if (FSTAT64(fst->ides, &stbuf))
+	if (FSTAT64(fd, &stbuf))
 		return 0;
-	/* TODO: Follow link */
-	if (S_ISLNK(stbuf.st_mode))
-		return;
-	/* char device */
-	if (S_ISCHR(stbuf.st_mode)) {
-		fst->i_chr = 1;
+	/* Note: S_ISLNK not relevant, we opened fd w/o NOLINK */
+	/* Char device or pipe */
+	if (S_ISCHR(stbuf.st_mode) || S_ISFIFO(stbuf.st_mode) || S_ISSOCK(stbuf.st_mode)) {
+		*ischr = 1;
 		return 0;
 	}
 	/* Block device */
 	if (S_ISBLK(stbuf.st_mode)) {
+		*isblk = 1;
 		/* Do magic to figure size of block dev */
-		loff_t l, p = lseek64(fst->ides, 0, SEEK_CUR);
+		loff_t l, p = lseek64(fd, 0, SEEK_CUR);
 		if (p == -1)
 			return 0;
-		l = lseek64(fst->ides, 0, SEEK_END) /* + 1 */;
-		lseek64(fst->ides, p, SEEK_SET);
-		return l - op->init_ipos;
+		l = lseek64(fd, 0, SEEK_END) /* + 1 */;
+		lseek64(fd, p, SEEK_SET);
+		return l;
 	}
-	loff_t l, diff;
-	l = stbuf.st_size;
-	if (!l)
+	/* Regular file */
+	loff_t diff;
+	if (!stbuf.st_size)
 		return 0;
-	diff = l - stbuf.st_blocks*512;
-	if (diff >= 4096 && (float)diff/l > 0.05 && !op->quiet)
-	       fplog(stderr, INFO, "%s is sparse (%i%%) %s\n", op->iname, (int)(100.0*diff/l), (op->sparse? "": ", consider -a"));
-	return l - op->init_ipos
+	diff = stbuf.st_size - stbuf.st_blocks*512;
+	if (!quiet && diff >= 4096 && (float)diff/stbuf.st_size > 0.05)
+	       fplog(stderr, INFO, "%s is sparse (%i%%) %s\n", nm, (int)(100.0*diff/stbuf.st_size), (sparse? "": ", consider -a"));
+	return stbuf.st_size;
 }
 #endif
 
