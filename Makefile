@@ -215,10 +215,13 @@ sha1.po:
 
 # Default rules
 %.o:
-	$(CC) $(CFLAGS) $(PIE) -c $<
+	$(CC) $(CFLAGS) $(DEFINES) $(PIE) -c $<
 
 %.po:
-	$(CC) $(CFLAGS) $(PIC) -o $@ -c $<
+	$(CC) $(CFLAGS) $(DEFINES) $(PIC) -o $@ -c $<
+
+%.s:
+	$(CC) $(CFLAGS) $(DEFINES) $(PIE) -S $<
 
 # Use stack protector for libddr_lzo ...
 libddr_lzo.po:
