@@ -879,10 +879,16 @@ void input_length(opt_t *op, fstate_t *fst)
 	if (!op->noextend && !fst->o_blk && !fst->o_chr) {
 		struct statvfs svfs;
 		if (!fstatvfs(fst->odes, &svfs)) {
+			/* FIXME: Should be CAP_SYS_RESOURCE check? */
 			uid_t uid = geteuid();
 			ofree = (uid? svfs.f_bavail: svfs.f_bfree) * svfs.f_bsize;
-			if (olen)
-				ofree += (olen - op->init_opos);
+			if (olen) {
+				loff_t add = svfs.f_bsize-1 + olen;
+				add -= add%svfs.f_bsize;
+				if (op->verbose)
+					fplog(stderr, INFO, "free space %" LL "i + %" LL "i\n", ofree, add);
+				ofree += add - (op->reverse? 0: op->init_opos);
+			}
 		} else
 			fplog(stderr, WARN, "statvfs call failed: %s\n", strerror(errno));
 	}
