@@ -43,8 +43,7 @@ CFLAGS="$CFLAGS -D_FORTIFY_SOURCE=2 -fPIE -pie -rdynamic"
 dnl ***************************************************************************
 dnl Check for support of rep nop
 AC_MSG_CHECKING(whether asm rep nop is supported)
-AC_TRY_LINK([
-],[
+AC_TRY_RUN([
 	int main() {
 	int err = 0;
 	asm volatile ("rep nop":::"memory");
