@@ -206,8 +206,8 @@ void* libfalloc = (void*)0;
 # include <sys/statvfs.h>
 #endif
 
-#if defined(__x86_64__) || defined(__i386__)
-# define cpu_relax() asm volatile ("rep nop");
+#if defined(HAVE_REP_NOP) && (defined(__x86_64__) || defined(__i386__))
+# define cpu_relax() asm volatile ("rep nop":::"memory");
 #else
 # define cpu_relax() while (0) {}
 #endif

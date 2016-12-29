@@ -38,4 +38,22 @@ CC_FLAGS_CHECK(-msse4.2,SSE42)
 CC_FLAGS_CHECK(-mavx2,AVX2)
 CC_FLAGS_CHECK(-mrdrnd,RDRND)
 CC_FLAGS_CHECK(-maes,AES)
+
+dnl ***************************************************************************
+dnl Check for support of rep nop
+AC_MSG_CHECKING(whether asm rep nop is supported)
+AC_TRY_COMPILE([
+],[
+	int main() {
+	asm volatile ("rep nop");
+	return 0;
+	}
+],[
+	AC_MSG_RESULT(yes)
+	AC_DEFINE_UNQUOTED([HAVE_REP_NOP], 1,
+		[check whether asm rep nop works])
+],[
+	AC_MSG_RESULT(no)
+])
+
 AC_OUTPUT
