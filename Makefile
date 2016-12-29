@@ -450,6 +450,9 @@ check: $(TARGETS) find_nonzero md5 sha1 sha256 sha512 fmt_no
 	cmp zero zero2
 	@rm zero zero2
 	@rm -f TEST TEST2
+	@echo "***** dd_rescue ratecontrol test *****"
+	# Test system must be fast enough to achieve ~20MB/s ...
+	OLDDT=`date +%s`; $(VG) ./dd_rescue -m 64M -C 20M /dev/zero /dev/null; DT=`date +%s`; test $$(($$DT-$$OLDDT)) = 3 -o $$(($$DT-$$OLDDT)) = 4
 	@echo "***** dd_rescue MD5 plugin tests *****"
 	$(VG) ./md5 /dev/null
 	$(VG) ./md5 /dev/null | md5sum -c
