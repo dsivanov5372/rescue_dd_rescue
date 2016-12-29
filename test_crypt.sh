@@ -97,7 +97,7 @@ cmp urandom.enc urandom.enc.old || exit 4
 $VG ./dd_rescue -t -m 4096 urandom urandom.new || exit 1
 # Ensure that we don't have 01 or 02 02 or ... at the end,
 # which would trip pad=asneeded
-echo -n "a" | dd_rescue -S 4095 -m 1 - urandom.new
+echo -n "a" | $VG ./dd_rescue -S 4095 -m 1 - urandom.new
 mv urandom.new urandom
 enc_dec_compare_keys urandom AES192-CBC "" pad=always "" "-qpt"
 enc_dec_compare_keys urandom AES192-CBC "" pad=asneeded "" "-qpt"
