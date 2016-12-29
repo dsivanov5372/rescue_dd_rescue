@@ -206,6 +206,13 @@ void* libfalloc = (void*)0;
 # include <sys/statvfs.h>
 #endif
 
+#if defined(__x86_64__) || defined(__i386__)
+# define cpu_relax() asm volatile ("rep nop");
+#else
+# define cpu_relax() while (0) {}
+#endif
+
+
 /* fwd decls */
 int cleanup(char);
 
@@ -1124,24 +1131,47 @@ void printstatus(FILE* const file1, FILE* const file2,
 		t2 = 0.0001;
 #endif
 	if (op->maxkbs) {
+		static unsigned w1 =0, w2 = 0, w3 = 0;
+		static float t1w = 0.0, t2w = 0.0;
 		/* Avoid global rate above limit */
 		float c1rate = prg->xfer/(1024.0*t1);
 		/* Avoid local rate above twice the limit */
 		float c2rate = (prg->xfer-prg->lxfer)/(2048.0*t2);
 		if (c1rate > op->maxkbs || c2rate > op->maxkbs) {
-			struct timespec ts;
-			unsigned mssleep = c1rate > c2rate?
-				prg->xfer/op->maxkbs - t1*1024.0:
-				(prg->xfer-prg->lxfer)/(2*op->maxkbs) - t2*1024.0;
-			ts.tv_sec = mssleep / 1000;
-			ts.tv_nsec = 1000*1000ULL*(mssleep%1000);
+			struct timeval wtime;
+			memcpy(&wtime, &currenttime, sizeof(wtime));
+			int m1sleep = 3*prg->xfer/(2*op->maxkbs) - t1*1536.0;
+			int m2sleep = (prg->xfer-prg->lxfer)/(2*op->maxkbs) - t2*1024.0;
+			int mssleep;
+			if (m2sleep >= m1sleep) {
+			       	++w3;
+				mssleep = m2sleep;
+			} else
+				mssleep = m1sleep;
 			//fprintf(stderr, "%04ims\r", mssleep); fflush(stderr);
-			nanosleep(&ts, NULL);
-			if (c1rate > c2rate)
-				t1 += mssleep / 1000.0;
-			else
-				t2 += mssleep / 1000.0;
+			cpu_relax();
+			if (mssleep >= 2) {
+				struct timespec ts;
+				++w1;
+				ts.tv_sec = mssleep / 1000;
+				ts.tv_nsec = 1000*1000ULL*(mssleep%1000);
+				nanosleep(&ts, NULL);
+				gettimeofday(&currenttime, NULL);
+				t1w += difftimetv(&currenttime, &wtime);
+			} else {
+				++w2;
+				sched_yield();
+				gettimeofday(&currenttime, NULL);
+				t2w += difftimetv(&currenttime, &wtime);
+			}
+			t1 = difftimetv(&currenttime, &starttime);
+			t2 = difftimetv(&currenttime, &lasttime);
+			cl = clock();
 		}
+		if (in_report && op->verbose)
+			fplog(stderr, INFO, "Sleep stats: %i(%.4f), %i(%.6f) - %i\n",
+					w1, w1? t1w/w1: 0.0,
+					w2, w2? t2w/w2: 0.0, w3);
 	}
 	/* Idea: Could save last not printed status and print on err */
 	if (t2 < printint && !sync && !in_report) {
@@ -2080,6 +2110,8 @@ int copyfile_hardbs(const loff_t max, opt_t *op, fstate_t *fst,
 			printstatus((op->quiet? 0: stderr), 0, op->hardbs, 1, op, fst, prg, dop);
 		else if (!op->quiet && !(prg->xfer % (8*op->softbs)))
 			printstatus(stderr, 0, op->hardbs, 0, op, fst, prg, dop);
+		else if (op->quiet && op->maxkbs && !(prg->xfer % (8*op->softbs)))
+			printstatus(0, 0, op->hardbs, 0, op, fst, prg, dop);
 	} /* remain */
 	return errs;
 }
@@ -2188,6 +2220,8 @@ int copyfile_softbs(const loff_t max, opt_t *op, fstate_t *fst,
 			printstatus((op->quiet? 0: stderr), 0, op->softbs, 1, op, fst, prg, dop);
 		else if (!op->quiet && !(prg->xfer % (16*op->softbs)))
 			printstatus(stderr, 0, op->softbs, 0, op, fst, prg, dop);
+		else if (op->quiet && op->maxkbs && !(prg->xfer % (16*op->softbs)))
+			printstatus(0, 0, op->softbs, 0, op, fst, prg, dop);
 	} /* remain */
 	return errs;
 }
@@ -2268,6 +2302,8 @@ int copyfile_splice(const loff_t max, opt_t *op, fstate_t *fst,
 			printstatus((op->quiet? 0: stderr), 0, op->softbs, 1, op, fst, prg, dop);
 		else if (!op->quiet && !(prg->xfer % (16*op->softbs)))
 			printstatus(stderr, 0, op->softbs, 0, op, fst, prg, dop);
+		else if (op->quiet && op->maxkbs && !(prg->xfer % (16*op->softbs)))
+			printstatus(0, 0, op->softbs, 0, op, fst, prg, dop);
 	}
 	close(fd_pipe[0]); close(fd_pipe[1]);
 	return 0;
