@@ -39,6 +39,7 @@ CC_FLAGS_CHECK(-mavx2,AVX2)
 CC_FLAGS_CHECK(-mrdrnd,RDRND)
 CC_FLAGS_CHECK(-maes,AES)
 
+CFLAGS="$CFLAGS -D_FORTIFY_SOURCE=2"
 dnl ***************************************************************************
 dnl Check for support of rep nop
 AC_MSG_CHECKING(whether asm rep nop is supported)
