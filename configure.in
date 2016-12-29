@@ -42,11 +42,12 @@ CC_FLAGS_CHECK(-maes,AES)
 dnl ***************************************************************************
 dnl Check for support of rep nop
 AC_MSG_CHECKING(whether asm rep nop is supported)
-AC_TRY_COMPILE([
+AC_TRY_LINK([
 ],[
 	int main() {
-	asm volatile ("rep nop");
-	return 0;
+	int err = 0;
+	asm volatile ("rep nop":::"memory");
+	return err;
 	}
 ],[
 	AC_MSG_RESULT(yes)
