@@ -26,6 +26,7 @@ typedef struct _opt_t {
 	char preserve, falloc, dosplice;
 	char noextend, avoidwrite, avoidnull;
 	char extend, rmvtrim, i_repeat;
+	unsigned int maxkbs; /* from 1kB/s to 4TB/s */
 } opt_t;
 extern char nocol;
 

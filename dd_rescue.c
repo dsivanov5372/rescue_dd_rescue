@@ -1123,6 +1123,26 @@ void printstatus(FILE* const file1, FILE* const file2,
 	if (t2 == 0.0)
 		t2 = 0.0001;
 #endif
+	if (op->maxkbs) {
+		/* Avoid global rate above limit */
+		float c1rate = prg->xfer/(1024.0*t1);
+		/* Avoid local rate above twice the limit */
+		float c2rate = (prg->xfer-prg->lxfer)/(2048.0*t2);
+		if (c1rate > op->maxkbs || c2rate > op->maxkbs) {
+			struct timespec ts;
+			unsigned mssleep = c1rate > c2rate?
+				prg->xfer/op->maxkbs - t1*1024.0:
+				(prg->xfer-prg->lxfer)/(2*op->maxkbs) - t2*1024.0;
+			ts.tv_sec = mssleep / 1000;
+			ts.tv_nsec = 1000*1000ULL*(mssleep%1000);
+			//fprintf(stderr, "%04ims\r", mssleep); fflush(stderr);
+			nanosleep(&ts, NULL);
+			if (c1rate > c2rate)
+				t1 += mssleep / 1000.0;
+			else
+				t2 += mssleep / 1000.0;
+		}
+	}
 	/* Idea: Could save last not printed status and print on err */
 	if (t2 < printint && !sync && !in_report) {
 		if (fst->estxfer)
@@ -2440,7 +2460,7 @@ void printversion()
 #ifdef HAVE_GETOPT_LONG
 struct option longopts[] = { 	{"help", 0, NULL, 'h'}, {"verbose", 0, NULL, 'v'},
 				{"quiet", 0, NULL, 'q'}, {"version", 0, NULL, 'V'},
-				{"color", 1, NULL, 'c'},
+				{"color", 1, NULL, 'c'}, {"ratecontrol", 1, NULL, 'C'},
 				{"ipos", 1, NULL, 's'}, {"opos", 1, NULL, 'S'},
 				{"softbs", 1, NULL, 'b'}, {"hardbs", 1, NULL, 'B'},
 				{"maxerr", 1, NULL, 'e'}, {"maxxfer", 1, NULL, 'm'},
@@ -2513,6 +2533,7 @@ void printlonghelp()
 	fprintf(stderr, "         -i         interactive: ask before overwriting data (def=no),\n");
 	fprintf(stderr, "         -f         force: skip some sanity checks (def=no),\n");
 	fprintf(stderr, "         -p         preserve: preserve ownership, perms, times, attrs (def=no),\n");
+	fprintf(stderr, "         -C limit   rateControl: avoid xfer data faster than limit B/s\n");
 	fprintf(stderr, "         -Y oname   Secondary output file (multiple possible),\n");
 	fprintf(stderr, "         -F off[-off]r/rep[,off[-off]w/rep[,...]]  fault injection (hardbs off) r/w\n");
 	fprintf(stderr, "         -q         quiet operation,\n");
@@ -2772,9 +2793,9 @@ char* parse_opts(int argc, char* argv[], opt_t *op, dpopt_t *dop)
 	int tmpfd = 0;
 
 #ifdef LACK_GETOPT_LONG
-	while ((c = getopt(argc, argv, ":rtTfihqvVwWaAdDkMRpPuc:b:B:m:e:s:S:l:L:o:y:z:Z:2:3:4:xY:F:")) != -1)
+	while ((c = getopt(argc, argv, ":rtTfihqvVwWaAdDkMRpPuc:b:B:m:e:s:S:l:L:o:y:z:Z:2:3:4:xY:F:C:")) != -1)
 #else
-	while ((c = getopt_long(argc, argv, ":rtTfihqvVwWaAdDkMRpPuc:b:B:m:e:s:S:l:L:o:y:z:Z:2:3:4:xY:F:", longopts, NULL)) != -1)
+	while ((c = getopt_long(argc, argv, ":rtTfihqvVwWaAdDkMRpPuc:b:B:m:e:s:S:l:L:o:y:z:Z:2:3:4:xY:F:C:", longopts, NULL)) != -1)
 #endif
 	{
 		switch (c) {
@@ -2802,6 +2823,7 @@ char* parse_opts(int argc, char* argv[], opt_t *op, dpopt_t *dop)
 			case 'v': op->quiet = 0; op->verbose = 1; break;
 			case 'q': op->verbose = 0; op->quiet = 1; break;
 			case 'c': op->nocol = !readbool(optarg); nocol = op->nocol; break;
+			case 'C': op->maxkbs = (unsigned int)(readint(optarg)/1024); break;
 			case 'b': op->softbs = (int)readint(optarg); break;
 			case 'B': op->hardbs = (int)readint(optarg); break;
 			case 'm': op->maxxfer = readint(optarg); break;

@@ -352,6 +352,15 @@ make sense to use sparse together with fallocate().)
 This option is only available if dd_rescue is compiled with fallocate()
 support. For optimal support, it should be compiled with the 
 libfallocate library.
+.TP 8
+.BI \-C\  rate \fR,\ \fB\ \-\-ratecontrol= rate
+limits the transfer speed of
+.B dd_rescue
+to the
+.IR rate
+(per second). The usual suffixes are allowed.
+Note that this limits the average speed; the current speed may be up to
+twice this limit. Default is unlimited.
 .
 .SS Misc options
 .TP 8
