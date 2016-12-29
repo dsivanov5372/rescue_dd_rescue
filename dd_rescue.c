@@ -1130,14 +1130,14 @@ void printstatus(FILE* const file1, FILE* const file2,
 	if (t2 == 0.0)
 		t2 = 0.0001;
 #endif
-	if (op->maxkbs) {
+	if (op->maxkbs && t1 && t2) {
 		static unsigned w1 =0, w2 = 0, w3 = 0;
 		static float t1w = 0.0, t2w = 0.0;
 		/* Avoid global rate above limit */
 		float c1rate = prg->xfer/(1024.0*t1);
 		/* Avoid local rate above twice the limit */
 		float c2rate = (prg->xfer-prg->lxfer)/(2048.0*t2);
-		if (c1rate > op->maxkbs || c2rate > op->maxkbs) {
+		if (!in_report && (c1rate > op->maxkbs || c2rate > op->maxkbs)) {
 			struct timeval wtime;
 			memcpy(&wtime, &currenttime, sizeof(wtime));
 			int m1sleep = 3*prg->xfer/(2*op->maxkbs) - t1*1536.0;
@@ -1148,11 +1148,16 @@ void printstatus(FILE* const file1, FILE* const file2,
 				mssleep = m2sleep;
 			} else
 				mssleep = m1sleep;
+			/* Do not pause longer than 8.2s */
+			if (mssleep > 8192)
+				mssleep = 8192;
 			//fprintf(stderr, "%04ims\r", mssleep); fflush(stderr);
 			cpu_relax();
 			if (mssleep >= 2) {
 				struct timespec ts;
 				++w1;
+				if (op->verbose && scrollup)
+					fprintf(stderr, "%s.\n", up);
 				ts.tv_sec = mssleep / 1000;
 				ts.tv_nsec = 1000*1000ULL*(mssleep%1000);
 				nanosleep(&ts, NULL);
@@ -2004,6 +2009,8 @@ static int partialwrite(const ssize_t rd, opt_t *op, fstate_t *fst,
 	return 0;
 }
 
+static int updstat = 8;
+
 int copyfile_hardbs(const loff_t max, opt_t *op, fstate_t *fst,
 		    progress_t *prg, repeat_t *rep, 
 		    dpopt_t *dop, dpstate_t *dst)
@@ -2108,9 +2115,9 @@ int copyfile_hardbs(const loff_t max, opt_t *op, fstate_t *fst,
 
 		if (op->syncfreq && !(prg->xfer % (op->syncfreq*op->softbs)))
 			printstatus((op->quiet? 0: stderr), 0, op->hardbs, 1, op, fst, prg, dop);
-		else if (!op->quiet && !(prg->xfer % (8*op->softbs)))
+		else if (!op->quiet && !(prg->xfer % (updstat*op->softbs)))
 			printstatus(stderr, 0, op->hardbs, 0, op, fst, prg, dop);
-		else if (op->quiet && op->maxkbs && !(prg->xfer % (8*op->softbs)))
+		else if (op->quiet && op->maxkbs && !(prg->xfer % (updstat*op->softbs)))
 			printstatus(0, 0, op->hardbs, 0, op, fst, prg, dop);
 	} /* remain */
 	return errs;
@@ -2218,9 +2225,9 @@ int copyfile_softbs(const loff_t max, opt_t *op, fstate_t *fst,
 
 		if (op->syncfreq && !(prg->xfer % (op->syncfreq*op->softbs)))
 			printstatus((op->quiet? 0: stderr), 0, op->softbs, 1, op, fst, prg, dop);
-		else if (!op->quiet && !(prg->xfer % (16*op->softbs)))
+		else if (!op->quiet && !(prg->xfer % (2*updstat*op->softbs)))
 			printstatus(stderr, 0, op->softbs, 0, op, fst, prg, dop);
-		else if (op->quiet && op->maxkbs && !(prg->xfer % (16*op->softbs)))
+		else if (op->quiet && op->maxkbs && !(prg->xfer % (2*updstat*op->softbs)))
 			printstatus(0, 0, op->softbs, 0, op, fst, prg, dop);
 	} /* remain */
 	return errs;
@@ -2300,9 +2307,9 @@ int copyfile_splice(const loff_t max, opt_t *op, fstate_t *fst,
 		advancepos(0, 0, 0, op, fst, prg);
 		if (op->syncfreq && !(prg->xfer % (op->syncfreq*op->softbs)))
 			printstatus((op->quiet? 0: stderr), 0, op->softbs, 1, op, fst, prg, dop);
-		else if (!op->quiet && !(prg->xfer % (16*op->softbs)))
+		else if (!op->quiet && !(prg->xfer % (2*updstat*op->softbs)))
 			printstatus(stderr, 0, op->softbs, 0, op, fst, prg, dop);
-		else if (op->quiet && op->maxkbs && !(prg->xfer % (16*op->softbs)))
+		else if (op->quiet && op->maxkbs && !(prg->xfer % (2*updstat*op->softbs)))
 			printstatus(0, 0, op->softbs, 0, op, fst, prg, dop);
 	}
 	close(fd_pipe[0]); close(fd_pipe[1]);
@@ -3210,6 +3217,19 @@ void sanitize_and_prepare(opt_t *op, dpopt_t *dop, fstate_t *fst, dpstate_t *dst
 		if (ftruncate(fst->odes, op->init_opos))
 			fplog(stderr, WARN, "Could not truncate %s to %skiB: %s!\n",
 				op->oname, fmt_kiB(op->init_opos, !nocol), strerror(errno));
+	if (op->maxkbs) {
+		/* Ev 8s, but only ev. second is synced, kB */
+		int upd = 4096*op->maxkbs/op->softbs;
+		if (!upd) {
+			upd = 1;
+			fplog(stderr, WARN, "Lower softbs (-b) to achieve low ratecontrol\n");
+		}
+		if (upd < updstat) {
+			if (op->verbose)
+				fplog(stderr, INFO, "Need to update stat every %i softbs\n", upd);
+			updstat = upd;
+		}
+	}
 
 }
 

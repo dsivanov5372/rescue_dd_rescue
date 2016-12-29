@@ -360,7 +360,8 @@ to the
 .IR rate
 (per second). The usual suffixes are allowed.
 Note that this limits the average speed; the current speed may be up to
-twice this limit. Default is unlimited.
+twice this limit. Default is unlimited. Note that you will have to use
+smaller softblocksizes if you want to go below 32k (kB/s).
 .
 .SS Misc options
 .TP 8
