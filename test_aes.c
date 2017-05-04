@@ -48,6 +48,16 @@ void fillval(unsigned char* bf, ssize_t ln, unsigned int val)
 
 #ifdef HAVE_AESNI
 #include "aesni.h"
+int have_aesni = 1;
+#if defined( __GNUC__) && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 8))
+static void detect_cpu_cap()
+{
+	have_aesni = !!__builtin_cpu_supports("avx");
+}
+#else
+# warn no runtime detection for aesni
+static void detect_cpu_cap();
+#endif
 #endif
 
 #ifdef HAVE_AES_ARM64
@@ -210,7 +220,7 @@ int test_alg(const char* prefix, ciph_desc_t *alg, uchar *key, uchar *in, ssize_
 
 #ifdef HAVE_OPENSSL_EVP_H
 #define TEST_OSSL(LN, EPAD, DPAD)			\
-	alg = findalg(AES_OSSL_Methods, testalg);	\
+	alg = findalg(AES_OSSL_Methods, testalg, 1);	\
 	if (alg)					\
 		ret += test_alg("OSSL ", alg, key, in, LN, EPAD, DPAD, rep)
 #else
@@ -219,7 +229,7 @@ int test_alg(const char* prefix, ciph_desc_t *alg, uchar *key, uchar *in, ssize_
 
 #ifdef HAVE_AESNI
 #define TEST_AESNI(LN, EPAD, DPAD)			\
-	alg = findalg(AESNI_Methods, testalg);	\
+	alg = findalg(AESNI_Methods, testalg, 1);	\
 	if (alg)					\
 		ret += test_alg("AESNI", alg, key, in, LN, EPAD, DPAD, rep)
 #else
@@ -228,7 +238,7 @@ int test_alg(const char* prefix, ciph_desc_t *alg, uchar *key, uchar *in, ssize_
 
 #ifdef HAVE_AES_ARM64
 #define TEST_AES_ARM64(LN, EPAD, DPAD)			\
-	alg = findalg(AES_ARM8_Methods, testalg);	\
+	alg = findalg(AES_ARM8_Methods, testalg, 1);	\
 	if (alg)					\
 		ret += test_alg("ARM64", alg, key, in, LN, EPAD, DPAD, rep)
 #else
@@ -239,7 +249,7 @@ int test_alg(const char* prefix, ciph_desc_t *alg, uchar *key, uchar *in, ssize_
 #define TEST_ENGINES(LN, EPAD, DPAD)			\
 	TEST_AESNI(LN, EPAD, DPAD);			\
 	TEST_AES_ARM64(LN, EPAD, DPAD);			\
-	alg = findalg(AES_C_Methods, testalg);		\
+	alg = findalg(AES_C_Methods, testalg, 1);	\
 	if (alg) 					\
 		ret += test_alg("AES_C", alg, key, in, LN, EPAD, DPAD, rep);	\
 	TEST_OSSL(LN, EPAD, DPAD)
@@ -252,6 +262,7 @@ int main(int argc, char *argv[])
 	unsigned char *key = (unsigned char*)"Test Key_123 is long enough even for AES-256";
 	//int dbg = 0;
 	char* testalg;
+	detect_cpu_cap();
 	crypto = secmem_init();
 	/*
 	if (argc > 1 && !strcmp("-d", argv[1])) {

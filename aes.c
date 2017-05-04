@@ -445,12 +445,15 @@ void AES_Gen_Release(uchar *rkeys, uint rounds)
 	asm("":::"memory");
 }
 
-ciph_desc_t *findalg(ciph_desc_t* list, const char* nm)
+ciph_desc_t *findalg(ciph_desc_t* list, const char* nm, const char probe)
 {
 	ciph_desc_t* alg = list;
 	while (alg->name) {
-		if (!strcmp(alg->name, nm))
-			return alg;
+		if (!strcmp(alg->name, nm)) {
+			if (!probe || !alg->probe)
+				return alg;
+			return (alg->probe()? NULL: alg);
+		}
 		alg += 1;
 	}
 	return NULL;

@@ -61,6 +61,7 @@ typedef int  (Crypt_IV_fn) (const uchar* rkeys, uint rounds,
 			    const uchar* input, uchar* output,
 			    ssize_t len, ssize_t *olen);
 typedef void (Key_Release_fn)(uchar* rkeys, uint rounds);
+typedef int (Probe_fn)();
 
 typedef struct _ciph_desc {
 	const char *name;
@@ -72,6 +73,7 @@ typedef struct _ciph_desc {
 	Key_Setup_fn *enc_key_setup, *dec_key_setup;
 	Crypt_IV_fn *encrypt, *decrypt;
 	Key_Release_fn *release;
+	Probe_fn *probe;
 } ciph_desc_t;
 
 
@@ -138,6 +140,6 @@ void AES_Gen_Release(uchar *rkeys, uint rounds);
 void fill_blk(const uchar *in, uchar bf[16], ssize_t len, uint pad);
 int  dec_fix_olen_pad(ssize_t *olen, uint pad, const uchar *output);
 
-ciph_desc_t *findalg(ciph_desc_t* list, const char* nm);
+ciph_desc_t *findalg(ciph_desc_t* list, const char* nm, const char probe);
 
 #endif

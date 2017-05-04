@@ -148,7 +148,7 @@ int set_flag(char* flg, const char* msg)
 
 int set_alg(crypt_state* state, const char* algnm)
 {
-	ciph_desc_t *alg = findalg(state->engine, algnm);
+	ciph_desc_t *alg = findalg(state->engine, algnm, 0);
 	if (state->alg) {
 		if (alg)
 			FPLOG(FATAL, "alg already set to, can't override with %s\n",
@@ -399,7 +399,7 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	/* 1st: Set engine: Default: aesni/aes_c: Done */
 	/* 2nd: Set alg: Already done if set explicitly */
 	if (!err && !state->alg)
-		state->alg = findalg(state->engine, "AES192-CTR");
+		state->alg = findalg(state->engine, "AES192-CTR", 0);
 	if (!state->alg)
 		return -1;
 
