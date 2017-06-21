@@ -113,6 +113,7 @@ static loff_t readint(const char* const ptr)
 	}
 	return (loff_t)res;
 }
+#define ALLOC_CHUNK 16384
 #endif
 
 hashalg_t *get_hashalg(hash_state *state, const char* nm)
@@ -533,10 +534,20 @@ unsigned char* hash_blk_cb(fstate_t *fst, unsigned char* bf,
 		state->buflen = to_process;
 	}
 #ifdef WANT_S3
-	if (state->multisz && !(pos%state->multisz)) {
+	if (state->multisz && !(state->hash_pos%state->multisz)) {
 		/* TODO: Check if we have enough space and enlarge mpbuf if needed */
+		unsigned int hln = state->alg->hashln;
+		if ((1+state->mpbufseg)*hln > state->mpbufsz) {
+			state->mpbufsz += ALLOC_CHUNK;
+			state->mpbuf = realloc(state->mpbuf, state->mpbufsz);
+		}
 		/* Copy current hash into mpbuf and incr mpbufseg */
+		memcpy(state->mpbuf+state->mpbufseg*hln, &state->hash, hln);
+		state->mpbufseg++;
+		char res[129];
+		FPLOG(INFO, "Hash segment %i: %s (pos %" LL "i hash %li)\n", state->mpbufseg, state->alg->hash_hexout(res, &state->hash), pos+consumed, state->hash_pos);
 		/* Reset hash to zero ... */
+		state->alg->hash_init(&state->hash);
 	}
 #endif
 	if (eof)
