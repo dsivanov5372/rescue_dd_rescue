@@ -71,6 +71,7 @@ typedef struct _hash_state {
 	loff_t multisz;
 	unsigned char *mpbuf;
 	int mpbufsz;
+	int mpbufseg;
 #endif
 	int hmacpln;
 	char xfallback;
@@ -423,6 +424,9 @@ void hash_last(hash_state *state, loff_t pos)
 				      state->hash_pos+state->buflen+preln+state->alg->blksz,
 				      &state->hmach);
 	state->hash_pos += state->buflen;
+#ifdef WANT_S3
+	/* TODO: add last has segment into buf */
+#endif
 }
 
 static inline void hash_block_buf(hash_state* state, int clear)
@@ -528,6 +532,13 @@ unsigned char* hash_blk_cb(fstate_t *fst, unsigned char* bf,
 		memcpy(state->buf+state->buflen, bf+consumed, to_process);
 		state->buflen = to_process;
 	}
+#ifdef WANT_S3
+	if (state->multisz && !(pos%state->multisz)) {
+		/* TODO: Check if we have enough space and enlarge mpbuf if needed */
+		/* Copy current hash into mpbuf and incr mpbufseg */
+		/* Reset hash to zero ... */
+	}
+#endif
 	if (eof)
 		hash_last(state, pos+*towr);
 	return bf;
@@ -700,6 +711,11 @@ int hash_close(loff_t ooff, void **stat)
 		err += check_xattr(state, res);
 	if (state->set_xattr)
 		err += write_xattr(state, res);
+#endif
+#ifdef WANT_S3
+	/* TODO: Calc s3 style hash */
+	/* Output s3 style multipart hash */
+	/* Free mpartbuf */
 #endif
 	return err;
 }
