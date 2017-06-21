@@ -66,6 +66,12 @@ typedef struct _hash_state {
 	const char* chkfnm;
 	const opt_t *opts;
 	unsigned char* hmacpwd;
+#ifdef WANT_S3
+	/* multipart s3 style checksum */
+	loff_t multisz;
+	unsigned char *mpbuf;
+	int mpbufsz;
+#endif
 	int hmacpln;
 	char xfallback;
 #if 1 //def HAVE_ATTR_XATTR_H
@@ -78,12 +84,35 @@ const char *hash_help = "The HASH plugin for dd_rescue calculates a cryptographi
 		" It supports unaligned blocks (arbitrary offsets) and holes(sparse writing).\n"
 		" Parameters: output:outfd=FNO:outnm=FILE:check:chknm=FILE:debug:[alg[o[rithm]=]ALG\n"
 		"\t:append=STR:prepend=STR:hmacpwd=STR:hmacpwdfd=FNO:hmacpwdnm=FILE\n"
+#ifdef WANT_S3
+		"\t:multipart=size\n"
+#endif
 		"\t:pbkdf2=ALG/PWD/SALT/ITER/LEN\n"
 #ifdef HAVE_ATTR_XATTR_H
 		"\t:chk_xattr[=xattr_name]:set_xattr[=xattr_name]:fallb[ack][=FILE]\n"
 #endif
 		" Use algorithm=help to get a list of supported hash algorithms\n";
 
+
+#ifdef WANT_S3
+static loff_t readint(const char* const ptr)
+{
+	char *es; double res;
+
+	res = strtod(ptr, &es);
+	switch (*es) {
+		case 'b': res *= 512; break;
+		case 'k': res *= 1024; break;
+		case 'M': res *= 1024*1024; break;
+		case 'G': res *= 1024*1024*1024; break;
+		case ' ':
+		case '\0': break;
+		default:
+			FPLOG(WARN, "suffix %c ignored!\n", *es);
+	}
+	return (loff_t)res;
+}
+#endif
 
 hashalg_t *get_hashalg(hash_state *state, const char* nm)
 {
@@ -159,6 +188,10 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			state->chkf = 1; state->chkfnm=param+6; }
 		else if (!strcmp(param, "check")) {
 			state->chkf = 1; state->chkfnm="-"; }
+#ifdef WANT_S3
+		else if (!memcmp(param, "multipart=", 10)) {
+			state->multisz = readint(param+10); }
+#endif
 		else if (!memcmp(param, "algo=", 5))
 			state->alg = get_hashalg(state, param+5);
 		else if (!memcmp(param, "alg=", 4))
@@ -301,7 +334,8 @@ int hash_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 		memset(ibuf, 0, blen); asm("":::"memory");
 	}
 	state->hash_pos = 0;
-	if (!ochg && state->seq != 0)
+
+	if (!ochg && state->seq != 0 && strcmp(opt->oname, "/dev/null"))
 		state->fname = opt->oname;
 	else if (!ichg)
 		state->fname = opt->iname;
@@ -528,7 +562,7 @@ int check_chkf(hash_state *state, const char* res)
 int write_chkf(hash_state *state, const char *res)
 {
 	const char* name = state->opts->oname;
-	if (state->ochg && !state->ichg) {
+	if ((state->ochg || !strcmp(state->opts->oname, "/dev/null")) && !state->ichg) {
 		name = state->opts->iname;
 		if (!state->opts->quiet)
 			FPLOG(INFO, "Write checksum to %s for input file %s\n", state->chkfnm, name);
