@@ -54,11 +54,15 @@ ssize_t getline(char **bf, size_t *sz, FILE *f)
 #define MAX(a,b) ((a)<(b)? (b): (a))
 
 /* file offset in the chksum file which has the chksum for nm, -1 = not found */
-off_t find_chks(FILE* f, const char* nm, char* res)
+off_t find_chks(FILE* f, const char* nm, char* res, off_t oldpos)
 {
 	char *lnbf = NULL;
 	size_t lln = 0;
 	char* bnm = basename((char*)nm);
+	if (oldpos && !feof_unlocked(f)) {
+		fseeko(f, oldpos, SEEK_SET);
+		getline(&lnbf, &lln, f);
+	}
 	while (!feof_unlocked(f)) {
 		char *fnm, *fwh;
 		off_t pos = ftello(f);
@@ -78,8 +82,8 @@ off_t find_chks(FILE* f, const char* nm, char* res)
 			fnm[last--] = 0;
 		//printf("\"%s\" <-> \"%s\"/\"%s\"\n", fnm, nm, bnm);
 		if (!strcmp(fnm, nm) || !strcmp(fnm, bnm)) {
-			if (res && fwh-lnbf <= 2*(int)sizeof(hash_t)) {
-				const int ln = MIN(128, fwh-lnbf);
+			if (res && fwh-lnbf <= 2*(int)sizeof(hash_t)+14) {
+				const int ln = MIN(142, fwh-lnbf);
 				memcpy(res, lnbf, ln);
 				res[ln] = 0;
 			} else if (res)
@@ -117,7 +121,7 @@ int get_chks(const char* cnm, const char* nm, char* chks)
 	FILE *f = fopen_chks(cnm, "r", 0);
 	if (!f)
 		return -1;
-	off_t err = find_chks(f, nm, chks);
+	off_t err = find_chks(f, nm, chks, 0);
 	if (f != stdin)
 		fclose(f);
 	return err < 0? err: 0;
@@ -128,7 +132,7 @@ int upd_chks(const char* cnm, const char *nm, const char *chks, int acc)
 {
 	FILE *f = fopen_chks(cnm, "r+", 0);
 	int err = 0;
-	char oldchks[129];
+	char oldchks[144];
 	char* bnm = basename(nm);
 	if (!f) {
 		errno = 0;
@@ -138,7 +142,12 @@ int upd_chks(const char* cnm, const char *nm, const char *chks, int acc)
 		fprintf(f, "%s *%s\n", chks, bnm);
 		err = -errno;
 	} else {
-		off_t pos = find_chks(f, nm, oldchks);
+		off_t pos = 0;
+		while (pos != -ENOENT) {
+		       	pos = find_chks(f, nm, oldchks, pos);
+			if (pos != -ENOENT && strlen(chks) != strlen(oldchks))
+				continue;
+		}
 		if (pos == -ENOENT || strlen(chks) != strlen(oldchks)) {
 			fclose(f);
 			f = fopen_chks(cnm, "a", 0);

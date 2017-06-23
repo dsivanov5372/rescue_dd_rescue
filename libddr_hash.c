@@ -66,7 +66,7 @@ typedef struct _hash_state {
 	const char* chkfnm;
 	const opt_t *opts;
 	unsigned char* hmacpwd;
-#ifdef WANT_S3
+#ifndef NO_S3_MP
 	/* multipart s3 style checksum */
 	loff_t multisz;
 	unsigned char *mpbuf;
@@ -85,17 +85,18 @@ const char *hash_help = "The HASH plugin for dd_rescue calculates a cryptographi
 		" It supports unaligned blocks (arbitrary offsets) and holes(sparse writing).\n"
 		" Parameters: output:outfd=FNO:outnm=FILE:check:chknm=FILE:debug:[alg[o[rithm]=]ALG\n"
 		"\t:append=STR:prepend=STR:hmacpwd=STR:hmacpwdfd=FNO:hmacpwdnm=FILE\n"
-#ifdef WANT_S3
-		"\t:multipart=size\n"
+		"\t:pbkdf2=ALG/PWD/SALT/ITER/LEN"
+#ifndef NO_S3_MP
+		":multipart=size"
 #endif
-		"\t:pbkdf2=ALG/PWD/SALT/ITER/LEN\n"
+		"\n"
 #ifdef HAVE_ATTR_XATTR_H
 		"\t:chk_xattr[=xattr_name]:set_xattr[=xattr_name]:fallb[ack][=FILE]\n"
 #endif
 		" Use algorithm=help to get a list of supported hash algorithms\n";
 
 
-#ifdef WANT_S3
+#ifndef NO_S3_MP
 static loff_t readint(const char* const ptr)
 {
 	char *es; double res;
@@ -190,7 +191,7 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			state->chkf = 1; state->chkfnm=param+6; }
 		else if (!strcmp(param, "check")) {
 			state->chkf = 1; state->chkfnm="-"; }
-#ifdef WANT_S3
+#ifndef NO_S3_MP
 		else if (!memcmp(param, "multipart=", 10)) {
 			state->multisz = readint(param+10); }
 #endif
@@ -425,9 +426,6 @@ void hash_last(hash_state *state, loff_t pos)
 				      state->hash_pos+state->buflen+preln+state->alg->blksz,
 				      &state->hmach);
 	state->hash_pos += state->buflen;
-#ifdef WANT_S3
-	/* TODO: add last has segment into buf */
-#endif
 }
 
 static inline void hash_block_buf(hash_state* state, int clear)
@@ -483,6 +481,30 @@ unsigned char* hash_blk_cb(fstate_t *fst, unsigned char* bf,
 			fst->opos - state->opts->init_opos;
 	HASH_DEBUG(FPLOG(DEBUG, "block(%i/%i): towr=%i, eof=%i, pos=%" LL "i, hash_pos=%" LL "i, buflen=%i\n",
 				state->seq, state->olnchg, *towr, eof, pos, state->hash_pos, state->buflen));
+#ifndef NO_S3_MP
+	if (state->multisz && ((!(state->hash_pos%state->multisz) && state->hash_pos && *towr) || (!*towr && state->mpbufseg))) {
+		/* TODO: Check if we have enough space and enlarge mpbuf if needed */
+		const unsigned int hln = state->alg->hashln;
+		if ((1+state->mpbufseg)*hln > state->mpbufsz) {
+			state->mpbufsz += ALLOC_CHUNK;
+			state->mpbuf = realloc(state->mpbuf, state->mpbufsz);
+			assert(state->mpbuf);
+		}
+		/* Copy current hash into mpbuf and incr mpbufseg */
+		unsigned long diff = state->hash_pos - (state->hash_pos-1)%state->multisz - 1;
+		state->hash_pos -= diff;
+		hash_last(state, pos-diff);
+		memcpy(state->mpbuf+state->mpbufseg*hln, &state->hash, hln);
+		state->mpbufseg++;
+		if (state->debug) {
+			char res[129];
+			FPLOG(DEBUG, "Hash segment %i: %s (pos %" LL "i hash %li)\n", state->mpbufseg, state->alg->hash_hexout(res, &state->hash), pos, state->hash_pos);
+		}
+		/* Reset hash to zero ... */
+		state->alg->hash_init(&state->hash);
+		state->hash_pos += diff;
+	}
+#endif
 	// Handle hole (sparse files)
 	const loff_t holesz = pos - (state->hash_pos + state->buflen);
 	assert(holesz >= 0 || (state->ilnchg && state->olnchg));
@@ -533,23 +555,6 @@ unsigned char* hash_blk_cb(fstate_t *fst, unsigned char* bf,
 		memcpy(state->buf+state->buflen, bf+consumed, to_process);
 		state->buflen = to_process;
 	}
-#ifdef WANT_S3
-	if (state->multisz && !(state->hash_pos%state->multisz)) {
-		/* TODO: Check if we have enough space and enlarge mpbuf if needed */
-		unsigned int hln = state->alg->hashln;
-		if ((1+state->mpbufseg)*hln > state->mpbufsz) {
-			state->mpbufsz += ALLOC_CHUNK;
-			state->mpbuf = realloc(state->mpbuf, state->mpbufsz);
-		}
-		/* Copy current hash into mpbuf and incr mpbufseg */
-		memcpy(state->mpbuf+state->mpbufseg*hln, &state->hash, hln);
-		state->mpbufseg++;
-		char res[129];
-		FPLOG(INFO, "Hash segment %i: %s (pos %" LL "i hash %li)\n", state->mpbufseg, state->alg->hash_hexout(res, &state->hash), pos+consumed, state->hash_pos);
-		/* Reset hash to zero ... */
-		state->alg->hash_init(&state->hash);
-	}
-#endif
 	if (eof)
 		hash_last(state, pos+*towr);
 	return bf;
@@ -680,10 +685,19 @@ int hash_close(loff_t ooff, void **stat)
 {
 	int err = 0;
 	hash_state *state = (hash_state*)*stat;
-	char res[129];
+	char res[144];
 	const unsigned int hlen = state->alg->hashln;
 	const unsigned int blen = state->alg->blksz;
 	loff_t firstpos = (state->seq == 0? state->opts->init_ipos: state->opts->init_opos);
+#ifndef NO_S3_MP
+	if (state->multisz && state->mpbufseg) {
+		const unsigned int hln = state->alg->hashln;
+		state->alg->hash_init(&state->hash);
+		state->alg->hash_calc(state->mpbuf, state->mpbufseg*hln, state->mpbufseg*hln, &state->hash);
+		state->alg->hash_hexout(res, &state->hash);
+		sprintf(res+strlen(res), "-%i", state->mpbufseg);
+	} else
+#endif
 	state->alg->hash_hexout(res, &state->hash);
 	if (!state->opts->quiet) 
 		FPLOG(INFO, "%s %s (%" LL "i-%" LL "i): %s\n",
@@ -722,11 +736,6 @@ int hash_close(loff_t ooff, void **stat)
 		err += check_xattr(state, res);
 	if (state->set_xattr)
 		err += write_xattr(state, res);
-#endif
-#ifdef WANT_S3
-	/* TODO: Calc s3 style hash */
-	/* Output s3 style multipart hash */
-	/* Free mpartbuf */
 #endif
 	return err;
 }
