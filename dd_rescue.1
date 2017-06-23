@@ -1,4 +1,4 @@
-.TH dd_rescue 1 "2016-12-29" "Kurt Garloff" "Data recovery and protection tool"
+.TH dd_rescue 1 "2017-06-23" "Kurt Garloff" "Data recovery and protection tool"
 .
 .SH NAME
 dd_rescue \- Data recovery and protection tool
@@ -594,6 +594,19 @@ the target file (unless you only write part of the file),
 but saves time by not accessing the (possibly large) file a second time.
 The hash plugin handles sparse writes and arbitrary offsets fine.
 .PP
+.B multipart=CHUNKSIZE
+tells ddr_hash to calculate multiple checksums for file chunks of CHUNKSIZE
+each and then combine them into a combined checksum by creating a checksum
+over the piece checksums. This is how the checksum for S3 multipart objects
+is calculated (using the md5 hash); the output there is the combination 
+checksum with a dash and the number of parts appended.
+.br
+Note that this feature is new in 1.99.6 and does not yet handle situations
+cleanly, where offsets plus block sizes do not happen to cleanly align
+with the CHUNKSIZE. The implementation for this will be completed later.
+Other features like the append/prepend/hmac pieces also don't work well with
+multipart checksum calculation.
+.PP
 ddr_hash also supports the parameter
 .B append=STRING
 which appends the given STRING to the output before computing the cryptographic
@@ -980,6 +993,7 @@ and the ability to store and validate checksums.
 1.98 brought encryption and the fault injection framework, 
 1.99 support for ARMv8 crypto acceleration.
 1.99.5 brought ratecontrol.
+1.99.6 brought S3 style multipart checksums.
 .PP
 Some additional information can be found on
 .br
