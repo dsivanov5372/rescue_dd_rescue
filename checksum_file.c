@@ -114,12 +114,12 @@ FILE* fopen_chks(const char* fnm, const char* mode, int acc)
 }
 
 /* get chksum */
-int get_chks(const char* cnm, const char* nm, char* chks)
+int get_chks(const char* cnm, const char* nm, char* chks, int wantedln)
 {
 	FILE *f = fopen_chks(cnm, "r", 0);
 	if (!f)
 		return -1;
-	off_t err = find_chks(f, nm, chks, 0);
+	off_t err = find_chks(f, nm, chks, wantedln);
 	if (f != stdin)
 		fclose(f);
 	return err < 0? err: 0;

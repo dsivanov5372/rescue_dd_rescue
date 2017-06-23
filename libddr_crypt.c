@@ -956,7 +956,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 #endif
 		if (!state->sgen && !state->sset && state->saltf) {
 			char* sfnm = keyfnm(saltnm, encnm);
-			int off = get_chks(sfnm, encnm, state->sec->charbuf1);
+			int off = get_chks(sfnm, encnm, state->sec->charbuf1, 0);
 			/* Failure is NOT fatal */
 			if (off >= 0) {
 				err += parse_hex(state->sec->salt, state->sec->charbuf1, 8);
@@ -1067,7 +1067,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			if (!state->kset && state->keyf) {
 				/* (d) Read from keyfile */
 				char* kfnm = keyfnm(keynm, encnm);
-				int off = get_chks(kfnm, encnm, state->sec->charbuf1);
+				int off = get_chks(kfnm, encnm, state->sec->charbuf1, 0);
 				free(kfnm);
 				/* Fatal if not successful */
 				if (off < 0) {
@@ -1149,7 +1149,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 			if (!state->iset && state->ivf) {
 				/* Read IV from ivsfile */
 				char* ivnm = keyfnm(ivsnm, encnm);
-				int off = get_chks(ivsnm, encnm, state->sec->charbuf1);
+				int off = get_chks(ivsnm, encnm, state->sec->charbuf1, 0);
 				free(ivnm);
 				if (off < 0) {
 					FPLOG(FATAL, "Can't read IV for %s from IVS file!\n", encnm);

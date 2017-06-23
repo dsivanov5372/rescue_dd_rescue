@@ -564,7 +564,7 @@ unsigned char* hash_blk_cb(fstate_t *fst, unsigned char* bf,
 int check_chkf(hash_state *state, const char* res)
 {
 	const char* name = state->opts->iname;
-	char cks[129];
+	char cks[144];
 	if (state->ichg && !state->ochg) {
 		name = state->opts->oname;
 		if (!state->opts->quiet)
@@ -573,7 +573,7 @@ int check_chkf(hash_state *state, const char* res)
 		FPLOG(WARN, "Can't read checksum in the middle of plugin chain (%s)\n", state->fname);
 		return -ENOENT;
 	}
-	int err = get_chks(state->chkfnm, name, cks);
+	int err = get_chks(state->chkfnm, name, cks, strlen(res));
 	if (err < 0) {
 		FPLOG(WARN, "Can't find checksum in %s for %s\n", state->chkfnm, name);
 		return -ENOENT;
@@ -607,7 +607,7 @@ int write_chkf(hash_state *state, const char *res)
 #ifdef HAVE_ATTR_XATTR_H
 int check_xattr(hash_state* state, const char* res)
 {
-	char xatstr[128];
+	char xatstr[144];
 	strcpy(xatstr, "xattr");
 	const char* name = state->opts->iname;
 	if (state->ichg && !state->ochg) {
@@ -619,13 +619,13 @@ int check_xattr(hash_state* state, const char* res)
 		return -ENOENT;
 	}
 	/* Longest is 128byte hex for SHA512 (8x64byte numbers -> 8x16 digits) */
-	char chksum[129];
-	ssize_t itln = getxattr(name, state->xattr_name, chksum, 129);
+	char chksum[144];
+	ssize_t itln = getxattr(name, state->xattr_name, chksum, 144);
 	const int rln = strlen(res);
 	if (itln <= 0) {
 		if (state->xfallback) {
-			int err = get_chks(state->chkfnm, name, chksum);
-			snprintf(xatstr, 128, "chksum file %s", state->chkfnm);
+			int err = get_chks(state->chkfnm, name, chksum, rln);
+			snprintf(xatstr, 143, "chksum file %s", state->chkfnm);
 			if (err < 0) {
 				FPLOG(WARN, "no hash found in xattr nor %s for %s\n", xatstr, name);
 				return -ENOENT;
@@ -649,8 +649,8 @@ int check_xattr(hash_state* state, const char* res)
 int write_xattr(hash_state* state, const char* res)
 {
 	const char* name = state->opts->oname;
-	char xatstr[128];
-	snprintf(xatstr, 128, "xattr %s", state->xattr_name);
+	char xatstr[144];
+	snprintf(xatstr, 143, "xattr %s", state->xattr_name);
 	if (state->ochg && !state->ichg) {
 		name = state->opts->iname;
 		if (!state->opts->quiet)
@@ -663,7 +663,7 @@ int write_xattr(hash_state* state, const char* res)
 	if (setxattr(name, state->xattr_name, res, strlen(res), 0)) {
 		if (state->xfallback) {
 			int err = upd_chks(state->chkfnm, name, res, 0644);
-			snprintf(xatstr, 128, "chksum file %s", state->chkfnm);
+			snprintf(xatstr, 143, "chksum file %s", state->chkfnm);
 			if (err) {
 				FPLOG(WARN, "Failed writing to %s for %s: %s\n", 
 						xatstr, name, strerror(-err));
