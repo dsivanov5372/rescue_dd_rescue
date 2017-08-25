@@ -140,15 +140,12 @@ int do_pbkdf2(hash_state *state, char* param);
 int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 {
 	int err = 0;
-	void *buf = 0;
 	hash_state *state; /* = (hash_state*)malloc(sizeof(hash_state));*/
-	if (posix_memalign(&buf, 64, sizeof(hash_state))) {
+	if (posix_memalign(stat, 64, sizeof(hash_state))) {
 		FPLOG(FATAL, "No enough memory for hash state!\n");
-		--err;
-		return err;
+		return -1;
 	}
-	state = (hash_state*)buf;
-	*stat = (void*)state;
+	state = (hash_state*)*stat;
 	memset(state, 0, sizeof(hash_state));
 	state->seq = seq;
 	state->opts = opt;
@@ -259,8 +256,7 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	}
 	if (!state->alg) {
 		FPLOG(FATAL, "No hash algorithm specified\n");
-		--err;
-		return err;
+		return --err;
 	}
 #ifdef HAVE_ATTR_XATTR_H
 	if ((state->chk_xattr || state->set_xattr) && !state->xattr_name) {
