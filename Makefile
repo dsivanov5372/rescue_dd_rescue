@@ -40,6 +40,7 @@ PIC = -fPIC
 PIE = -fPIE
 LDPIE = -pie
 RDYNAMIC = -rdynamic
+MAKE := $(MAKE) -f $(SRCDIR)/Makefile
 
 LZOP = $(shell type -p lzop || type -P true)
 HAVE_SHA256SUM = $(shell type -p sha256sum >/dev/null && echo 1 || echo 0)
@@ -168,13 +169,14 @@ default: $(TARGETS)
 
 all: $(TARGETS) $(OTHTARGETS)
 
-Makefile:
-	test -e Makefile || ln -s $(SRCDIR)/Makefile .
+#Makefile:
+#	test -e Makefile || ln -s $(SRCDIR)/Makefile .
 
 config.h: $(SRCDIR)/configure $(SRCDIR)/config.h.in
 	$(SRCDIR)/configure
 	test -e test_crypt.sh || ln -s $(SRCDIR)/test_crypt.sh .
 	test -e test_lzo_fuzz.sh || ln -s $(SRCDIR)/test_lzo_fuzz.sh .
+	test -e calchmac.py || ln -s $(SRCDIR)/calchmac.py .
 
 $(SRCDIR)/configure: $(SRCDIR)/configure.in
 	cd $(SRCDIR) && autoconf
@@ -187,7 +189,7 @@ $(SRCDIR)/config.h.in: $(SRCDIR)/configure.in
 DEP_SSE = -D__AES__ -D__SSE4_1__ -D__SSSE3__ -D__SSE3__ -D__SSE2__ -D__SSE__ -D__MMX__
 
 # Automated dependency generation
-.dep: Makefile config.h $(SRCDIR)/*.h $(SRCDIR)/*.c
+.dep: $(SRCDIR)/Makefile config.h $(SRCDIR)/*.h $(SRCDIR)/*.c
 	#$(CC) $(CFLAGS) -DGEN_DEP $(ARCHFLAGS) -MM $(SRCDIR)/*.c >.dep
 	$(CC) $(CFLAGS) -DGEN_DEP $(DEP_SSE) -MM $(SRCDIR)/*.c >.dep
 	sed 's/\.o:/\.po:/' <.dep >.dep2
@@ -502,10 +504,10 @@ check: $(TARGETS) find_nonzero md5 sha1 sha256 sha512 fmt_no
 	echo "750c783e6ab0b503eaa86e310a5db738 *TEST" > HMACS.md5
 	$(VG) ./dd_rescue -L ./libddr_hash.so=md5:hmacpwd=Jefe:chknm= TEST /dev/null
 	rm -f /tmp/dd_rescue CHECKSUMS.sha512 TEST HMACS.md5
-	if ./calchmac.py sha1 pass dd_rescue; then make check_hmac; else echo "Sorry, no more HMAC test due to missing python-hashlib support"; true; fi
-	make check_fault
-	#make check_aes
-	make check_crypt
+	if ./calchmac.py sha1 pass dd_rescue; then $(MAKE) check_hmac; else echo "Sorry, no more HMAC test due to missing python-hashlib support"; true; fi
+	$(MAKE) check_fault
+	#$(MAKE) check_aes
+	$(MAKE) check_crypt
 
 
 # FIXME: This fails on filesystems without xattr support - disabled until we know how to handle this
@@ -520,11 +522,11 @@ check_xattr_copy: $(TARGETS)
 
 
 check_hmac: $(TARGETS)
-	FILES="*.c *.h *.po dd_rescue *.so"; \
+	FILES="$(SRCDIR)/*.c $(SRCDIR)/*.h *.po dd_rescue *.so"; \
 	for alg in md5 sha1 sha256 sha384; do \
 		./calchmac.py $$alg pass_$$alg $$FILES > HMACS.$$alg; \
 	done
-	for name in *.c *.h *.po dd_rescue *.so; do \
+	for name in $(SRCDIR)/*.c $(SRCDIR)/*.h *.po dd_rescue *.so; do \
 		for alg in md5 sha1 sha256 sha384; do \
 			$(VG) ./dd_rescue -L ./libddr_hash.so=$$alg:hmacpwd=pass_$$alg:chknm= $$name /dev/null || exit 1; \
 		done \
