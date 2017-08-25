@@ -398,7 +398,7 @@ int hash_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 #error __WORDSIZE unknown
 #endif
 
-inline int round_down(int val, const int gran)
+static inline int round_down(int val, const int gran)
 {
 	return val-val%gran;
 }
