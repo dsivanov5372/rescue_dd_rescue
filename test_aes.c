@@ -262,7 +262,9 @@ int main(int argc, char *argv[])
 	unsigned char *key = (unsigned char*)"Test Key_123 is long enough even for AES-256";
 	//int dbg = 0;
 	char* testalg;
+#ifdef HAVE_AESNI
 	detect_cpu_cap();
+#endif
 	crypto = secmem_init();
 	/*
 	if (argc > 1 && !strcmp("-d", argv[1])) {

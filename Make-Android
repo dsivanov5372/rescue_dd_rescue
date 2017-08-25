@@ -5,7 +5,7 @@ make_and()
 {
 	mkdir -p $2
 	make clean
-	make -f $1 config; make -f $1 all -j4
+	make -f $1 config && make -f $1 all -j4 || exit
 	for name in $FILES; do mv $name $2/; done
 }
 

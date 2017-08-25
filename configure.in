@@ -55,6 +55,8 @@ AC_TRY_RUN([
 		[check whether asm rep nop works])
 ],[
 	AC_MSG_RESULT(no)
+],[
+	AC_MSG_RESULT(no -- cross compiling)
 ])
 
 AC_OUTPUT
