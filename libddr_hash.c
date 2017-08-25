@@ -140,7 +140,14 @@ int do_pbkdf2(hash_state *state, char* param);
 int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 {
 	int err = 0;
-	hash_state *state = (hash_state*)malloc(sizeof(hash_state));
+	void *buf = 0;
+	hash_state *state; /* = (hash_state*)malloc(sizeof(hash_state));*/
+	if (posix_memalign(&buf, 64, sizeof(hash_state))) {
+		FPLOG(FATAL, "No enough memory for hash state!\n");
+		--err;
+		return err;
+	}
+	state = (hash_state*)buf;
 	*stat = (void*)state;
 	memset(state, 0, sizeof(hash_state));
 	state->seq = seq;

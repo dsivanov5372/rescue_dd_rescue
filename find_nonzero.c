@@ -137,8 +137,8 @@ size_t find_nonzero_rep(const unsigned char* blk, const size_t ln)
 #define TEST_SIMD2(a,b,c,d) TESTC(a,b,c*2,d)
 #define TEST2_SIMD2(a,b,c,d) TEST2C(a,b,c*2,d)
 #else
-#define TEST_SIMD2(a,b,c,d) if (have_simd) { TESTC(a,b,c*2,d); }
-#define TEST2_SIMD2(a,b,c,d) if (have_simd) { TEST2C(a,b,c*2,d); }
+#define TEST_SIMD2(a,b,c,d) if (have_sse2) { TESTC(a,b,c*2,d); }
+#define TEST2_SIMD2(a,b,c,d) if (have_sse2) { TEST2C(a,b,c*2,d); }
 #endif
 #else
 #define TEST_SIMD2(a,b,c,d) do {} while (0)
