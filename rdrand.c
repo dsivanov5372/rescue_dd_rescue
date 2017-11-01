@@ -3,9 +3,17 @@
  *
  * (c) Kurt Garloff <kurt@garloff.de>, 8/2014
  * License: GNU GPL v2 or v3
+ *
+ * Can also be compiled as selfstanding program to just retrive one random number
+ * using the rdrand CPU instruction unconditionally (will SIGILL is not supported)
+ * gcc -O2 -Wall -mrdrnd -DRDRAND_MAIN -o rdrand rdrand.c
  */
 
-#include "archdep.h"
+#ifdef HAVE_CONFIG_H
+# include "archdep.h"
+#else
+# define have_rdrand 1
+#endif
 
 #ifdef __RDRND__
 #include <immintrin.h>
@@ -66,3 +74,17 @@ unsigned int rdrand32()
 }
 #endif
 
+#ifdef RDRAND_MAIN
+#include <stdio.h>
+int main(int argc, char* argv[])
+{
+#ifdef __x86_64__
+	unsigned long rnd = rdrand64();
+	printf("%lu\n", rnd);
+#else
+	unsigned int rnd = rdrand32();
+	printf("%u\n", rnd);
+#endif
+	return 0;
+}
+#endif
