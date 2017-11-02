@@ -1615,14 +1615,6 @@ static inline ssize_t mypread(int fd, void* bf, size_t sz, loff_t off,
 			      dpopt_t *dop, dpstate_t *dst)
 {
 	/* TODO: Handle plugin input here ... */
-	if (dop->prng_libc && !op->i_repeat)
-		return fill_rand(bf, sz);
-	if (dop->prng_frnd && !op->i_repeat) {
-		if (!dop->bsim715_2ndpass)
-			return frandom_bytes(dst->prng_state, (unsigned char*) bf, sz);
-		else
-			return frandom_bytes_inv(dst->prng_state, (unsigned char*) bf, sz);
-	}
 	/* Handle fault injection here */
 	int fault = in_fault_list(read_faults, off/op->hardbs,
 				  (off+(loff_t)sz+(loff_t)(op->hardbs-1))/op->hardbs);
@@ -1647,6 +1639,15 @@ static inline ssize_t mypread(int fd, void* bf, size_t sz, loff_t off,
 			return sz;
 		else
 			rep->i_rep_init = 1;
+	}
+	/* Random numbers */
+	if (dop->prng_libc)
+		return fill_rand(bf, sz);
+	if (dop->prng_frnd) {
+		if (!dop->bsim715_2ndpass)
+			return frandom_bytes(dst->prng_state, (unsigned char*) bf, sz);
+		else
+			return frandom_bytes_inv(dst->prng_state, (unsigned char*) bf, sz);
 	}
 	/* We won't make progress beyond EOF */
 	ssize_t rd;
