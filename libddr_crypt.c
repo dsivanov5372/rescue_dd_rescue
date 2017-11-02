@@ -1223,23 +1223,27 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	return err;
 }
 
-char holememcpy(void* dst, const void* src, size_t ln)
+/* Copy memory block and test for it being all zero at the same time 
+ * Will always return 0 for blocks that are not multiples of sizeof(long) in size
+ */
+char memcpy_testzero(void* dst, const void* src, size_t ln)
 {
 	unsigned long *ldst = (unsigned long*)dst;
-	unsigned long *lsrc = (unsigned long*)src;
+	const unsigned long *lsrc = (const unsigned long*)src;
 	unsigned int left = ln/sizeof(long);
-	if (*lsrc || ln%sizeof(long)) {
+	if (*lsrc || ln%sizeof(long) || !ln) {
 		memcpy(dst, src, ln);
 		return 0;
 	}
 	while (left--) {
-		unsigned long val = *lsrc++;
+		const unsigned long val = *lsrc++;
 		*ldst++ = val;
 		if (val) {
 			memcpy(ldst, lsrc, left*sizeof(long));
 			return 0;
 		}
 	}
+	//asm volatile ("" ::: "memory");
 	return 1;
 }
 
@@ -1330,7 +1334,7 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 		int left = MIN(512, *towr-i);
 		left -= left%BLKSZ;
 		//memcpy(state->sec->databuf2, bf+i, left);
-		char zero = (state->skiphole? holememcpy(state->sec->databuf2, bf+i, left): (memcpy(state->sec->databuf2, bf+i, left), 0));
+		const char zero = (state->skiphole? memcpy_testzero(state->sec->databuf2, bf+i, left): (memcpy(state->sec->databuf2, bf+i, left), 0));
 		/* Last block on decryption ? */
 		unsigned int unpad = (eof || (lastdec && i+left == *towr))? state->pad: PAD_ZERO;
 		if (state->debug && unpad)
