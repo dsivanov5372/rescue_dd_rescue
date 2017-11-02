@@ -55,7 +55,7 @@ static void detect_cpu_cap()
 	have_aesni = !!__builtin_cpu_supports("avx");
 }
 #else
-# warn no runtime detection for aesni
+# warning no runtime detection for aesni
 static void detect_cpu_cap();
 #endif
 #endif
