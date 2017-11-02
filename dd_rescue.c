@@ -1418,7 +1418,7 @@ static void advancepos(const ssize_t rd, const ssize_t wr, const ssize_t rwr,
 		       opt_t *op, fstate_t *fst, progress_t *prg);
 
 int real_cleanup(opt_t *op, fstate_t *fst, progress_t *prg, 
-	 	 dpopt_t *dop, dpstate_t *dst, char closelog)
+		 dpopt_t *dop, dpstate_t *dst, char closelog)
 {
 	int rc, errs = 0;
 	if (!op->dosplice && !dop->bsim715) {
@@ -1615,9 +1615,9 @@ static inline ssize_t mypread(int fd, void* bf, size_t sz, loff_t off,
 			      dpopt_t *dop, dpstate_t *dst)
 {
 	/* TODO: Handle plugin input here ... */
-	if (dop->prng_libc)
+	if (dop->prng_libc && !op->i_repeat)
 		return fill_rand(bf, sz);
-	if (dop->prng_frnd) {
+	if (dop->prng_frnd && !op->i_repeat) {
 		if (!dop->bsim715_2ndpass)
 			return frandom_bytes(dst->prng_state, (unsigned char*) bf, sz);
 		else
@@ -2334,7 +2334,8 @@ int tripleoverwrite(const loff_t max, opt_t *op, fstate_t *fst,
 	struct timeval orig_starttime;
 	LISTTYPE(ofile_t) *of;
 	memcpy(&orig_starttime, &starttime, sizeof(starttime));
-	fprintf(stderr, "%s%s%s%s" DDR_INFO "Triple overwrite (BSI M7.15): first pass ... (frandom)      \n\n\n\n\n", up, up, up, up);
+	//fprintf(stderr, "%s%s%s%s" DDR_INFO "Triple overwrite (BSI M7.15): first pass ... (frandom)      \n\n\n\n\n", up, up, up, up);
+	fprintf(stderr, DDR_INFO "Triple overwrite (BSI M7.15): first pass ... (frandom)      \n");
 	ret += copyfile_softbs(max, op, fst, prg, rep, dop, dst);
 	fprintf(stderr, "syncing ... \n%s", up);
 	ret += fsync(fst->odes);
