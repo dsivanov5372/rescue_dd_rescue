@@ -129,11 +129,11 @@ if openssl enc -aes-192-cbc -K 4d20e517cd98ff130ac160dcb4177ef1ab4e8f9501bc6e1d 
   rm -f dd_rescue.enc.o
 fi
 # Salted__ tests ...
-if openssl enc -aes-192-ctr -pass pass:PASWD -S f61059ec2d87a410 -p -in dd_rescue -out dd_rescue.enc.o; then
+if openssl enc -aes-192-ctr -pass pass:PASWD -S f61059ec2d87a410 -md md5 -p -in dd_rescue -out dd_rescue.enc.o; then
   enc_dec_compare dd_rescue AES192-CTR "" pass=PASWD:salthex=f61059ec2d87a410:opbkdf:outkeyiv
   cmp dd_rescue.enc dd_rescue.enc.o || exit 4
 fi
-if openssl enc -aes-192-cbc -pass pass:PASWD -S f61059ec2d87a410 -p -in dd_rescue -out dd_rescue.enc.o; then
+if openssl enc -aes-192-cbc -pass pass:PASWD -S f61059ec2d87a410 -md md5 -p -in dd_rescue -out dd_rescue.enc.o; then
   enc_dec_compare dd_rescue AES192-CBC "" pass=PASWD:salthex=f61059ec2d87a410:opbkdf:outkeyiv
   cmp dd_rescue.enc dd_rescue.enc.o || exit 4
   rm -f dd_rescue.enc.o
