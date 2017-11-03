@@ -102,6 +102,7 @@ typedef struct _crypt_state {
 	char opbkdf;
 	char outkeyiv;
 	char ctrbug198;
+	char opbkdf11;
 } crypt_state;
 
 /* aes modules rely on avail of global crypto symbol to point to sec_fields ... */
@@ -121,7 +122,7 @@ const char *crypt_help = "The crypt plugin for dd_rescue de/encrypts data copied
 #ifdef HAVE_ATTR_XATTR_H
 		":saltxattr[=xattr_name]:sxfallback"
 #endif
-		"\n\t:pbkdf2[=INT]:opbkdf:debug:bench[mark]:skiphole:weakrnd:outkeyiv:ctrbug198\n"
+		"\n\t:pbkdf2[=INT]:opbkdf[11]:debug:bench[mark]:skiphole:weakrnd:outkeyiv:ctrbug198\n"
 		" Use algorithm=help to get a list of supported crypt algorithms\n";
 
 /* TODO: 
@@ -376,7 +377,9 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			state->pbkdf2r = 17000;
 		else if (!strcmp(param, "opbkdf"))
 			state->opbkdf = 1;
-		else if (!strcmp(param, "skiphole"))
+		else if (!strcmp(param, "opbkdf11")) {
+			state->opbkdf = 1; state->opbkdf11 = 1;
+		} else if (!strcmp(param, "skiphole"))
 			state->skiphole = 1;
 		else if (!strcmp(param, "weakrnd"))
 			state->weakrnd = 1;
@@ -795,6 +798,10 @@ int get_salt_xattr(crypt_state* state)
 			if (rnd != state->pbkdf2r && state->opts->verbose)
 				FPLOG(INFO, "Setting pbkdf2 KDF with %i rounds\n", rnd);
 			state->pbkdf2r = rnd; state->opbkdf = 0;
+		} else if (sscanf(state->sec->charbuf1, "opbkdf11") == 0) {
+			if (!state->opbkdf && state->opts->verbose)
+				FPLOG(INFO, "Setting opbkdf11\n");
+			state->opbkdf = 1; state->opbkdf11 = 1; state->pbkdf2r = 0;
 		} else if (sscanf(state->sec->charbuf1, "opbkdf") == 0) {
 			if (!state->opbkdf && state->opts->verbose)
 				FPLOG(INFO, "Setting opbkdf\n");
@@ -814,6 +821,8 @@ int set_salt_xattr(crypt_state* state)
 		char buf[32];
 		if (state->pbkdf2r)
 			snprintf(buf, 32, "pbkdf2=%i", state->pbkdf2r);
+		else if (state->opbkdf11)
+			sprintf(buf, "opbkdf11");
 		else if (state->opbkdf)
 			sprintf(buf, "opbkdf");
 		else
@@ -1039,11 +1048,19 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 				err = pbkdf2(&sha256_halg, state->sec->passphr, 128, state->sec->salt, 8,
 					     state->pbkdf2r, state->sec->userkey1, state->alg->keylen/8);
 			} else {
-				hashalg_t md5_halg = MD5_HALG_T;
-				err = pbkdf_ossl(&md5_halg, state->sec->passphr, strlen((char*)state->sec->passphr),
+				if (state->opbkdf11) {
+					hashalg_t hash_halg = SHA256_HALG_T;
+					err = pbkdf_ossl(&hash_halg, state->sec->passphr, strlen((char*)state->sec->passphr),
 						 state->sec->salt, 8, 1,
 						 state->sec->userkey1, state->alg->keylen/8,
 						 state->sec->nonce1, BLKSZ);
+				} else {
+					hashalg_t hash_halg = MD5_HALG_T;
+					err = pbkdf_ossl(&hash_halg, state->sec->passphr, strlen((char*)state->sec->passphr),
+						 state->sec->salt, 8, 1,
+						 state->sec->userkey1, state->alg->keylen/8,
+						 state->sec->nonce1, BLKSZ);
+				}
 			}
 			if (err) {
 				FPLOG(FATAL, "Key generation with pass+salt failed!\n", NULL);
