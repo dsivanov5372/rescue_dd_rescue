@@ -468,7 +468,7 @@ check: $(TARGETS) find_nonzero md5 sha1 sha256 sha512 fmt_no
 	@rm TEST
 	@echo "***** dd_rescue ratecontrol test *****"
 	# Test system must be fast enough to achieve ~20MB/s ...
-	OLDDT=`date +%s`; $(VG) ./dd_rescue -m 64M -C 20M /dev/zero /dev/null; DT=`date +%s`; ARCH=$$(uname -m); test $$(($$DT-$$OLDDT)) = 3 -o $$(($$DT-$$OLDDT)) = 4 || test $$(($$DT-$$OLDDT)) -ge 5 -a $${ARCH:0:5} = ppc64
+	OLDDT=`date +%s`; $(VG) ./dd_rescue -m 64M -C 20M /dev/zero /dev/null; DT=`date +%s`; ARCH=$$(uname -m); test $$(($$DT-$$OLDDT)) = 3 -o $$(($$DT-$$OLDDT)) = 4 || test $$(($$DT-$$OLDDT)) -ge 5 -a $${ARCH:0:3} = ppc
 	@echo "***** dd_rescue MD5 plugin tests *****"
 	$(VG) ./md5 /dev/null
 	$(VG) ./md5 /dev/null | md5sum -c
