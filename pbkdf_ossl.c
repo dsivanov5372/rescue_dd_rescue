@@ -69,7 +69,7 @@ int pbkdf_ossl(hashalg_t *hash, unsigned char* pwd,  int plen,
 				memcpy(hbuf+plen, salt, slen);
 		} else {
 			hbln = plen+slen+hash->hashln;
-			memcpy_hash(hbuf, &hv, hash->hashln);
+			memcpy_nhash(hash, hbuf, &hv, hash->hashln);
 			memcpy(hbuf+hash->hashln, pwd, plen);
 			if (slen)
 				memcpy(hbuf+hash->hashln+plen, salt, slen);
