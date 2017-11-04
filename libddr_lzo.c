@@ -977,11 +977,11 @@ int recover_decompr_error(lzo_state *state, fstate_t *fst,
 
 #define QUIT { raise(SIGQUIT); ++do_break; break; }
 #define BREAK if (!state->nodiscard) ++do_break; break
-#define DRAIN(x) do { ++do_break; *recall=1; 		\
+#define DRAIN(x) { do { ++do_break; *recall=1; 		\
 		   LZO_DEBUG(FPLOG(DEBUG, "Drain %i bytes before %s error handling\n", d_off, x));	\
 		   eof = 0;				\
        		   break; } while(0); 			\
-		   if (do_break) break
+		   if (do_break) break; }
 
 /* TODO:
  * - Debug: Output block boundaries
