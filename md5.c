@@ -192,9 +192,13 @@ unsigned char* md5_beout(unsigned char* buf, const hash_t *ctx)
 {
 	assert(buf);
 	int i;
-	/* FIXME !!! */
 	for (i = 0; i < 4; ++i) 
-		*((uint32_t*)buf+i) = htonl(BSWAP32(ctx->md5_h[i]));
+		//*((uint32_t*)buf+i) = htonl(BSWAP32(ctx->md5_h[i]));
+#if __BYTE_ORDER == __BIG_ENDIAN
+		*((uint32_t*)buf+i) = BSWAP32(ctx->md5_h[i]);
+#else
+		*((uint32_t*)buf+i) = ctx->md5_h[i];
+#endif
 	return buf;
 }
 
