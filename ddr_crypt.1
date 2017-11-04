@@ -291,8 +291,14 @@ is used which makes brute-forcing very effective. Using this option
 also has the side-effect of writing (encryption) or parsing
 (decryption) an openSSL style Salted__ header. Note the openssl
 version 1.1 started to default to one round of sha256 hashing
-instead which can be overriden by specifying -md md5. One round
-of sha256 is of course still very weak.
+instead which can be forced on older openssl versions with
+-md sha256 and overriden by specifying -md md5 on the openssl
+command line. You can instruct dd_rescue to use an openssl
+compatible KDF with sha256 by specifying
+.B opbkdf11 .
+One round of sha256 can of course still be very efficiently
+brute-forced, so use high-entropy passwords if you really
+need to use this.
 .P
 The salt can be derived automatically from the name (and length)
 of the encrypted file; this allows to work with just one password

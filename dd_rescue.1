@@ -743,7 +743,8 @@ be cryptographically signed with PGP/GnuPG.
 Please note that the md5 algorithm is NOT recommended any more for
 good protection against malicious attempts to hide data modification;
 it's not considered strong enough any more to prevent hash collisions.
-sha1 is better, but the recommendation is to use the SHA-2 family of hashes.
+sha1 is a bit better, but has been broken as well as of 2017.
+The recommendation is to use the SHA-2 family of hashes.
 On 32bit machines, I'd recommend sha256, while on 64bit machines, sha512
 is faster and thus the best choice.
 .PP

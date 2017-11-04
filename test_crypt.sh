@@ -133,7 +133,7 @@ if openssl enc -aes-192-ctr -pass pass:PASWD -S f61059ec2d87a410 -md md5 -p -in 
   enc_dec_compare dd_rescue AES192-CTR "" pass=PASWD:salthex=f61059ec2d87a410:opbkdf:outkeyiv
   cmp dd_rescue.enc dd_rescue.enc.o || exit 4
 fi
-if false && openssl enc -aes-192-ctr -pass pass:PASWD -S f61059ec2d87a410 -md sha256 -p -in dd_rescue -out dd_rescue.enc.o; then
+if openssl enc -aes-192-ctr -pass pass:PASWD -S f61059ec2d87a410 -md sha256 -p -in dd_rescue -out dd_rescue.enc.o; then
   enc_dec_compare dd_rescue AES192-CTR "" pass=PASWD:salthex=f61059ec2d87a410:opbkdf11:outkeyiv
   cmp dd_rescue.enc dd_rescue.enc.o || exit 4
 fi
