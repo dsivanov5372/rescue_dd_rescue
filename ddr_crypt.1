@@ -289,7 +289,10 @@ using an openssl compatible key derivation function with
 Note that this is not recommended; only one round of md5 hashing
 is used which makes brute-forcing very effective. Using this option
 also has the side-effect of writing (encryption) or parsing
-(decryption) an openSSL style Salted__ header.
+(decryption) an openSSL style Salted__ header. Note the openssl
+version 1.1 started to default to one round of sha256 hashing
+instead which can be overriden by specifying -md md5. One round
+of sha256 is of course still very weak.
 .P
 The salt can be derived automatically from the name (and length)
 of the encrypted file; this allows to work with just one password

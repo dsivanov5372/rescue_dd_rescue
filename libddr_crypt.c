@@ -1260,7 +1260,7 @@ char memcpy_testzero(void* dst, const void* src, size_t ln)
 			return 0;
 		}
 	}
-	//asm volatile ("" ::: "memory");
+	asm volatile ("":::"memory");
 	return 1;
 }
 
