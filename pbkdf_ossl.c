@@ -16,40 +16,19 @@
 
 #define MIN(a,b) ((a)<(b)? (a): (b))
 
-#if __BYTE_ORDER == __BIG_ENDIAN
-static inline void to_bytes(uint32_t val, uint8_t *bytes)
+static inline void memcpy_nhash(hashalg_t *hash, uint8_t *buf, hash_t *hv, size_t hln, size_t off)
 {
-	bytes[0] = (uint8_t)val;
-	bytes[1] = (uint8_t)(val >> 8);
-	bytes[2] = (uint8_t)(val >> 16);
-	bytes[3] = (uint8_t)(val >> 24);
-}
-static inline void memcpy_hash(uint8_t *buf, hash_t *hv, size_t hln)
-{
-	int i;
-	assert(hln%sizeof(uint32_t) == 0);
-	for (i=0; i<hln/sizeof(uint32_t); ++i)
-		to_bytes(hv->sha256_h[i], buf+i*sizeof(uint32_t));
-}
-#else
-static inline void memcpy_hash(uint8_t *buf, hash_t *hv, size_t hln)
-{
-	memcpy(buf, hv, hln);
+	if (off == 0 && hln == hash->hashln)
+		hash->hash_beout(buf, hv);
+	else {
+		uint8_t tmp[64];
+		hash->hash_beout(tmp, hv);
+		memcpy(buf, tmp+off, hln);
+		memset(tmp, 0, hash->hashln);
+		asm("":::"memory");
+	}
 }
 
-#endif
-#include <netinet/in.h>
-static inline void memcpy_nhash(hashalg_t *hash, uint8_t *buf, hash_t *hv, size_t hln)
-{
-	if (hash->hashln == 16)
-		return memcpy_hash(buf, hv, hln);
-	int i;
-	assert(hln%sizeof(uint32_t) == 0);
-	for (i=0; i<hln/sizeof(uint32_t); ++i)
-		*((uint32_t*)buf+i) = htonl(*((uint32_t*)hv+i));
-}
-
-#include <stdio.h>
 int pbkdf_ossl(hashalg_t *hash, unsigned char* pwd,  int plen,
 				unsigned char* salt, int slen,
 	     unsigned int iter, unsigned char* key,  int klen,
@@ -69,7 +48,7 @@ int pbkdf_ossl(hashalg_t *hash, unsigned char* pwd,  int plen,
 				memcpy(hbuf+plen, salt, slen);
 		} else {
 			hbln = plen+slen+hash->hashln;
-			memcpy_nhash(hash, hbuf, &hv, hash->hashln);
+			hash->hash_beout(hbuf, &hv);
 			memcpy(hbuf+hash->hashln, pwd, plen);
 			if (slen)
 				memcpy(hbuf+hash->hashln+plen, salt, slen);
@@ -79,23 +58,12 @@ int pbkdf_ossl(hashalg_t *hash, unsigned char* pwd,  int plen,
 		hash->hash_calc(hbuf, hbln, hbln, &hv);
 		/* Fill in result */
 		if (off+hash->hashln < klen)
-			//hash->hash_beout(key+off, &hv);
-			memcpy_nhash(hash, key+off, &hv, hash->hashln);
+			memcpy_nhash(hash, key+off, &hv, hash->hashln, 0);
 		else if (off >= klen) {
-			//hash->hash_beout(iv+off-klen, &hv);
-			//memcpy_nhash(hash, iv+off-klen, &hv, MIN(hash->hashln, ivlen+klen-off));
-			if (ivlen+klen < off+hash->hashln) {
-				//char buf[131];
-				//fprintf(stderr, "%s\n", hash->hash_hexout(buf, &hv));
-				memcpy_nhash(hash, iv+off-klen, &hv, ivlen+klen-off);
-			} else
-				memcpy_nhash(hash, iv+off-klen, &hv, hash->hashln);
+			memcpy_nhash(hash, iv+off-klen, &hv, MIN(hash->hashln, ivlen+klen-off), 0);
 		} else {
-			//fprintf(stderr, "OUCH!\n");
-			//hash->hash_beout(key+off, &hv);
-			memcpy_nhash(hash, key+off, &hv, klen-off);
-			//hash->hash_beout(iv-(klen-off), &hv);
-			memcpy_nhash(hash, iv, (hash_t*)(((unsigned char*)&hv)+klen-off), MIN(hash->hashln-klen+off, ivlen));
+			memcpy_nhash(hash, key+off, &hv, klen-off, 0);
+			memcpy_nhash(hash, iv, &hv, MIN(hash->hashln-klen+off, ivlen), klen-off);
 		}
 		off += hash->hashln;
 		++cnt;
