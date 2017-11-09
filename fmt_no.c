@@ -46,13 +46,12 @@ static char fmtbufs[8][64];
  *   or a single (visible) character or empty/NULL
  */
 char* fmt_int_b(unsigned char pre, unsigned char post, unsigned int scale,
-	       	loff_t no, const char* bold, const char* norm, 
+		loff_t no, const char* bold, const int blen,
+		const char* norm, const int nlen,
 		const char boldinvis, const unsigned char base,
 		const unsigned char group)
 {
 	static int fbno = -1;
-	const int blen = bold? strlen(bold): 0;
-	const int nlen = norm? strlen(norm): 0;
 	int idx = sizeof(fmtbufs[0])-1;
 	char pos;
 	loff_t my_no;
