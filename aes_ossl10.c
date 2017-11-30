@@ -183,6 +183,7 @@ void AES_OSSL_Bits_EKey_ExpandX2(const EVP_CIPHER *cipher, const unsigned char* 
 	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;
 	EVP_CIPHER_CTX_init(evpctx);
 	EVP_EncryptInit_ex(evpctx, cipher, NULL, userkey, NULL);
+	//EVP_CipherInit_ex(evpctx, cipher, NULL, userkey, NULL, 1);
 	//EVP_CIPHER_CTX_set_padding(evpctx, 0);
 	hash_t hv;
 	sha256_init(&hv);
@@ -236,8 +237,9 @@ int  AES_OSSL_##BITCHAIN##_EncryptX2(const unsigned char* ctx, unsigned int roun
 {								\
 	int olen, elen, ores;					\
 	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;		\
-	EVP_EncryptInit(evpctx, NULL, NULL, NULL);		\
-	EVP_EncryptInit(evpctx+1, NULL, NULL, NULL);		\
+	/* NOTE: This fixes a problem ... WHY? */		\
+	evpctx[0].buf_len = 0; evpctx[0].final_used = 0;	\
+	evpctx[1].buf_len = 0; evpctx[1].final_used = 0;	\
 	EVP_CIPHER_CTX_set_padding(evpctx, pad);		\
 	EVP_CIPHER_CTX_set_padding(evpctx+1, 0);		\
 	if (IV) {						\
@@ -279,8 +281,9 @@ int  AES_OSSL_##BITCHAIN##_DecryptX2(const unsigned char* ctx, unsigned int roun
 	int olen, elen, ores;					\
 	int rlen = (len&15)? len+16-(len&15): len;		\
 	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;		\
-	EVP_DecryptInit(evpctx+1, NULL, NULL, NULL);		\
-	EVP_DecryptInit(evpctx, NULL, NULL, NULL);		\
+	/* NOTE: This fixes a problem ... WHY? */		\
+	evpctx[0].buf_len = 0; evpctx[0].final_used = 0;	\
+	evpctx[1].buf_len = 0; evpctx[1].final_used = 0;	\
 	EVP_CIPHER_CTX_set_padding(evpctx+1, 0);		\
 	EVP_CIPHER_CTX_set_padding(evpctx, pad==PAD_ASNEEDED? 0: pad);	\
 	if (IV) {						\
@@ -334,8 +337,8 @@ int  AES_OSSL_##BITCHAIN##_DecryptX2(const unsigned char* ctx, unsigned int roun
 void AES_OSSL_ReleaseX2(unsigned char *ctx, unsigned int rounds)
 {
 	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;
-	EVP_CIPHER_CTX_cleanup(evpctx);
 	EVP_CIPHER_CTX_cleanup(evpctx+1);
+	EVP_CIPHER_CTX_cleanup(evpctx);
 }
 
 AES_OSSL_KEY_EX2(128, AES_128_ROUNDS, ecb);
@@ -393,8 +396,8 @@ int  AES_OSSL_##BITS##_CBC_EncryptX2(const unsigned char *ctx, unsigned int roun
 	       			     ssize_t len, ssize_t *olen)			\
 {											\
 	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;					\
-	EVP_EncryptInit(evpctx, NULL, NULL, NULL);					\
-	EVP_EncryptInit(evpctx+1, NULL, NULL, NULL);					\
+	/* EVP_EncryptInit(evpctx, NULL, NULL, NULL);					\
+	EVP_EncryptInit(evpctx+1, NULL, NULL, NULL); */					\
 	EVP_CIPHER_CTX_set_padding(evpctx, 0);						\
 	EVP_CIPHER_CTX_set_padding(evpctx+1, 0);					\
 	return AES_Gen_CBC_Enc(AES_OSSL_Blk_EncryptX2, ctx, rounds, iv, pad, in, out, len, olen);	\
@@ -405,8 +408,8 @@ int  AES_OSSL_##BITS##_CBC_DecryptX2(const unsigned char *ctx, unsigned int roun
 	       			     ssize_t len, ssize_t *olen)			\
 {											\
 	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;					\
-	EVP_DecryptInit(evpctx+1, NULL, NULL, NULL);					\
-	EVP_DecryptInit(evpctx, NULL, NULL, NULL);					\
+	/* EVP_DecryptInit(evpctx+1, NULL, NULL, NULL);					\
+	EVP_DecryptInit(evpctx, NULL, NULL, NULL); */					\
 	EVP_CIPHER_CTX_set_padding(evpctx+1, 0);					\
 	EVP_CIPHER_CTX_set_padding(evpctx, 0);						\
 	return AES_Gen_CBC_Dec(AES_OSSL_Blk_DecryptX2, ctx, rounds, iv, pad, in, out, len, olen);	\
@@ -425,8 +428,8 @@ int  AES_OSSL_##BITS##_CTR_CryptX2(const unsigned char *ctx, unsigned int rounds
 {											\
 	*olen = len;									\
 	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;					\
-	EVP_EncryptInit(evpctx, NULL, NULL, NULL);					\
-	EVP_EncryptInit(evpctx+1, NULL, NULL, NULL);					\
+	/* EVP_EncryptInit(evpctx, NULL, NULL, NULL);					\
+	EVP_EncryptInit(evpctx+1, NULL, NULL, NULL); */					\
 	EVP_CIPHER_CTX_set_padding(evpctx, 0);						\
 	EVP_CIPHER_CTX_set_padding(evpctx+1, 0);					\
 	return AES_Gen_CTR_Crypt(AES_OSSL_Blk_EncryptX2, ctx, rounds, iv, in, out, len);\
