@@ -182,8 +182,8 @@ AES_OSSL_CRYPT(256_CTR, 1, 0);
 void AES_OSSL_Bits_EKey_ExpandX2(const EVP_CIPHER *cipher, const unsigned char* userkey, unsigned char *ctx, unsigned int bits)
 {
 	EVP_CIPHER_CTX **evpctx = (EVP_CIPHER_CTX**)ctx;
-	evpctx[0] = EVP_CIPHER_CTX_new();						\
-	evpctx[1] = EVP_CIPHER_CTX_new();						\
+	evpctx[0] = EVP_CIPHER_CTX_new();
+	evpctx[1] = EVP_CIPHER_CTX_new();
 	EVP_CIPHER_CTX_init(evpctx[0]);
 	EVP_EncryptInit_ex(evpctx[0], cipher, NULL, userkey, NULL);
 	//EVP_CIPHER_CTX_set_padding(evpctx[0], 0);
@@ -202,8 +202,8 @@ void AES_OSSL_Bits_EKey_ExpandX2(const EVP_CIPHER *cipher, const unsigned char* 
 void AES_OSSL_Bits_DKey_ExpandX2(const EVP_CIPHER *cipher, const unsigned char* userkey, unsigned char *ctx, unsigned int bits)
 {
 	EVP_CIPHER_CTX **evpctx = (EVP_CIPHER_CTX**)ctx;
-	evpctx[0] = EVP_CIPHER_CTX_new();						\
-	evpctx[1] = EVP_CIPHER_CTX_new();						\
+	evpctx[0] = EVP_CIPHER_CTX_new();
+	evpctx[1] = EVP_CIPHER_CTX_new();
 	EVP_CIPHER_CTX_init(evpctx[0]);
 	EVP_DecryptInit_ex(evpctx[0], cipher, NULL, userkey, NULL);
 	//EVP_CIPHER_CTX_set_padding(evpctx[0], 0);
@@ -250,7 +250,7 @@ int  AES_OSSL_##BITCHAIN##_EncryptX2(const unsigned char* ctx, unsigned int roun
 		memcpy(EVP_CIPHER_CTX_original_iv(evpctx[1]), iv, 16); memcpy(EVP_CIPHER_CTX_iv_noconst(evpctx[1]), iv, 16);	\
 	}							\
        	if (!pad && (len&15)) {					\
-		ores = EVP_EncryptUpdate(evpctx[0], out, &olen, in, len-(len&15));		\
+		ores = EVP_EncryptUpdate(evpctx[0], out, &olen, in, len-(len&15));	\
 		assert(ores);					\
 		uchar ibf[16];					\
 		memcpy(ibf, in+olen, len&15);			\
@@ -262,7 +262,7 @@ int  AES_OSSL_##BITCHAIN##_EncryptX2(const unsigned char* ctx, unsigned int roun
 	} else {						\
 		ores = EVP_EncryptUpdate(evpctx[0], out, &olen, in, len);	\
 		assert(ores);					\
-		ores = EVP_EncryptFinal(evpctx[0], out+olen, &elen);	\
+		ores = EVP_EncryptFinal(evpctx[0], out+olen, &elen);		\
 		assert(ores);					\
 	}							\
 	ores = EVP_EncryptUpdate(evpctx[1], out, &olen, out, olen+elen);	\
@@ -319,7 +319,7 @@ int  AES_OSSL_##BITCHAIN##_DecryptX2(const unsigned char* ctx, unsigned int roun
 		EVP_CIPHER_CTX_free(ctx2);			\
 		asm("":::"memory");				\
 	} else {						\
-		ores = EVP_DecryptUpdate(evpctx[0], out, &olen, out, olen+elen);	\
+		ores = EVP_DecryptUpdate(evpctx[0], out, &olen, out, olen+elen);\
 		assert(ores);					\
 		ores = EVP_DecryptFinal(evpctx[0], out+olen, &elen);	\
 	}							\

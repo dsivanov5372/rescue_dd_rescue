@@ -2,7 +2,7 @@
 # (c) garloff@suse.de, 99/10/09, GNU GPL
 # (c) kurt@garloff.de, 2010 -- 2015, GNU GPL v2 or v3
 
-VERSION = 1.99.7
+VERSION = 1.99.8
 
 DESTDIR = 
 SRCDIR = .
@@ -393,7 +393,7 @@ aes_arm32.po: $(SRCDIR)/aes_arm32.c
 aes_c.o: $(SRCDIR)/aes_c.c
 	$(CC) $(CFLAGS) $(PIE) $(FULL_UNROLL) -O3 -c $<
 
-aes_ossl.o: $(SRCDIR)/aes_ossl.c
+aes_ossl.o: $(SRCDIR)/aes_ossl.c $(SRCDIR)/aes_ossl10.c $(SRCDIR)/aes_ossl11.c
 	$(CC) $(CFLAGS) $(PIE) -O3 -c $<
 
 distclean: clean
