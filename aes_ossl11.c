@@ -234,12 +234,17 @@ void AES_OSSL_Bits_DKey_ExpandX2(const EVP_CIPHER *cipher, const unsigned char* 
 	asm("":::"memory");
 }
 
+/* fancy way of setting final_used to 0 */
 static inline void EVP_reset(EVP_CIPHER_CTX *ectx)
 {
-	unsigned char* ptr = EVP_CIPHER_CTX_get_cipher_data(ectx);
-	memset(ptr+sizeof(void*), 0, sizeof(int));
-	ptr = EVP_CIPHER_CTX_original_iv(ectx);
-	memset(ptr-sizeof(int), 0, sizeof(int));
+	unsigned char* ptr = ectx;
+	ptr += 2*sizeof(void*)+3*sizeof(int)+2*EVP_MAX_IV_LENGTH+EVP_MAX_BLOCK_LENGTH;
+	if ((ptr-(unsigned char*)ectx)%sizeof(void*))
+		ptr += 8;
+	ptr += sizeof(int)+2*sizeof(void*)+sizeof(long);
+	//printf("Offset %i\n", ptr-(unsigned char*)ectx);
+	memset(ptr, 0, sizeof(int));
+	asm("":::"memory");
 }
 
 #define AES_OSSL_KEY_EX2(BITS, ROUNDS, CHAIN)	\
