@@ -234,6 +234,13 @@ void AES_OSSL_Bits_DKey_ExpandX2(const EVP_CIPHER *cipher, const unsigned char* 
 	asm("":::"memory");
 }
 
+static inline void EVP_reset(EVP_CIPHER_CTX *ectx)
+{
+	unsigned char* ptr = EVP_CIPHER_CTX_get_cipher_data(ectx);
+	//memset(ptr+sizeof(void*), 0, sizeof(int));
+	ptr = EVP_CIPHER_CTX_original_iv(ectx);
+	memset(ptr-sizeof(int), 0, sizeof(int));
+}
 
 #define AES_OSSL_KEY_EX2(BITS, ROUNDS, CHAIN)	\
 void AES_OSSL_##BITS##_EKey_ExpandX2_##CHAIN (const unsigned char *userkey, unsigned char *ctx, unsigned int rounds)	\
@@ -258,6 +265,7 @@ int  AES_OSSL_##BITCHAIN##_EncryptX2(const unsigned char* ctx, unsigned int roun
 	/* EVP_EncryptInit(evpctx[0], NULL, NULL, NULL);	\
 	EVP_EncryptInit(evpctx[1], NULL, NULL, NULL); */	\
 	/* FIXME: We need to find a way to reset padding */	\
+	EVP_reset(evpctx[0]); /* EVP_reset(evpctx[1]);*/	\
 	EVP_CIPHER_CTX_set_padding(evpctx[0], pad);		\
 	EVP_CIPHER_CTX_set_padding(evpctx[1], 0);		\
 	if (IV) {						\
@@ -302,6 +310,7 @@ int  AES_OSSL_##BITCHAIN##_DecryptX2(const unsigned char* ctx, unsigned int roun
 	int rlen = (len&15)? len+16-(len&15): len;		\
 	EVP_CIPHER_CTX **evpctx = (EVP_CIPHER_CTX**)ctx;	\
 	/* FIXME: We need to find a way to reset padding */	\
+	EVP_reset(evpctx[0]); /*EVP_reset(evpctx[1]);*/		\
 	EVP_CIPHER_CTX_set_padding(evpctx[1], 0);		\
 	EVP_CIPHER_CTX_set_padding(evpctx[0], pad==PAD_ASNEEDED? 0: pad);	\
 	if (IV) {						\
