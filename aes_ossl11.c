@@ -257,6 +257,7 @@ int  AES_OSSL_##BITCHAIN##_EncryptX2(const unsigned char* ctx, unsigned int roun
 	EVP_CIPHER_CTX **evpctx = (EVP_CIPHER_CTX**)ctx;	\
 	/* EVP_EncryptInit(evpctx[0], NULL, NULL, NULL);	\
 	EVP_EncryptInit(evpctx[1], NULL, NULL, NULL); */	\
+	/* FIXME: We need to find a way to reset padding */	\
 	EVP_CIPHER_CTX_set_padding(evpctx[0], pad);		\
 	EVP_CIPHER_CTX_set_padding(evpctx[1], 0);		\
 	if (IV) {						\
@@ -300,6 +301,7 @@ int  AES_OSSL_##BITCHAIN##_DecryptX2(const unsigned char* ctx, unsigned int roun
 	int olen, elen, ores;					\
 	int rlen = (len&15)? len+16-(len&15): len;		\
 	EVP_CIPHER_CTX **evpctx = (EVP_CIPHER_CTX**)ctx;	\
+	/* FIXME: We need to find a way to reset padding */	\
 	EVP_CIPHER_CTX_set_padding(evpctx[1], 0);		\
 	EVP_CIPHER_CTX_set_padding(evpctx[0], pad==PAD_ASNEEDED? 0: pad);	\
 	if (IV) {						\
