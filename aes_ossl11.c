@@ -16,19 +16,26 @@
 
 #include <netinet/in.h>
 
+#define ENCRYPT 1
+#define DECRYPT 0
+
 void AES_OSSL_Bits_EKey_Expand(const EVP_CIPHER *cipher, const unsigned char* userkey, unsigned char *ctx)
 {
 	EVP_CIPHER_CTX **evpctx = (EVP_CIPHER_CTX**)ctx;
 	evpctx[0] = EVP_CIPHER_CTX_new();
-	EVP_CIPHER_CTX_init(evpctx[0], cipher);
-	EVP_EncryptInit_ex(evpctx[0], cipher, NULL, userkey, NULL);
+	//EVP_CIPHER_CTX_init(evpctx[0], cipher);
+	//EVP_EncryptInit_ex(evpctx[0], NULL, NULL, userkey, NULL);
+	EVP_CipherInit_ex(evpctx[0], cipher, NULL, userkey, NULL, ENCRYPT);
+	//EVP_CIPHER_CTX_set_padding(evpctx[0], 0);
 }
 void AES_OSSL_Bits_DKey_Expand(const EVP_CIPHER *cipher, const unsigned char* userkey, unsigned char *ctx)
 {
 	EVP_CIPHER_CTX **evpctx = (EVP_CIPHER_CTX**)ctx;
 	evpctx[0] = EVP_CIPHER_CTX_new();
-	EVP_CIPHER_CTX_init(evpctx[0], cipher);
-	EVP_DecryptInit_ex(evpctx[0], cipher, NULL, userkey, NULL);
+	//EVP_CIPHER_CTX_init(evpctx[0]);
+	//EVP_DecryptInit_ex(evpctx[0], cipher, NULL, userkey, NULL);
+	EVP_CipherInit_ex(evpctx[0], cipher, NULL, userkey, NULL, DECRYPT);
+	//EVP_CIPHER_CTX_set_padding(evpctx[0], 0);
 }
 
 
@@ -144,8 +151,8 @@ int AES_OSSL_##BITCHAIN##_Decrypt(const unsigned char* ctx, unsigned int rounds,
 void AES_OSSL_Release(unsigned char *ctx, unsigned int rounds)
 {
 	EVP_CIPHER_CTX **evpctx = (EVP_CIPHER_CTX**)ctx;
-	EVP_CIPHER_CTX_cleanup(evpctx[0]);
-	EVP_CIPHER_CTX_free(ctx);
+	//EVP_CIPHER_CTX_cleanup(evpctx[0]);
+	EVP_CIPHER_CTX_free(evpctx[0]);
 }
 
 AES_OSSL_KEY_EX(128, AES_128_ROUNDS, ecb);
@@ -187,8 +194,9 @@ void AES_OSSL_Bits_EKey_ExpandX2(const EVP_CIPHER *cipher, const unsigned char* 
 	EVP_CIPHER_CTX **evpctx = (EVP_CIPHER_CTX**)ctx;
 	evpctx[0] = EVP_CIPHER_CTX_new();
 	evpctx[1] = EVP_CIPHER_CTX_new();
-	EVP_CIPHER_CTX_init(evpctx[0]);
-	EVP_EncryptInit_ex(evpctx[0], cipher, NULL, userkey, NULL);
+	//EVP_CIPHER_CTX_init(evpctx[0]);
+	//EVP_EncryptInit_ex(evpctx[0], cipher, NULL, userkey, NULL);
+	EVP_CipherInit_ex(evpctx[0], cipher, NULL, userkey, NULL, ENCRYPT);
 	//EVP_CIPHER_CTX_set_padding(evpctx[0], 0);
 	hash_t hv;
 	sha256_init(&hv);
@@ -196,8 +204,9 @@ void AES_OSSL_Bits_EKey_ExpandX2(const EVP_CIPHER *cipher, const unsigned char* 
 	uchar usrkey2[32];
 	sha256_beout(usrkey2, &hv);
 	sha256_init(&hv);
-	EVP_CIPHER_CTX_init(evpctx[1]);
-	EVP_EncryptInit_ex(evpctx[1], cipher, NULL, usrkey2, NULL);
+	//EVP_CIPHER_CTX_init(evpctx[1]);
+	//EVP_EncryptInit_ex(evpctx[1], cipher, NULL, usrkey2, NULL);
+	EVP_CipherInit_ex(evpctx[1], cipher, NULL, usrkey2, NULL, ENCRYPT);
 	//EVP_CIPHER_CTX_set_padding(evpctx+1, 0);
 	memset(usrkey2, 0, 32);
 	asm("":::"memory");
@@ -207,8 +216,9 @@ void AES_OSSL_Bits_DKey_ExpandX2(const EVP_CIPHER *cipher, const unsigned char* 
 	EVP_CIPHER_CTX **evpctx = (EVP_CIPHER_CTX**)ctx;
 	evpctx[0] = EVP_CIPHER_CTX_new();
 	evpctx[1] = EVP_CIPHER_CTX_new();
-	EVP_CIPHER_CTX_init(evpctx[0]);
-	EVP_DecryptInit_ex(evpctx[0], cipher, NULL, userkey, NULL);
+	//EVP_CIPHER_CTX_init(evpctx[0]);
+	//EVP_DecryptInit_ex(evpctx[0], cipher, NULL, userkey, NULL);
+	EVP_CipherInit_ex(evpctx[0], cipher, NULL, userkey, NULL, DECRYPT);
 	//EVP_CIPHER_CTX_set_padding(evpctx[0], 0);
 	hash_t hv;
 	sha256_init(&hv);
@@ -216,8 +226,9 @@ void AES_OSSL_Bits_DKey_ExpandX2(const EVP_CIPHER *cipher, const unsigned char* 
 	uchar usrkey2[32];
 	sha256_beout(usrkey2, &hv);
 	sha256_init(&hv);
-	EVP_CIPHER_CTX_init(evpctx[1]);
-	EVP_DecryptInit_ex(evpctx[1], cipher, NULL, usrkey2, NULL);
+	//EVP_CIPHER_CTX_init(evpctx[1]);
+	//EVP_DecryptInit_ex(evpctx[1], cipher, NULL, usrkey2, NULL);
+	EVP_CipherInit_ex(evpctx[1], cipher, NULL, usrkey2, NULL, DECRYPT);
 	//EVP_CIPHER_CTX_set_padding(evpctx[1], 0);
 	memset(usrkey2, 0, 32);
 	asm("":::"memory");
@@ -344,11 +355,11 @@ int  AES_OSSL_##BITCHAIN##_DecryptX2(const unsigned char* ctx, unsigned int roun
 void AES_OSSL_ReleaseX2(unsigned char *ctx, unsigned int rounds)
 {
 	EVP_CIPHER_CTX **evpctx = (EVP_CIPHER_CTX**)ctx;
-	EVP_CIPHER_CTX_cleanup(evpctx[1]);
-	EVP_CIPHER_CTX_cleanup(evpctx[0]);
+	//EVP_CIPHER_CTX_cleanup(evpctx[1]);
+	//EVP_CIPHER_CTX_cleanup(evpctx[0]);
 	/* FIXME: free ? */
 	EVP_CIPHER_CTX_free(evpctx[1]);
-	EVP_CIPHER_CTX_free(expctx[0]);
+	EVP_CIPHER_CTX_free(evpctx[0]);
 }
 
 AES_OSSL_KEY_EX2(128, AES_128_ROUNDS, ecb);
