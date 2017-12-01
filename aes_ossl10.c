@@ -50,7 +50,7 @@ int AES_OSSL_##BITCHAIN##_Encrypt(const unsigned char* ctx, unsigned int rounds,
 	int olen, elen, ores;					\
 	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;		\
 	/*EVP_EncryptInit(evpctx, NULL, NULL, NULL);*/		\
-	evpctx->final_used = 0;					\
+	evpctx->final_used = 0;	evpctx->buf_len = 0;		\
 	EVP_CIPHER_CTX_set_padding(evpctx, DOPAD? pad: 0);	\
 	if (IV) {						\
 		memcpy(evpctx->oiv, iv, 16); memcpy(evpctx->iv, iv, 16);	\
@@ -239,7 +239,7 @@ int  AES_OSSL_##BITCHAIN##_EncryptX2(const unsigned char* ctx, unsigned int roun
 {								\
 	int olen, elen, ores;					\
 	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;		\
-	evpctx[0].final_used = 0;	\
+	evpctx[0].final_used = 0; evpctx[0].buf_len = 0;	\
 	EVP_CIPHER_CTX_set_padding(evpctx, pad);		\
 	EVP_CIPHER_CTX_set_padding(evpctx+1, 0);		\
 	if (IV) {						\
