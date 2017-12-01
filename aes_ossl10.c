@@ -51,6 +51,7 @@ int AES_OSSL_##BITCHAIN##_Encrypt(const unsigned char* ctx, unsigned int rounds,
 	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;		\
 	/*EVP_EncryptInit(evpctx, NULL, NULL, NULL);*/		\
 	evpctx->final_used = 0;	evpctx->buf_len = 0;		\
+	evpctx->num = 0; /*CTR */				\
 	EVP_CIPHER_CTX_set_padding(evpctx, DOPAD? pad: 0);	\
 	if (IV) {						\
 		memcpy(evpctx->oiv, iv, 16); memcpy(evpctx->iv, iv, 16);	\
