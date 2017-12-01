@@ -19,6 +19,30 @@
 #define ENCRYPT 1
 #define DECRYPT 0
 
+/* An awful hack to directly access fields in EVP_CIPHER_CTX */
+static inline void EVP_reset(EVP_CIPHER_CTX *ectx)
+{
+	unsigned char* ptr = ectx;
+	/* buf_len = 0 */
+	ptr += 2*sizeof(void*)+sizeof(int);
+	assert(ptr+sizeof(int) == EVP_CIPHER_CTX_original_iv(ectx));
+	memset(ptr, 0, sizeof(int));
+	/* num = 0 */
+	ptr += sizeof(int)+2*EVP_MAX_IV_LENGTH+EVP_MAX_BLOCK_LENGTH;
+	memset(ptr, 0, sizeof(int));
+	/* final_used = 0 */
+	/* padding */
+	ptr += sizeof(int);
+	if ((ptr-(unsigned char*)ectx)%sizeof(void*))
+		ptr += 8;
+	ptr += sizeof(int)+2*sizeof(void*)+sizeof(long);
+	void *c_data = *((void**)ptr-1);
+	assert(c_data == EVP_CIPHER_CTX_get_cipher_data(ectx));
+	//printf("Offset %i\n", ptr-(unsigned char*)ectx);
+	memset(ptr, 0, sizeof(int));
+	asm("":::"memory");
+}
+
 void AES_OSSL_Bits_EKey_Expand(const EVP_CIPHER *cipher, const unsigned char* userkey, unsigned char *ctx)
 {
 	EVP_CIPHER_CTX **evpctx = (EVP_CIPHER_CTX**)ctx;
@@ -37,7 +61,6 @@ void AES_OSSL_Bits_DKey_Expand(const EVP_CIPHER *cipher, const unsigned char* us
 	EVP_CipherInit_ex(evpctx[0], cipher, NULL, userkey, NULL, DECRYPT);
 	//EVP_CIPHER_CTX_set_padding(evpctx[0], 0);
 }
-
 
 #define AES_OSSL_KEY_EX(BITS, ROUNDS, CHAIN)	\
 void AES_OSSL_##BITS##_EKey_Expand_##CHAIN (const unsigned char *userkey, unsigned char *ctx, unsigned int rounds)	\
@@ -59,6 +82,7 @@ int AES_OSSL_##BITCHAIN##_Encrypt(const unsigned char* ctx, unsigned int rounds,
 {								\
 	int olen, elen, ores;					\
 	EVP_CIPHER_CTX **evpctx = (EVP_CIPHER_CTX**)ctx;	\
+	EVP_reset(evpctx[0]);					\
 	EVP_CIPHER_CTX_set_padding(evpctx[0], DOPAD? pad: 0);	\
 	if (IV) {						\
 		memcpy(EVP_CIPHER_CTX_original_iv(evpctx[0]), iv, 16);	\
@@ -101,6 +125,7 @@ int AES_OSSL_##BITCHAIN##_Decrypt(const unsigned char* ctx, unsigned int rounds,
 	int olen, elen = 0, ores;				\
 	int ilen = (len&15)? len+15-(len&15): len;		\
 	EVP_CIPHER_CTX **evpctx = (EVP_CIPHER_CTX**)ctx;	\
+	EVP_reset(evpctx[0]);					\
 	EVP_CIPHER_CTX_set_padding(evpctx[0], DOPAD && pad != PAD_ASNEEDED?pad:0);	\
 	if (IV) {						\
 		memcpy(EVP_CIPHER_CTX_original_iv(evpctx[0]), iv, 16);	\
@@ -234,18 +259,7 @@ void AES_OSSL_Bits_DKey_ExpandX2(const EVP_CIPHER *cipher, const unsigned char* 
 	asm("":::"memory");
 }
 
-/* fancy way of setting final_used to 0 */
-static inline void EVP_reset(EVP_CIPHER_CTX *ectx)
-{
-	unsigned char* ptr = ectx;
-	ptr += 2*sizeof(void*)+3*sizeof(int)+2*EVP_MAX_IV_LENGTH+EVP_MAX_BLOCK_LENGTH;
-	if ((ptr-(unsigned char*)ectx)%sizeof(void*))
-		ptr += 8;
-	ptr += sizeof(int)+2*sizeof(void*)+sizeof(long);
-	//printf("Offset %i\n", ptr-(unsigned char*)ectx);
-	memset(ptr, 0, sizeof(int));
-	asm("":::"memory");
-}
+
 
 #define AES_OSSL_KEY_EX2(BITS, ROUNDS, CHAIN)	\
 void AES_OSSL_##BITS##_EKey_ExpandX2_##CHAIN (const unsigned char *userkey, unsigned char *ctx, unsigned int rounds)	\
@@ -269,7 +283,7 @@ int  AES_OSSL_##BITCHAIN##_EncryptX2(const unsigned char* ctx, unsigned int roun
 	EVP_CIPHER_CTX **evpctx = (EVP_CIPHER_CTX**)ctx;	\
 	/* EVP_EncryptInit(evpctx[0], NULL, NULL, NULL);	\
 	EVP_EncryptInit(evpctx[1], NULL, NULL, NULL); */	\
-	EVP_reset(evpctx[0]); /* EVP_reset(evpctx[1]);*/	\
+	EVP_reset(evpctx[0]); /* EVP_reset(evpctx[1]); */	\
 	EVP_CIPHER_CTX_set_padding(evpctx[0], pad);		\
 	EVP_CIPHER_CTX_set_padding(evpctx[1], 0);		\
 	if (IV) {						\
@@ -313,7 +327,7 @@ int  AES_OSSL_##BITCHAIN##_DecryptX2(const unsigned char* ctx, unsigned int roun
 	int olen, elen, ores;					\
 	int rlen = (len&15)? len+16-(len&15): len;		\
 	EVP_CIPHER_CTX **evpctx = (EVP_CIPHER_CTX**)ctx;	\
-	EVP_reset(evpctx[0]); /*EVP_reset(evpctx[1]);*/		\
+	EVP_reset(evpctx[0]); /* EVP_reset(evpctx[1]); */	\
 	EVP_CIPHER_CTX_set_padding(evpctx[1], 0);		\
 	EVP_CIPHER_CTX_set_padding(evpctx[0], pad==PAD_ASNEEDED? 0: pad);	\
 	if (IV) {						\
