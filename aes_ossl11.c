@@ -20,7 +20,7 @@
 #define DECRYPT 0
 
 /* An awful hack to directly access fields in EVP_CIPHER_CTX */
-static inline void EVP_reset(EVP_CIPHER_CTX *ectx)
+void AES_OSSL_Recycle(EVP_CIPHER_CTX *ectx)
 {
 	unsigned char* ptr = ectx;
 	/* buf_len = 0 */
@@ -82,7 +82,6 @@ int AES_OSSL_##BITCHAIN##_Encrypt(const unsigned char* ctx, unsigned int rounds,
 {								\
 	int olen, elen, ores;					\
 	EVP_CIPHER_CTX **evpctx = (EVP_CIPHER_CTX**)ctx;	\
-	EVP_reset(evpctx[0]);					\
 	EVP_CIPHER_CTX_set_padding(evpctx[0], DOPAD? pad: 0);	\
 	if (IV) {						\
 		memcpy(EVP_CIPHER_CTX_original_iv(evpctx[0]), iv, 16);	\
@@ -125,7 +124,6 @@ int AES_OSSL_##BITCHAIN##_Decrypt(const unsigned char* ctx, unsigned int rounds,
 	int olen, elen = 0, ores;				\
 	int ilen = (len&15)? len+15-(len&15): len;		\
 	EVP_CIPHER_CTX **evpctx = (EVP_CIPHER_CTX**)ctx;	\
-	EVP_reset(evpctx[0]);					\
 	EVP_CIPHER_CTX_set_padding(evpctx[0], DOPAD && pad != PAD_ASNEEDED?pad:0);	\
 	if (IV) {						\
 		memcpy(EVP_CIPHER_CTX_original_iv(evpctx[0]), iv, 16);	\
@@ -259,7 +257,11 @@ void AES_OSSL_Bits_DKey_ExpandX2(const EVP_CIPHER *cipher, const unsigned char* 
 	asm("":::"memory");
 }
 
-
+void AES_OSSL_RecycleX2(EVP_CIPHER_CTX *ectx)
+{
+	AES_OSSL_Recycle(ectx);
+	//AES_OSSL_Recycle(ectx+1);
+}
 
 #define AES_OSSL_KEY_EX2(BITS, ROUNDS, CHAIN)	\
 void AES_OSSL_##BITS##_EKey_ExpandX2_##CHAIN (const unsigned char *userkey, unsigned char *ctx, unsigned int rounds)	\
@@ -283,7 +285,6 @@ int  AES_OSSL_##BITCHAIN##_EncryptX2(const unsigned char* ctx, unsigned int roun
 	EVP_CIPHER_CTX **evpctx = (EVP_CIPHER_CTX**)ctx;	\
 	/* EVP_EncryptInit(evpctx[0], NULL, NULL, NULL);	\
 	EVP_EncryptInit(evpctx[1], NULL, NULL, NULL); */	\
-	EVP_reset(evpctx[0]); /* EVP_reset(evpctx[1]); */	\
 	EVP_CIPHER_CTX_set_padding(evpctx[0], pad);		\
 	EVP_CIPHER_CTX_set_padding(evpctx[1], 0);		\
 	if (IV) {						\
@@ -327,7 +328,6 @@ int  AES_OSSL_##BITCHAIN##_DecryptX2(const unsigned char* ctx, unsigned int roun
 	int olen, elen, ores;					\
 	int rlen = (len&15)? len+16-(len&15): len;		\
 	EVP_CIPHER_CTX **evpctx = (EVP_CIPHER_CTX**)ctx;	\
-	EVP_reset(evpctx[0]); /* EVP_reset(evpctx[1]); */	\
 	EVP_CIPHER_CTX_set_padding(evpctx[1], 0);		\
 	EVP_CIPHER_CTX_set_padding(evpctx[0], pad==PAD_ASNEEDED? 0: pad);	\
 	if (IV) {						\
@@ -491,60 +491,78 @@ AES_OSSL_DECL_CTR_X2(256);
 #define EVP_CTX_SZX2 2*sizeof(EVP_CIPHER_CTX*)
 
 ciph_desc_t AES_OSSL_Methods[] = {
-				 {"AES128-ECB"  , 128, 10, 16, EVP_CTX_SZ, &aes_stream_ecb,
-					AES_OSSL_128_EKey_Expand_ecb, AES_OSSL_128_DKey_Expand_ecb,
-					AES_OSSL_128_ECB_Encrypt, AES_OSSL_128_ECB_Decrypt, AES_OSSL_Release},
-				 {"AES128-CBC"  , 128, 10, 16, EVP_CTX_SZ, &aes_stream_cbc,
-					AES_OSSL_128_EKey_Expand_cbc, AES_OSSL_128_DKey_Expand_cbc,
-					AES_OSSL_128_CBC_Encrypt, AES_OSSL_128_CBC_Decrypt, AES_OSSL_Release},
-				 {"AES128-CTR"  , 128, 10, 16, EVP_CTX_SZ, &aes_stream_ctr,
-					AES_OSSL_128_EKey_Expand_ctr, AES_OSSL_128_EKey_Expand_ctr,
-					AES_OSSL_128_CTR_Encrypt, AES_OSSL_128_CTR_Encrypt, AES_OSSL_Release},
-				 {"AES192-ECB"  , 192, 12, 16, EVP_CTX_SZ, &aes_stream_ecb,
-					AES_OSSL_192_EKey_Expand_ecb, AES_OSSL_192_DKey_Expand_ecb,
-					AES_OSSL_192_ECB_Encrypt, AES_OSSL_192_ECB_Decrypt, AES_OSSL_Release},
-				 {"AES192-CBC"  , 192, 12, 16, EVP_CTX_SZ, &aes_stream_cbc,
-					AES_OSSL_192_EKey_Expand_cbc, AES_OSSL_192_DKey_Expand_cbc,
-					AES_OSSL_192_CBC_Encrypt, AES_OSSL_192_CBC_Decrypt, AES_OSSL_Release},
-				 {"AES192-CTR"  , 192, 12, 16, EVP_CTX_SZ, &aes_stream_ctr,
-					AES_OSSL_192_EKey_Expand_ctr, AES_OSSL_192_EKey_Expand_ctr,
-					AES_OSSL_192_CTR_Encrypt, AES_OSSL_192_CTR_Encrypt, AES_OSSL_Release},
-				 {"AES256-ECB"  , 256, 14, 16, EVP_CTX_SZ, &aes_stream_ecb,
-					AES_OSSL_256_EKey_Expand_ecb, AES_OSSL_256_DKey_Expand_ecb,
-					AES_OSSL_256_ECB_Encrypt, AES_OSSL_256_ECB_Decrypt, AES_OSSL_Release},
-				 {"AES256-CBC"  , 256, 14, 16, EVP_CTX_SZ, &aes_stream_cbc,
-					AES_OSSL_256_EKey_Expand_cbc, AES_OSSL_256_DKey_Expand_cbc,
-					AES_OSSL_256_CBC_Encrypt, AES_OSSL_256_CBC_Decrypt, AES_OSSL_Release},
-				 {"AES256-CTR"  , 256, 14, 16, EVP_CTX_SZ, &aes_stream_ctr,
-					AES_OSSL_256_EKey_Expand_ctr, AES_OSSL_256_EKey_Expand_ctr,
-					AES_OSSL_256_CTR_Encrypt, AES_OSSL_256_CTR_Encrypt, AES_OSSL_Release},
-				 /* TODO: Plus methods non-trivial with openssl */
-				 {"AES128x2-ECB", 128, 20, 16, EVP_CTX_SZX2, &aes_stream_ecb,
-					AES_OSSL_128_EKey_ExpandX2_ecb, AES_OSSL_128_DKey_ExpandX2_ecb,
-					AES_OSSL_128_ECB_EncryptX2, AES_OSSL_128_ECB_DecryptX2, AES_OSSL_ReleaseX2},
-				 {"AES128x2-CBC", 128, 20, 16, EVP_CTX_SZX2, &aes_stream_cbc,
-					AES_OSSL_128_EKey_ExpandX2_ecb, AES_OSSL_128_DKey_ExpandX2_ecb,
-					AES_OSSL_128_CBC_EncryptX2, AES_OSSL_128_CBC_DecryptX2, AES_OSSL_ReleaseX2},
-				 {"AES128x2-CTR", 128, 20, 16, EVP_CTX_SZX2, &aes_stream_ctr,
-					AES_OSSL_128_EKey_ExpandX2_ecb, AES_OSSL_128_EKey_ExpandX2_ecb,
-					AES_OSSL_128_CTR_CryptX2, AES_OSSL_128_CTR_CryptX2, AES_OSSL_ReleaseX2},
-				 {"AES192x2-ECB", 192, 24, 16, EVP_CTX_SZX2, &aes_stream_ecb,
-					AES_OSSL_192_EKey_ExpandX2_ecb, AES_OSSL_192_DKey_ExpandX2_ecb,
-					AES_OSSL_192_ECB_EncryptX2, AES_OSSL_192_ECB_DecryptX2, AES_OSSL_ReleaseX2},
-				 {"AES192x2-CBC", 192, 24, 16, EVP_CTX_SZX2, &aes_stream_cbc,
-					AES_OSSL_192_EKey_ExpandX2_ecb, AES_OSSL_192_DKey_ExpandX2_ecb,
-					AES_OSSL_192_CBC_EncryptX2, AES_OSSL_192_CBC_DecryptX2, AES_OSSL_ReleaseX2},
-				 {"AES192x2-CTR", 192, 24, 16, EVP_CTX_SZX2, &aes_stream_ctr,
-					AES_OSSL_192_EKey_ExpandX2_ecb, AES_OSSL_192_EKey_ExpandX2_ecb,
-					AES_OSSL_192_CTR_CryptX2, AES_OSSL_192_CTR_CryptX2, AES_OSSL_ReleaseX2},
-				 {"AES256x2-ECB", 256, 28, 16, EVP_CTX_SZX2, &aes_stream_ecb,
-					AES_OSSL_256_EKey_ExpandX2_ecb, AES_OSSL_256_DKey_ExpandX2_ecb,
-					AES_OSSL_256_ECB_EncryptX2, AES_OSSL_256_ECB_DecryptX2, AES_OSSL_ReleaseX2},
-				 {"AES256x2-CBC", 256, 28, 16, EVP_CTX_SZX2, &aes_stream_cbc,
-					AES_OSSL_256_EKey_ExpandX2_ecb, AES_OSSL_256_DKey_ExpandX2_ecb,
-					AES_OSSL_256_CBC_EncryptX2, AES_OSSL_256_CBC_DecryptX2, AES_OSSL_ReleaseX2},
-				 {"AES256x2-CTR", 256, 28, 16, EVP_CTX_SZX2, &aes_stream_ctr,
-					AES_OSSL_256_EKey_ExpandX2_ecb, AES_OSSL_256_EKey_ExpandX2_ecb,
-					AES_OSSL_256_CTR_CryptX2, AES_OSSL_256_CTR_CryptX2, AES_OSSL_ReleaseX2},
-				 {NULL, /* ... */}
+		 {"AES128-ECB"  , 128, 10, 16, EVP_CTX_SZ, &aes_stream_ecb,
+			AES_OSSL_128_EKey_Expand_ecb, AES_OSSL_128_DKey_Expand_ecb,
+			AES_OSSL_128_ECB_Encrypt, AES_OSSL_128_ECB_Decrypt, AES_OSSL_Release,
+			0, AES_OSSL_Recycle},
+		 {"AES128-CBC"  , 128, 10, 16, EVP_CTX_SZ, &aes_stream_cbc,
+			AES_OSSL_128_EKey_Expand_cbc, AES_OSSL_128_DKey_Expand_cbc,
+			AES_OSSL_128_CBC_Encrypt, AES_OSSL_128_CBC_Decrypt, AES_OSSL_Release,
+			0, AES_OSSL_Recycle},
+		 {"AES128-CTR"  , 128, 10, 16, EVP_CTX_SZ, &aes_stream_ctr,
+			AES_OSSL_128_EKey_Expand_ctr, AES_OSSL_128_EKey_Expand_ctr,
+			AES_OSSL_128_CTR_Encrypt, AES_OSSL_128_CTR_Encrypt, AES_OSSL_Release,
+			0, AES_OSSL_Recycle},
+		 {"AES192-ECB"  , 192, 12, 16, EVP_CTX_SZ, &aes_stream_ecb,
+			AES_OSSL_192_EKey_Expand_ecb, AES_OSSL_192_DKey_Expand_ecb,
+			AES_OSSL_192_ECB_Encrypt, AES_OSSL_192_ECB_Decrypt, AES_OSSL_Release,
+			0, AES_OSSL_Recycle},
+		 {"AES192-CBC"  , 192, 12, 16, EVP_CTX_SZ, &aes_stream_cbc,
+			AES_OSSL_192_EKey_Expand_cbc, AES_OSSL_192_DKey_Expand_cbc,
+			AES_OSSL_192_CBC_Encrypt, AES_OSSL_192_CBC_Decrypt, AES_OSSL_Release,
+			0, AES_OSSL_Recycle},
+		 {"AES192-CTR"  , 192, 12, 16, EVP_CTX_SZ, &aes_stream_ctr,
+			AES_OSSL_192_EKey_Expand_ctr, AES_OSSL_192_EKey_Expand_ctr,
+			AES_OSSL_192_CTR_Encrypt, AES_OSSL_192_CTR_Encrypt, AES_OSSL_Release,
+			0, AES_OSSL_Recycle},
+		 {"AES256-ECB"  , 256, 14, 16, EVP_CTX_SZ, &aes_stream_ecb,
+			AES_OSSL_256_EKey_Expand_ecb, AES_OSSL_256_DKey_Expand_ecb,
+			AES_OSSL_256_ECB_Encrypt, AES_OSSL_256_ECB_Decrypt, AES_OSSL_Release,
+			0, AES_OSSL_Recycle},
+		 {"AES256-CBC"  , 256, 14, 16, EVP_CTX_SZ, &aes_stream_cbc,
+			AES_OSSL_256_EKey_Expand_cbc, AES_OSSL_256_DKey_Expand_cbc,
+			AES_OSSL_256_CBC_Encrypt, AES_OSSL_256_CBC_Decrypt, AES_OSSL_Release,
+			0, AES_OSSL_Recycle},
+		 {"AES256-CTR"  , 256, 14, 16, EVP_CTX_SZ, &aes_stream_ctr,
+			AES_OSSL_256_EKey_Expand_ctr, AES_OSSL_256_EKey_Expand_ctr,
+			AES_OSSL_256_CTR_Encrypt, AES_OSSL_256_CTR_Encrypt, AES_OSSL_Release,
+			0, AES_OSSL_Recycle},
+		 /* TODO: Plus methods non-trivial with openssl */
+		 {"AES128x2-ECB", 128, 20, 16, EVP_CTX_SZX2, &aes_stream_ecb,
+			AES_OSSL_128_EKey_ExpandX2_ecb, AES_OSSL_128_DKey_ExpandX2_ecb,
+			AES_OSSL_128_ECB_EncryptX2, AES_OSSL_128_ECB_DecryptX2, AES_OSSL_ReleaseX2,
+			0, AES_OSSL_RecycleX2},
+		 {"AES128x2-CBC", 128, 20, 16, EVP_CTX_SZX2, &aes_stream_cbc,
+			AES_OSSL_128_EKey_ExpandX2_ecb, AES_OSSL_128_DKey_ExpandX2_ecb,
+			AES_OSSL_128_CBC_EncryptX2, AES_OSSL_128_CBC_DecryptX2, AES_OSSL_ReleaseX2,
+			0, AES_OSSL_RecycleX2},
+		 {"AES128x2-CTR", 128, 20, 16, EVP_CTX_SZX2, &aes_stream_ctr,
+			AES_OSSL_128_EKey_ExpandX2_ecb, AES_OSSL_128_EKey_ExpandX2_ecb,
+			AES_OSSL_128_CTR_CryptX2, AES_OSSL_128_CTR_CryptX2, AES_OSSL_ReleaseX2,
+			0, AES_OSSL_RecycleX2},
+		 {"AES192x2-ECB", 192, 24, 16, EVP_CTX_SZX2, &aes_stream_ecb,
+			AES_OSSL_192_EKey_ExpandX2_ecb, AES_OSSL_192_DKey_ExpandX2_ecb,
+			AES_OSSL_192_ECB_EncryptX2, AES_OSSL_192_ECB_DecryptX2, AES_OSSL_ReleaseX2,
+			0, AES_OSSL_RecycleX2},
+		 {"AES192x2-CBC", 192, 24, 16, EVP_CTX_SZX2, &aes_stream_cbc,
+			AES_OSSL_192_EKey_ExpandX2_ecb, AES_OSSL_192_DKey_ExpandX2_ecb,
+			AES_OSSL_192_CBC_EncryptX2, AES_OSSL_192_CBC_DecryptX2, AES_OSSL_ReleaseX2,
+			0, AES_OSSL_RecycleX2},
+		 {"AES192x2-CTR", 192, 24, 16, EVP_CTX_SZX2, &aes_stream_ctr,
+			AES_OSSL_192_EKey_ExpandX2_ecb, AES_OSSL_192_EKey_ExpandX2_ecb,
+			AES_OSSL_192_CTR_CryptX2, AES_OSSL_192_CTR_CryptX2, AES_OSSL_ReleaseX2,
+			0, AES_OSSL_RecycleX2},
+		 {"AES256x2-ECB", 256, 28, 16, EVP_CTX_SZX2, &aes_stream_ecb,
+			AES_OSSL_256_EKey_ExpandX2_ecb, AES_OSSL_256_DKey_ExpandX2_ecb,
+			AES_OSSL_256_ECB_EncryptX2, AES_OSSL_256_ECB_DecryptX2, AES_OSSL_ReleaseX2,
+			0, AES_OSSL_RecycleX2},
+		 {"AES256x2-CBC", 256, 28, 16, EVP_CTX_SZX2, &aes_stream_cbc,
+			AES_OSSL_256_EKey_ExpandX2_ecb, AES_OSSL_256_DKey_ExpandX2_ecb,
+			AES_OSSL_256_CBC_EncryptX2, AES_OSSL_256_CBC_DecryptX2, AES_OSSL_ReleaseX2,
+			0, AES_OSSL_RecycleX2},
+		 {"AES256x2-CTR", 256, 28, 16, EVP_CTX_SZX2, &aes_stream_ctr,
+			AES_OSSL_256_EKey_ExpandX2_ecb, AES_OSSL_256_EKey_ExpandX2_ecb,
+			AES_OSSL_256_CTR_CryptX2, AES_OSSL_256_CTR_CryptX2, AES_OSSL_ReleaseX2,
+			0, AES_OSSL_RecycleX2},
+		 {NULL, /* ... */}
 };
