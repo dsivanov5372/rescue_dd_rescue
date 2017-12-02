@@ -28,7 +28,7 @@ void AES_OSSL_Bits_DKey_Expand(const EVP_CIPHER *cipher, const unsigned char* us
 	EVP_DecryptInit_ex(evpctx, cipher, NULL, userkey, NULL);
 }
 
-void AES_OSSL_Recycle(unsigend char *ctx)
+void AES_OSSL_Recycle(unsigned char *ctx)
 {
 	EVP_CIPHER_CTX *evpctx = (EVP_CIPHER_CTX*)ctx;
 	evpctx->final_used = 0;	evpctx->buf_len = 0;
