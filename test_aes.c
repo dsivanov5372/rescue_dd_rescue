@@ -162,7 +162,7 @@ int test_alg(const char* prefix, ciph_desc_t *alg, uchar *key, uchar *in, ssize_
 	BENCH(alg->enc_key_setup(key, rkeys, alg->rounds); if (alg->release) alg->release(rkeys, alg->rounds), rep, 16*(1+alg->rounds));
 	alg->enc_key_setup(key, rkeys, alg->rounds);
 	printf("\nEncrypt   : ");
-	BENCH(setup_iv(alg->stream, iv, BLKSZ); eerr = alg->encrypt(rkeys, alg->rounds, iv, epad, in, ctxt, ln, &eln), rep/2+1, ln);
+	BENCH(setup_iv(alg->stream, iv, BLKSZ); eerr = alg->encrypt(rkeys, alg->rounds, iv, epad, in, ctxt, ln, &eln); if (alg->recycle) alg->recycle(rkeys), rep/2+1, ln);
 	printf("%zi->%zi: %i ", ln, eln, eerr);
 	if (eerr < 0)
 		++err;
@@ -172,13 +172,15 @@ int test_alg(const char* prefix, ciph_desc_t *alg, uchar *key, uchar *in, ssize_
 		err += cmp_ln(eln, last_eln, "enc len");
 		err += cmp_rv(eerr, last_eres, "enc retval");
 	}
+	if (alg->release)
+		alg->release(rkeys, alg->rounds);
 	//if (err) printf("%i ", err);
 	printf("\nDKey setup: ");
 	BENCH(alg->dec_key_setup(key, rkeys, alg->rounds); if (alg->release) alg->release(rkeys, alg->rounds), rep, 16*(1+alg->rounds));
 	alg->dec_key_setup(key, rkeys, alg->rounds);
 	printf("\nDecrypt   : ");
 	memset(vfy, 0xff, DEF_LN+32);
-	BENCH(setup_iv(alg->stream, iv, BLKSZ); derr = alg->decrypt(rkeys, alg->rounds, iv, dpad, ctxt, vfy, eln, &dln), rep/2+1, eln);
+	BENCH(setup_iv(alg->stream, iv, BLKSZ); derr = alg->decrypt(rkeys, alg->rounds, iv, dpad, ctxt, vfy, eln, &dln); if (alg->recycle) alg->recycle(rkeys), rep/2+1, eln);
 	printf("%zi->%zi: %i ", eln, dln, derr);
 	if (derr < 0)
 		++err;
