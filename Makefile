@@ -629,7 +629,7 @@ check_aes: $(TARGETS) test_aes
 	# FIXME: No AESNI detection here, currently :-(
 	for alg in $(ALGS); do $(VG) ./test_aes $$alg 10000 || exit $$?; done
 
-check_crypt: $(TARGETS)
+check_crypt: $(TARGETS) test_aes
 	# TODO: Move previous cases into script ...
 	HAVE_LZO=$(HAVE_LZO) HAVE_OPENSSL=$(HAVE_OPENSSL) HAVE_AES=$(HAVE_AES) ./test_crypt.sh
 	# Holes (all)
