@@ -33,6 +33,11 @@ fi
 echo "We will eat a lot of entropy ... hopefully you have some left afterwards!"
 
 # MAIN TEST
+if test -e test_aes; then
+  LOG=test_aes.log
+  for ALG in $TESTALGS; do echo test_aes $ALG 10000; $VG ./test_aes $ALG 10000 >$LOG 2>&1; if test $? != 0; then cat $LOG; echo "ERROR"; exit 1; fi; done
+  rm $LOG
+fi
 # Reverse (CTR, ECB)
 echo "*** Reverse ***"
 enc_dec_compare_keys dd_rescue AES192-CTR keygen:ivgen "" "" "-qptAr"
