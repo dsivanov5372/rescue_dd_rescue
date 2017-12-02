@@ -20,8 +20,10 @@
 #define DECRYPT 0
 
 /* An awful hack to directly access fields in EVP_CIPHER_CTX */
-void AES_OSSL_Recycle(EVP_CIPHER_CTX *ectx)
+void AES_OSSL_Recycle(unsigned char* ctx)
 {
+	EVP_CIPHER_CTX **evpctx = (EVP_CIPHER_CTX**)ctx;
+	EVP_CIPHER_CTX *ectx = *evpctx;
 	unsigned char* ptr = ectx;
 	/* buf_len = 0 */
 	ptr += 2*sizeof(void*)+sizeof(int);
@@ -257,10 +259,15 @@ void AES_OSSL_Bits_DKey_ExpandX2(const EVP_CIPHER *cipher, const unsigned char* 
 	asm("":::"memory");
 }
 
-void AES_OSSL_RecycleX2(EVP_CIPHER_CTX *ectx)
+void AES_OSSL_RecycleX2(unsigned char *ctx)
 {
-	AES_OSSL_Recycle(ectx);
-	//AES_OSSL_Recycle(ectx+1);
+	AES_OSSL_Recycle(ctx);
+	/*
+	EVP_CIPHER_CTX **evpctx  = (EVP_CIPHER_CTX**) ctx;
+	EVP_CIPHER_CTX *ectx = evpctx[1];
+	unsigned char* ctx2 = (unsigned char*)&ectx;
+	AES_OSSL_Recycle(ctx2);
+	*/
 }
 
 #define AES_OSSL_KEY_EX2(BITS, ROUNDS, CHAIN)	\
