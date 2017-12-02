@@ -62,6 +62,7 @@ typedef int  (Crypt_IV_fn) (const uchar* rkeys, uint rounds,
 			    ssize_t len, ssize_t *olen);
 typedef void (Key_Release_fn)(uchar* rkeys, uint rounds);
 typedef int (Probe_fn)();
+typedef void (Key_Recycle_fn)(uchar* rkeys);
 
 typedef struct _ciph_desc {
 	const char *name;
@@ -74,6 +75,7 @@ typedef struct _ciph_desc {
 	Crypt_IV_fn *encrypt, *decrypt;
 	Key_Release_fn *release;
 	Probe_fn *probe;
+	Key_Recycle_fn *recycle;
 } ciph_desc_t;
 
 
