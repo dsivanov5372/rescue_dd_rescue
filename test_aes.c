@@ -1,19 +1,21 @@
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
+#include "find_nonzero.h"
+#include "archdep.h"
+#include "secmem.h"
+#include "aes.h"
+
+ARCH_DECLS
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 #include <sys/time.h>
 #include <string.h>
 #include <assert.h>
-#include "secmem.h"
-#include "aes.h"
-#include "find_nonzero.h"
-#include "archdep.h"
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
-
-ARCH_DECLS
 
 sec_fields *crypto;
 
