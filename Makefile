@@ -9,7 +9,7 @@ SRCDIR = .
 
 CC = gcc
 RPM_OPT_FLAGS = -Os -Wall -g -D_FORTIFY_SOURCE=2
-CFLAGS = $(RPM_OPT_FLAGS) $(EXTRA_CFLAGS) -DHAVE_CONFIG_H
+CFLAGS = $(RPM_OPT_FLAGS) $(EXTRA_CFLAGS) -DHAVE_CONFIG_H -I .
 CFLAGS_OPT = $(CFLAGS) -O3
 INSTALL = install
 INSTALLFLAGS = -s
@@ -191,7 +191,7 @@ DEP_SSE = -D__AES__ -D__SSE4_1__ -D__SSSE3__ -D__SSE3__ -D__SSE2__ -D__SSE__ -D_
 # Automated dependency generation
 .dep: $(SRCDIR)/Makefile config.h $(SRCDIR)/*.h $(SRCDIR)/*.c
 	#$(CC) $(CFLAGS) -DGEN_DEP $(ARCHFLAGS) -MM $(SRCDIR)/*.c >.dep
-	$(CC) $(CFLAGS) -DGEN_DEP $(DEP_SSE) -MM $(SRCDIR)/*.c >.dep
+	$(CC) $(CFLAGS) -DGEN_DEP $(DEP_SSE) -I . -MM $(SRCDIR)/*.c >.dep
 	sed 's/\.o:/\.po:/' <.dep >.dep2
 	cat .dep2 >> .dep
 	rm .dep2

@@ -196,20 +196,20 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		state->engine = AESNI_Methods;
 		if (opt->verbose)
 			FPLOG(INFO, "Default to use AESNI crypto extensions\n");
-	} else {
+	} else
 #elif defined(HAVE_AES_ARM64)
+	{
 	if (have_arm8crypto) {
 		state->engine = AES_ARM8_Methods;
 		if (opt->verbose)
 			FPLOG(INFO, "Default to use ARMv8 crypto extensions\n");
-	} else {
+	} else
 #endif
+	{
 		if (opt->verbose)
 			FPLOG(INFO, "Default to use C crypto implementation\n");
 		state->engine = AES_C_Methods;
-#if defined(HAVE_AES_ARM64) || defined(HAVE_AESNI)
 	}
-#endif
 	while (param) {
 		char* next = strchr(param, ':');
 		if (next)

@@ -177,6 +177,7 @@ enc_dec_compare dd_rescue AES192-CTR keygen:ivgen keyxattr:kxfallb:ivxattr:ixfal
 
 HAVE_AESNI=`grep " sse4" /proc/cpuinfo 2>/dev/null | grep " aes " 2>/dev/null`
 HAVE_AESARM=`grep " pmull " /proc/cpuinfo 2>/dev/null`
+HAVE_LIBCRYPTO=`grep 'HAVE_LIBCRYPTO 1' config.h 2>/dev/null`
 if test -n "$TESTALGS"; then
   echo "*** Engines comparison ***"
 fi
@@ -195,7 +196,7 @@ for alg in $TESTALGS; do
 	if test -n "$HAVE_AESARM"; then
 		ENG="$ENG aesarm64"
 	fi
-	if test "$HAVE_OPENSSL" = "0"; then ENG=`echo $ENG | sed 's/ openssl//'`; fi
+	if test -z "$HAVE_LIBCRYPTO"; then ENG=`echo $ENG | sed 's/ openssl//'`; fi
 	if test "$HAVE_AES" = "0"; then ENG=`echo $ENG | sed 's/ aesni//'`; fi
 	echo "** Alg $alg engines $ENG **"
 	for engine in $ENG; do
