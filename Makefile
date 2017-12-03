@@ -368,8 +368,8 @@ fiemap: $(SRCDIR)/fiemap.c $(SRCDIR)/fiemap.h $(SRCDIR)/fstrim.h config.h fstrim
 pbkdf2: $(SRCDIR)/ossl_pbkdf2.c
 	$(CC) $(CFLAGS) $(PIE) $(LDPIE) -o $@ $< $(CRYPTOLIB)
 
-test_aes: $(SRCDIR)/test_aes.c $(AESNI_O) $(AES_ARM64_O) aes_c.o secmem.o sha256.o $(AES_OSSL_O) aes.o $(SRCDIR)/aesni.h $(SRCDIR)/aes_arm64.h config.h
-	$(CC) $(CFLAGS) $(PIE) $(LDPIE) $(DEF) -o $@ $< $(AESNI_O) $(AES_ARM64_O) aes_c.o secmem.o sha256.o $(AES_OSSL_O) aes.o $(CRYPTOLIB)
+test_aes: $(SRCDIR)/test_aes.c $(AESNI_O) $(AES_ARM64_O) aes_c.o secmem.o sha256.o find_nonzero.o $(AES_OSSL_O) aes.o $(SRCDIR)/aesni.h $(SRCDIR)/aes_arm64.h config.h
+	$(CC) $(CFLAGS) $(PIE) $(LDPIE) $(DEF) -o $@ $< $(AESNI_O) $(AES_ARM64_O) aes_c.o secmem.o sha256.o $(AES_OSSL_O) aes.o find_nonzero.o $(OBJECTS2) $(CRYPTOLIB)
 
 # Special optimized versions
 aesni.o: $(SRCDIR)/aesni.c

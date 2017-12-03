@@ -6,10 +6,14 @@
 #include <assert.h>
 #include "secmem.h"
 #include "aes.h"
+#include "find_nonzero.h"
+#include "archdep.h"
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
+
+ARCH_DECLS
 
 sec_fields *crypto;
 
@@ -48,7 +52,8 @@ void fillval(unsigned char* bf, ssize_t ln, unsigned int val)
 
 #ifdef HAVE_AESNI
 #include "aesni.h"
-int have_aesni = 1;
+#if 0
+int have_aesni = 0;
 #if defined( __GNUC__) && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 8))
 static void detect_cpu_cap()
 {
@@ -57,6 +62,7 @@ static void detect_cpu_cap()
 #else
 # warning no runtime detection for aesni
 static void detect_cpu_cap();
+#endif
 #endif
 #endif
 
@@ -264,6 +270,7 @@ int main(int argc, char *argv[])
 	unsigned char *key = (unsigned char*)"Test Key_123 is long enough even for AES-256";
 	//int dbg = 0;
 	char* testalg;
+	ARCH_DETECT;
 #ifdef HAVE_AESNI
 	detect_cpu_cap();
 #endif
