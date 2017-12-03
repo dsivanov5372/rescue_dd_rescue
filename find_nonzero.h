@@ -10,8 +10,8 @@
 # include "config.h"
 #endif
 
-#include "archdep.h"
 #include "ffs.h"
+#include "archdep.h"
 
 extern char cap_str[64];
 extern char FNZ_OPT[64];

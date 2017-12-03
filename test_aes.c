@@ -216,7 +216,7 @@ int test_alg(const char* prefix, ciph_desc_t *alg, uchar *key, uchar *in, ssize_
 	return err;
 }
 
-#ifdef HAVE_OPENSSL_EVP_H
+#ifdef HAVE_LIBCRYPTO
 #define TEST_OSSL(LN, EPAD, DPAD)			\
 	alg = findalg(AES_OSSL_Methods, testalg, 1);	\
 	if (alg)					\
