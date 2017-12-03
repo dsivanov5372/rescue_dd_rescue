@@ -19,30 +19,45 @@
 #define ENCRYPT 1
 #define DECRYPT 0
 
+/* Here comes a copy from crypt/evp/evl_locl.h (openssl-1.1, unchanged since 1.0)
+ * FIXME: Copying it here and using it is RISKY of course!
+ * We do a few things to make it less risky, though:
+ * - It is only used when we recycle EVP_CIPHER_CTX objects,
+ *   which is currently only done in the test_aes benchmark.
+ *   So if it breaks, it won'd break regular dd_rescue usage.
+ * - We have two asserts in the code to avoid silent breakage.
+ */
+struct _evp_cipher_ctx_st {
+    const EVP_CIPHER *cipher;
+    ENGINE *engine;             /* functional reference if 'cipher' is
+                                 * ENGINE-provided */
+    int encrypt;                /* encrypt or decrypt */
+    int buf_len;                /* number we have left */
+    unsigned char oiv[EVP_MAX_IV_LENGTH]; /* original iv */
+    unsigned char iv[EVP_MAX_IV_LENGTH]; /* working iv */
+    unsigned char buf[EVP_MAX_BLOCK_LENGTH]; /* saved partial block */
+    int num;                    /* used by cfb/ofb/ctr mode */
+    /* FIXME: Should this even exist? It appears unused */
+    void *app_data;             /* application stuff */
+    int key_len;                /* May change for variable length cipher */
+    unsigned long flags;        /* Various flags */
+    void *cipher_data;          /* per EVP data */
+    int final_used;
+    int block_mask;
+    unsigned char final[EVP_MAX_BLOCK_LENGTH]; /* possible final block */
+} /* EVP_CIPHER_CTX */ ;
+
+
 /* An awful hack to directly access fields in EVP_CIPHER_CTX */
 void AES_OSSL_Recycle(unsigned char* ctx)
 {
 	EVP_CIPHER_CTX **evpctx = (EVP_CIPHER_CTX**)ctx;
-	EVP_CIPHER_CTX *ectx = *evpctx;
-	unsigned char* ptr = ectx;
-	/* buf_len = 0 */
-	ptr += 2*sizeof(void*)+sizeof(int);
-	assert(ptr+sizeof(int) == EVP_CIPHER_CTX_original_iv(ectx));
-	memset(ptr, 0, sizeof(int));
-	/* num = 0 */
-	ptr += sizeof(int)+2*EVP_MAX_IV_LENGTH+EVP_MAX_BLOCK_LENGTH;
-	memset(ptr, 0, sizeof(int));
-	/* final_used = 0 */
-	/* padding */
-	ptr += sizeof(int);
-	if ((ptr-(unsigned char*)ectx)%sizeof(void*))
-		ptr += 8;
-	ptr += sizeof(int)+2*sizeof(void*)+sizeof(long);
-	void *c_data = *((void**)ptr-1);
-	assert(c_data == EVP_CIPHER_CTX_get_cipher_data(ectx));
-	//printf("Offset %i\n", ptr-(unsigned char*)ectx);
-	memset(ptr, 0, sizeof(int));
-	asm("":::"memory");
+	struct _evp_cipher_ctx_st *ectx = (struct _evp_cipher_ctx_st*)*evpctx;
+	assert(ectx->oiv == EVP_CIPHER_CTX_original_iv(*evpctx));
+	assert(ectx->cipher_data == EVP_CIPHER_CTX_get_cipher_data(*evpctx));
+	ectx->buf_len = 0;
+	ectx->num = 0;
+	ectx->final_used = 0;
 }
 
 void AES_OSSL_Bits_EKey_Expand(const EVP_CIPHER *cipher, const unsigned char* userkey, unsigned char *ctx)
