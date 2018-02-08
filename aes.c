@@ -449,7 +449,7 @@ ciph_desc_t *findalg(ciph_desc_t* list, const char* nm, const char probe)
 {
 	ciph_desc_t* alg = list;
 	while (alg->name) {
-		if (!strcmp(alg->name, nm)) {
+		if (!strcasecmp(alg->name, nm)) {
 			if (!probe || !alg->probe)
 				return alg;
 			return (alg->probe()? NULL: alg);

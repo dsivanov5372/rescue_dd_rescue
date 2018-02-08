@@ -120,7 +120,7 @@ static loff_t readint(const char* const ptr)
 hashalg_t *get_hashalg(hash_state *state, const char* nm)
 {
 	unsigned int i;
-	const char help = !strcmp(nm, "help");
+	const char help = !strcasecmp(nm, "help");
 	if (help)
 		FPLOG(INFO, "Supported algorithms:");
 	for (i = 0; i < sizeof(hashes)/sizeof(hashalg_t); ++i) {
@@ -154,10 +154,10 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		char* next = strchr(param, ':');
 		if (next)
 			*next++ = 0;
-		if (!strcmp(param, "help"))
+		if (!strcasecmp(param, "help"))
 			FPLOG(INFO, "%s", hash_help);
 		
-		else if (!strcmp(param, "debug"))
+		else if (!strcasecmp(param, "debug"))
 			state->debug = 1;
 		else if (!strcmp(param, "output"))
 			state->outfd = 1;

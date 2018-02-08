@@ -158,7 +158,7 @@ int set_alg(crypt_state* state, const char* algnm)
 			FPLOG(FATAL, "Don't understand option (alg?) %s\n", algnm);
 		return -1;
 	}
-	if (!strcmp(algnm, "help")) {
+	if (!strcasecmp(algnm, "help")) {
 		FPLOG(INFO, "Crypto algorithms:", NULL);
 		ciph_desc_t *alg;
 		for (alg = state->engine; alg->name != NULL; ++alg)
@@ -218,28 +218,28 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			param = next;
 			continue;
 		}
-		if (!strcmp(param, "help")) {
+		if (!strcasecmp(param, "help")) {
 			FPLOG(INFO, "%s", crypt_help);
 			return -1;
-		} else if (!strcmp(param, "debug"))
+		} else if (!strcasecmp(param, "debug"))
 			state->debug = 1;
 		else if (!strcmp(param, "encrypt") || !strcmp(param, "enc"))
 			state->enc = 1;
 		else if (!strcmp(param, "decrypt") || !strcmp(param, "dec"))
 			state->enc = 0;
 		else if (!memcmp(param, "engine=", 7)) {
-			if (!strcmp(param+7, "aes_c"))
+			if (!strcasecmp(param+7, "aes_c"))
 				state->engine = AES_C_Methods;
 #ifdef HAVE_AES_ARM64
-			else if (!strcmp(param+7, "aesarm64"))
+			else if (!strcasecmp(param+7, "aesarm64"))
 				state->engine = AES_ARM8_Methods;
 #endif
 #ifdef HAVE_AESNI
-			else if (!strcmp(param+7, "aesni"))
+			else if (!strcasecmp(param+7, "aesni"))
 				state->engine = AESNI_Methods;
 #endif
 #ifdef HAVE_LIBCRYPTO
-			else if (!strcmp(param+7, "openssl"))
+			else if (!strcasecmp(param+7, "openssl"))
 				state->engine = AES_OSSL_Methods;
 #endif
 			else {
@@ -257,11 +257,11 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		else if (!memcmp(param, "alg=", 4))
 			err += set_alg(state, param+4);
 		else if (!memcmp(param, "pad=", 4)) {
-			if (!strcmp(param+4, "zero"))
+			if (!strcasecmp(param+4, "zero"))
 				state->pad = PAD_ZERO;
-			else if (!strcmp(param+4, "always"))
+			else if (!strcasecmp(param+4, "always"))
 				state->pad = PAD_ALWAYS;
-			else if (!strcmp(param+4, "asneeded"))
+			else if (!strcasecmp(param+4, "asneeded"))
 				state->pad = PAD_ASNEEDED;
 			else {
 				FPLOG(FATAL, "Illegal padding %s: Specify zero/always/asneeded!\n",
@@ -401,8 +401,10 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	}
 	/* 1st: Set engine: Default: aesni/aes_c: Done */
 	/* 2nd: Set alg: Already done if set explicitly */
-	if (!err && !state->alg)
+	if (!err && !state->alg) {
 		state->alg = findalg(state->engine, "AES192-CTR", 0);
+		FPLOG(INFO, "Using default algorithm AES192-CTR\n", NULL);
+	}
 	if (!state->alg)
 		return -1;
 
