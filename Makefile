@@ -63,6 +63,12 @@ else
   HAVE_OPENSSL=0
 endif
 
+ifeq ($(shell grep 'HAVE_ATTR_XATTR_H 1' config.h >/dev/null 2>&1 && echo 1), 1)
+  HAVE_XATTR=1
+else
+  HAVE_XATTR=0
+endif
+
 ifeq ($(CC),wcl386)
   CFLAGS = "-ox -wx $(EXTRA_CFLAGS)"
   DEFINES = -dMISS_STRSIGNAL -dMISS_PREAD -dVERSION=\"$(VERSION)\" -d__COMPILER__="\"$(COMPILER)\""
@@ -493,15 +499,9 @@ check: $(TARGETS) find_nonzero md5 sha1 sha256 sha512 fmt_no
 	#if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo_test; fi
 	if test $(HAVE_LZO) = 1; then $(MAKE) check_lzo_fuzz; fi
 	# Tests for libddr_null
-	$(VG) ./dd_rescue -L ./libddr_null.so=debug dd_rescue /dev/null
-	# Tests with hash set_xattr and chk_xattr (with fallback as not all filesystems support xattrs ...)
-	$(VG) ./dd_rescue -tL ./libddr_hash.so=sha256:set_xattr:fallback dd_rescue /tmp/dd_rescue
-	$(VG) ./dd_rescue -L ./libddr_hash.so=sha256:chk_xattr:fallback /tmp/dd_rescue /dev/null
-	rm -f /tmp/dd_rescue CHECKSUMS.sha256
-	# Tests with prepend and append
-	$(VG) ./dd_rescue -tL ./libddr_hash.so=sha512:set_xattr:fallback:prepend=abc:append=xyz dd_rescue /tmp/dd_rescue
-	$(VG) ./dd_rescue  -L ./libddr_hash.so=sha512:chk_xattr:fallback /tmp/dd_rescue /dev/null && false || true
-	$(VG) ./dd_rescue  -L ./libddr_hash.so=sha512:chk_xattr:fallback:prepend=abc:append=xyz /tmp/dd_rescue /dev/null
+	$(VG) ./dd_rescue  -L ./libddr_null.so=debug dd_rescue /dev/null
+	# Hash tests with set_xattr and chk_xattr
+	if test $(HAVE_XATTR) = 1; then $(MAKE) check_xattr_storehash; fi
 	# Extra xattrs (should be preserved)
 	#make check_xattr_copy
 	# Tests with HMAC
@@ -514,6 +514,15 @@ check: $(TARGETS) find_nonzero md5 sha1 sha256 sha512 fmt_no
 	#$(MAKE) check_aes
 	$(MAKE) check_crypt
 
+check_xattr_storehash: $(TARGETS)
+	# Tests with hash set_xattr and chk_xattr (with fallback as not all filesystems support xattrs ...)
+	$(VG) ./dd_rescue -tL ./libddr_hash.so=sha256:set_xattr:fallback dd_rescue /tmp/dd_rescue
+	$(VG) ./dd_rescue  -L ./libddr_hash.so=sha256:chk_xattr:fallback /tmp/dd_rescue /dev/null
+	rm -f /tmp/dd_rescue CHECKSUMS.sha256
+	# Tests with prepend and append
+	$(VG) ./dd_rescue -tL ./libddr_hash.so=sha512:set_xattr:fallback:prepend=abc:append=xyz dd_rescue /tmp/dd_rescue
+	$(VG) ./dd_rescue  -L ./libddr_hash.so=sha512:chk_xattr:fallback /tmp/dd_rescue /dev/null && false || true
+	$(VG) ./dd_rescue  -L ./libddr_hash.so=sha512:chk_xattr:fallback:prepend=abc:append=xyz /tmp/dd_rescue /dev/null
 
 # FIXME: This fails on filesystems without xattr support - disabled until we know how to handle this
 check_xattr_copy: $(TARGETS)
