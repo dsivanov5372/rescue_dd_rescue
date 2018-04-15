@@ -170,10 +170,12 @@ done
 echo "*** Salt and XAttrs ***"
 # Use random numbers and write to binary file
 enc_dec_compare dd_rescue AES192-CTR saltgen pass=PWD_:pbkdf2:saltfile=SALT
-# Use random numbers and write to xattr, fall back to saltsfile
-enc_dec_compare dd_rescue AES192-CTR saltgen pass=PSWD:pbkdf2:saltxattr:sxfallback
-# Save key and IV to xattrs
-enc_dec_compare dd_rescue AES192-CTR keygen:ivgen keyxattr:kxfallb:ivxattr:ixfallb
+if grep 'define HAVE_ATTR_XATTR_H 1' config.h >/dev/null 2>&1 ; then
+  # Use random numbers and write to xattr, fall back to saltsfile
+  enc_dec_compare dd_rescue AES192-CTR saltgen pass=PSWD:pbkdf2:saltxattr:sxfallback
+  # Save key and IV to xattrs
+  enc_dec_compare dd_rescue AES192-CTR keygen:ivgen keyxattr:kxfallb:ivxattr:ixfallb
+fi
 
 HAVE_AESNI=`grep " sse4" /proc/cpuinfo 2>/dev/null | grep " aes " 2>/dev/null`
 HAVE_AESARM=`grep " pmull " /proc/cpuinfo 2>/dev/null`
