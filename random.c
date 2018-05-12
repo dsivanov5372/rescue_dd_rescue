@@ -22,6 +22,9 @@ typedef unsigned int __u32;
 #ifdef HAVE_LINUX_RANDOM_H
 #include <linux/random.h>
 #endif
+#ifdef HAVE_SYS_RANDOM_H
+#include <sys/random.h>
+#endif
 
 static void msleep(unsigned int msecs)
 {
