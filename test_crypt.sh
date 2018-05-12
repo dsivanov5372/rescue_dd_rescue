@@ -52,13 +52,20 @@ rm dd_rescue2
 
 # Holes (all), skiphole
 echo "*** Holes ***"
+# Produce file that consists of dd_rescue + hole + dd_rescue
 ./dd_rescue -qpt dd_rescue dd_rescue3
 ./dd_rescue -qS 512k dd_rescue dd_rescue3
+# Ensure there is a hole even if dd_rescue is long
+./dd_rescue -qS 384k -m 128k /dev/zero dd_rescue3
+# Test without and with skiphole
 enc_dec_compare_keys dd_rescue3 AES192-CTR keygen:ivgen "" "" "-qpt"
 enc_dec_compare_keys dd_rescue3 AES192-CTR keygen:ivgen skiphole "" "-qpt"
+# Store 384k-512k in cmp3
 ./dd_rescue -qt -s 384k -m 128k -S 0 dd_rescue3.cmp dd_rescue3.cmp3
+# Should be 128k of zeroes
 ./dd_rescue -qm 128k /dev/zero dd_rescue3.cmp2
 cmp dd_rescue3.cmp2 dd_rescue3.cmp3 || exit 4
+# Repeat test with reverse
 enc_dec_compare_keys dd_rescue3 AES192-CTR keygen:ivgen "" "" "-qptr"
 enc_dec_compare_keys dd_rescue3 AES192-CTR keygen:ivgen skiphole "" "-qptr"
 ./dd_rescue -qt -s 384k -m 128k -S 0 dd_rescue3.cmp dd_rescue3.cmp3
