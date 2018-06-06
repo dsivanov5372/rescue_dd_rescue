@@ -54,7 +54,26 @@ AC_TRY_RUN([
 	AC_DEFINE_UNQUOTED([HAVE_REP_NOP], 1,
 		[check whether asm rep nop works])
 ],[
-	AC_MSG_RESULT(no)
+	AC_MSG_RESULT(yes)
+],[
+	AC_MSG_RESULT(no -- cross compiling)
+])
+
+dnl ***************************************************************************
+dnl Check for support of rep nop
+AC_MSG_CHECKING(whether asm lfence is supported)
+AC_TRY_RUN([
+	int main() {
+	int err = 0;
+	asm volatile ("lfence":::"memory");
+	return err;
+	}
+],[
+	AC_MSG_RESULT(yes)
+	AC_DEFINE_UNQUOTED([HAVE_LFENCE], 1,
+		[check whether asm lfence works])
+],[
+	AC_MSG_RESULT(yes)
 ],[
 	AC_MSG_RESULT(no -- cross compiling)
 ])
