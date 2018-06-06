@@ -23,6 +23,7 @@
 #include "sha1.h"
 #include "pbkdf2.h"
 #include "checksum_file.h"
+#include "secmem.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -311,7 +312,7 @@ int hash_plug_release(void **stat)
 		free((void*)state->fname);
 	if (state->hmacpwd) {
 		memset(state->hmacpwd, 0, MAX_HMACPWDLN);
-		asm("":::"memory");
+		LFENCE;
 		free(state->hmacpwd);
 	}
 	free(*stat);
@@ -714,7 +715,7 @@ int hash_close(loff_t ooff, void **stat)
 		state->alg->hash_beout(obuf+blen, &state->hmach);
 		state->alg->hash_init(&state->hmach);
 		state->alg->hash_calc(obuf, blen+hlen, blen+hlen, &state->hmach);
-		memset(obuf, 0, blen); asm("":::"memory");
+		memset(obuf, 0, blen); LFENCE;
 		state->alg->hash_hexout(res, &state->hmach);
 		if (!state->opts->quiet) 
 			FPLOG(INFO, "HMAC %s %s (%" LL "i-%" LL "i): %s\n",

@@ -12,6 +12,8 @@
 
 #include <stdio.h>
 
+#define mem_clobber	asm("":::"memory")
+
 char cap_str[64];
 char FNZ_OPT[64];
 
@@ -39,7 +41,7 @@ char probe_procedure(void (*probefn)(void))
 	signal(SIGILL, ill_handler);
 	if (setjmp(sigill_jmp) == 0) {
 		probefn();
-		asm volatile("" : : : "memory");
+		mem_clobber;
 		have_feature = 1;
 	} else {
 		have_feature = 0;
@@ -85,7 +87,6 @@ size_t find_nonzero_rep(const unsigned char* blk, const size_t ln)
 
 #define SIZE (64*1024*1024)
 
-#define mem_clobber	asm("": : : "memory")
 #define RTESTC(sz,routine,rnm,rep,tsz) 	\
 	memset(buf, 0, sz);		\
 	if (sz<tsz) buf[sz] = 1;	\

@@ -195,7 +195,7 @@ int  AES_Gen_CBC_Enc(AES_Crypt_Blk_fn *cryptfn,
 		//memcpy(iv, output, 16);
 		*olen += 16-(len&15);
 		//memset(in, 0, 16);
-		//asm("":::"memory");
+		//LFENCE;
 	}
 	return (pad == PAD_ALWAYS || (len&15))? 16-(len&15): 0;
 }
@@ -215,7 +215,7 @@ int  AES_Gen_CBC_Dec(AES_Crypt_Blk_fn *cryptfn,
 		len -= 16; input += 16; output += 16;
 	}
 	//memset(ebf, 0, 16);
-	//asm("":::"memory");
+	//LFENCE;
 	if (pad)
 		return dec_fix_olen_pad(olen, pad, output);
 	else
@@ -245,7 +245,7 @@ int  AES_Gen_CBC_Dec4(AES_Crypt_Blk_fn *cryptfn4,
 		len -= 16; input += 16; output += 16;
 	}
 	//memset(ebf, 0, 64);
-	//asm("":::"memory");
+	//LFENCE;
 	if (pad)
 		return dec_fix_olen_pad(olen, pad, output);
 	else
@@ -320,7 +320,7 @@ int  AES_Gen_CTR_Crypt(AES_Crypt_Blk_fn *cryptfn,
 		//memset(in, 0, 16);
 	}
 	//memset(eblk, 0, 16);
-	//asm("":::"memory");
+	//LFENCE;
 	return 0;
 }
 
@@ -356,7 +356,7 @@ int  AES_Gen_CTR_Crypt_Opt(AES_Crypt_CTR_Blk_fn *cryptfn4c,
 		//memset(in, 0, 16);
 		//memcpy(ctr, octr, 16);
 		//memset(eblk, 0, 16);
-		//asm("":::"memory");
+		//LFENCE;
 	}
 	return 0;
 }
@@ -435,14 +435,14 @@ int  AES_Gen_CTR_Crypt4(AES_Crypt_Blk_fn *cryptfn4,
 		memcpy(output, in, len&15);
 	}
 	//memset(eblk, 0, 16);
-	//asm("":::"memory");
+	//LFENCE;
 	return 0;
 }
 
 void AES_Gen_Release(uchar *rkeys, uint rounds)
 {
 	memset(rkeys, 0, 16*(rounds+1));
-	asm("":::"memory");
+	LFENCE;
 }
 
 ciph_desc_t *findalg(ciph_desc_t* list, const char* nm, const char probe)

@@ -12,6 +12,7 @@
  */
 
 #include "pbkdf2.h"
+#include "secmem.h"
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
@@ -150,7 +151,7 @@ int pbkdf2(hashalg_t *hash,   unsigned char* pwd,  int plen,
 	}
 	memset(khash, 0, khlen);
 	memset(buf, 0, bflen);
-	asm("":::"memory");
+	LFENCE;
 	free(khash);
 	free(buf);
 	return 0;

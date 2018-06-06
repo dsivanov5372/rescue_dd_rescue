@@ -12,6 +12,7 @@
 #include <assert.h>
 #include "aes.h"
 #include "aes_ossl.h"
+#include "secmem.h"
 #include <string.h>
 
 #include <netinet/in.h>
@@ -112,7 +113,7 @@ int AES_OSSL_##BITCHAIN##_Encrypt(const unsigned char* ctx, unsigned int rounds,
 		memset(ibf+(len&15), 0, 16-(len&15));		\
 		ores = EVP_EncryptUpdate(evpctx[0], out+olen, &elen, ibf, 16);	\
 		memset(ibf, 0, len&15);				\
-		asm("":::"memory");				\
+		LFENCE;						\
 		assert(ores);					\
 	} else {								\
 		if (DOPAD && !(len%15) && pad == PAD_ASNEEDED)	\
@@ -171,7 +172,7 @@ int AES_OSSL_##BITCHAIN##_Decrypt(const unsigned char* ctx, unsigned int rounds,
 			assert(ores);				\
 		}						\
 		EVP_CIPHER_CTX_free(ctx2);			\
-		asm("":::"memory");				\
+		LFENCE;						\
 	} else {						\
 		ores = EVP_DecryptUpdate(evpctx[0], out, &olen, in, ilen);	\
 		assert(ores);					\
@@ -249,7 +250,7 @@ void AES_OSSL_Bits_EKey_ExpandX2(const EVP_CIPHER *cipher, const unsigned char* 
 	EVP_CipherInit_ex(evpctx[1], cipher, NULL, usrkey2, NULL, ENCRYPT);
 	//EVP_CIPHER_CTX_set_padding(evpctx+1, 0);
 	memset(usrkey2, 0, 32);
-	asm("":::"memory");
+	LFENCE;
 }
 void AES_OSSL_Bits_DKey_ExpandX2(const EVP_CIPHER *cipher, const unsigned char* userkey, unsigned char *ctx, unsigned int bits)
 {
@@ -271,7 +272,7 @@ void AES_OSSL_Bits_DKey_ExpandX2(const EVP_CIPHER *cipher, const unsigned char* 
 	EVP_CipherInit_ex(evpctx[1], cipher, NULL, usrkey2, NULL, DECRYPT);
 	//EVP_CIPHER_CTX_set_padding(evpctx[1], 0);
 	memset(usrkey2, 0, 32);
-	asm("":::"memory");
+	LFENCE;
 }
 
 void AES_OSSL_RecycleX2(unsigned char *ctx)
@@ -323,7 +324,7 @@ int  AES_OSSL_##BITCHAIN##_EncryptX2(const unsigned char* ctx, unsigned int roun
 		memset(ibf+(len&15), 0, 16-(len&15));		\
 		ores = EVP_EncryptUpdate(evpctx[0], out+olen, &elen, ibf, 16);		\
 		memset(ibf, 0, len&15);				\
-		asm("":::"memory");				\
+		LFENCE;						\
 		assert(ores);					\
 	} else {						\
 		ores = EVP_EncryptUpdate(evpctx[0], out, &olen, in, len);	\
@@ -385,7 +386,7 @@ int  AES_OSSL_##BITCHAIN##_DecryptX2(const unsigned char* ctx, unsigned int roun
 			assert(ores);				\
 		}						\
 		EVP_CIPHER_CTX_free(ctx2);			\
-		asm("":::"memory");				\
+		LFENCE;						\
 	} else {						\
 		ores = EVP_DecryptUpdate(evpctx[0], out, &olen, out, olen+elen);\
 		assert(ores);					\
@@ -445,7 +446,7 @@ void AES_OSSL_Blk_EncryptX2(const unsigned char *ctx, unsigned int rounds,
 	EVP_EncryptUpdate(evpctx[0], blk, &olen, in, 16);
 	EVP_EncryptUpdate(evpctx[1], out, &olen, blk, olen);
 	memset(blk, 0, 16);
-	asm("":::"memory");
+	LFENCE;
 }
 void AES_OSSL_Blk_DecryptX2(const unsigned char *ctx, unsigned int rounds,
 			    const unsigned char *in, unsigned char *out)			
@@ -456,7 +457,7 @@ void AES_OSSL_Blk_DecryptX2(const unsigned char *ctx, unsigned int rounds,
 	EVP_DecryptUpdate(evpctx[1], blk, &olen, in, 16);
 	EVP_DecryptUpdate(evpctx[0], out, &olen, blk, olen);
 	memset(blk, 0, 16);
-	asm("":::"memory");
+	LFENCE;
 }
 
 

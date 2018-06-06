@@ -9,6 +9,7 @@
 
 #include "pbkdf_ossl.h"
 #include "md5.h"
+#include "secmem.h"
 #include <stdlib.h>
 #include <assert.h>
 #include <endian.h>
@@ -25,7 +26,7 @@ static inline void memcpy_nhash(hashalg_t *hash, uint8_t *buf, hash_t *hv, size_
 		hash->hash_beout(tmp, hv);
 		memcpy(buf, tmp+off, hln);
 		memset(tmp, 0, hash->hashln);
-		asm("":::"memory");
+		LFENCE;
 	}
 }
 
@@ -69,7 +70,7 @@ int pbkdf_ossl(hashalg_t *hash, unsigned char* pwd,  int plen,
 		++cnt;
 	}
 	memset(hbuf, 0, hash->hashln+plen+slen);
-	asm("":::"memory");
+	LFENCE;
 	free(hbuf);
 	return 0;
 }

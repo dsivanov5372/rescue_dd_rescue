@@ -72,7 +72,7 @@ void secmem_release(sec_fields* sf)
 {
 	unsigned char* ptr = (unsigned char*)sf;
 	memset(ptr, 0, pagesize);
-	asm volatile ("" ::: "memory");
+	LFENCE;
 	munlock(ptr, pagesize);
 	if ((unsigned long)ptr - (unsigned long)optr < pagesize)
 		free(optr);

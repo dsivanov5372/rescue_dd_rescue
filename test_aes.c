@@ -81,7 +81,7 @@ void fillval(unsigned char* bf, ssize_t ln, unsigned int val)
 	gettimeofday(&t1, NULL);	\
 	for (i = 0; i < (_rep); ++i) {	\
 		_routine; 		\
-		asm("":::"memory");	\
+		LFENCE;			\
 	}				\
 	gettimeofday(&t2, NULL);	\
 	tdiff = t2.tv_sec-t1.tv_sec + 0.000001*(t2.tv_usec-t1.tv_usec);	\

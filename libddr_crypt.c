@@ -1236,7 +1236,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	/* No need to keep key/passphr in memory */
 	memset(state->sec->userkey1, 0, state->alg->keylen/8);
 	memset(state->sec->passphr, 0, 128);
-	asm("":::"memory");
+	LFENCE;
 	if (state->bench)
 		state->cpu += clock() - t1;
 	return err;
@@ -1262,7 +1262,7 @@ char memcpy_testzero(void* dst, const void* src, size_t ln)
 			return 0;
 		}
 	}
-	asm volatile ("":::"memory");
+	LFENCE;
 	return 1;
 }
 
