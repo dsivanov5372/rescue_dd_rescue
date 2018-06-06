@@ -57,4 +57,12 @@ void secmem_release(sec_fields*);
 
 extern sec_fields *crypto;
 
+//#if defined(__i386__) || defined(__x86_64__)
+#ifdef HAVE_LFENCE
+#define LFENCE asm("lfence":::"memory")
+#else
+#define LFENCE asm("":::"memory")
+#endif
+#define mem_clobber asm("":::"memory")
+
 #endif
