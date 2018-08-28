@@ -13,6 +13,9 @@
 #ifdef HAVE_MALLOC_H
 # include <malloc.h>
 #endif
+#ifdef HAVE_SYS_RESOURCE_H
+# include <sys/resource.h>
+#endif
 
 static unsigned char *optr;
 static unsigned int pagesize;
@@ -60,6 +63,17 @@ sec_fields* secmem_init()
 #ifdef MADV_DONTDUMP
 	if (madvise(ptr, pagesize, MADV_DONTDUMP)) {
 		fprintf(stderr, "Can't set to exclude from core: %s\n", strerror(errno));
+		abort();
+	}
+#elif defined(HAVE_GETRLIMIT)
+	struct rlimit rlim;
+	if (getrlimit(RLIMIT_CORE, &rlim)) {
+		fprintf(stderr, "Can't get core limit: %s\n", strerror(errno));
+		abort();
+	}
+	rlim.rlim_cur = 0;
+	if (setrlimit(RLIMIT_CORE, &rlim)) {
+		fprintf(stderr, "Can't set core limit: %s\n", strerror(errno));
 		abort();
 	}
 #else
