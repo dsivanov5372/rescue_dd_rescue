@@ -70,7 +70,7 @@ static inline u32 aes_sbox(u32 in)
 	"	dup 	v1.4s, %w[in]		\n"
 	"	movi	v0.16b, #0		\n"
 	"	aese	v0.16b, v1.16b		\n"
-	"	umov	%w[out], v0.4s[0]		\n"
+	"	umov	%w[out], v0.s[0]	\n"
 	: [out] "=r"(ret)
 	: [in] "r"(in)
 	: "v0", "v1"
