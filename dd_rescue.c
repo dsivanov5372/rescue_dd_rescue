@@ -1230,7 +1230,7 @@ void printreport(opt_t *op, fstate_t *fst, progress_t *prg, dpopt_t *dop)
 		LISTTYPE(ofile_t) *of;
 		LISTFOREACH(ofiles, of)
 			fplog(report, NOHDR, "; %s", LISTDATA(of).name);
-		if (logfd > 0)
+		if (logfd)
 			fprintf(logfd, ":\n");
 		fprintf(report, "\n");
 		printstatus(report, logfd, 0, 1, op, fst, prg, dop);
