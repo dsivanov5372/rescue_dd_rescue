@@ -54,6 +54,9 @@
 /* Define to 1 if you have the `getrandom' function. */
 #undef HAVE_GETRANDOM
 
+/* Define to 1 if you have the `getrlimit' function. */
+#undef HAVE_GETRLIMIT
+
 /* Define to 1 if you have the `htobe64' function. */
 #undef HAVE_HTOBE64
 
@@ -152,6 +155,9 @@
 
 /* Define to 1 if you have the <sys/random.h> header file. */
 #undef HAVE_SYS_RANDOM_H
+
+/* Define to 1 if you have the <sys/resource.h> header file. */
+#undef HAVE_SYS_RESOURCE_H
 
 /* Define to 1 if you have the <sys/statvfs.h> header file. */
 #undef HAVE_SYS_STATVFS_H
