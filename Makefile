@@ -143,15 +143,23 @@ else
 endif
 endif
 
-MACH := $(shell uname -m |sed 's/armv[0-9a-z]*/arm/')
-ifeq ($(MACH),arm)
+MACH := $(shell uname -m |sed 's/armv\([0-9]*\)[a-z]*/armv\1/')
+ISARM := $(shell uname -m | grep '^arm')
+ifneq (,$(ISARM),)	# ARM
+ifneq (,$(filter $(MACH),armv7 armv8))
 	OBJECTS2 = find_nonzero_arm.o
 	#POBJECTS2 = find_nonzero.po find_nonzero_arm.po
 	AES_ARM64_O = aes_arm32.o
 	AES_ARM64_PO = aes_arm32.po
 	CFLAGS += -DHAVE_AES_ARM64
 	ARCHFLAGS += -mfpu=crypto-neon-fp-armv8
-endif
+else
+ifeq (armv6,$(MACH))
+	OBJECTS2 = find_nonzero_arm.o
+# else default arm stuff not needed here
+endif	# ARMv6
+endif	# ARMv7/8
+endif	# ARM
 ifeq ($(MACH),aarch64)
 	LIB = lib64
 	OBJECTS2 = find_nonzero_arm64.o
