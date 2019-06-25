@@ -601,7 +601,6 @@ ddr_plugin_t* insert_plugin(void* hdl, const char* nm, char* param, opt_t *op)
 void load_plugins(char* plugs, opt_t *op)
 {
 	char* next;
-	char path[256];
 	int plugno = 0;
 	int errs = 0;
 	while (plugs) {
@@ -611,9 +610,13 @@ void load_plugins(char* plugs, opt_t *op)
 		char* param = strchr(plugs, '=');
 		if (param)
 			*param++ = 0;
-		snprintf(path, 255, "libddr_%s.so", plugs);
+		void* hdl = 0;
 		//errno = ENOENT;
-		void* hdl = dlopen(path, RTLD_NOW);
+		if (*plugs != '/') {
+			char path[256];
+			snprintf(path, 255, "libddr_%s.so", plugs);
+			hdl = dlopen(path, RTLD_NOW);
+		}
 		/* Allow full name (with absolute path if wanted) */
 		if (!hdl) {
 			/* Second attempt: Try with name passed */
@@ -622,10 +625,11 @@ void load_plugins(char* plugs, opt_t *op)
 			if (hdl) {
 				char* ptr = strrchr(plugs, '_');
 				if (ptr) {
-					char* ptr2 = strchr(ptr+1, '.');
+					++ptr;
+					char* ptr2 = strchr(ptr, '.');
 					if (ptr2) {
 						*ptr2 = 0;
-						plugs = ptr+1;
+						plugs = ptr;
 					}
 				}
 			}
