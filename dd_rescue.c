@@ -3112,7 +3112,7 @@ void sanitize_and_prepare(opt_t *op, dpopt_t *dop, fstate_t *fst, dpstate_t *dst
 	if (!op->extend)
 		sparse_output_warn(op, fst);
 	if (fst->o_chr) {
-		if (!op->nosparse)
+		if (!op->nosparse || !op->quiet)
 			fplog(stderr, WARN, "Not using sparse writes for non-seekable output\n");
 		op->nosparse = 1; op->sparse = 0; op->dosplice = 0;
 		if (op->avoidwrite) {
