@@ -63,7 +63,7 @@ typedef struct _hash_state {
 	int seq;
 	int outfd;
 	unsigned char buflen;
-	unsigned char ilnchg, olnchg, ichg, ochg, debug, outf, chkf, chkfalloc;
+	unsigned char ilnchg, olnchg, ichg, ochg, debug, outf, chkf, chkfalloc, chkupd;
 	const char* chkfnm;
 	const opt_t *opts;
 	unsigned char* hmacpwd;
@@ -84,8 +84,8 @@ typedef struct _hash_state {
 
 const char *hash_help = "The HASH plugin for dd_rescue calculates a cryptographic checksum on the fly.\n"
 		" It supports unaligned blocks (arbitrary offsets) and holes(sparse writing).\n"
-		" Parameters: output:outfd=FNO:outnm=FILE:check:chknm=FILE:debug:[alg[o[rithm]=]ALG\n"
-		"\t:append=STR:prepend=STR:hmacpwd=STR:hmacpwdfd=FNO:hmacpwdnm=FILE\n"
+		" Parameters: output:outfd=FNO:outnm=FILE:check:chknm=FILE:chkadd:[alg[o[rithm]=]ALG\n"
+		"\t:append=STR:prepend=STR:hmacpwd=STR:hmacpwdfd=FNO:hmacpwdnm=FILE:debug\n"
 		"\t:pbkdf2=ALG/PWD/SALT/ITER/LEN"
 #ifndef NO_S3_MP
 		":multipart=size"
@@ -194,6 +194,8 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			state->chkf = 1;
 		else if (!memcmp(param, "chknm=", 6)) {
 			state->chkf = 1; state->chkfnm=param+6; }
+		else if (!memcmp(param, "chkadd", 6))
+			state->chkupd = 1;
 		else if (!strcmp(param, "check")) {
 			state->chkf = 1; state->chkfnm="-"; }
 #ifndef NO_S3_MP
@@ -565,31 +567,6 @@ unsigned char* hash_blk_cb(fstate_t *fst, unsigned char* bf,
 }
 
 
-int check_chkf(hash_state *state, const char* res)
-{
-	const char* name = state->opts->iname;
-	char cks[144];
-	if (state->ichg && !state->ochg) {
-		name = state->opts->oname;
-		if (!state->opts->quiet)
-			FPLOG(INFO, "Read checksum from %s for output file %s\n", state->chkfnm, name);
-	} else if (state->ichg) {
-		FPLOG(WARN, "Can't read checksum in the middle of plugin chain (%s)\n", state->fname);
-		return -ENOENT;
-	}
-	int err = get_chks(state->chkfnm, name, cks, strlen(res));
-	if (err < 0) {
-		FPLOG(WARN, "Can't find checksum in %s for %s\n", state->chkfnm, name);
-		return -ENOENT;
-	}
-	if (strcmp(cks, res)) {
-		FPLOG(WARN, "Hash from chksum file %s for %s does not match\n", state->chkfnm, name);
-		FPLOG(WARN, "comp %s, read %s\n", res, cks);
-		return -EBADF;
-	}
-	return 0;
-}
-
 int write_chkf(hash_state *state, const char *res)
 {
 	const char* name = state->opts->oname;
@@ -608,48 +585,36 @@ int write_chkf(hash_state *state, const char *res)
 	return err;
 }
 
-#ifdef HAVE_ATTR_XATTR_H
-int check_xattr(hash_state* state, const char* res)
+int check_chkf(hash_state *state, const char* res)
 {
-	char xatstr[144];
-	strcpy(xatstr, "xattr");
 	const char* name = state->opts->iname;
+	char cks[144];
 	if (state->ichg && !state->ochg) {
 		name = state->opts->oname;
 		if (!state->opts->quiet)
-			FPLOG(INFO, "Read xattr from output file %s\n", name);
+			FPLOG(INFO, "Read checksum from %s for output file %s\n", state->chkfnm, name);
 	} else if (state->ichg) {
-		FPLOG(WARN, "Can't read xattrs in the middle of plugin chain (%s)\n", state->fname);
+		FPLOG(WARN, "Can't read checksum in the middle of plugin chain (%s)\n", state->fname);
 		return -ENOENT;
 	}
-	/* Longest is 128byte hex for SHA512 (8x64byte numbers -> 8x16 digits) */
-	char chksum[144];
-	ssize_t itln = getxattr(name, state->xattr_name, chksum, 144);
-	const int rln = strlen(res);
-	if (itln <= 0) {
-		if (state->xfallback) {
-			int err = get_chks(state->chkfnm, name, chksum, rln);
-			snprintf(xatstr, 143, "chksum file %s", state->chkfnm);
-			if (err < 0) {
-				FPLOG(WARN, "no hash found in xattr nor %s for %s\n", xatstr, name);
-				return -ENOENT;
-			} else if (strcmp(chksum, res)) {
-				FPLOG(WARN, "Hash from %s for %s does not match\n", xatstr, name);
-				return -EBADF;
-			}
-		} else {
-			FPLOG(WARN, "Hash could not be read from xattr of %s\n", name);
+	int err = get_chks(state->chkfnm, name, cks, strlen(res));
+	if (err < 0) {
+		if (state->chkupd)
+			return write_chkf(state, res);
+		else {
+			FPLOG(WARN, "Can't find checksum in %s for %s\n", state->chkfnm, name);
 			return -ENOENT;
 		}
-	} else if (itln < rln || memcmp(res, chksum, rln)) {
-		FPLOG(WARN, "Hash from xattr of %s does not match\n", name);
+	}
+	if (strcmp(cks, res)) {
+		FPLOG(WARN, "Hash from chksum file %s for %s does not match\n", state->chkfnm, name);
+		FPLOG(WARN, "comp %s, read %s\n", res, cks);
 		return -EBADF;
 	}
-	if (!state->opts->quiet || state->debug)
-		FPLOG(INFO, "Successfully validated hash from %s for %s\n", xatstr, name);
 	return 0;
 }
 
+#ifdef HAVE_ATTR_XATTR_H
 int write_xattr(hash_state* state, const char* res)
 {
 	const char* name = state->opts->oname;
@@ -681,6 +646,51 @@ int write_xattr(hash_state* state, const char* res)
 	if (state->debug)
 		FPLOG(DEBUG, "Set %s for %s to %s\n",
 				xatstr, name, res);
+	return 0;
+}
+
+int check_xattr(hash_state* state, const char* res)
+{
+	char xatstr[144];
+	strcpy(xatstr, "xattr");
+	const char* name = state->opts->iname;
+	if (state->ichg && !state->ochg) {
+		name = state->opts->oname;
+		if (!state->opts->quiet)
+			FPLOG(INFO, "Read xattr from output file %s\n", name);
+	} else if (state->ichg) {
+		FPLOG(WARN, "Can't read xattrs in the middle of plugin chain (%s)\n", state->fname);
+		return -ENOENT;
+	}
+	/* Longest is 128byte hex for SHA512 (8x64byte numbers -> 8x16 digits) */
+	char chksum[144];
+	ssize_t itln = getxattr(name, state->xattr_name, chksum, 144);
+	const int rln = strlen(res);
+	if (itln <= 0) {
+		if (state->xfallback) {
+			int err = get_chks(state->chkfnm, name, chksum, rln);
+			snprintf(xatstr, 143, "chksum file %s", state->chkfnm);
+			if (err < 0) {
+				if (state->chkupd)
+					return write_xattr(state, res);
+				else {
+					FPLOG(WARN, "no hash found in xattr nor %s for %s\n", xatstr, name);
+					return -ENOENT;
+				}
+			} else if (strcmp(chksum, res)) {
+				FPLOG(WARN, "Hash from %s for %s does not match\n", xatstr, name);
+				return -EBADF;
+			}
+		} else {
+			FPLOG(WARN, "Hash could not be read from xattr of %s\n", name);
+			return -ENOENT;
+		}
+	} else if (itln < rln || memcmp(res, chksum, rln)) {
+		FPLOG(WARN, "Hash from xattr of %s does not match\n", name);
+		return -EBADF;
+	}
+	if (!state->opts->quiet || state->debug)
+		FPLOG(INFO, "Successfully validated hash from %s for %s\n", xatstr, name);
 	return 0;
 }
 #endif

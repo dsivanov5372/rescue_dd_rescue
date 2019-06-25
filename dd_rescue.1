@@ -677,7 +677,7 @@ If the checksum can't be written, a warning will be printed and the exit code
 of dd_rescue will become non-zero.
 .PP
 The checksum can be validated using 
-.B checknm=CHKNAME .
+.B chknm=CHKNAME .
 The file will be read and ddr_hash will look for an md5sum/sha256sum/...
 compatible line with a matching file name to take the checksum from and
 compare it to the one computed. If NAME is omitted, the same default 
@@ -694,6 +694,16 @@ the final target, use a temporary target that you delete upon error and
 only move to the final location if dd_rescue's exit value is 0; you can
 of course also copy to /dev/null for testing beforehand, but it might
 be too costly reading the input file twice.)
+.br
+If in addition to 
+.B chknm (or
+.B chk_xattr
+) the option
+.B chkadd
+is specified, then a missing checksum will not be reported as error,
+but instead an entry to the checksum file (or xattr) be added. A mismatch
+will still be reported as error and the checksum file will not be
+updated.
 .PP
 You can store the cryptographic hash into the files by using the
 .B set_xattr
