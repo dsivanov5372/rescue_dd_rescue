@@ -1,0 +1,97 @@
+#!/bin/bash
+# integrity_check
+# looks for directories with MD5SUMS
+# and checks the integrity using dd_rescue
+
+RED="\e[0;31m"
+NORM="\e[0;0m"
+
+unset ADDNEWDIR NOADD
+
+usage()
+{
+	echo "Usage: integrity_check [--alg] [--newdir] [--noadd] [DIR]"
+	echo " Choices for alg: md5, sha1, sha256/512/224/384 (default: sha512)"
+	echo "integrity_check searches for all directories below DIR (default: .) with a"
+	echo " checksum file (named MD5SUMS or CHECKSUMS.sha*, overridable with --chkfilenm=)"
+        echo " or optionally all (--newdir) and then computes the checksum (hash) of each"
+	echo " regular file in these directories."
+        echo " If the checksum file contains an entry, it will be compared and an error"
+	echo " reported on change. If there is no entry, the computed checksum will be added,"
+	echo " unless --noadd is used."
+	echo "The checksum files are compatible with the md5sum/sha*sum/... family of tools."
+	exit 1
+}
+
+while test $# -gt 0 -a "${1:0:1}" = "-"; do
+  case "$1" in
+    -h|--help)
+	usage;;
+    --md5) ALG=md5; CHKS=MD5SUMS;;
+    --sha1) ALG=sha1;;
+    --sha224) ALG=sha224;;
+    --sha256) ALG=sha256;;
+    --sha384) ALG=sha384;;
+    --sha512) ALG=sha512;;
+    --newdir) ADDNEWDIR=1;;
+    --chkfilenm=*) CHKS="${1#--chkfilenm=}";;
+    --noadd) NOADD=1;;
+  esac
+  shift
+done
+# Default
+if test -z "$ALG"; then
+  ALG=sha512
+fi
+if test -z "$CHKS"; then
+  CHKS=CHECKSUMS.$ALG
+fi
+if test -z "$NOADD"; then
+  CHKADD=":chkadd"
+fi
+# Optional DIR argument
+if test -n "$1"; then
+  cd "$1"
+fi
+
+MYPWD=`pwd`
+
+# Find right dd_rescue and ddr_ plugins
+#export PATH=/usr/local/bin:$PATH
+#export LD_LIBRARY_PATH=/usr/local/lib64:$LD_LIBRARY_PATH
+FAILS=""
+declare -i err=0
+declare -i suc=0
+echo -n "Building list of directories ... "
+if test -n "$ADDNEWDIR"; then
+  DIRLIST=$(find . -type d)
+else
+  DIRLIST=$(find . -type f -a -name $CHKS | sed "s@/$CHKS\$@@g")
+fi
+echo "$DIRLIST" | wc -l
+for nm in $DIRLIST; do
+  DIRNM="${nm%/$CHKS}"
+  cd "$MYPWD/$DIRNM"
+  echo -n "$DIRNM: "
+  declare -i lerr=0
+  declare -i lsuc=0
+  for fnm in `ls -U`; do
+    if test ! -f "$fnm" -o "$fnm" = "$CHKS"; then continue; fi
+    dd_rescue -qL hash=$ALG:chknm=$CHKS$CHKADD -- "$fnm" /dev/null
+    RC=$?
+    if test $RC != 0; then
+      echo -en "${RED}FAIL: $fnm${NORM} "
+      FAILS="${FAILS}$DIRNM/$fnm "
+      let lerr+=1
+      let err+=1
+    else
+      let lsuc+=1
+      let suc+=1
+    fi
+  done
+  echo " Stats: $lsuc Success, $lerr Fails"
+done
+echo "Total: $suc Success, $err Fails"
+echo "$FAILS"
+cd "$MYPWD"
+exit $err
