@@ -63,22 +63,24 @@ MYPWD=`pwd`
 FAILS=""
 declare -i err=0
 declare -i suc=0
-echo -n "Building list of directories ... "
 if test -n "$NOREC"; then
   DIRLIST="."
 elif test -n "$ADDNEWDIR"; then
+  echo -n "Building list of directories ... "
   DIRLIST=$(find . -type d)
+  echo "$DIRLIST" | wc -l
 else
+  echo -n "Building list of directories ... ($CHKS) "
   DIRLIST=$(find . -type f -a -name $CHKS | sed "s@/$CHKS\$@@g")
+  echo "$DIRLIST" | wc -l
 fi
-echo "$DIRLIST" | wc -l
-for nm in $DIRLIST; do
+while read nm; do
   DIRNM="${nm%/$CHKS}"
   cd "$MYPWD/$DIRNM"
   echo -n "$DIRNM: "
   declare -i lerr=0
   declare -i lsuc=0
-  for fnm in `ls -U`; do
+  while read fnm; do
     if test ! -f "$fnm" -o "$fnm" = "$CHKS"; then continue; fi
     dd_rescue -qL hash=$ALG:chknm=$CHKS$CHKADD -- "$fnm" /dev/null
     RC=$?
@@ -93,9 +95,9 @@ for nm in $DIRLIST; do
       let lsuc+=1
       let suc+=1
     fi
-  done
+  done < <(ls -U)
   echo " Stats: $lsuc Success, $lerr Fails"
-done
+done < <(echo "$DIRLIST")
 echo "Total: $suc Success, $err Fails"
 echo "$FAILS"
 cd "$MYPWD"
