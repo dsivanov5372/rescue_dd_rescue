@@ -10,7 +10,7 @@ unset ADDNEWDIR NOADD
 
 usage()
 {
-	echo "Usage: integrity_check [--alg] [--newdir] [--noadd] [DIR]"
+	echo "Usage: integrity_check [--alg] [--newdir] [--noadd] [--norecursive] [DIR]"
 	echo " Choices for alg: md5, sha1, sha256/512/224/384 (default: sha512)"
 	echo "integrity_check searches for all directories below DIR (default: .) with a"
 	echo " checksum file (named MD5SUMS or CHECKSUMS.sha*, overridable with --chkfilenm=)"
@@ -36,6 +36,7 @@ while test $# -gt 0 -a "${1:0:1}" = "-"; do
     --newdir) ADDNEWDIR=1;;
     --chkfilenm=*) CHKS="${1#--chkfilenm=}";;
     --noadd) NOADD=1;;
+    --norecursive) NOREC=1;;
   esac
   shift
 done
@@ -63,7 +64,9 @@ FAILS=""
 declare -i err=0
 declare -i suc=0
 echo -n "Building list of directories ... "
-if test -n "$ADDNEWDIR"; then
+if test -n "$NOREC"; then
+  DIRLIST="."
+elif test -n "$ADDNEWDIR"; then
   DIRLIST=$(find . -type d)
 else
   DIRLIST=$(find . -type f -a -name $CHKS | sed "s@/$CHKS\$@@g")
@@ -79,8 +82,10 @@ for nm in $DIRLIST; do
     if test ! -f "$fnm" -o "$fnm" = "$CHKS"; then continue; fi
     dd_rescue -qL hash=$ALG:chknm=$CHKS$CHKADD -- "$fnm" /dev/null
     RC=$?
+    # Ignore new files even with --noadd
+    if test -n "$NOADD" -a $RC = 2; then RC=0; fi
     if test $RC != 0; then
-      echo -en "${RED}FAIL: $fnm${NORM} "
+      echo -en "${RED}FAIL($RC): $fnm${NORM} "
       FAILS="${FAILS}$DIRNM/$fnm "
       let lerr+=1
       let err+=1

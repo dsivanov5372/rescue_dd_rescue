@@ -475,6 +475,7 @@ void call_plugins_open(opt_t *op, fstate_t *fst)
 int call_plugins_close(opt_t *op, fstate_t *fst)
 {
 	int errs = 0;
+	int maxerr = 0;
 	int seq = 0;
 	if (!plugins_opened)
 		return 0;
@@ -486,12 +487,14 @@ int call_plugins_close(opt_t *op, fstate_t *fst)
 				fplog(stderr, WARN, "Plugin %s(%i) reported error on close: %s!\n",
 					LISTDATA(plug).name, seq, strerror(-err));
 				++errs;
+				if (-err > maxerr)
+					maxerr = -err;
 			}
 		}
 		++seq;
 		--plugins_opened;
 	}
-	return errs;
+	return /*errs*/maxerr;
 }
 
 /** Call the plugin block processing chain ...
