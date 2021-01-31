@@ -7,7 +7,7 @@
 #include "secmem.h"
 #include "aes.h"
 
-ARCH_DECLS
+//ARCH_DECLS
 
 #include <stdio.h>
 #include <stdlib.h>
