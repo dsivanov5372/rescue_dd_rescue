@@ -34,6 +34,8 @@ void mydirnm(char* nm)
 loff_t fstrim(const char* onm, char quiet)
 {
 	char* dirnm = strdup(onm);
+	if (!dirnm)
+		return -1;
 	mydirnm(dirnm);
 	struct fstrim_range trim;
 	int fd = open(dirnm, O_RDONLY);
