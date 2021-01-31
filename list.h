@@ -9,6 +9,7 @@
 #define _LIST_H
 
 #include <stdlib.h>
+#include <assert.h>
 
 #define LISTDECL(type) 			\
 struct _list_##type {			\
@@ -23,6 +24,7 @@ struct _list_##type {			\
 
 #define LISTINSAFTER(l, x, type) do {			\
 	struct _list_##type *newel = (struct _list_##type *)malloc(sizeof(struct _list_##type));	\
+	assert(newel);					\
 	newel->data = x;				\
 	if (l) {					\
 		newel->next = l->next;			\
@@ -35,6 +37,7 @@ struct _list_##type {			\
 
 #define LISTINSBEFORE(lh, x, type) do {			\
 	struct _list_##type *newel = (struct _list_##type *)malloc(sizeof(struct _list_##type));	\
+	assert(newel);					\
 	newel->data = x;				\
 	newel->next = lh;				\
 	lh = newel;					\
@@ -42,6 +45,7 @@ struct _list_##type {			\
 
 #define LISTAPPEND(lh, x, type) do {		\
 	struct _list_##type *newel = (struct _list_##type *)malloc(sizeof(struct _list_##type));	\
+	assert(newel);				\
 	newel->data = x; newel->next = 0;	\
 	if (!lh)				\
 		lh = newel;			\
