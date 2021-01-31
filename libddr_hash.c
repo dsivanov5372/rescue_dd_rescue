@@ -143,7 +143,7 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	int err = 0;
 	hash_state *state; /* = (hash_state*)malloc(sizeof(hash_state));*/
 	if (posix_memalign(stat, 64, sizeof(hash_state))) {
-		FPLOG(FATAL, "No enough memory for hash state!\n");
+		FPLOG(FATAL, "Not enough memory for hash state!\n");
 		return -1;
 	}
 	state = (hash_state*)*stat;
