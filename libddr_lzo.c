@@ -398,12 +398,12 @@ int lzo_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 {
 	int err = 0;
 	lzo_state *state = (lzo_state*)malloc(sizeof(lzo_state));
+	*stat = (void*)state;
 	if (!state) {
 		FPLOG(FATAL, "can't allocate %i bytes\n", sizeof(lzo_state));
 		return -1;
 	}
 	memset(state, 0, sizeof(lzo_state));
-	*stat = (void*)state;
 	state->mode = AUTO;
 	state->seq = seq;
 	state->algo = calgos;
