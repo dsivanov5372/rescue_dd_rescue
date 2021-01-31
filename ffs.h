@@ -132,6 +132,8 @@ static int myflsl(unsigned long val)
 	return res;
 #endif
 }
+int myffs_sse42(unsigned long);
+int myffsl_sse42(unsigned long);
 #endif
 
 void probe_sse42();
