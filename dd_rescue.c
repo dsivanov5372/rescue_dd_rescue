@@ -459,6 +459,7 @@ void call_plugins_open(opt_t *op, fstate_t *fst)
 			if (err < 0) {
 				fplog(stderr, WARN, "Error initializing plugin %s(%i): %s!\n",
 					LISTDATA(plug).name, plugins_opened, strerror(-err));
+				cleanup(1);
 				exit(13);
 			} else if (err>0) {
 				fst->ipos += err;
@@ -552,7 +553,7 @@ ddr_plugin_t* insert_plugin(void* hdl, const char* nm, char* param, opt_t *op)
 	if (param && !plug->init_callback) {
 		fplog(stderr, FATAL, "Plugin %s has no init callback to consume passed param %s\n",
 			nm, param);
-		exit(13);
+		cleanup(1); exit(13);
 	}
 
 	plug->logger = (plug_logger_t*)malloc(sizeof(plug_logger_t));
@@ -562,9 +563,10 @@ ddr_plugin_t* insert_plugin(void* hdl, const char* nm, char* param, opt_t *op)
 	if (plug->init_callback) {
 		int ret = plug->init_callback(&plug->state, param, plugins_loaded, op);
 		if (ret) {
+			//unload_plugins();
 			plugins_loaded++;
 			LISTAPPEND(ddr_plugins, *plug, ddr_plugin_t);
-			unload_plugins();
+			cleanup(1);
 			exit(-ret);
 		}
 	}
@@ -596,8 +598,8 @@ ddr_plugin_t* insert_plugin(void* hdl, const char* nm, char* param, opt_t *op)
 	if (plug->replaces_output)
 		no_output++;
 
-	LISTAPPEND(ddr_plugins, *plug, ddr_plugin_t);
 	plugins_loaded++;
+	LISTAPPEND(ddr_plugins, *plug, ddr_plugin_t);
 	return plug;
 }
 
@@ -660,7 +662,8 @@ void load_plugins(char* plugs, opt_t *op)
 		plugs = next;
 	}
 	if (errs) {
-		unload_plugins();
+		//unload_plugins();
+		cleanup(1);
 		exit(13);
 	}
 }
@@ -2780,7 +2783,7 @@ void populate_faultlists(const char* arg, opt_t *op)
 {
 	if (!*arg) {
 		fplog(stderr, FATAL, "Empty fault list specified\n");
-		exit(11);
+		cleanup(1); exit(11);
 	}
 	while (*arg) {
 		const char* ptr = strchr(arg, ',');
@@ -2794,7 +2797,7 @@ void populate_faultlists(const char* arg, opt_t *op)
 					 (unsigned long*)&fault.off2, &rw, &fault.rep);
 			if (err != 4) {
 				fplog(stderr, FATAL, "Could not parse fault spec %s\n", arg);
-				exit(11);
+				cleanup(1); exit(11);
 			}
 		} else
 			fault.off2 = fault.off+1;
@@ -2806,7 +2809,7 @@ void populate_faultlists(const char* arg, opt_t *op)
 			LISTAPPEND(write_faults, fault, fault_in_t);
 		else {
 			fplog(stderr, FATAL, "Need to specify r or w for X in offX/rep in %s\n", arg);
-			exit(11);
+			cleanup(1); exit(11);
 		}
 		if (ptr)
 			arg = ptr+1;
@@ -2876,8 +2879,8 @@ char* parse_opts(int argc, char* argv[], opt_t *op, dpopt_t *dop)
 			case 'A': op->nosparse = 1; op->sparse = 0; break;
 			case 'w': op->abwrerr = 1; break;
 			case 'W': op->avoidwrite = 1; break;
-			case 'h': printlonghelp(); exit(0); break;
-			case 'V': printversion(); exit(0); break;
+			case 'h': printlonghelp(); cleanup(1); exit(0); break;
+			case 'V': printversion(); cleanup(1); exit(0); break;
 			case 'v': op->quiet = 0; op->verbose = 1; break;
 			case 'q': op->verbose = 0; op->quiet = 1; break;
 			case 'c': op->nocol = !readbool(optarg); nocol = op->nocol; break;
@@ -2907,12 +2910,12 @@ char* parse_opts(int argc, char* argv[], opt_t *op, dpopt_t *dop)
 			case '4': dop->prng_frnd = 1; if (is_filename(optarg)) dop->prng_sfile = optarg; else dop->prng_seed = readint(optarg); dop->bsim715 = 1; dop->bsim715_4 = 1; break;
 			case ':': fplog(stderr, FATAL, "option %c requires an argument!\n", optopt); 
 				shortusage();
-				exit(11); break;
+				cleanup(1); exit(11); break;
 			case '?': fplog(stderr, FATAL, "unknown option %c!\n", optopt, argv[0]);
 				shortusage();
-				exit(11); break;
+				cleanup(1); exit(11); break;
 			default: fplog(stderr, FATAL, "your getopt() is buggy!\n");
-				exit(255);
+				cleanup(1); exit(255);
 		}
 	}
  
@@ -2930,7 +2933,7 @@ char* parse_opts(int argc, char* argv[], opt_t *op, dpopt_t *dop)
 		shortusage();
 		if (logfd)
 			fclose(logfd);
-		exit(12);
+		cleanup(1); exit(12);
 	}
 	/* Defaults for blocksizes */
 	if (op->softbs == 0) {
@@ -3298,7 +3301,8 @@ int main(int argc, char* argv[])
 		load_plugins(plugins, opts);
 	if (plug_not_sparse && opts->sparse) {
 		fplog(stderr, FATAL, "not all plugins handle -a/--sparse!\n");
-		unload_plugins();
+		//unload_plugins();
+		cleanup(1);
 		exit(13);
 	}
 	if (plug_not_sparse && !opts->nosparse) {
@@ -3308,17 +3312,20 @@ int main(int argc, char* argv[])
 	/* TODO: Check for supports_seek of all plugins instead */
 	if (plug_no_seek && opts->reverse) {
 		fplog(stderr, FATAL, "Plugins currently don't handle reverse\n");
-		unload_plugins();
+		//unload_plugins();
+		cleanup(1);
 		exit(13);
 	}
 	if (plugins_loaded && opts->dosplice) {
 		fplog(stderr, FATAL, "Plugins can't handle splice\n");
-		unload_plugins();
+		//unload_plugins();
+		cleanup(1);
 		exit(13);
 	}
 #else
 	if (plugins) {
 		fplog(stderr, FATAL, "Can not handle plugins in static build!\n");
+		cleanup(1);
 		exit(12);
 	}
 #endif
@@ -3326,14 +3333,16 @@ int main(int argc, char* argv[])
 	if (no_input || no_output) {
 		fplog(stderr, FATAL, "plugins that replace in/output not yet supported!\n");
 		shortusage();
-		unload_plugins();
+		//unload_plugins();
+		cleanup(1);
 		exit(12);
 	}
 
 	if (!opts->iname || !opts->oname) {
 		fplog(stderr, FATAL, "both input and output files have to be specified!\n");
 		shortusage();
-		unload_plugins();
+		//unload_plugins();
+		cleanup(1);
 		exit(12);
 	}
 
