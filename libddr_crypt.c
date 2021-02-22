@@ -442,6 +442,14 @@ int crypt_plug_release(void **stat)
 		secmem_release(state->sec);
 	else
 		return -2;
+#ifdef HAVE_ATTR_XATTR_H
+	if (state->iv_xattr_name)
+		free(state->iv_xattr_name);
+	if (state->key_xattr_name)
+		free(state->key_xattr_name);
+	if (state->salt_xattr_name)
+		free(state->salt_xattr_name);
+#endif
 	free(*stat);
 	return 0;
 }
