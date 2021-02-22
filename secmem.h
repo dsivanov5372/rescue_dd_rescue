@@ -10,8 +10,9 @@
 # include "config.h"
 #endif
 
-typedef struct _roundkey {
+typedef union _roundkey {
 	unsigned char data[16];
+	unsigned int data32[4];
 } roundkey;
 
 typedef struct _ciphblk {

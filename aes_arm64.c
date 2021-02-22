@@ -158,8 +158,8 @@ inline void AES_ARM8_EKey_DKey(const u32* ekey,
 int AES_ARM8_KeySetupDec(u32 rk[/*4*(Nr + 1)*/], const u8 cipherKey[], int keyBits, int rounds)
 {
 	/* expand the cipher key: */
-	int Nr = AES_ARM8_KeySetupEnc((u32*)crypto->xkeys, cipherKey, keyBits, rounds);
-	AES_ARM8_EKey_DKey((u32*)crypto->xkeys, rk, Nr);
+	int Nr = AES_ARM8_KeySetupEnc(crypto->xkeys.data32, cipherKey, keyBits, rounds);
+	AES_ARM8_EKey_DKey(crypto->xkeys.data32, rk, Nr);
 	return Nr;
 }
 
