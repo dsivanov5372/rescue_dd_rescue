@@ -21,7 +21,6 @@ ARCH_DECLS
 
 #include <signal.h>
 #include <setjmp.h>
-static sig_atomic_t have_feature;
 static jmp_buf sigill_jmp;
 static void ill_handler(int sig)
 {
@@ -38,6 +37,7 @@ static void ill_handler(int sig)
 
 char probe_procedure(void (*probefn)(void))
 {
+	/*static*/ sig_atomic_t have_feature;
 	signal(SIGILL, ill_handler);
 	if (setjmp(sigill_jmp) == 0) {
 		probefn();
@@ -72,7 +72,9 @@ size_t find_nonzero_rep(const unsigned char* blk, const size_t ln)
 	"	inc %%rcx	\n"
 #endif
 	"	1:		\n"
-		: "=c"(res), "=D"(blk): "0"(ln), "1"(blk): "al");
+		: "=c"(res), "=D"(blk)
+		: "0"(ln), "1"(blk), "m"(*blk)
+		: "al");
 	return ln - res;
 }
 #define HAVE_NONZERO_REP

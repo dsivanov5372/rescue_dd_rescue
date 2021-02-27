@@ -84,7 +84,7 @@ size_t find_nonzero_arm6(const unsigned char *blk, const size_t ln)
 #endif
 	"10:				\n"
 	: "=r"(res)
-	: "0"(blk), "r"(end)
+	: "0"(blk), "r"(end), "m"(*blk)
 	: "r2", "r3", "r4", "r5");
 	return res-blk;
 }
