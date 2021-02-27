@@ -37,8 +37,12 @@
 #include <netinet/in.h>	/* For ntohl/htonl */
 #include <endian.h>
 
-#ifdef HAVE_ATTR_XATTR_H
+#ifdef HAVE_SYS_XATTR_H
+#include <sys/xattr.h>
+#define HAVE_XATTR 1
+#elif defined(HAVE_ATTR_XATTR_H)
 #include <attr/xattr.h>
+#define HAVE_XATTR 1
 #endif
 // TODO: pass at runtime rather than compile time
 #define HASH_DEBUG(x) if (state->debug) x
@@ -76,7 +80,7 @@ typedef struct _hash_state {
 #endif
 	int hmacpln;
 	char xfallback;
-#if 1 //def HAVE_ATTR_XATTR_H
+#if 1 //def HAVE_XATTR
 	char chk_xattr, set_xattr, xnmalloc;
 	char* xattr_name;
 #endif
@@ -91,7 +95,7 @@ const char *hash_help = "The HASH plugin for dd_rescue calculates a cryptographi
 		":multipart=size"
 #endif
 		"\n"
-#ifdef HAVE_ATTR_XATTR_H
+#ifdef HAVE_XATTR
 		"\t:chk_xattr[=xattr_name]:set_xattr[=xattr_name]:fallb[ack][=FILE]\n"
 #endif
 		" Use algorithm=help to get a list of supported hash algorithms\n";
@@ -168,7 +172,7 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			state->append = param+7;
 		else if (!memcmp(param, "prepend=", 8))
 			state->prepend = param+8;
-#if 1 //def HAVE_ATTR_XATTR_H
+#if 1 //def HAVE_XATTR
 		else if (!memcmp(param, "chk_xattr=", 10)) {
 			state->chk_xattr = 1; state->xattr_name = param+10; }
 		else if (!strcmp(param, "chk_xattr"))
@@ -261,7 +265,7 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		FPLOG(FATAL, "No hash algorithm specified\n");
 		return --err;
 	}
-#ifdef HAVE_ATTR_XATTR_H
+#ifdef HAVE_XATTR
 	if ((state->chk_xattr || state->set_xattr) && !state->xattr_name) {
 		state->xattr_name = (char*)malloc(32);
 		state->xnmalloc = 1;
@@ -272,7 +276,7 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	}
 #endif
 	if ((!state->chkfnm || !*state->chkfnm) && (state->chkf || state->outf
-#ifdef HAVE_ATTR_XATTR_H
+#ifdef HAVE_XATTR
 				|| state->xfallback
 #endif
 			     				)) {
@@ -304,7 +308,7 @@ int hash_plug_release(void **stat)
 	if (!stat || !(*stat))
 		return -1;
 	hash_state *state = (hash_state*)*stat;
-#ifdef HAVE_ATTR_XATTR_H
+#ifdef HAVE_XATTR
 	if (state->xnmalloc)
 		free((void*)state->xattr_name);
 #endif
@@ -354,7 +358,7 @@ int hash_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 		strcat(nnm, "->");
 		strcat(nnm, opt->oname);
 		state->fname = nnm;
-#ifdef HAVE_ATTR_XATTR_H
+#ifdef HAVE_XATTR
 		if (state->chk_xattr || state->set_xattr) {
 			--err;
 			FPLOG(WARN, "Can't access xattr in the middle of a plugin chain!");
@@ -614,7 +618,7 @@ int check_chkf(hash_state *state, const char* res)
 	return 0;
 }
 
-#ifdef HAVE_ATTR_XATTR_H
+#ifdef HAVE_XATTR
 int write_xattr(hash_state* state, const char* res)
 {
 	const char* name = state->opts->oname;
@@ -745,7 +749,7 @@ int hash_close(loff_t ooff, void **stat)
 		err += check_chkf(state, res);
 	if (state->outf)
 		err += write_chkf(state, res);
-#ifdef HAVE_ATTR_XATTR_H
+#ifdef HAVE_XATTR
 	if (state->chk_xattr)
 		err += check_xattr(state, res);
 	if (state->set_xattr)

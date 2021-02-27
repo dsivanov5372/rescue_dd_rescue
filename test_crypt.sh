@@ -177,7 +177,7 @@ done
 echo "*** Salt and XAttrs ***"
 # Use random numbers and write to binary file
 enc_dec_compare dd_rescue AES192-CTR saltgen pass=PWD_:pbkdf2:saltfile=SALT
-if grep 'define HAVE_ATTR_XATTR_H 1' config.h >/dev/null 2>&1 ; then
+if grep 'define HAVE_\(SYS\|ATTR\)_XATTR_H 1' config.h >/dev/null 2>&1 ; then
   # Use random numbers and write to xattr, fall back to saltsfile
   enc_dec_compare dd_rescue AES192-CTR saltgen pass=PSWD:pbkdf2:saltxattr:sxfallback
   # Save key and IV to xattrs

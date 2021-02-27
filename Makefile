@@ -63,7 +63,7 @@ else
   HAVE_OPENSSL=0
 endif
 
-ifeq ($(shell grep 'HAVE_ATTR_XATTR_H 1' config.h >/dev/null 2>&1 && echo 1), 1)
+ifeq ($(shell grep 'HAVE_\(ATTR\|SYS\)_XATTR_H 1' config.h >/dev/null 2>&1 && echo 1), 1)
   HAVE_XATTR=1
 else
   HAVE_XATTR=0

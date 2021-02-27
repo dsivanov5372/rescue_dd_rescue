@@ -161,8 +161,12 @@ void* libfalloc = (void*)0;
 #endif
 
 /* xattrs */
-#ifdef HAVE_ATTR_XATTR_H
+#ifdef HAVE_SYS_XATTR_H
+# include <sys/xattr.h>
+# define HAVE_XATTR 1
+#elif defined(HAVE_ATTR_XATTR_H)
 # include <attr/xattr.h>
+# define HAVE_XATTR 1
 #else
 /* TODO: Could provide the prototypes for the syscalls ourselves ... */
 # warning No support for copying extended attributes / ACLs
@@ -1286,7 +1290,7 @@ int copyperm(int ifd, int ofd)
 
 /** Copy xattrs */
 int copyxattr(const char* inm, const char* onm)
-#ifdef HAVE_ATTR_XATTR_H
+#ifdef HAVE_XATTR
 {
 	char *attrs = NULL;
 	ssize_t aln = listxattr(inm, NULL, 0);
@@ -2496,7 +2500,7 @@ void printversion()
 #ifdef FITRIM
 	fprintf(stderr, "fitrim ");
 #endif
-#ifdef HAVE_ATTR_XATTR_H
+#ifdef HAVE_XATTR
 	fprintf(stderr, "xattr ");
 #endif
 #if (defined(__x86_64__) || defined(__i386__)) && !defined(NO_RDRND)
