@@ -19,10 +19,10 @@ PATH = $(shell echo $$PATH)
 #.PHONY: dd_rescue find_nonzero fmt_no fiemap file_zblock
 
 default: config.h crtbegin_so.o $(DEPS) 
-	$(MAKE) $(MAKEFLAGS) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm EXTRA_LDFLAGS="$(ATTR)" LDPIE="" $@
+	$(MAKE) $(MAKEFLAGS) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=armv6 EXTRA_LDFLAGS="$(ATTR)" LDPIE="" $@
 
 all test check strip lib static libfalloc test_aes find_nonzero sha512 sha256 sha1 md5 fiemap file_zblock: config.h crtbegin_so.o $(DEPS)
-	$(MAKE) $(MAKEFLAGS) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm EXTRA_LDFLAGS="$(ATTR)" LDPIE="" $@
+	$(MAKE) $(MAKEFLAGS) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=armv6 EXTRA_LDFLAGS="$(ATTR)" LDPIE="" $@
 
 crtbegin_so.o: $(LIBD)/crtbegin_so.o
 	ln -sf $(LIBD)/crtbegin_dynamic.o .
@@ -45,7 +45,7 @@ config:
 	$(MAKE) -f Makefile.android.arm32 config.h
 
 clean:
-	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=arm LDPIE="" $@
+	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=armv6 LDPIE="" $@
 	rm -f config.h crtbegin_dynamic.o crtbegin_static.o crtend_android.o crtend_so.o crtbegin_so.o
 
 TGT = dd_rescue libddr_null.so libddr_lzo.so libddr_hash.so libddr_crypt.so
