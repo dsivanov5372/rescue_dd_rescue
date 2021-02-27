@@ -5,6 +5,7 @@ Random ideas of future work on dd_rescue and plugins.
 * Keep track of successfully copied blocks in dd_rescue itself to ease dd_rhelp's job ...
 * ddr_hash: More optimization (ARMv8), addition of SHA-3 (and SKEIN?) algs.
 * A networking plugin that allows (mostly unprotected?) network copies via TCP.
+  This could also include support for (unencrypted) S3 protocol.
 * Leverage fault injection for more regression tests
 * Convert sparse detection into a plugin?
 * Reorganize source tree into multiple directories
