@@ -200,7 +200,10 @@ $(SRCDIR)/config.h.in: $(SRCDIR)/configure.in
 
 # The headers for x86 intrinsics cause breakage while preprocessing 
 # for dependency generation :-( Workaround ...
-DEP_SSE = -D__AES__ -D__SSE4_1__ -D__SSSE3__ -D__SSE3__ -D__SSE2__ -D__SSE__ -D__MMX__
+DEP_SSE = -D__AES__ -D__SSE4_1__ -D__SSSE3__ -D__SSE3__ -D__SSE2__ -D__SSE__ -D__MMX__ -DNO_WARN_X86_INTRINSICS
+ifneq (,$(filter $(MACH),ppc ppc64 ppc64le))
+	DEP_SSE += -maltivec
+endif
 
 # Automated dependency generation
 .dep: $(SRCDIR)/Makefile config.h $(SRCDIR)/*.h $(SRCDIR)/*.c
