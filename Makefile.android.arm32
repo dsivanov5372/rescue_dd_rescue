@@ -34,10 +34,10 @@ crtbegin_so.o: $(LIBD)/crtbegin_so.o
 config.h: crtbegin_so.o configure config.h.in # Makefile
 	PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" ./configure --host x86-64-linux-gnu
 
-config.h.in: configure.in
+config.h.in: configure.ac
 	autoheader
 
-configure: configure.in
+configure: configure.ac
 	autoconf
 
 config:

@@ -192,10 +192,10 @@ config.h: $(SRCDIR)/configure $(SRCDIR)/config.h.in
 	test -e test_lzo_fuzz.sh || ln -s $(SRCDIR)/test_lzo_fuzz.sh .
 	test -e calchmac.py || ln -s $(SRCDIR)/calchmac.py .
 
-$(SRCDIR)/configure: $(SRCDIR)/configure.in
+$(SRCDIR)/configure: $(SRCDIR)/configure.ac
 	cd $(SRCDIR) && autoconf
 
-$(SRCDIR)/config.h.in: $(SRCDIR)/configure.in
+$(SRCDIR)/config.h.in: $(SRCDIR)/configure.ac
 	cd $(SRCDIR) && autoheader
 
 # The headers for x86 intrinsics cause breakage while preprocessing 

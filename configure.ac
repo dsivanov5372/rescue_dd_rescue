@@ -79,4 +79,4 @@ AC_TRY_RUN([
 ])
 
 AC_OUTPUT
-dnl link (if needed) Makefile configure.in test_crypt.sh test_lzo_fuzz.sh
+dnl link (if needed) Makefile configure.ac test_crypt.sh test_lzo_fuzz.sh
