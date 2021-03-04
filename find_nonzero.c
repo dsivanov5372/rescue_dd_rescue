@@ -73,7 +73,7 @@ size_t find_nonzero_rep(const unsigned char* blk, const size_t ln)
 #endif
 	"	1:		\n"
 		: "=c"(res), "=D"(blk)
-		: "0"(ln), "1"(blk), "m"(*blk)
+		: "0"(ln), "1"(blk), "m"(*(const char(*)[ln])blk)
 		: "al");
 	return ln - res;
 }
