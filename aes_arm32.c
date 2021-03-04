@@ -195,8 +195,9 @@ void AES_ARM8_Encrypt(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 
 	"	veor	q0, q0, q1		\n"
 	"3:					\n"
 	"	vst1.8	{q0}, [%[ct]]		\n"
-	: [rk] "=r" (rk), [nr] "=r" (dummy1)
-	: "0" (rkeys), "1" (Nr), [pt] "r" (pt), [ct] "r" (ct)
+	: [rk] "=r" (rk), [nr] "=r" (dummy1), "=m" (*ct)
+	: "0" (rkeys), "1" (Nr), [pt] "r" (pt), [ct] "r" (ct),
+	  "m" (*(const char(*)[16*(Nr+1)])rkeys), "m" (*pt)
 	: "q0", "q1", "q2", "cc"
 	);
 	//printf("%i rounds left, %li rounds\n", Nr, (rkeys-rk)/16);
@@ -235,8 +236,9 @@ void AES_ARM8_Decrypt(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 
 	"	veor	q0, q0, q1		\n"
 	"3:					\n"
 	"	vst1.8	{q0}, [%[pt]]		\n"
-	: [rk] "=r" (rk), [nr] "=r" (dummy1)
-	: "0" (rkeys), "1" (Nr), [ct] "r" (ct), [pt] "r" (pt)
+	: [rk] "=r" (rk), [nr] "=r" (dummy1), "=m" (*pt)
+	: "0" (rkeys), "1" (Nr), [ct] "r" (ct), [pt] "r" (pt),
+	  "m" (*(const char(*)[16*(Nr+1)])rkeys), "m" (*ct)
 	: "q0", "q1", "q2", "cc"
 	);
 	//printf("%i rounds left, %li rounds\n", Nr, (rkeys-rk)/16);
@@ -300,8 +302,10 @@ void AES_ARM8_Encrypt4(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8
 	"3:					\n"
 	"	vst1.8	{q2,q3}, [%[ct]]!	\n"
 	"	vst1.8	{q4,q5}, [%[ct]]	\n"
-	: [rk] "=r" (rk), [nr] "=r" (dummy1), [pt] "=r" (dum2), [ct] "=r" (dum3)
-	: "0" (rkeys), "1" (Nr), /*[pt]*/ "2" (pt), /*[ct]*/ "3" (ct)
+	: [rk] "=r" (rk), [nr] "=r" (dummy1), [pt] "=r" (dum2), [ct] "=r" (dum3),
+	  "=m" (*ct)
+	: "0" (rkeys), "1" (Nr), /*[pt]*/ "2" (pt), /*[ct]*/ "3" (ct),
+	  "m" (*(const char(*)[16*(Nr+1)])rkeys), "m" (*pt)
 	: "q0", "q1", "q2", "q3", "q4", "q5", "cc"
 	);
 	//printf("%i rounds left, %li rounds\n", Nr, (rkeys-rk)/16);
@@ -364,8 +368,10 @@ void AES_ARM8_Decrypt4(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8
 	"3:					\n"
 	"	vst1.8	{q2,q3}, [%[pt]]!	\n"
 	"	vst1.8	{q4,q5}, [%[pt]]	\n"
-	: [rk] "=r" (rk), [nr] "=r" (dummy1), [ct] "=r" (dum2), [pt] "=r" (dum3)
-	: "0" (rkeys), "1" (Nr), /*[ct]*/ "2" (ct), /*[pt]*/ "3" (pt)
+	: [rk] "=r" (rk), [nr] "=r" (dummy1), [ct] "=r" (dum2), [pt] "=r" (dum3),
+	  "=m" (*pt)
+	: "0" (rkeys), "1" (Nr), /*[ct]*/ "2" (ct), /*[pt]*/ "3" (pt),
+	  "m" (*(const char(*)[16*(Nr+1)])rkeys), "m" (*ct)
 	: "q0", "q1", "q2", "q3", "q4", "q5", "cc"
 	);
 	//printf("%i rounds left, %li rounds\n", Nr, (rkeys-rk)/16);
@@ -409,8 +415,10 @@ void AES_ARM8_Encrypt_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const
 	"3:					\n"
 	"	veor	q3, q3, q2		\n"
 	"	vst1.8	{q3}, [%[ct]]		\n"
-	: [rk] "=r" (rk), [nr] "=r" (dummy1)
-	: "0" (rkeys), "1" (Nr), [pt] "r" (pt), [ct] "r" (ct), [iv] "r" (iv), [inc] "Q" (inc1)
+	: [rk] "=r" (rk), [nr] "=r" (dummy1),
+	  "=m" (*ct), "=m" (*iv)
+	: "0" (rkeys), "1" (Nr), [pt] "r" (pt), [ct] "r" (ct), [iv] "r" (iv), [inc] "Q" (inc1),
+	  "m" (*(const char(*)[16*(Nr+1)])rkeys), "m" (*pt)
 	: "q0", "q1", "q2", "q3", "q4", "cc"
 	);
 	//printf("%i rounds left, %li rounds\n", Nr, (rkeys-rk)/16);
@@ -491,8 +499,10 @@ void AES_ARM8_Encrypt4_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, cons
 	"	veor	q9, q9, q5		\n"
 	"	vst1.8	{q6,q7}, [%[ct]]!	\n"
 	"	vst1.8	{q8,q9}, [%[ct]]	\n"
-	: [rk] "=r" (rk), [nr] "=r" (dummy1), [pt] "=r" (dum2), [ct] "=r" (dum3)
-	: "0" (rkeys), "1" (Nr), "2" (pt), "3" (ct), [iv] "r" (iv), [inc] "Q" (inc1)
+	: [rk] "=r" (rk), [nr] "=r" (dummy1), [pt] "=r" (dum2), [ct] "=r" (dum3),
+	  "=m" (*ct), "=m" (*iv)
+	: "0" (rkeys), "1" (Nr), "2" (pt), "3" (ct), [iv] "r" (iv), [inc] "Q" (inc1),
+	  "m" (*(const char(*)[16*(Nr+1)])rkeys), "m" (*pt)
 	: "q0", "q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8", "q9", "q10", "cc"
 	);
 	//printf("%i rounds left, %li rounds\n", Nr, (rkeys-rk)/16);
@@ -547,8 +557,10 @@ void AES_ARM8_EncryptX2_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, con
 	"4:					\n"
 	"	veor	q3, q3, q2		\n"
 	"	vst1.8	{q3}, [%[ct]]		\n"
-	: [rk] "=r" (rk), [nr] "=r" (dummy1)
-	: "0" (rkeys), "1" (halfnr), [pt] "r" (pt), [ct] "r" (ct), [iv] "r" (iv), [inc] "Q" (inc1)
+	: [rk] "=r" (rk), [nr] "=r" (dummy1),
+	  "=m" (*ct), "=m" (*iv)
+	: "0" (rkeys), "1" (halfnr), [pt] "r" (pt), [ct] "r" (ct), [iv] "r" (iv), [inc] "Q" (inc1),
+	  "m" (*(const char(*)[16*(Nr+1)])rkeys), "m" (*pt)
 	: "q0", "q1", "q2", "q3", "q4", "r5", "cc"
 	);
 	//printf("%i rounds left, %li rounds\n", Nr, (rkeys-rk)/16);
@@ -639,8 +651,10 @@ void AES_ARM8_Encrypt4X2_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, co
 	"	veor	q9, q9, q5		\n"
 	"	vst1.8	{q6,q7}, [%[ct]]!	\n"
 	"	vst1.8	{q8,q9}, [%[ct]]	\n"
-	: [rk] "=r" (rk), [nr] "=r" (dummy1), [pt] "=r" (dum2), [ct] "=r" (dum3)
-	: "0" (rkeys), "1" (halfnr), "2" (pt), "3" (ct), [iv] "r" (iv), [inc] "Q" (inc1)
+	: [rk] "=r" (rk), [nr] "=r" (dummy1), [pt] "=r" (dum2), [ct] "=r" (dum3),
+	  "=m" (*ct), "=m" (*iv)
+	: "0" (rkeys), "1" (halfnr), "2" (pt), "3" (ct), [iv] "r" (iv), [inc] "Q" (inc1),
+	  "m" (*(const char(*)[16*(Nr+1)])rkeys), "m" (*pt)
 	: "q0", "q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8", "q9", "q10", "r5", "cc"
 	);
 	//printf("%i rounds left, %li rounds\n", Nr, (rkeys-rk)/16);

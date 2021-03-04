@@ -193,6 +193,7 @@ void AES_ARM8_Encrypt(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 
 	"3:					\n"
 	"	st1	{v0.16b}, [%[ct]]	\n"
 	: [rk] "=r" (rk), [nr] "=r" (dummy1), "=m" (*(char(*)[16])ct)
+	//: "0" (rkeys), "1" (Nr), [pt] "r" (pt), [ct] "r" (ct), "m" (*(const char(*)[640])rkeys), "m" (*pt)
 	: "0" (rkeys), "1" (Nr), [pt] "r" (pt), [ct] "r" (ct), "m" (*(const char(*)[16*(Nr+1)])rkeys), "m" (*(const char(*)[16])pt)
 	: "v0", "v1", "v2", "cc"
 	);
