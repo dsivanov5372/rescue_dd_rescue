@@ -34,6 +34,8 @@
 #define feof_unlocked(x) feof(x)
 #endif
 
+#define MAXHASHSLN 142
+
 #ifndef HAVE_GETLINE
 ssize_t getline(char **bf, size_t *sz, FILE *f)
 {
@@ -81,7 +83,7 @@ off_t find_chks(FILE* f, const char* nm, char* res, int wantedln)
 			if (wantedln && fwh-lnbf != wantedln)
 				continue;
 			if (res && fwh-lnbf <= 2*(int)sizeof(hash_t)+14) {
-				const int ln = MIN(142, fwh-lnbf);
+				const int ln = MIN(MAXHASHSLN, fwh-lnbf);
 				memcpy(res, lnbf, ln);
 				res[ln] = 0;
 			} else if (res)
@@ -130,7 +132,7 @@ int upd_chks(const char* cnm, const char *nm, const char *chks, int acc)
 {
 	FILE *f = fopen_chks(cnm, "r+", 0);
 	int err = 0;
-	char oldchks[144];
+	char oldchks[MAXHASHSLN+2];
 	char* bnm = basename(nm);
 	if (!f) {
 		errno = 0;
