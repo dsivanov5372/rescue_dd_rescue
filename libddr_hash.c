@@ -213,10 +213,10 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		else if (!memcmp(param, "algorithm=", 10))
 			state->alg = get_hashalg(state, param+10);
 		else if (!memcmp(param, "hmacpwd=", 8)) {
+			state->hmacpwd = (unsigned char*)malloc(MAX_HMACPWDLN);
 			state->hmacpln = strlen(param+8);
 			if (state->hmacpln >= MAX_HMACPWDLN)
 				state->hmacpln = MAX_HMACPWDLN-1;
-			state->hmacpwd = (unsigned char*)malloc(state->hmacpln+1);
 			memcpy(state->hmacpwd, param+8, state->hmacpln);
 			state->hmacpwd[state->hmacpln] = 0;
 		}
