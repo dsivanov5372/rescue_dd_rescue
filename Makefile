@@ -7,11 +7,11 @@ VERSION = 1.99.9
 DESTDIR = 
 SRCDIR = .
 
-CC = gcc
-RPM_OPT_FLAGS = -Os -Wall -g -D_FORTIFY_SOURCE=2
+CC ?= gcc
+RPM_OPT_FLAGS ?= -Os -Wall -g -D_FORTIFY_SOURCE=2
 CFLAGS = $(RPM_OPT_FLAGS) $(EXTRA_CFLAGS) -DHAVE_CONFIG_H -I .
 CFLAGS_OPT = $(CFLAGS) -O3
-INSTALL = install
+INSTALL ?= install
 INSTALLFLAGS = -s
 prefix = $(DESTDIR)/usr
 INSTALLDIR = $(prefix)/bin
