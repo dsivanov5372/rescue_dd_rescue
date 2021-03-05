@@ -1326,22 +1326,24 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 		FPLOG(DEBUG, "%Li: %02x %02x %02x %02x ... -> ",
 			currpos, bf[0], bf[1], bf[2], bf[3]);
 	if (((currpos) % BLKSZ) && state->enc) {
+		const unsigned int curroff = (unsigned int)currpos % BLKSZ;
+		const unsigned int currmininoff = (unsigned int)(currpos-state->inbuf)%BLKSZ;
 		FPLOG(WARN, "Enc alignment error! (%Li-%i)=%Li %i/%i\n", currpos, state->inbuf,
-			currpos - state->inbuf, (int)((currpos-state->inbuf)%BLKSZ),
-			(int)((currpos-state->inbuf)&0x0fUL));
+			currpos - state->inbuf, currmininoff,
+			(unsigned int)((currpos-state->inbuf)&0x0fUL));
 		/* Can only handle in CTR mode and without buffered bytes. */
 		assert(state->alg->stream->granul == 1);
 		assert(state->inbuf == 0);
-		memcpy(state->sec->databuf1+(currpos%BLKSZ), bf, BLKSZ-currpos%BLKSZ);
+		memcpy(state->sec->databuf1+curroff, bf, BLKSZ-curroff);
 		err = crypt(keys, state->alg->rounds, state->sec->iv1.data,
-			    PAD_ZERO, state->sec->databuf1, bf-(currpos%BLKSZ), BLKSZ, &olen);
+			    PAD_ZERO, state->sec->databuf1, bf-curroff, BLKSZ, &olen);
 		assert(!err);
 		assert(olen == BLKSZ);
-		i = BLKSZ-(currpos%BLKSZ);
+		i = BLKSZ-curroff;
 	} else if ((currpos-state->inbuf)%BLKSZ && !state->enc) {
 		FPLOG(WARN, "Dec alignment error! (%Li-%i)=%Li %i/%i\n", currpos, state->inbuf,
-			currpos - state->inbuf, (int)((currpos-state->inbuf)%BLKSZ),
-			(int)((currpos-state->inbuf)&0x0fUL));
+			currpos - state->inbuf, (unsigned int)((currpos-state->inbuf)%BLKSZ),
+			(unsigned int)((currpos-state->inbuf)&0x0fUL));
 		//raise(SIGQUIT);
 	}
 	if (!state->enc && !state->rev)
