@@ -213,18 +213,22 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		else if (!memcmp(param, "algorithm=", 10))
 			state->alg = get_hashalg(state, param+10);
 		else if (!memcmp(param, "hmacpwd=", 8)) {
-			state->hmacpwd = (unsigned char*)malloc(MAX_HMACPWDLN);
-			strncpy((char*)state->hmacpwd, param+8, MAX_HMACPWDLN);
 			state->hmacpln = strlen(param+8);
+			if (state->hmacpln >= MAX_HMACPWDLN)
+				state->hmacpln = MAX_HMACPWDLN-1;
+			state->hmacpwd = (unsigned char*)malloc(state->hmacpln+1);
+			memcpy(state->hmacpwd, param+8, state->hmacpln);
+			state->hmacpwd[state->hmacpln] = 0;
 		}
 		else if (!memcmp(param, "hmacpwdfd=", 10)) {
 			int hfd = atol(param+10);
 			state->hmacpwd = (unsigned char*)malloc(MAX_HMACPWDLN);
+			state->hmacpwd[MAX_HMACPWDLN-1] = 0;
 			if (hfd == 0 && isatty(hfd)) {
 				FPLOG(INPUT, "%s", "Enter HMAC password: ");
-				state->hmacpln = hidden_input(hfd, (char*)state->hmacpwd, MAX_HMACPWDLN, 1);
+				state->hmacpln = hidden_input(hfd, (char*)state->hmacpwd, MAX_HMACPWDLN-1, 1);
 			} else
-				state->hmacpln = read(hfd, state->hmacpwd, MAX_HMACPWDLN);
+				state->hmacpln = read(hfd, state->hmacpwd, MAX_HMACPWDLN-1);
 			if (state->hmacpln <= 0) {
 				FPLOG(FATAL, "No HMAC password entered!\n");
 				--err;
@@ -239,7 +243,8 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 				continue;
 			}
 			state->hmacpwd = (unsigned char*)malloc(MAX_HMACPWDLN);
-			state->hmacpln = fread(state->hmacpwd, 1, MAX_HMACPWDLN, f);
+			state->hmacpwd[MAX_HMACPWDLN-1] = 0;
+			state->hmacpln = fread(state->hmacpwd, 1, MAX_HMACPWDLN-1, f);
 			if (state->hmacpln <= 0) {
 				FPLOG(FATAL, "No HMAC pwd contents found in %s!\n", param+10);
 				--err;
