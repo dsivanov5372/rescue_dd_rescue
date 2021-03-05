@@ -179,7 +179,7 @@ int set_alg(crypt_state* state, const char* algnm)
 	return 0;
 }
 
-#define BLKSZ (state->alg? state->alg->blocksize: 16)
+#define BLKSZ (state->alg? state->alg->blocksize: 16UL)
 
 int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 {
@@ -1323,12 +1323,12 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 		}
 	}
 	if (0 && state->debug)
-		FPLOG(DEBUG, "%zi: %02x %02x %02x %02x ... -> ",
+		FPLOG(DEBUG, "%Li: %02x %02x %02x %02x ... -> ",
 			currpos, bf[0], bf[1], bf[2], bf[3]);
 	if (((currpos) % BLKSZ) && state->enc) {
-		FPLOG(WARN, "Enc alignment error! (%zi-%i)=%zi %i/%i\n", currpos, state->inbuf,
-			currpos - state->inbuf,
-			(currpos-state->inbuf)%BLKSZ, (currpos-state->inbuf)&0x0f);
+		FPLOG(WARN, "Enc alignment error! (%Li-%i)=%Li %i/%i\n", currpos, state->inbuf,
+			currpos - state->inbuf, (int)((currpos-state->inbuf)%BLKSZ),
+			(int)((currpos-state->inbuf)&0x0fUL));
 		/* Can only handle in CTR mode and without buffered bytes. */
 		assert(state->alg->stream->granul == 1);
 		assert(state->inbuf == 0);
@@ -1339,9 +1339,9 @@ unsigned char* crypt_blk_cb(fstate_t *fst, unsigned char* bf,
 		assert(olen == BLKSZ);
 		i = BLKSZ-(currpos%BLKSZ);
 	} else if ((currpos-state->inbuf)%BLKSZ && !state->enc) {
-		FPLOG(WARN, "Dec alignment error! (%zi-%i)=%zi %i/%i\n", currpos, state->inbuf,
-			currpos - state->inbuf,
-			(currpos-state->inbuf)%BLKSZ, (currpos-state->inbuf)&0x0f);
+		FPLOG(WARN, "Dec alignment error! (%Li-%i)=%Li %i/%i\n", currpos, state->inbuf,
+			currpos - state->inbuf, (int)((currpos-state->inbuf)%BLKSZ),
+			(int)((currpos-state->inbuf)&0x0fUL));
 		//raise(SIGQUIT);
 	}
 	if (!state->enc && !state->rev)
