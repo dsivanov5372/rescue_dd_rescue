@@ -1,9 +1,14 @@
-AC_INIT(dd_rescue, 1.99, kurt@garloff.de)
-AC_CONFIG_HEADER(config.h)
+AC_INIT([dd_rescue],[1.99],[kurt@garloff.de])
+AC_CONFIG_HEADERS(config.h)
 AC_PROG_CC
 AC_C_CONST
 AC_C_INLINE
-AC_HEADER_STDC
+# Autoupdate added the next two lines to ensure that your configure
+# script's behavior did not change.  They are probably safe to remove.
+AC_CHECK_INCLUDES_DEFAULT
+AC_PROG_EGREP
+
+#AC_CHECK_HEADERS([inttypes.h locale.h stddef.h stdint.h])
 #AC_PROG_INSTALL
 #CFLAGS="$CFLAGS -DHAVE_CONFIG_H"
 AC_CHECK_HEADERS([fallocate.h dlfcn.h unistd.h sys/xattr.h attr/xattr.h sys/acl.h sys/ioctl.h endian.h linux/fs.h linux/fiemap.h stdint.h lzo/lzo1x.h openssl/evp.h linux/random.h sys/random.h malloc.h sched.h sys/statvfs.h sys/resource.h])
@@ -43,13 +48,13 @@ CFLAGS="$CFLAGS -D_FORTIFY_SOURCE=2 -fPIE -pie -rdynamic"
 dnl ***************************************************************************
 dnl Check for support of rep nop
 AC_MSG_CHECKING(whether asm rep nop is supported)
-AC_TRY_RUN([
+AC_RUN_IFELSE([AC_LANG_SOURCE([[
 	int main() {
 	int err = 0;
 	asm volatile ("rep nop":::"memory");
 	return err;
 	}
-],[
+]])],[
 	AC_MSG_RESULT(yes)
 	AC_DEFINE_UNQUOTED([HAVE_REP_NOP], 1,
 		[check whether asm rep nop works])
@@ -62,13 +67,13 @@ AC_TRY_RUN([
 dnl ***************************************************************************
 dnl Check for support of rep nop
 AC_MSG_CHECKING(whether asm lfence is supported)
-AC_TRY_RUN([
+AC_RUN_IFELSE([AC_LANG_SOURCE([[
 	int main() {
 	int err = 0;
 	asm volatile ("lfence":::"memory");
 	return err;
 	}
-],[
+]])],[
 	AC_MSG_RESULT(yes)
 	AC_DEFINE_UNQUOTED([HAVE_LFENCE], 1,
 		[check whether asm lfence works])
