@@ -835,12 +835,11 @@ void AESNI_CTR_Prep_2(const unsigned char* iv, const unsigned char* nonce,
 /* CTR is big-endian */
 void AESNI_CTR_Prep(const unsigned char* iv, unsigned char* ctr, unsigned long long val)
 {
-	__m128i BSWAP_EPI64, VAL, tmp/*, MSK*/;
-	VAL = _mm_set_epi64x(val, 0);
-	//MSK = _mm_set_epi32(0xffffffff, 0, 0xffffffff, 0xffffffff);
-	BSWAP_EPI64 = _mm_setr_epi8(7,6,5,4,3,2,1,0,15,14,13,12,11,10,9,8); 
-	
+	__m128i VAL, tmp/*, MSK*/;
 	tmp = _mm_loadu_si128((__m128i*)iv);
+	//MSK = _mm_set_epi32(0xffffffff, 0, 0xffffffff, 0xffffffff);
+	const __m128i BSWAP_EPI64 = _mm_setr_epi8(7,6,5,4,3,2,1,0,15,14,13,12,11,10,9,8); 
+	VAL = _mm_set_epi64x(val, 0);
 	tmp = _mm_shuffle_epi8(tmp, BSWAP_EPI64);
 	//tmp = _mm_and_si128(tmp, MSK);
 	tmp = _mm_add_epi64(tmp, VAL);
@@ -849,7 +848,7 @@ void AESNI_CTR_Prep(const unsigned char* iv, unsigned char* ctr, unsigned long l
 	static int c = 0;
 	if (!c++) {
 		_debug_print(tmp);
-		__m128i ONE = _mm_set_epi32(0, 1, 0, 0);
+		const __m128i ONE = _mm_set_epi32(0, 1, 0, 0);
 		tmp = _mm_add_epi64(tmp, ONE);
 		tmp = _mm_shuffle_epi8(tmp, BSWAP_EPI64);
 		_debug_print(tmp);
@@ -864,26 +863,29 @@ int AESNI_CTR_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt,
 		 	 const unsigned char* in, unsigned char* out,
 			 ssize_t len)
 {
-	__m128i ONE = _mm_set_epi32(0, 1, 0, 0);
-	__m128i BSWAP_EPI64 = _mm_setr_epi8(7,6,5,4,3,2,1,0,15,14,13,12,11,10,9,8); 
 	__m128i cblk = _mm_loadu_si128((__m128i*)ctr);
+	const __m128i BSWAP_EPI64 = _mm_setr_epi8(7,6,5,4,3,2,1,0,15,14,13,12,11,10,9,8);
+	const __m128i ONE = _mm_set_epi32(0, 1, 0, 0);
+	const __m128i TWO = _mm_set_epi32(0, 2, 0, 0);
 	while (len >= 8*SIZE128) {
+		/* Prepare CTR (IV) values */
 		__m128i tmp0 = _mm_shuffle_epi8(cblk, BSWAP_EPI64);
-		cblk = _mm_add_epi64(cblk, ONE);
-		__m128i tmp1 = _mm_shuffle_epi8(cblk, BSWAP_EPI64);
-		cblk = _mm_add_epi64(cblk, ONE);
+		__m128i tmp1 = _mm_add_epi64(cblk, ONE);
+		cblk = _mm_add_epi64(cblk, TWO);
+		tmp1 = _mm_shuffle_epi8(tmp1, BSWAP_EPI64);
 		__m128i tmp2 = _mm_shuffle_epi8(cblk, BSWAP_EPI64);
-		cblk = _mm_add_epi64(cblk, ONE);
-		__m128i tmp3 = _mm_shuffle_epi8(cblk, BSWAP_EPI64);
-		cblk = _mm_add_epi64(cblk, ONE);
+		__m128i tmp3 = _mm_add_epi64(cblk, ONE);
+		cblk = _mm_add_epi64(cblk, TWO);
+		tmp3 = _mm_shuffle_epi8(tmp3, BSWAP_EPI64);
 		__m128i tmp4 = _mm_shuffle_epi8(cblk, BSWAP_EPI64);
-		cblk = _mm_add_epi64(cblk, ONE);
-		__m128i tmp5 = _mm_shuffle_epi8(cblk, BSWAP_EPI64);
-		cblk = _mm_add_epi64(cblk, ONE);
+		__m128i tmp5 = _mm_add_epi64(cblk, ONE);
+		cblk = _mm_add_epi64(cblk, TWO);
+		tmp5 = _mm_shuffle_epi8(tmp5, BSWAP_EPI64);
 		__m128i tmp6 = _mm_shuffle_epi8(cblk, BSWAP_EPI64);
-		cblk = _mm_add_epi64(cblk, ONE);
-		__m128i tmp7 = _mm_shuffle_epi8(cblk, BSWAP_EPI64);
-		cblk = _mm_add_epi64(cblk, ONE);
+		__m128i tmp7 = _mm_add_epi64(cblk, ONE);
+		cblk = _mm_add_epi64(cblk, TWO);
+		tmp7 = _mm_shuffle_epi8(tmp7, BSWAP_EPI64);
+		/* Encrypt 8 IVs */
 		crypt8(&tmp0, &tmp1, &tmp2, &tmp3, &tmp4, &tmp5, &tmp6, &tmp7, key, rounds);
 		tmp0 = _mm_xor_si128(tmp0, _mm_loadu_si128((__m128i*)in));
 		tmp1 = _mm_xor_si128(tmp1, _mm_loadu_si128((__m128i*)in+1));
@@ -916,10 +918,11 @@ int AESNI_CTR_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt,
 			_mm_storeu_si128((__m128i*)obuf, tmp);
 			memcpy(out, obuf, len);
 		} else {
-			cblk = _mm_add_epi64(cblk, ONE);
 			tmp = _mm_xor_si128(tmp, _mm_loadu_si128((__m128i*)in));
 			_mm_storeu_si128((__m128i*)out, tmp);
 		}
+		/* FIXME: We had only increased CTR for complete blocks before. Why? */
+		cblk = _mm_add_epi64(cblk, ONE);
 		len -= SIZE128;
 		in  += SIZE128;
 		out += SIZE128;
