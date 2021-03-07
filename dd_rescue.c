@@ -8,7 +8,7 @@
  * for rescueing data of crashed disk, and that's the reason it has been
  * written by me.
  *
- * Copyright (C) Kurt Garloff <kurt@garloff.de>, 11/1997 -- 02/2013
+ * Copyright (C) Kurt Garloff <kurt@garloff.de>, 11/1997 -- 03/2021
  *
  * Improvements from LAB Valentin, see
  * http://www.kalysto.org/utilities/dd_rhelp/index.en.html
@@ -33,7 +33,6 @@
  * TODO:
  * - Use termcap to fetch cursor up/down and color codes
  * - Display more infos on errors by collecting info from syslog
- * - Option to send TRIM on zeroed file blocks
  * - Plugins for compression/decompression other than liblzo2
  * - Reed-Solomon/Erasure codes a la par2
  */

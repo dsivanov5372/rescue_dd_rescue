@@ -1,8 +1,8 @@
 # Makefile for dd_rescue
 # (c) garloff@suse.de, 99/10/09, GNU GPL
-# (c) kurt@garloff.de, 2010 -- 2015, GNU GPL v2 or v3
+# (c) kurt@garloff.de, 2010 -- 2021, GNU GPL v2 or v3
 
-VERSION = 1.99.9
+VERSION = 1.99.10
 
 DESTDIR = 
 SRCDIR = .
