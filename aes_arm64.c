@@ -415,7 +415,7 @@ void AES_ARM8_Encrypt4_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, cons
 	"	add	v4.2d, v5.2d, v7.2d	\n"
 	"	add	v5.2d, v5.2d, v8.2d	\n"
 	"	//prfm	PLDL1STRM, [%[pt],#64]	\n"
-	"	rev64	v9.16b, v9.16b	\n"
+	"	rev64	v9.16b, v9.16b		\n"
 	"	rev64	v3.16b, v3.16b		\n"
 	"	rev64	v4.16b, v4.16b		\n"
 	"	rev64	v5.16b, v5.16b		\n"
