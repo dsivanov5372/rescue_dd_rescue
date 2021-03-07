@@ -361,10 +361,11 @@ void AES_ARM8_Encrypt_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const
 	"	ld1	{v2.16b}, [%[iv]]	\n"
 	"	//prfm	PLDL1STRM, [%[pt]]	\n"
 	"	ld1	{v3.2d}, %[inc]		\n"
+	"	mov	w7, %w[nr]		\n"
 	"	rev64	v4.16b, v2.16b		\n"
 	"	ld1	{v0.4s, v1.4s}, [%[rk]], #32	\n"
 	"	add	v4.2d, v4.2d, v3.2d	\n"
-	"	subs	%w[nr], %w[nr], #2	\n"
+	"	subs	w7, w7, #2		\n"
 	"	rev64	v4.16b, v4.16b		\n"
 	"	ld1	{v3.16b}, [%[pt]]	\n"
 	"	st1	{v4.16b}, [%[iv]]	\n"
@@ -376,7 +377,7 @@ void AES_ARM8_Encrypt_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const
 	"	b.eq	2f			\n"
 	"	aese	v2.16b, v1.16b		\n"
 	"	aesmc	v2.16b, v2.16b		\n"
-	"	subs	%w[nr], %w[nr], #2	\n"
+	"	subs	w7, w7, #2		\n"
 	"	ld1	{v1.4s}, [%[rk]], #16	\n"
 	"	b.pl	1b			\n"
 	"					\n"
@@ -389,10 +390,10 @@ void AES_ARM8_Encrypt_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const
 	"3:					\n"
 	"	eor	v3.16b, v3.16b, v2.16b	\n"
 	"	st1	{v3.16b}, [%[ct]]	\n"
-	: [rk] "=r" (rkeys), [nr] "=r" (Nr), "=m" (*ct), "=m" (*iv)
-	: "0" (rkeys), "1" (Nr), [pt] "r" (pt), [ct] "r" (ct), [iv] "r" (iv),
+	: [rk] "=r" (rkeys), "=m" (*ct), "=m" (*iv)
+	: "0" (rkeys), [nr] "r" (Nr), [pt] "r" (pt), [ct] "r" (ct), [iv] "r" (iv),
 	  [inc] "Q" (inc1), "m" (*(const char(*)[16*(Nr+1)])rkeys), "m" (*pt)
-	: "v0", "v1", "v2", "v3", "v4", "cc"
+	: "v0", "v1", "v2", "v3", "v4", "w7", "cc"
 	);
 	//printf("%i rounds left, %li rounds\n", Nr, (rkeys-rk)/16);
 	return;
@@ -404,10 +405,11 @@ void AES_ARM8_Encrypt4_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, cons
 	asm volatile(
 	"	ld1	{v2.16b}, [%[iv]]	\n"
 	"	ld1	{v6.2d-v9.2d}, [%[inc]] \n"
+	"	mov	w7, %w[nr]		\n"
 	"	//prfm	PLDL1STRM, [%[pt]]	\n"
 	"	rev64	v5.16b, v2.16b		\n"
 	"	ld1	{v0.4s, v1.4s}, [%[rk]], #32	\n"
-	"	subs	%w[nr], %w[nr], #2	\n"
+	"	subs	w7, w7, #2		\n"
 	"	add	v9.2d, v5.2d, v9.2d	\n"
 	"	add	v3.2d, v5.2d, v6.2d	\n"
 	"	add	v4.2d, v5.2d, v7.2d	\n"
@@ -431,7 +433,7 @@ void AES_ARM8_Encrypt4_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, cons
 	"	aesmc	v5.16b, v5.16b		\n"
 	"	ld1	{v0.4s}, [%[rk]], #16	\n"
 	"	b.eq	2f			\n"
-	"	subs	%w[nr], %w[nr], #2	\n"
+	"	subs	w7, w7, #2		\n"
 	"	aese	v2.16b, v1.16b		\n"
 	"	aese	v3.16b, v1.16b		\n"
 	"	aese	v4.16b, v1.16b		\n"
@@ -467,12 +469,12 @@ void AES_ARM8_Encrypt4_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, cons
 	"	eor	v8.16b, v8.16b, v4.16b	\n"
 	"	eor	v9.16b, v9.16b, v5.16b	\n"
 	"	st1	{v6.16b-v9.16b}, [%[ct]]	\n"
-	: [rk] "=r" (rkeys), [nr] "=r" (Nr), "=m" (*ct), "=m" (*iv)
-	: "0" (rkeys), "1" (Nr), [pt] "r" (pt), [ct] "r" (ct), [iv] "r" (iv),
+	: [rk] "=r" (rkeys), "=m" (*ct), "=m" (*iv)
+	: "0" (rkeys), [nr] "r" (Nr), [pt] "r" (pt), [ct] "r" (ct), [iv] "r" (iv),
 	  //[inc4] "Q" (inc4), [inc1] "Q" (inc1), [inc2] "Q" (inc2), [inc3] "Q" (inc3),
 	  [inc] "r" (inc),
 	  "m" (*(const char(*)[16*(Nr+1)])rkeys), "m" (*pt)
-	: "v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "cc"
+	: "v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "w7", "cc"
 	);
 	//printf("%i rounds left, %li rounds\n", Nr, (rkeys-rk)/16);
 	return;
@@ -492,7 +494,7 @@ void AES_ARM8_EncryptX2_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, con
 	"	subs	%w[nr], %w[nr], #2	\n"
 	"	rev64	v4.16b, v4.16b		\n"
 	"	ld1	{v3.16b}, [%[pt]]	\n"
-	"	mov	w5, %w[nr]		\n"
+	"	mov	w7, %w[nr]		\n"
 	"	st1	{v4.16b}, [%[iv]]	\n"
 	".align 4				\n"
 	"1:					\n"
@@ -513,11 +515,11 @@ void AES_ARM8_EncryptX2_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, con
 	"	aese	v2.16b, v1.16b		\n"
 	"	eor	v2.16b, v2.16b, v0.16b	\n"
 	"3:					\n"
-	"	cmp	w5, #0			\n"
+	"	cmp	w7, #0			\n"
 	"	b.eq	4f			\n"
 	"	ld1	{v0.4s, v1.4s}, [%[rk]], #32	\n"
-	"	mov	%w[nr], w5		\n"
-	"	mov	w5, #0			\n"
+	"	mov	%w[nr], w7		\n"
+	"	mov	w7, #0			\n"
 	"	b 	1b			\n"
 	"4:					\n"
 	"	eor	v3.16b, v3.16b, v2.16b	\n"
@@ -525,7 +527,7 @@ void AES_ARM8_EncryptX2_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, con
 	: [rk] "=r" (rkeys), [nr] "=r" (halfnr), "=m" (*ct), "=m" (*iv)
 	: "0" (rkeys), "1" (halfnr), [pt] "r" (pt), [ct] "r" (ct), [iv] "r" (iv),
 	  [inc] "Q" (inc1), "m" (*(const char(*)[16*(Nr+1)])rkeys), "m" (*pt)
-	: "v0", "v1", "v2", "v3", "v4", "w5", "cc"
+	: "v0", "v1", "v2", "v3", "v4", "w7", "cc"
 	);
 	//printf("%i rounds left, %li rounds\n", Nr, (rkeys-rk)/16);
 	return;
@@ -547,7 +549,7 @@ void AES_ARM8_Encrypt4X2_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, co
 	"	add	v3.2d, v5.2d, v6.2d	\n"
 	"	add	v4.2d, v5.2d, v7.2d	\n"
 	"	add	v5.2d, v5.2d, v8.2d	\n"
-	"	mov	w5, %w[nr]		\n"
+	"	mov	w7, %w[nr]		\n"
 	"	rev64	v9.16b, v9.16b		\n"
 	"	rev64	v3.16b, v3.16b		\n"
 	"	rev64	v4.16b, v4.16b		\n"
@@ -598,11 +600,11 @@ void AES_ARM8_Encrypt4X2_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, co
 	"	eor	v4.16b, v4.16b, v0.16b	\n"
 	"	eor	v5.16b, v5.16b, v0.16b	\n"
 	"3:					\n"
-	"	cmp	w5, #0			\n"
+	"	cmp	w7, #0			\n"
 	"	b.eq	4f			\n"
 	"	ld1	{v0.4s, v1.4s}, [%[rk]], #32	\n"
-	"	mov	%w[nr], w5		\n"
-	"	mov	w5, #0			\n"
+	"	mov	%w[nr], w7		\n"
+	"	mov	w7, #0			\n"
 	"	b	1b			\n"
 	"4:					\n"
 	"	eor	v6.16b, v6.16b, v2.16b	\n"
@@ -613,7 +615,7 @@ void AES_ARM8_Encrypt4X2_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, co
 	: [rk] "=r" (rkeys), [nr] "=r" (halfnr), "=m" (*ct), "=m" (*iv)
 	: "0" (rkeys), "1" (halfnr), [pt] "r" (pt), [ct] "r" (ct), [iv] "r" (iv),
 	  [inc] "r" (inc), "m" (*(const char(*)[16*(Nr+1)])rkeys), "m" (*pt)
-	: "v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "w5", "cc"
+	: "v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "w7", "cc"
 	);
 	//printf("%i rounds left, %li rounds\n", Nr, (rkeys-rk)/16);
 	return;
