@@ -418,8 +418,8 @@ void AES_ARM8_Encrypt4_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, cons
 	const unsigned long long inc[] = {0ULL, 1ULL, 0ULL, 2ULL, 0ULL, 3ULL, 0ULL, 4ULL};
 	asm volatile(
 	"	vld1.64	{q2}, [%[iv]]		\n"
-	"	vld1.64	{q6, q7}, %[inc]!	\n"
-	"	vld1.64	{q8, q9}, %[inc]	\n"
+	"	vld1.64	{q6, q7}, [%[inc]]!	\n"
+	"	vld1.64	{q8, q9}, [%[inc]]	\n"
 	"	mov	r7, %r[nr]		\n"
 	"	vrev64.8	q5, q2		\n"
 	"	vld1.8	{q0, q1}, [%[rk]]!	\n"
@@ -558,8 +558,8 @@ void AES_ARM8_Encrypt4X2_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, co
 	const unsigned long long inc[] = {0ULL, 1ULL, 0ULL, 2ULL, 0ULL, 3ULL, 0ULL, 4ULL};
 	asm volatile(
 	"	vld1.64	{q2}, [%[iv]]		\n"
-	"	vld1.64	{q6,q7}, %[inc]!	\n"
-	"	vld1.64	{q8,q9}, %[inc]		\n"
+	"	vld1.64	{q6,q7}, [%[inc]]!	\n"
+	"	vld1.64	{q8,q9}, [%[inc]]	\n"
 	"	vrev64.8	q5, q2		\n"
 	"	vld1.8	{q0, q1}, [%[rk]]!	\n"
 	"	//prfm	PLDL1STRM, [%[pt]]	\n"
