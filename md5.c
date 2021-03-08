@@ -134,7 +134,7 @@ void md5_64(const uint8_t *ptr, hash_t *ctx)
 
 void md5_init(hash_t *ctx)
 {
-	memset((char*)ctx, 0, sizeof(hash_t));
+	memset((char*)ctx+16, 0, sizeof(hash_t)-16);
 	ctx->md5_h[0] = 0x67452301;
 	ctx->md5_h[1] = 0xefcdab89;
 	ctx->md5_h[2] = 0x98badcfe;

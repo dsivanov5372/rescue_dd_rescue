@@ -33,7 +33,7 @@ Note 4: Big-endian convention is used when expressing the constants in this pseu
  */
 void sha256_init(hash_t *ctx)
 {
-	memset((uint8_t*)ctx, 0, sizeof(hash_t));
+	memset((uint8_t*)ctx+32, 0, sizeof(hash_t)-32);
 	ctx->sha256_h[0] = 0x6a09e667;
 	ctx->sha256_h[1] = 0xbb67ae85;
 	ctx->sha256_h[2] = 0x3c6ef372;
@@ -46,7 +46,7 @@ void sha256_init(hash_t *ctx)
 
 void sha224_init(hash_t *ctx)
 {
-	memset((uint8_t*)ctx, 0, sizeof(hash_t));
+	memset((uint8_t*)ctx+32, 0, sizeof(hash_t)-32);
 	ctx->sha256_h[0] = 0xc1059ed8;
 	ctx->sha256_h[1] = 0x367cd507;
 	ctx->sha256_h[2] = 0x3070dd17;

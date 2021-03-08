@@ -807,9 +807,9 @@ int  AESNI_CBC_Decrypt( const unsigned char* key, unsigned int rounds,
 void AESNI_CTR_Prep_2(const unsigned char* iv, const unsigned char* nonce,
 		      unsigned char* ctr, unsigned long long val)
 {
-	__m128i BSWAP_EPI64, VAL, tmp;
+	__m128i VAL, tmp;
 	VAL = _mm_set_epi64x(val, 0);
-	BSWAP_EPI64 = _mm_setr_epi8(7,6,5,4,3,2,1,0,15,14,13,12,11,10,9,8); 
+	/*static*/ const __m128i BSWAP_EPI64 = _mm_setr_epi8(7,6,5,4,3,2,1,0,15,14,13,12,11,10,9,8);
 	
 	tmp = _mm_setzero_si128();
 	tmp = _mm_insert_epi64(tmp, *(unsigned long long*)iv, 1);
@@ -838,7 +838,7 @@ void AESNI_CTR_Prep(const unsigned char* iv, unsigned char* ctr, unsigned long l
 	__m128i VAL, tmp/*, MSK*/;
 	tmp = _mm_loadu_si128((__m128i*)iv);
 	//MSK = _mm_set_epi32(0xffffffff, 0, 0xffffffff, 0xffffffff);
-	const __m128i BSWAP_EPI64 = _mm_setr_epi8(7,6,5,4,3,2,1,0,15,14,13,12,11,10,9,8); 
+	/*static*/ const __m128i BSWAP_EPI64 = _mm_setr_epi8(7,6,5,4,3,2,1,0,15,14,13,12,11,10,9,8);
 	VAL = _mm_set_epi64x(val, 0);
 	tmp = _mm_shuffle_epi8(tmp, BSWAP_EPI64);
 	//tmp = _mm_and_si128(tmp, MSK);
@@ -864,9 +864,9 @@ int AESNI_CTR_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt,
 			 ssize_t len)
 {
 	__m128i cblk = _mm_loadu_si128((__m128i*)ctr);
-	const __m128i BSWAP_EPI64 = _mm_setr_epi8(7,6,5,4,3,2,1,0,15,14,13,12,11,10,9,8);
-	const __m128i ONE = _mm_set_epi32(0, 1, 0, 0);
-	const __m128i TWO = _mm_set_epi32(0, 2, 0, 0);
+	/*static*/ const __m128i BSWAP_EPI64 = _mm_setr_epi8(7,6,5,4,3,2,1,0,15,14,13,12,11,10,9,8);
+	/*static*/ const __m128i ONE = _mm_set_epi32(0, 1, 0, 0);
+	/*static*/ const __m128i TWO = _mm_set_epi32(0, 2, 0, 0);
 	while (len >= 8*SIZE128) {
 		/* Prepare CTR (IV) values */
 		__m128i tmp0 = _mm_shuffle_epi8(cblk, BSWAP_EPI64);
@@ -947,8 +947,8 @@ void AESNI_CTR_Crypt4(const unsigned char* in, unsigned char* out,
 		     unsigned char* ctr,
 		     ssize_t len, const unsigned char* key, unsigned int rounds)
 {
-	__m128i ONE = _mm_set_epi32(0, 1, 0, 0);
-	__m128i BSWAP_EPI64 = _mm_setr_epi8(7,6,5,4,3,2,1,0,15,14,13,12,11,10,9,8); 
+	/*static*/ const __m128i ONE = _mm_set_epi32(0, 1, 0, 0);
+	/*static*/ const __m128i BSWAP_EPI64 = _mm_setr_epi8(7,6,5,4,3,2,1,0,15,14,13,12,11,10,9,8);
 	__m128i cblk = _mm_loadu_si128((__m128i*)ctr);
 	while (len >= 4*SIZE128) {
 		__m128i tmp0 = _mm_shuffle_epi8(cblk, BSWAP_EPI64);
@@ -995,8 +995,8 @@ void AESNI_CTR_Crypt_old(const unsigned char* in, unsigned char* out,
 		         unsigned char* ctr,
 		         ssize_t len, const unsigned char* key, unsigned int rounds)
 {
-	__m128i ONE = _mm_set_epi32(0, 1, 0, 0);
-	__m128i BSWAP_EPI64 = _mm_setr_epi8(7,6,5,4,3,2,1,0,15,14,13,12,11,10,9,8); 
+	/*static*/ const __m128i ONE = _mm_set_epi32(0, 1, 0, 0);
+	/*static*/ const __m128i BSWAP_EPI64 = _mm_setr_epi8(7,6,5,4,3,2,1,0,15,14,13,12,11,10,9,8);
 	__m128i cblk = _mm_loadu_si128((__m128i*)ctr);
 	/* TODO: We could process 4 blocks at once here as well */
 	while (len >= SIZE128) {
