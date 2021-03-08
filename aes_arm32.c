@@ -368,9 +368,11 @@ void AES_ARM8_Decrypt4(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8
 	return;
 }
 
+static const unsigned long long inc1234[] = {0ULL, 1ULL, 0ULL, 2ULL, 0ULL, 3ULL, 0ULL, 4ULL};
+
 void AES_ARM8_Encrypt_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 pt[16], u8 ct[16], u8 iv[16])
 {
-	const unsigned long long inc1[] = {0ULL, 1ULL};
+	static const unsigned long long inc1[] = {0ULL, 1ULL};
 	asm volatile(
 	"	vld1.64	{q2}, [%[iv]]		\n"
 	"	vld1.64	{q4}, %[inc]		\n"
@@ -405,7 +407,8 @@ void AES_ARM8_Encrypt_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const
 	"	vst1.8	{q3}, [%[ct]]		\n"
 	: [rk] "=r" (rkeys),
 	  "=m" (*ct), "=m" (*iv)
-	: "0" (rkeys), [nr] "r" (Nr), [pt] "r" (pt), [ct] "r" (ct), [iv] "r" (iv), [inc] "Q" (inc1),
+	: "0" (rkeys), [nr] "r" (Nr), [pt] "r" (pt), [ct] "r" (ct),
+	  [iv] "r" (iv), [inc] "Q" (inc1),
 	  "m" (*(const char(*)[16*(Nr+1)])rkeys), "m" (*pt)
 	: "q0", "q1", "q2", "q3", "q4", "r7", "cc"
 	);
@@ -415,7 +418,6 @@ void AES_ARM8_Encrypt_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const
 
 void AES_ARM8_Encrypt4_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 pt[64], u8 ct[64], u8 iv[16])
 {
-	const unsigned long long inc[] = {0ULL, 1ULL, 0ULL, 2ULL, 0ULL, 3ULL, 0ULL, 4ULL};
 	asm volatile(
 	"	vld1.64	{q2}, [%[iv]]		\n"
 	"	vld1.64	{q6, q7}, [%[inc]]!	\n"
@@ -488,7 +490,8 @@ void AES_ARM8_Encrypt4_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, cons
 	"	vst1.8	{q8,q9}, [%[ct]]	\n"
 	: [rk] "=r" (rkeys), [nr] "=r" (Nr), [pt] "=r" (pt), [ct] "=r" (ct),
 	  "=m" (*ct), "=m" (*iv)
-	: "0" (rkeys), "1" (Nr), "2" (pt), "3" (ct), [iv] "r" (iv), [inc] "r" (inc),
+	: "0" (rkeys), "1" (Nr), "2" (pt), "3" (ct), [iv] "r" (iv),
+	  [inc] "r" (inc1234), "m" (*inc1234),
 	  "m" (*(const char(*)[16*(Nr+1)])rkeys), "m" (*pt)
 	: "q0", "q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8", "q9", "r7", "cc"
 	);
@@ -501,7 +504,7 @@ void AES_ARM8_EncryptX2_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, con
 {
 	assert(Nr > 4 && !(Nr%2));
 	uint halfnr = Nr/2;
-	const unsigned long long inc1[] = {0ULL, 1ULL};
+	static const unsigned long long inc1[] = {0ULL, 1ULL};
 	asm volatile(
 	"	vld1.64	{q2}, [%[iv]]		\n"
 	"	vld1.64	{q4}, %[inc]		\n"
@@ -555,7 +558,6 @@ void AES_ARM8_Encrypt4X2_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, co
 {
 	assert(Nr > 4 && !(Nr%2));
 	uint halfnr = Nr/2;
-	const unsigned long long inc[] = {0ULL, 1ULL, 0ULL, 2ULL, 0ULL, 3ULL, 0ULL, 4ULL};
 	asm volatile(
 	"	vld1.64	{q2}, [%[iv]]		\n"
 	"	vld1.64	{q6,q7}, [%[inc]]!	\n"
@@ -635,7 +637,8 @@ void AES_ARM8_Encrypt4X2_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, co
 	"	vst1.8	{q8,q9}, [%[ct]]	\n"
 	: [rk] "=r" (rkeys), [nr] "=r" (Nr), [pt] "=r" (pt), [ct] "=r" (ct),
 	  "=m" (*ct), "=m" (*iv)
-	: "0" (rkeys), "1" (halfnr), "2" (pt), "3" (ct), [iv] "r" (iv), [inc] "r" (inc),
+	: "0" (rkeys), "1" (halfnr), "2" (pt), "3" (ct),
+	  [iv] "r" (iv), [inc] "r" (inc1234), "m" (*inc1234),
 	  "m" (*(const char(*)[16*(Nr+1)])rkeys), "m" (*pt)
 	: "q0", "q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8", "q9", "r7", "cc"
 	);
