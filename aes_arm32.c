@@ -369,10 +369,10 @@ void AES_ARM8_Decrypt4(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8
 }
 
 static const unsigned long long inc1234[] = {0ULL, 1ULL, 0ULL, 2ULL, 0ULL, 3ULL, 0ULL, 4ULL};
+static const unsigned long long inc1[] = {0ULL, 1ULL};
 
 void AES_ARM8_Encrypt_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 pt[16], u8 ct[16], u8 iv[16])
 {
-	static const unsigned long long inc1[] = {0ULL, 1ULL};
 	asm volatile(
 	"	vld1.64	{q2}, [%[iv]]		\n"
 	"	vld1.64	{q4}, %[inc]		\n"
@@ -504,7 +504,6 @@ void AES_ARM8_EncryptX2_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, con
 {
 	assert(Nr > 4 && !(Nr%2));
 	uint halfnr = Nr/2;
-	static const unsigned long long inc1[] = {0ULL, 1ULL};
 	asm volatile(
 	"	vld1.64	{q2}, [%[iv]]		\n"
 	"	vld1.64	{q4}, %[inc]		\n"
