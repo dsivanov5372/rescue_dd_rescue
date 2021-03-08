@@ -21,6 +21,7 @@ INSTALLLIBDIR = $(prefix)/$(LIB)
 MANDIR = $(prefix)/share/man
 #MYDIR = dd_rescue-$(VERSION)
 MYDIR = dd_rescue
+TMPDIR ?= /tmp
 BINTARGETS = dd_rescue 
 LIBTARGETS = libddr_hash.so libddr_MD5.so libddr_null.so libddr_crypt.so
 #TARGETS = libfalloc-dl
@@ -527,13 +528,14 @@ check: $(TARGETS) find_nonzero md5 sha1 sha256 sha512 fmt_no
 
 check_xattr_storehash: $(TARGETS)
 	# Tests with hash set_xattr and chk_xattr (with fallback as not all filesystems support xattrs ...)
-	$(VG) ./dd_rescue -tL ./libddr_hash.so=sha256:set_xattr:fallback dd_rescue /tmp/dd_rescue
-	$(VG) ./dd_rescue  -L ./libddr_hash.so=sha256:chk_xattr:fallback /tmp/dd_rescue /dev/null
-	rm -f /tmp/dd_rescue CHECKSUMS.sha256
+	$(VG) ./dd_rescue -tL ./libddr_hash.so=sha256:set_xattr:fallback dd_rescue $(TMPDIR)/dd_rescue
+	$(VG) ./dd_rescue  -L ./libddr_hash.so=sha256:chk_xattr:fallback $(TMPDIR)/dd_rescue /dev/null
+	rm -f $(TMPDIR)/dd_rescue CHECKSUMS.sha256
 	# Tests with prepend and append
-	$(VG) ./dd_rescue -tL ./libddr_hash.so=sha512:set_xattr:fallback:prepend=abc:append=xyz dd_rescue /tmp/dd_rescue
-	$(VG) ./dd_rescue  -L ./libddr_hash.so=sha512:chk_xattr:fallback /tmp/dd_rescue /dev/null && false || true
-	$(VG) ./dd_rescue  -L ./libddr_hash.so=sha512:chk_xattr:fallback:prepend=abc:append=xyz /tmp/dd_rescue /dev/null
+	$(VG) ./dd_rescue -tL ./libddr_hash.so=sha512:set_xattr:fallback:prepend=abc:append=xyz dd_rescue $(TMPDIR)/dd_rescue
+	$(VG) ./dd_rescue  -L ./libddr_hash.so=sha512:chk_xattr:fallback $(TMPDIR)/dd_rescue /dev/null && false || true
+	$(VG) ./dd_rescue  -L ./libddr_hash.so=sha512:chk_xattr:fallback:prepend=abc:append=xyz $(TMPDIR)/dd_rescue /dev/null
+	rm -f $(TMPDIR)/dd_rescue CHECKSUMS.sha512
 
 # FIXME: This fails on filesystems without xattr support - disabled until we know how to handle this
 check_xattr_copy: $(TARGETS)
