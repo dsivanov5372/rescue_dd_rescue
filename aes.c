@@ -253,7 +253,7 @@ int  AES_Gen_CBC_Dec4(AES_Crypt_Blk_fn *cryptfn4,
 }
 
 
-/* Use 12 bits from nonce, initialize rest with counter */
+/* Use nonce, add ival (little endian, 64bits, at offset 32bits) */
 void AES_Gen_CTR_Prep(const uchar *nonce /*[16]*/, uchar *ctr /*[16]*/, unsigned long long ival)
 {
 	memcpy(ctr, nonce, 16);
@@ -261,6 +261,7 @@ void AES_Gen_CTR_Prep(const uchar *nonce /*[16]*/, uchar *ctr /*[16]*/, unsigned
 	*(uint*)(ctr+12)  = htonl(ntohl(*(uint*)(ctr+12))+low);
 	unsigned int high = (unsigned int)(ival>>32);
 	*(uint*)(ctr+8)   = htonl(ntohl(*(uint*)(ctr+8))+high);
+	//  *(ctr+4) would be bits 95--64; those are 0, so nothing needs to be done
 }
 
 /* Consider counter to be 8 bytes ... this avoids wrap around after 4G blocks (64GB) */
@@ -271,18 +272,21 @@ void be_inc(uchar ctr[8])
 	do {
 		++ctr[--i];
 	} while (i && !ctr[i]);
+	// } while (i > 4 && !ctr[i]);
 }
 
 static inline 
 void be_inc4(uchar ctr[8])
 {
-	int i;
-	for (i = 7; i >= 0; --i) {
-		uchar ov = ctr[i];
-		ctr[i] = ov+4;
-		if (ov < 0xfc)
-			return;
-	}
+	int i = 7;
+	uchar ov = ctr[i];
+	ctr[i] += ov+4;
+	if (ov < 0xfc)
+		return;
+	do {
+		++ctr[--i];
+	} while (i && !ctr[i]);
+	// } while (i > 4 && !ctr[i]);
 }
 
 static inline 
