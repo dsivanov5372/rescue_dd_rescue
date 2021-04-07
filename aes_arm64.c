@@ -18,6 +18,7 @@
 
 #include <string.h>
 #include <assert.h>
+//#include <stdio.h>
 
 #define MAXKC (256 / 32)
 #define MAXKB (256 / 8)
@@ -691,7 +692,7 @@ int  AES_ARM8_ECB_Decrypt(const uchar* rkeys, uint rounds, uchar *iv, uint pad, 
 	CLR_NEON6;
 	return r;
 }
-
+#if 0
 int  AES_ARM8_CBC_Encrypt(const uchar* rkeys, uint rounds, uchar *iv, uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen)
 {
 	int r = AES_Gen_CBC_Enc(AES_ARM8_Encrypt_Blk, 
@@ -699,6 +700,89 @@ int  AES_ARM8_CBC_Encrypt(const uchar* rkeys, uint rounds, uchar *iv, uint pad, 
 	CLR_NEON3;
 	return r;
 }
+#else
+
+#define XOR16(x1, x2, xout)	\
+	for (uint _i = 0; _i < 16; _i+=sizeof(ulong))			\
+		*(ulong*)(xout+_i) = *(ulong*)(x1+_i) ^ *(ulong*)(x2+_i);
+#define FILL_BLK(in, bf, len, pad) 	\
+do {					\
+	uint i;				\
+	uchar by = pad? 16-(len&0x0f) : 0;	\
+	for (i = 0; i < len; ++i)	\
+		bf[i] = in[i];		\
+	for (; i < 16; ++i)		\
+		bf[i] = by;		\
+} while(0)
+
+
+int  AES_ARM8_CBC_Encrypt(const uchar* rkeys, uint rounds,
+		uchar *iv, uint pad,
+		const uchar *input, uchar *output,
+		ssize_t len, ssize_t *olen)
+{
+	*olen = len;
+	asm volatile(
+	"	ld1	{v3.16b}, [%[iv]]	\n"
+	"0:					\n"
+	"	cmp	%[len], #16		\n"
+	"	mov	x8, %[rk]		\n"
+	"	b.mi	4f			\n"
+	"	ld1	{v0.16b}, [%[pt]], #16	\n"
+	"	mov	w9, %w[nr]		\n"
+	"	ld1	{v1.4s, v2.4s}, [x8], #32	\n"
+	"	eor	v0.16b, v0.16b, v3.16b	\n"
+	"	subs	w9, w9, #2		\n"
+	".align 4				\n"
+	"1:					\n"
+	"	aese	v0.16b, v1.16b		\n"
+	"	aesmc	v0.16b, v0.16b		\n"
+	"	ld1	{v1.4s}, [x8], #16	\n"
+	"	b.eq	2f			\n"
+	"	subs	w9, w9, #2		\n"
+	"	aese	v0.16b, v2.16b		\n"
+	"	aesmc	v0.16b, v0.16b		\n"
+	"	ld1	{v2.4s}, [x8], #16	\n"
+	"	b.pl	1b			\n"
+	"					\n"
+	"	aese	v0.16b, v1.16b		\n"
+	"	eor	v0.16b, v0.16b, v2.16b	\n"
+	"	b	3f			\n"
+	"2:					\n"
+	"	aese	v0.16b, v2.16b		\n"
+	"	eor	v0.16b, v0.16b, v1.16b	\n"
+	"3:					\n"
+	"	subs	%[len], %[len], #16	\n"
+	"	st1	{v0.16b}, [%[ct]], #16	\n"
+	"	mov	v3.16b, v0.16b		\n"
+	"	b.gt	0b			\n"
+	"4:					\n"
+	"	st1	{v3.16b}, [%[iv]]	\n"
+	"	movi	v3.16b, #0		\n"
+	: [len] "=r" (len), [pt] "=r" (input), [ct] "=r" (output),
+	  "=m" (*(char(*)[16])iv), "=m" (*(char(*)[len])output)
+	: "0" (len), "1" (input), "2" (output), [rk] "r" (rkeys),
+	  [nr] "r" (rounds), [iv] "r" (iv),
+	  "m" (*(const char(*)[16*(rounds+1)])rkeys), "m" (*(const char(*)[len])input)
+	: "v0", "v1", "v2", "v3", "w9", "x8", "cc"
+	);
+	//printf("%li bytes left, %li done\n", len, *olen);
+	if (len || pad == PAD_ALWAYS) {
+		uchar *in = crypto->blkbuf1;
+		FILL_BLK(input, in, len, pad);
+		XOR16(iv, in, iv);
+		AES_ARM8_Encrypt_Blk(rkeys, rounds, iv, output);
+		//memcpy(iv, output, 16);
+		*olen += 16-(len&15);
+		//memset(in, 0, 16);
+		//LFENCE;
+	}
+	CLR_NEON3;
+	return (pad == PAD_ALWAYS || (len&15))? 16-(len&15): 0;
+}
+#endif
+
+// TODO: Create optimized version
 int  AES_ARM8_CBC_Decrypt(const uchar* rkeys, uint rounds, uchar *iv, uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen)
 {
 	int r = AES_Gen_CBC_Dec4(AES_ARM8_Decrypt_4Blk, AES_ARM8_Decrypt_Blk, 
