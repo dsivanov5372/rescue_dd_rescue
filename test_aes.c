@@ -149,6 +149,7 @@ int test_alg(const char* prefix, ciph_desc_t *alg, uchar *key, uchar *in, ssize_
 	int i;
 	int err = 0;
 	int eerr = 0, derr = 0;
+	ulong ivhash;
 	ssize_t eln, dln;
 	ssize_t exp_eln = alg->stream->granul <= 1? ln: ((epad == PAD_ALWAYS || (ln&(BLKSZ-1)))? ln+BLKSZ-(ln&(BLKSZ-1)): ln);
 	++tested;
@@ -159,7 +160,8 @@ int test_alg(const char* prefix, ciph_desc_t *alg, uchar *key, uchar *in, ssize_
 	alg->enc_key_setup(key, rkeys, alg->rounds);
 	printf("\nEncrypt   : ");
 	BENCH(setup_iv(alg->stream, iv, BLKSZ); eerr = alg->encrypt(rkeys, alg->rounds, iv, epad, in, ctxt, ln, &eln); if (alg->recycle) alg->recycle(rkeys), rep/2+1, ln);
-	printf("%zi->%zi: %i ", ln, eln, eerr);
+	memcpy(&ivhash, iv, 4); memcpy((uchar*)(&ivhash)+4, iv+12, 4);
+	printf("%zi->%zi: %i %016lx", ln, eln, eerr, ivhash);
 	if (eerr < 0)
 		++err;
 	err += cmp_ln(eln, exp_eln, "encr vs exp");
@@ -177,7 +179,8 @@ int test_alg(const char* prefix, ciph_desc_t *alg, uchar *key, uchar *in, ssize_
 	printf("\nDecrypt   : ");
 	memset(vfy, 0xff, DEF_LN+32);
 	BENCH(setup_iv(alg->stream, iv, BLKSZ); derr = alg->decrypt(rkeys, alg->rounds, iv, dpad, ctxt, vfy, eln, &dln); if (alg->recycle) alg->recycle(rkeys), rep/2+1, eln);
-	printf("%zi->%zi: %i ", eln, dln, derr);
+	memcpy(&ivhash, iv, 4); memcpy((uchar*)(&ivhash)+4, iv+12, 4);
+	printf("%zi->%zi: %i %016lx", eln, dln, derr, ivhash);
 	if (derr < 0)
 		++err;
 	ssize_t exp_dln = alg->stream->granul <= 1? eln: (dpad? ln: eln);
