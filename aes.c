@@ -183,7 +183,8 @@ int  AES_Gen_CBC_Enc(AES_Crypt_Blk_fn *cryptfn,
 		fill_blk(input, in, len, pad);
 		XOR16(iv, in, iv);
 		cryptfn(rkeys, rounds, iv, output);
-		//memcpy(iv, output, 16);
+		/* Store last IV */
+		memcpy(iv, output, 16);
 		*olen += 16-(len&15);
 		//memset(in, 0, 16);
 		//LFENCE;

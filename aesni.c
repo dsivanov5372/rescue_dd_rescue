@@ -718,7 +718,7 @@ int AESNI_CBC_Encrypt_Tmpl(crypt_blk_fn *encrypt,
 		in  += SIZE128;
 		out += SIZE128;
 	}
-	_mm_storeu_si128((__m128i*)iv, ivb);
+	//_mm_storeu_si128((__m128i*)iv, ivb);
 	if (len || pad == PAD_ALWAYS) {
 		register __m128i dat = _mm_loadu_si128((const __m128i*)in);
 		__m128i mask = _mkmask(len);
@@ -735,7 +735,7 @@ int AESNI_CBC_Encrypt_Tmpl(crypt_blk_fn *encrypt,
 		_mm_storeu_si128((__m128i*)out, ivb);
 		*olen += 16-(*olen&15);
 	}
-	//_mm_storeu_si128((__m128i*)iv, ivb);
+	_mm_storeu_si128((__m128i*)iv, ivb);
 	return (pad == PAD_ALWAYS || (len&15))? 16-(len&15): 0;
 }
 
