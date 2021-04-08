@@ -772,7 +772,8 @@ int  AES_ARM8_CBC_Encrypt(const uchar* rkeys, uint rounds,
 		FILL_BLK(input, in, len, pad);
 		XOR16(iv, in, iv);
 		AES_ARM8_Encrypt_Blk(rkeys, rounds, iv, output);
-		//memcpy(iv, output, 16);
+		/* Update last IV */
+		memcpy(iv, output, 16);
 		*olen += 16-(len&15);
 		//memset(in, 0, 16);
 		//LFENCE;
