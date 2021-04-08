@@ -924,8 +924,8 @@ int AESNI_CTR_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt,
 			_mm_storeu_si128((__m128i*)out, tmp);
 		}
 		/* FIXME: We had only increased CTR for complete blocks before. Why? */
-		/* if (len >= SIZE128) */
-		cblk = _mm_add_epi64(cblk, ONE);
+		/*if (len >= SIZE128)*/
+			cblk = _mm_add_epi64(cblk, ONE);
 		len -= SIZE128;
 		in  += SIZE128;
 		out += SIZE128;

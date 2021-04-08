@@ -300,7 +300,7 @@ int  AES_Gen_CTR_Crypt(AES_Crypt_Blk_fn *cryptfn,
 	uchar *eblk = crypto->blkbuf2;
 	while (len >= 16) {
 		cryptfn(rkeys, rounds, ctr, eblk);
-		be_inc(ctr+8);	
+		be_inc(ctr+8);
 		XOR16(eblk, input, output);
 		len -= 16;
 		input += 16; output += 16;
@@ -309,7 +309,8 @@ int  AES_Gen_CTR_Crypt(AES_Crypt_Blk_fn *cryptfn,
 		uchar *in = crypto->blkbuf1;
 		fill_blk(input, in, len, 0 /*pad*/);
 		cryptfn(rkeys, rounds, ctr, eblk);
-		//be_inc(ctr+8);	
+		/* We do increase the last blk */
+		be_inc(ctr+8);
 		XOR16(eblk, in, in);
 		memcpy(output, in, len&15);
 		//memset(in, 0, 16);
@@ -416,7 +417,7 @@ int  AES_Gen_CTR_Crypt4(AES_Crypt_Blk_fn *cryptfn4,
 #endif	
 	while (len >= 16) {
 		cryptfn(rkeys, rounds, ctr, eblk);
-		be_inc(ctr+8);	
+		be_inc(ctr+8);
 		XOR16(eblk, input, output);
 		len -= 16;
 		input += 16; output += 16;
@@ -425,7 +426,8 @@ int  AES_Gen_CTR_Crypt4(AES_Crypt_Blk_fn *cryptfn4,
 		uchar *in = crypto->blkbuf1;
 		fill_blk(input, in, len, 0 /*pad*/);
 		cryptfn(rkeys, rounds, ctr, eblk);
-		//be_inc(ctr+8);	
+		/* We do count the last block */
+		be_inc(ctr+8);
 		XOR16(eblk, in, in);
 		memcpy(output, in, len&15);
 	}
