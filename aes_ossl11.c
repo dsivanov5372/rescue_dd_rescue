@@ -116,16 +116,16 @@ int AES_OSSL_##BITCHAIN##_Encrypt(const unsigned char* ctx, unsigned int rounds,
 		LFENCE;						\
 		assert(ores);					\
 	} else {								\
-		if (DOPAD && !(len%15) && pad == PAD_ASNEEDED)	\
+		if (DOPAD && !(len%16) && pad == PAD_ASNEEDED)			\
 			EVP_CIPHER_CTX_set_padding(evpctx[0], 0);		\
 		ores = EVP_EncryptUpdate(evpctx[0], out, &olen, in, len);	\
 		assert(ores);					\
-		ores = EVP_EncryptFinal(evpctx[0], out+olen, &elen);\
+		ores = EVP_EncryptFinal(evpctx[0], out+olen, &elen);		\
 		assert(ores);					\
 		if (0 && elen && (len&15)) olen -= 16;		\
 	}							\
 	*flen = olen+elen;					\
-	if (DOPAD && pad == PAD_ASNEEDED && !(len&15))		\
+	if (0 && DOPAD && pad == PAD_ASNEEDED && !(len&15))			\
 		*flen -= 16;					\
 	if (0 && olen+elen < len)				\
 		fprintf(stderr, "Encryption length mismatch %i+%i != %zi\n",	\
