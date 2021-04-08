@@ -843,6 +843,7 @@ void AESNI_CTR_Prep(const unsigned char* iv, unsigned char* ctr, unsigned long l
 	tmp = _mm_shuffle_epi8(tmp, BSWAP_EPI64);
 	//tmp = _mm_and_si128(tmp, MSK);
 	tmp = _mm_add_epi64(tmp, VAL);
+	tmp = _mm_shuffle_epi8(tmp, BSWAP_EPI64);
 	_mm_storeu_si128((__m128i*)ctr, tmp);
 #ifdef DEBUG_CBLK_SETUP
 	static int c = 0;
@@ -866,6 +867,7 @@ int AESNI_CTR_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt,
 	__m128i cblk = _mm_loadu_si128((__m128i*)ctr);
 	const __m128i BSWAP_EPI64 = _mm_setr_epi8(7,6,5,4,3,2,1,0,15,14,13,12,11,10,9,8);
 	const __m128i ONE = _mm_set_epi32(0, 1, 0, 0);
+	cblk = _mm_shuffle_epi8(cblk, BSWAP_EPI64);
 	const __m128i TWO = _mm_set_epi32(0, 2, 0, 0);
 	while (len >= 8*SIZE128) {
 		/* Prepare CTR (IV) values */
@@ -922,12 +924,15 @@ int AESNI_CTR_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt,
 			_mm_storeu_si128((__m128i*)out, tmp);
 		}
 		/* FIXME: We had only increased CTR for complete blocks before. Why? */
+		/* if (len >= SIZE128) */
 		cblk = _mm_add_epi64(cblk, ONE);
 		len -= SIZE128;
 		in  += SIZE128;
 		out += SIZE128;
 	}
-	_mm_storeu_si128((__m128i*)ctr, cblk);
+	/* Change back to initial byte order */
+	register __m128i tmp = _mm_shuffle_epi8(cblk, BSWAP_EPI64);
+	_mm_storeu_si128((__m128i*)ctr, tmp);
 	return 0;
 }
 
