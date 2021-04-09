@@ -68,10 +68,10 @@ void fillval(unsigned char* bf, ssize_t ln, unsigned int val)
 
 /* Defaults */
 
-#define REP 5000000
-#define DEF_LN 288
+#define REP 3000000
+#define DEF_LN 432
 #ifndef SHIFT
-# define SHIFT 5
+# define SHIFT 1
 #endif
 
 /* TIMING */
@@ -149,7 +149,7 @@ int test_alg(const char* prefix, ciph_desc_t *alg, uchar *key, uchar *in, ssize_
 	int i;
 	int err = 0;
 	int eerr = 0, derr = 0;
-	ulong ivhash;
+	ulong ivhash, divhash;
 	ssize_t eln, dln;
 	ssize_t exp_eln = alg->stream->granul <= 1? ln: ((epad == PAD_ALWAYS || (ln&(BLKSZ-1)))? ln+BLKSZ-(ln&(BLKSZ-1)): ln);
 	++tested;
@@ -179,8 +179,8 @@ int test_alg(const char* prefix, ciph_desc_t *alg, uchar *key, uchar *in, ssize_
 	printf("\nDecrypt   : ");
 	memset(vfy, 0xff, DEF_LN+32);
 	BENCH(setup_iv(alg->stream, iv, BLKSZ); derr = alg->decrypt(rkeys, alg->rounds, iv, dpad, ctxt, vfy, eln, &dln); if (alg->recycle) alg->recycle(rkeys), rep/2+1, eln);
-	memcpy(&ivhash, iv, 4); memcpy((uchar*)(&ivhash)+4, iv+12, 4);
-	printf("%zi->%zi: %i %016lx", eln, dln, derr, ivhash);
+	memcpy(&divhash, iv, 4); memcpy((uchar*)(&divhash)+4, iv+12, 4);
+	printf("%zi->%zi: %i %016lx", eln, dln, derr, divhash);
 	if (derr < 0)
 		++err;
 	ssize_t exp_dln = alg->stream->granul <= 1? eln: (dpad? ln: eln);
@@ -203,6 +203,9 @@ int test_alg(const char* prefix, ciph_desc_t *alg, uchar *key, uchar *in, ssize_
 		if (epad != PAD_ZERO && vfy[ln] != BLKSZ-(ln&(BLKSZ-1))) {
 			printf("no %i pad ", BLKSZ-(int)(ln&(BLKSZ-1))); ++err;
 		}
+	}
+	if (ivhash != divhash) {
+		printf("iv miscompare "); ++err;
 	}
 	//if (err) printf("%i ", err);
 	/* Update cache */	
