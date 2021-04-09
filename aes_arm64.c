@@ -169,7 +169,7 @@ void AES_ARM8_Encrypt(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 
 	asm volatile(
 	"	ld1	{v0.16b}, [%[pt]]	\n"
 	"	ld1	{v1.4s, v2.4s}, [%[rk]], #32	\n"
-	"//	eor	v0.16b, v0.16b, v1.16b	\n"
+	"//	eor	v0.16b, v0.16b, v3.16b	\n"
 	"	subs	%w[nr], %w[nr], #2	\n"
 	".align 4				\n"
 	"1:					\n"
@@ -727,9 +727,9 @@ int  AES_ARM8_CBC_Encrypt(const uchar* rkeys, uint rounds,
 	"0:					\n"
 	"	cmp	%[len], #16		\n"
 	"	mov	x8, %[rk]		\n"
-	"	b.mi	4f			\n"
-	"	ld1	{v0.16b}, [%[pt]], #16	\n"
 	"	mov	w9, %w[nr]		\n"
+	"	b.lt	10f			\n"
+	"	ld1	{v0.16b}, [%[pt]], #16	\n"
 	"	ld1	{v1.4s, v2.4s}, [x8], #32	\n"
 	"	eor	v0.16b, v0.16b, v3.16b	\n"
 	"	subs	w9, w9, #2		\n"
@@ -756,7 +756,7 @@ int  AES_ARM8_CBC_Encrypt(const uchar* rkeys, uint rounds,
 	"	st1	{v0.16b}, [%[ct]], #16	\n"
 	"	mov	v3.16b, v0.16b		\n"
 	"	b.gt	0b			\n"
-	"4:					\n"
+	"10:					\n"
 	"	st1	{v3.16b}, [%[iv]]	\n"
 	"	movi	v3.16b, #0		\n"
 	: [len] "=r" (len), [pt] "=r" (input), [ct] "=r" (output),
@@ -764,7 +764,7 @@ int  AES_ARM8_CBC_Encrypt(const uchar* rkeys, uint rounds,
 	: "0" (len), "1" (input), "2" (output), [rk] "r" (rkeys),
 	  [nr] "r" (rounds), [iv] "r" (iv),
 	  "m" (*(const char(*)[16*(rounds+1)])rkeys), "m" (*(const char(*)[len])input)
-	: "v0", "v1", "v2", "v3", "w9", "x8", "cc"
+	: "v0", "v1", "v2", "v3", "x8", "w9", "cc"
 	);
 	//printf("%li bytes left, %li done\n", len, *olen);
 	if (len || pad == PAD_ALWAYS) {
