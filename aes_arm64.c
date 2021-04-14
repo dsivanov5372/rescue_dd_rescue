@@ -723,16 +723,17 @@ int  AES_ARM8_CBC_Encrypt(const uchar* rkeys, uint rounds,
 {
 	*olen = len;
 	asm volatile(
+	"	subs	%[len], %[len], #16	\n"
 	"	ld1	{v3.16b}, [%[iv]]	\n"
+	"	b.mi	10f			\n"
+	"//.align 4				\n"
 	"0:					\n"
-	"	cmp	%[len], #16		\n"
 	"	mov	x8, %[rk]		\n"
-	"	mov	w9, %w[nr]		\n"
-	"	b.lt	10f			\n"
 	"	ld1	{v0.16b}, [%[pt]], #16	\n"
+	"	mov	w9, %w[nr]		\n"
 	"	ld1	{v1.4s, v2.4s}, [x8], #32	\n"
-	"	eor	v0.16b, v0.16b, v3.16b	\n"
 	"	subs	w9, w9, #2		\n"
+	"	eor	v0.16b, v0.16b, v3.16b	\n"
 	".align 4				\n"
 	"1:					\n"
 	"	aese	v0.16b, v1.16b		\n"
@@ -755,9 +756,10 @@ int  AES_ARM8_CBC_Encrypt(const uchar* rkeys, uint rounds,
 	"	subs	%[len], %[len], #16	\n"
 	"	st1	{v0.16b}, [%[ct]], #16	\n"
 	"	mov	v3.16b, v0.16b		\n"
-	"	b.gt	0b			\n"
+	"	b.pl	0b			\n"
 	"10:					\n"
 	"	st1	{v3.16b}, [%[iv]]	\n"
+	"	add	%[len], %[len], #16	\n"
 	"	movi	v3.16b, #0		\n"
 	: [len] "=r" (len), [pt] "=r" (input), [ct] "=r" (output),
 	  "=m" (*(char(*)[16])iv), "=m" (*(char(*)[len])output)
