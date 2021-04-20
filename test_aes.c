@@ -266,9 +266,7 @@ int ret = 0;
 int main(int argc, char *argv[])
 {
 	int rep = REP;
-	unsigned char *in = aligned_alloc(64, DEF_LN+16);
 	unsigned char *key = (unsigned char*)"Test Key_123 is long enough even for AES-256";
-	last_ct = aligned_alloc(64, DEF_LN+32);
 	//int dbg = 0;
 	char* testalg;
 	ARCH_DETECT;
@@ -289,11 +287,13 @@ int main(int argc, char *argv[])
 	else
 		srand(time(NULL));
 	if (argc > 4)
+		DEF_LN = atol(argv[5]);
+	unsigned char *in = aligned_alloc(64, DEF_LN+16);
+	last_ct = aligned_alloc(64, DEF_LN+32);
+	if (argc > 5)
 		fillval(in, DEF_LN, atol(argv[4]));
 	else
 		fillrand(in, DEF_LN);
-	if (argc > 5)
-		DEF_LN = atol(argv[5]);
 
 	ciph_desc_t *alg = NULL;
 	//OPENSSL_init();
