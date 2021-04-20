@@ -142,8 +142,11 @@ uchar last_ct[DEF_LN+32];
 
 int test_alg(const char* prefix, ciph_desc_t *alg, uchar *key, uchar *in, ssize_t ln, int epad, int dpad, int rep)
 {
-	uchar ctxt[DEF_LN+32], vfy[DEF_LN+2*32];	/* OpenSSL may need +2*16, sigh */
-	uchar iv[32];
+	//uchar ctxt[DEF_LN+32], vfy[DEF_LN+2*32];	/* OpenSSL may need +2*16, sigh */
+	//uchar iv[32];
+	uchar *ctxt = aligned_alloc(64, DEF_LN+32);
+	uchar *vfy  = aligned_alloc(64, DEF_LN+2*32);
+	uchar *iv   = aligned_alloc(64, 32);
         struct timeval t1, t2;
 	double tdiff; 
 	int i;
@@ -219,6 +222,7 @@ int test_alg(const char* prefix, ciph_desc_t *alg, uchar *key, uchar *in, ssize_
 	if (alg->release)
 		alg->release(rkeys, alg->rounds);
 	//free(rkeys);
+	free(iv); free(vfy); free(ctxt);
 	return err;
 }
 
@@ -262,7 +266,7 @@ int ret = 0;
 int main(int argc, char *argv[])
 {
 	int rep = REP;
-	unsigned char in[DEF_LN+16];
+	unsigned char *in = aligned_alloc(64, DEF_LN+16);
 	unsigned char *key = (unsigned char*)"Test Key_123 is long enough even for AES-256";
 	//int dbg = 0;
 	char* testalg;
@@ -330,6 +334,7 @@ int main(int argc, char *argv[])
 
 	printf("\n");
 	secmem_release(crypto);
+	free(in);
 	return (tested? ret: -1);
 }
 
