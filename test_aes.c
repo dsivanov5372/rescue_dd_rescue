@@ -69,7 +69,7 @@ void fillval(unsigned char* bf, ssize_t ln, unsigned int val)
 /* Defaults */
 
 #define REP 3000000
-#define DEF_LN 432
+unsigned int DEF_LN = 432;
 #ifndef SHIFT
 # define SHIFT 1
 #endif
@@ -136,7 +136,7 @@ int last_epad, last_dpad;
 /* Result cache contents */
 uint last_eln, last_dln;
 int last_eres, last_dres;
-uchar last_ct[DEF_LN+32];
+uchar *last_ct;
 
 #define BLKSZ (alg->blocksize)
 
@@ -268,6 +268,7 @@ int main(int argc, char *argv[])
 	int rep = REP;
 	unsigned char *in = aligned_alloc(64, DEF_LN+16);
 	unsigned char *key = (unsigned char*)"Test Key_123 is long enough even for AES-256";
+	last_ct = aligned_alloc(64, DEF_LN+32);
 	//int dbg = 0;
 	char* testalg;
 	ARCH_DETECT;
@@ -291,7 +292,8 @@ int main(int argc, char *argv[])
 		fillval(in, DEF_LN, atol(argv[4]));
 	else
 		fillrand(in, DEF_LN);
-
+	if (argc > 5)
+		DEF_LN = atol(argv[5]);
 
 	ciph_desc_t *alg = NULL;
 	//OPENSSL_init();
@@ -334,7 +336,7 @@ int main(int argc, char *argv[])
 
 	printf("\n");
 	secmem_release(crypto);
-	free(in);
+	free(last_ct); free(in);
 	return (tested? ret: -1);
 }
 
