@@ -287,11 +287,11 @@ int main(int argc, char *argv[])
 	else
 		srand(time(NULL));
 	if (argc > 4)
-		DEF_LN = atol(argv[5]);
+		DEF_LN = atol(argv[4]);
 	unsigned char *in = aligned_alloc(64, DEF_LN+16);
 	last_ct = aligned_alloc(64, DEF_LN+32);
 	if (argc > 5)
-		fillval(in, DEF_LN, atol(argv[4]));
+		fillval(in, DEF_LN, atol(argv[5]));
 	else
 		fillrand(in, DEF_LN);
 
