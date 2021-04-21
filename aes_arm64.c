@@ -785,22 +785,28 @@ int  AES_ARM8_CBC_Encrypt(const uchar* rkeys, uint rounds,
 }
 #endif
 
-#if 1
+#ifndef NO_CBC_DEC4X
 int  AES_ARM8_CBC_Decrypt(const uchar* rkeys, uint rounds, uchar *iv, uint pad,
 		          const uchar *input, uchar *output, ssize_t len, ssize_t *olen)
 {
 	*olen = len;
 	asm volatile(
 	"	subs	%[len], %[len], #64	\n"
+	"	//prfm	PLDL1STRM, [%[ct]]	\n"
 	"	ld1	{v2.16b}, [%[iv]]	\n"
 	"	b.mi	10f			\n"
 	"//.align 4				\n"
 	"0:					\n"
 	"	mov	x8, %[rk]		\n"
-	"	ld1	{v3.16b-v6.16b}, [%[ct]]\n"
+	"	ld1	{v3.16b-v6.16b}, [%[ct]], #64\n"
+	"	//prfm	PLDL1STRM, [%[ct],#64]	\n"
 	"	mov	w9, %w[nr]		\n"
 	"	ld1	{v0.4s, v1.4s}, [x8], #32	\n"
 	"	subs	w9, w9, #2		\n"
+	"	mov	v7.16b, v3.16b		\n"
+	"	mov	v8.16b, v4.16b		\n"
+	"	mov	v9.16b, v5.16b		\n"
+	"	mov	v10.16b, v6.16b		\n"
 	".align 4				\n"
 	"1:					\n"
 	"	aesd	v3.16b, v0.16b		\n"
@@ -845,26 +851,25 @@ int  AES_ARM8_CBC_Decrypt(const uchar* rkeys, uint rounds, uchar *iv, uint pad,
 	"	eor	v6.16b, v6.16b, v0.16b	\n"
 	"3:					\n"
 	"	subs	%[len], %[len], #64	\n"
-	"	eor	v3.16b, v3.16b, v2.16b	\n"	
-	"	ld1	{v2.16b}, [%[ct]], #16	\n"
-	"	eor	v4.16b, v4.16b, v2.16b	\n"	
-	"	ld1	{v2.16b}, [%[ct]], #16	\n"
-	"	eor	v5.16b, v5.16b, v2.16b	\n"	
-	"	ld1	{v2.16b}, [%[ct]], #16	\n"
-	"	eor	v6.16b, v6.16b, v2.16b	\n"	
-	"	ld1	{v2.16b}, [%[ct]], #16	\n"
+	"	eor	v3.16b, v3.16b, v2.16b	\n"
+	"	eor	v4.16b, v4.16b, v7.16b	\n"
+	"	eor	v5.16b, v5.16b, v8.16b	\n"
+	"	eor	v6.16b, v6.16b, v9.16b	\n"
+	"	mov	v2.16b, v10.16b		\n"
 	"	st1	{v3.16b-v6.16b}, [%[pt]], #64	\n"
 	"	b.pl	0b			\n"
 	"10:					\n"
 	"	st1	{v2.16b}, [%[iv]]	\n"
 	"	add	%[len], %[len], #64	\n"
-	"	movi	v6.16b, #0		\n"
+	"	//movi	v6.16b, #0		\n"
+	"	movi	v10.16b, #0		\n"
 	: [len] "=r" (len), [ct] "=r" (input), [pt] "=r" (output),
 	  "=m" (*(char(*)[16])iv), "=m" (*(char(*)[len])output)
 	: "0" (len), "1" (input), "2" (output), [rk] "r" (rkeys),
 	  [nr] "r" (rounds), [iv] "r" (iv),
 	  "m" (*(const char(*)[16*(rounds+1)])rkeys), "m" (*(const char(*)[len])input)
-	: "v0", "v1", "v2", "v3", "v4", "v5", "v6", "x8", "w9", "cc"
+	: "v0", "v1", "v2", "v3", "v4", "v5", "v6", "x8", "w9", "cc",
+	  "v7", "v8", "v9", "v10"
 	);
 	//printf("%li bytes left, %li done\n", len, *olen);
 	while (len > 0) {
@@ -877,7 +882,7 @@ int  AES_ARM8_CBC_Decrypt(const uchar* rkeys, uint rounds, uchar *iv, uint pad,
 		//LFENCE;
 		len -= 16; input += 16; output += 16;
 	}
-	CLR_NEON6;
+	CLR_NEON10;
 	if (pad)
 		return dec_fix_olen_pad(olen, pad, output);
 	else
