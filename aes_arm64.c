@@ -787,7 +787,7 @@ int  AES_ARM8_CBC_Encrypt(const uchar* rkeys, uint rounds,
 
 #if 1
 int  AES_ARM8_CBC_Decrypt(const uchar* rkeys, uint rounds, uchar *iv, uint pad,
-		          const uchar *in, uchar *out, ssize_t len, ssize_t *olen)
+		          const uchar *input, uchar *output, ssize_t len, ssize_t *olen)
 {
 	*olen = len;
 	asm volatile(
@@ -797,7 +797,7 @@ int  AES_ARM8_CBC_Decrypt(const uchar* rkeys, uint rounds, uchar *iv, uint pad,
 	"//.align 4				\n"
 	"0:					\n"
 	"	mov	x8, %[rk]		\n"
-	"	ld1	{v3.16b-v6.16b}, [%[ct]], #64	\n"
+	"	ld1	{v3.16b-v6.16b}, [%[ct]]\n"
 	"	mov	w9, %w[nr]		\n"
 	"	ld1	{v0.4s, v1.4s}, [x8], #32	\n"
 	"	subs	w9, w9, #2		\n"
@@ -811,9 +811,9 @@ int  AES_ARM8_CBC_Decrypt(const uchar* rkeys, uint rounds, uchar *iv, uint pad,
 	"	aesimc	v4.16b, v4.16b		\n"
 	"	aesimc	v5.16b, v5.16b		\n"
 	"	aesimc	v6.16b, v6.16b		\n"
-	"	ld1	{v0.4s}, [%[rk]], #16	\n"
+	"	ld1	{v0.4s}, [x8], #16	\n"
 	"	b.eq	2f			\n"
-	"	subs	%w[nr], %w[nr], #2	\n"
+	"	subs	w9, w9, #2		\n"
 	"	aesd	v3.16b, v1.16b		\n"
 	"	aesd	v4.16b, v1.16b		\n"
 	"	aesd	v5.16b, v1.16b		\n"
@@ -822,7 +822,7 @@ int  AES_ARM8_CBC_Decrypt(const uchar* rkeys, uint rounds, uchar *iv, uint pad,
 	"	aesimc	v4.16b, v4.16b		\n"
 	"	aesimc	v5.16b, v5.16b		\n"
 	"	aesimc	v6.16b, v6.16b		\n"
-	"	ld1	{v1.4s}, [%[rk]], #16	\n"
+	"	ld1	{v1.4s}, [x8], #16	\n"
 	"	b.pl	1b			\n"
 	"					\n"
 	"	aesd	v3.16b, v0.16b		\n"
@@ -844,20 +844,20 @@ int  AES_ARM8_CBC_Decrypt(const uchar* rkeys, uint rounds, uchar *iv, uint pad,
 	"	eor	v5.16b, v5.16b, v0.16b	\n"
 	"	eor	v6.16b, v6.16b, v0.16b	\n"
 	"3:					\n"
-	"	subs	%[len], %[len], #16	\n"
+	"	subs	%[len], %[len], #64	\n"
 	"	eor	v3.16b, v3.16b, v2.16b	\n"	
-	"	ld1	v2.16b, -#64[ct]	\n"
+	"	ld1	{v2.16b}, [%[ct]], #16	\n"
 	"	eor	v4.16b, v4.16b, v2.16b	\n"	
-	"	ld1	v2.16b, -#48[ct]	\n"
+	"	ld1	{v2.16b}, [%[ct]], #16	\n"
 	"	eor	v5.16b, v5.16b, v2.16b	\n"	
-	"	ld1	v2.16b, -#32[ct]	\n"
+	"	ld1	{v2.16b}, [%[ct]], #16	\n"
 	"	eor	v6.16b, v6.16b, v2.16b	\n"	
-	"	ld1	v2.16b, -#16[ct]	\n"
+	"	ld1	{v2.16b}, [%[ct]], #16	\n"
 	"	st1	{v3.16b-v6.16b}, [%[pt]], #64	\n"
 	"	b.pl	0b			\n"
 	"10:					\n"
 	"	st1	{v2.16b}, [%[iv]]	\n"
-	"	add	%[len], %[len], #16	\n"
+	"	add	%[len], %[len], #64	\n"
 	"	movi	v6.16b, #0		\n"
 	: [len] "=r" (len), [ct] "=r" (input), [pt] "=r" (output),
 	  "=m" (*(char(*)[16])iv), "=m" (*(char(*)[len])output)
@@ -867,9 +867,9 @@ int  AES_ARM8_CBC_Decrypt(const uchar* rkeys, uint rounds, uchar *iv, uint pad,
 	: "v0", "v1", "v2", "v3", "v4", "v5", "v6", "x8", "w9", "cc"
 	);
 	//printf("%li bytes left, %li done\n", len, *olen);
-	if (while len > 0) {
+	while (len > 0) {
 		uchar *ebf = crypto->blkbuf2;
-		AES_ARM8_Encrypt_Blk(rkeys, rounds, input, ebf);
+		AES_ARM8_Decrypt_Blk(rkeys, rounds, input, ebf);
 		XOR16(iv, ebf, output);
 		/* Update last IV */
 		memcpy(iv, input, 16);
