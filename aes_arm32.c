@@ -171,7 +171,7 @@ void AES_ARM8_Encrypt(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 
 	"	.fpu crypto-neon-fp-armv8	\n"
 	"	vld1.8	{q0}, [%[pt]]		\n"
 	"	vld1.8	{q1, q2}, [%[rk]]!	\n"
-	"//	veor	q0, q0, q1		\n"
+	"//	veor	q0, q0, q3		\n"
 	"	subs	%r[nr], %r[nr], #2	\n"
 	".align 4				\n"
 	"1:					\n"
