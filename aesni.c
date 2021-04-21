@@ -685,6 +685,24 @@ int  AESNI_ECB_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt, int enc,
 #if defined(__AVX2__) && defined(__VAES__)
 #include "immintrin.h"
 #include "vaesintrin.h"
+#ifdef __GNUC__
+#define ALWAYS_INLINE __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+#else
+#define ALWAYS_INLINE
+#endif
+/* Why is this intrinsic missing ??? */
+static inline __m256i ALWAYS_INLINE
+_mm256_broadcast_si128 (const __m128i *__X)
+{
+	register __m256i ret;
+	asm volatile("	vbroadcasti128	(%1), %0"
+			: "=x"(ret)
+			: "r"(__X), "m"(*__X)
+		    );
+	return ret;
+	//return (__m256i) __builtin_ia32_vbroadcasti128 (*(__v2di)__X);
+}
+
 typedef void (crypt_4x2blks_fn)(__m256i *i0, __m256i *i1, __m256i *i2, __m256i *i3,
 			        const unsigned char *rkeys, unsigned int rounds);
 
@@ -694,21 +712,18 @@ void Encrypt_4x2Blocks(__m256i *i0, __m256i *i1, __m256i *i2, __m256i *i3,
 {
 	int r;
 	const __m128i *rkeys = (__m128i*)ekey;
-	register __m128i rk128 /*asm("xmm0")*/ = _mm_loadu_si128(rkeys++);
-	register __m256i rk = _mm256_broadcastsi128_si256(rk128);
+	register __m256i rk = _mm256_broadcast_si128(rkeys++);
 	*i0 = _mm256_xor_si256(*i0, rk);
 	*i1 = _mm256_xor_si256(*i1, rk);
-	rk128 = _mm_loadu_si128(rkeys++);
 	*i2 = _mm256_xor_si256(*i2, rk);
 	*i3 = _mm256_xor_si256(*i3, rk);
-	rk = _mm256_broadcastsi128_si256(rk128);
+	rk = _mm256_broadcast_si128(rkeys++);
 	for (r = rounds-1; r > 0; --r) {
 		*i0 = _mm256_aesenc_epi128(*i0, rk);
 		*i1 = _mm256_aesenc_epi128(*i1, rk);
-		rk128 = _mm_loadu_si128(rkeys++);
 		*i2 = _mm256_aesenc_epi128(*i2, rk);
 		*i3 = _mm256_aesenc_epi128(*i3, rk);
-		rk = _mm256_broadcastsi128_si256(rk128);
+		rk = _mm256_broadcast_si128(rkeys++);
 	}
 	/* Last round ... */
 	*i0 = _mm256_aesenclast_epi128(*i0, rk);
@@ -716,8 +731,6 @@ void Encrypt_4x2Blocks(__m256i *i0, __m256i *i1, __m256i *i2, __m256i *i3,
 	*i2 = _mm256_aesenclast_epi128(*i2, rk);
 	*i3 = _mm256_aesenclast_epi128(*i3, rk);
 	MM256CLEAR(rk);
-	MMCLEAR(rk128);
-	//asm volatile("pxor %%xmm0, %%xmm0\n" :::"xmm0");
 }
 
 static inline
@@ -726,21 +739,18 @@ void Decrypt_4x2Blocks(__m256i *i0, __m256i *i1, __m256i *i2, __m256i *i3,
 {
 	int r;
 	const __m128i *rkeys = (__m128i*)dkey;
-	register __m128i rk128 /*asm("xmm0")*/ = _mm_loadu_si128(rkeys++);
-	register __m256i rk = _mm256_broadcastsi128_si256(rk128);
+	register __m256i rk = _mm256_broadcast_si128(rkeys++);
 	*i0 = _mm256_xor_si256(*i0, rk);
 	*i1 = _mm256_xor_si256(*i1, rk);
-	rk128 = _mm_loadu_si128(rkeys++);
 	*i2 = _mm256_xor_si256(*i2, rk);
 	*i3 = _mm256_xor_si256(*i3, rk);
-	rk = _mm256_broadcastsi128_si256(rk128);
+	rk = _mm256_broadcast_si128(rkeys++);
 	for (r = rounds-1; r > 0; --r) {
 		*i0 = _mm256_aesdec_epi128(*i0, rk);
 		*i1 = _mm256_aesdec_epi128(*i1, rk);
-		rk128 = _mm_loadu_si128(rkeys++);
 		*i2 = _mm256_aesdec_epi128(*i2, rk);
 		*i3 = _mm256_aesdec_epi128(*i3, rk);
-		rk = _mm256_broadcastsi128_si256(rk128);
+		rk = _mm256_broadcast_si128(rkeys++);
 	}
 	/* Last round ... */
 	*i0 = _mm256_aesdeclast_epi128(*i0, rk);
@@ -748,8 +758,6 @@ void Decrypt_4x2Blocks(__m256i *i0, __m256i *i1, __m256i *i2, __m256i *i3,
 	*i2 = _mm256_aesdeclast_epi128(*i2, rk);
 	*i3 = _mm256_aesdeclast_epi128(*i3, rk);
 	MM256CLEAR(rk);
-	MMCLEAR(rk128);
-	//asm volatile("pxor %%xmm0, %%xmm0\n" :::"xmm0");
 }
 
 static inline
@@ -1046,6 +1054,7 @@ void AESNI_CTR_Prep(const unsigned char* iv, unsigned char* ctr, unsigned long l
 #endif
 }
 
+
 static inline
 int AESNI_CTR_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt,
 			 const unsigned char* key, unsigned int rounds,
@@ -1150,12 +1159,11 @@ int AESNI_CTR_Crypt_Tmpl2(crypt_4x2blks_fn *crypt4, crypt_blk_fn *crypt,
 	__m256i cblk = _mm256_broadcastsi128_si256(cblk128);
 	const __m128i BSWAP_EPI64 = _mm_setr_epi8(7,6,5,4,3,2,1,0,15,14,13,12,11,10,9,8);
 	const __m256i BSWAP_BOTH = _mm256_broadcastsi128_si256(BSWAP_EPI64);
-	const __m128i ONE  = _mm_set_epi32(0, 1, 0, 0);
 	const __m256i INIT = _mm256_set_epi32(0, 1, 0, 0, 0, 0, 0, 0);
 	cblk = _mm256_shuffle_epi8(cblk, BSWAP_BOTH);
-	const __m256i TWO = _mm256_set_epi32(0, 2, 0, 0, 0, 2, 0, 0);
 	cblk = _mm256_add_epi64(cblk, INIT);
-	while (len >= 8*SIZE128) {
+	while (len >= 4*SIZE256) {
+		const __m256i TWO = _mm256_set_epi32(0, 2, 0, 0, 0, 2, 0, 0);
 		/* Prepare CTR (IV) values */
 		__m256i tmp0 = _mm256_shuffle_epi8(cblk, BSWAP_BOTH);
 		cblk = _mm256_add_epi64(cblk, TWO);
@@ -1166,22 +1174,23 @@ int AESNI_CTR_Crypt_Tmpl2(crypt_4x2blks_fn *crypt4, crypt_blk_fn *crypt,
 		__m256i tmp3 = _mm256_shuffle_epi8(cblk, BSWAP_BOTH);
 		/* Encrypt 4 Double IVs */
 		crypt4(&tmp0, &tmp1, &tmp2, &tmp3, key, rounds);
-		cblk = _mm256_add_epi64(cblk, TWO);
 		tmp0 = _mm256_xor_si256(tmp0, _mm256_loadu_si256((__m256i*)in));
 		tmp1 = _mm256_xor_si256(tmp1, _mm256_loadu_si256((__m256i*)in+1));
 		tmp2 = _mm256_xor_si256(tmp2, _mm256_loadu_si256((__m256i*)in+2));
 		tmp3 = _mm256_xor_si256(tmp3, _mm256_loadu_si256((__m256i*)in+3));
+		cblk = _mm256_add_epi64(cblk, TWO);
 		_mm256_storeu_si256((__m256i*)out  , tmp0);
 		_mm256_storeu_si256((__m256i*)out+1, tmp1);
 		_mm256_storeu_si256((__m256i*)out+2, tmp2);
 		_mm256_storeu_si256((__m256i*)out+3, tmp3);
-		len -= 8*SIZE128;
-		in  += 8*SIZE128;
-		out += 8*SIZE128;
+		len -= 4*SIZE256;
+		in  += 4*SIZE256;
+		out += 4*SIZE256;
 	}
 	cblk128 = _mm256_extracti128_si256(cblk, 0);
 	while (len > 0) {
 		register __m128i tmp = _mm_shuffle_epi8(cblk128, BSWAP_EPI64);
+		const __m128i ONE  = _mm_set_epi32(0, 1, 0, 0);
 		tmp = crypt(tmp, key, rounds);
 		if (len < SIZE128) {
 			uchar obuf[16];
