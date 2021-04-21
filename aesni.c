@@ -1157,11 +1157,13 @@ int AESNI_CTR_Crypt_Tmpl2(crypt_4x2blks_fn *crypt4, crypt_blk_fn *crypt,
 {
 	__m128i cblk128 = _mm_loadu_si128((__m128i*)ctr);
 	__m256i cblk = _mm256_broadcastsi128_si256(cblk128);
+	//__builtin_prefetch(key, 0, 3);
 	const __m128i BSWAP_EPI64 = _mm_setr_epi8(7,6,5,4,3,2,1,0,15,14,13,12,11,10,9,8);
 	const __m256i BSWAP_BOTH = _mm256_broadcastsi128_si256(BSWAP_EPI64);
 	const __m256i INIT = _mm256_set_epi32(0, 1, 0, 0, 0, 0, 0, 0);
 	cblk = _mm256_shuffle_epi8(cblk, BSWAP_BOTH);
 	cblk = _mm256_add_epi64(cblk, INIT);
+	//__builtin_prefetch(in, 0, 3);
 	while (len >= 4*SIZE256) {
 		const __m256i TWO = _mm256_set_epi32(0, 2, 0, 0, 0, 2, 0, 0);
 		/* Prepare CTR (IV) values */
