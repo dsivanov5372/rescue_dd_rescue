@@ -77,7 +77,7 @@ unsigned int DEF_LN = 432;
 /* TIMING */
 #define BENCH(_routine, _rep, _ln)	\
 	fflush(stdout);			\
-	/* _routine; */			\
+	_routine; /* warmup */		\
 	gettimeofday(&t1, NULL);	\
 	for (i = 0; i < (_rep); ++i) {	\
 		_routine; 		\
