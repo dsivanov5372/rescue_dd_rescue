@@ -151,6 +151,46 @@ inline void AES_ARM8_EKey_DKey(const u32* ekey,
 	memcpy(dkey+4*i, ekey, 16);
 }
 
+#define CLR_NEON3			\
+	asm volatile(			\
+	" movi	v0.16b, #0	\n"	\
+	" movi	v1.16b, #0	\n"	\
+	" movi	v2.16b, #0	\n"	\
+	::: "v0", "v1", "v2")
+
+#define CLR_NEON6			\
+	asm volatile(			\
+	" movi	v0.16b, #0	\n"	\
+	" movi	v1.16b, #0	\n"	\
+	" movi	v2.16b, #0	\n"	\
+	" movi	v3.16b, #0	\n"	\
+	" movi	v4.16b, #0	\n"	\
+	" movi	v5.16b, #0	\n"	\
+	::: "v0", "v1", "v2", "v3", "v4", "v5")
+
+#define CLR_NEON10			\
+	asm volatile(			\
+	" movi	v0.16b, #0	\n"	\
+	" movi	v1.16b, #0	\n"	\
+	" movi	v2.16b, #0	\n"	\
+	" movi	v3.16b, #0	\n"	\
+	" movi	v4.16b, #0	\n"	\
+	" movi	v5.16b, #0	\n"	\
+	" movi	v6.16b, #0	\n"	\
+	" movi	v7.16b, #0	\n"	\
+	" movi	v8.16b, #0	\n"	\
+	" movi	v9.16b, #0	\n"	\
+	::: "v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9")
+
+#define CLR_NEON10_14			\
+	asm volatile(			\
+	" movi	v10.16b, #0	\n"	\
+	" movi	v11.16b, #0	\n"	\
+	" movi	v12.16b, #0	\n"	\
+	" movi	v13.16b, #0	\n"	\
+	" movi	v14.16b, #0	\n"	\
+	::: "v10", "v11", "v12", "v13", "v14")
+
 /**
  * Expand the cipher key into the decryption key schedule.
  *
@@ -247,44 +287,44 @@ void AES_ARM8_Encrypt4(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8
 	".align 4				\n"
 	"1:					\n"
 	"	aese	v2.16b, v0.16b		\n"
-	"	aese	v3.16b, v0.16b		\n"
-	"	aese	v4.16b, v0.16b		\n"
-	"	aese	v5.16b, v0.16b		\n"
 	"	aesmc	v2.16b, v2.16b		\n"
+	"	aese	v3.16b, v0.16b		\n"
 	"	aesmc	v3.16b, v3.16b		\n"
+	"	aese	v4.16b, v0.16b		\n"
 	"	aesmc	v4.16b, v4.16b		\n"
+	"	aese	v5.16b, v0.16b		\n"
 	"	aesmc	v5.16b, v5.16b		\n"
 	"	ld1	{v0.4s}, [%[rk]], #16	\n"
 	"	b.eq	2f			\n"
 	"	subs	%w[nr], %w[nr], #2	\n"
 	"	aese	v2.16b, v1.16b		\n"
-	"	aese	v3.16b, v1.16b		\n"
-	"	aese	v4.16b, v1.16b		\n"
-	"	aese	v5.16b, v1.16b		\n"
 	"	aesmc	v2.16b, v2.16b		\n"
+	"	aese	v3.16b, v1.16b		\n"
 	"	aesmc	v3.16b, v3.16b		\n"
+	"	aese	v4.16b, v1.16b		\n"
 	"	aesmc	v4.16b, v4.16b		\n"
+	"	aese	v5.16b, v1.16b		\n"
 	"	aesmc	v5.16b, v5.16b		\n"
 	"	ld1	{v1.4s}, [%[rk]], #16	\n"
 	"	b.pl	1b			\n"
 	"					\n"
 	"	aese	v2.16b, v0.16b		\n"
-	"	aese	v3.16b, v0.16b		\n"
-	"	aese	v4.16b, v0.16b		\n"
-	"	aese	v5.16b, v0.16b		\n"
 	"	eor	v2.16b, v2.16b, v1.16b	\n"
+	"	aese	v3.16b, v0.16b		\n"
 	"	eor	v3.16b, v3.16b, v1.16b	\n"
+	"	aese	v4.16b, v0.16b		\n"
 	"	eor	v4.16b, v4.16b, v1.16b	\n"
+	"	aese	v5.16b, v0.16b		\n"
 	"	eor	v5.16b, v5.16b, v1.16b	\n"
 	"	b	3f			\n"
 	"2:					\n"
 	"	aese	v2.16b, v1.16b		\n"
-	"	aese	v3.16b, v1.16b		\n"
-	"	aese	v4.16b, v1.16b		\n"
-	"	aese	v5.16b, v1.16b		\n"
 	"	eor	v2.16b, v2.16b, v0.16b	\n"
+	"	aese	v3.16b, v1.16b		\n"
 	"	eor	v3.16b, v3.16b, v0.16b	\n"
+	"	aese	v4.16b, v1.16b		\n"
 	"	eor	v4.16b, v4.16b, v0.16b	\n"
+	"	aese	v5.16b, v1.16b		\n"
 	"	eor	v5.16b, v5.16b, v0.16b	\n"
 	"3:					\n"
 	"	st1	{v2.16b-v5.16b}, [%[ct]]	\n"
@@ -306,44 +346,44 @@ void AES_ARM8_Decrypt4(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8
 	".align 4				\n"
 	"1:					\n"
 	"	aesd	v2.16b, v0.16b		\n"
-	"	aesd	v3.16b, v0.16b		\n"
-	"	aesd	v4.16b, v0.16b		\n"
-	"	aesd	v5.16b, v0.16b		\n"
 	"	aesimc	v2.16b, v2.16b		\n"
+	"	aesd	v3.16b, v0.16b		\n"
 	"	aesimc	v3.16b, v3.16b		\n"
+	"	aesd	v4.16b, v0.16b		\n"
 	"	aesimc	v4.16b, v4.16b		\n"
+	"	aesd	v5.16b, v0.16b		\n"
 	"	aesimc	v5.16b, v5.16b		\n"
 	"	ld1	{v0.4s}, [%[rk]], #16	\n"
 	"	b.eq	2f			\n"
 	"	subs	%w[nr], %w[nr], #2	\n"
 	"	aesd	v2.16b, v1.16b		\n"
-	"	aesd	v3.16b, v1.16b		\n"
-	"	aesd	v4.16b, v1.16b		\n"
-	"	aesd	v5.16b, v1.16b		\n"
 	"	aesimc	v2.16b, v2.16b		\n"
+	"	aesd	v3.16b, v1.16b		\n"
 	"	aesimc	v3.16b, v3.16b		\n"
+	"	aesd	v4.16b, v1.16b		\n"
 	"	aesimc	v4.16b, v4.16b		\n"
+	"	aesd	v5.16b, v1.16b		\n"
 	"	aesimc	v5.16b, v5.16b		\n"
 	"	ld1	{v1.4s}, [%[rk]], #16	\n"
 	"	b.pl	1b			\n"
 	"					\n"
 	"	aesd	v2.16b, v0.16b		\n"
-	"	aesd	v3.16b, v0.16b		\n"
-	"	aesd	v4.16b, v0.16b		\n"
-	"	aesd	v5.16b, v0.16b		\n"
 	"	eor	v2.16b, v2.16b, v1.16b	\n"
+	"	aesd	v3.16b, v0.16b		\n"
 	"	eor	v3.16b, v3.16b, v1.16b	\n"
+	"	aesd	v4.16b, v0.16b		\n"
 	"	eor	v4.16b, v4.16b, v1.16b	\n"
+	"	aesd	v5.16b, v0.16b		\n"
 	"	eor	v5.16b, v5.16b, v1.16b	\n"
 	"	b	3f			\n"
 	"2:					\n"
 	"	aesd	v2.16b, v1.16b		\n"
-	"	aesd	v3.16b, v1.16b		\n"
-	"	aesd	v4.16b, v1.16b		\n"
-	"	aesd	v5.16b, v1.16b		\n"
 	"	eor	v2.16b, v2.16b, v0.16b	\n"
+	"	aesd	v3.16b, v1.16b		\n"
 	"	eor	v3.16b, v3.16b, v0.16b	\n"
+	"	aesd	v4.16b, v1.16b		\n"
 	"	eor	v4.16b, v4.16b, v0.16b	\n"
+	"	aesd	v5.16b, v1.16b		\n"
 	"	eor	v5.16b, v5.16b, v0.16b	\n"
 	"3:					\n"
 	"	st1	{v2.16b-v5.16b}, [%[pt]]	\n"
@@ -414,57 +454,57 @@ void AES_ARM8_Encrypt4_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, cons
 	"	ld1	{v0.4s, v1.4s}, [%[rk]], #32	\n"
 	"	subs	w7, w7, #2		\n"
 	"	add	v9.2d, v5.2d, v9.2d	\n"
+	"	rev64	v9.16b, v9.16b		\n"
 	"	add	v3.2d, v5.2d, v6.2d	\n"
+	"	rev64	v3.16b, v3.16b		\n"
 	"	add	v4.2d, v5.2d, v7.2d	\n"
+	"	rev64	v4.16b, v4.16b		\n"
 	"	add	v5.2d, v5.2d, v8.2d	\n"
 	"	//prfm	PLDL1STRM, [%[pt],#64]	\n"
-	"	rev64	v9.16b, v9.16b		\n"
-	"	rev64	v3.16b, v3.16b		\n"
-	"	rev64	v4.16b, v4.16b		\n"
 	"	rev64	v5.16b, v5.16b		\n"
 	"	st1	{v9.16b}, [%[iv]]	\n"
 	"	ld1	{v6.16b-v9.16b}, [%[pt]]\n"
 	".align 4				\n"
 	"1:					\n"
 	"	aese	v2.16b, v0.16b		\n"
-	"	aese	v3.16b, v0.16b		\n"
-	"	aese	v4.16b, v0.16b		\n"
-	"	aese	v5.16b, v0.16b		\n"
 	"	aesmc	v2.16b, v2.16b		\n"
+	"	aese	v3.16b, v0.16b		\n"
 	"	aesmc	v3.16b, v3.16b		\n"
+	"	aese	v4.16b, v0.16b		\n"
 	"	aesmc	v4.16b, v4.16b		\n"
+	"	aese	v5.16b, v0.16b		\n"
 	"	aesmc	v5.16b, v5.16b		\n"
 	"	ld1	{v0.4s}, [%[rk]], #16	\n"
 	"	b.eq	2f			\n"
 	"	subs	w7, w7, #2		\n"
 	"	aese	v2.16b, v1.16b		\n"
-	"	aese	v3.16b, v1.16b		\n"
-	"	aese	v4.16b, v1.16b		\n"
-	"	aese	v5.16b, v1.16b		\n"
 	"	aesmc	v2.16b, v2.16b		\n"
+	"	aese	v3.16b, v1.16b		\n"
 	"	aesmc	v3.16b, v3.16b		\n"
+	"	aese	v4.16b, v1.16b		\n"
 	"	aesmc	v4.16b, v4.16b		\n"
+	"	aese	v5.16b, v1.16b		\n"
 	"	aesmc	v5.16b, v5.16b		\n"
 	"	ld1	{v1.4s}, [%[rk]], #16	\n"
 	"	b.pl	1b			\n"
 	"					\n"
 	"	aese	v2.16b, v0.16b		\n"
-	"	aese	v3.16b, v0.16b		\n"
-	"	aese	v4.16b, v0.16b		\n"
-	"	aese	v5.16b, v0.16b		\n"
 	"	eor	v2.16b, v2.16b, v1.16b	\n"
+	"	aese	v3.16b, v0.16b		\n"
 	"	eor	v3.16b, v3.16b, v1.16b	\n"
+	"	aese	v4.16b, v0.16b		\n"
 	"	eor	v4.16b, v4.16b, v1.16b	\n"
+	"	aese	v5.16b, v0.16b		\n"
 	"	eor	v5.16b, v5.16b, v1.16b	\n"
 	"	b	3f			\n"
 	"2:					\n"
 	"	aese	v2.16b, v1.16b		\n"
-	"	aese	v3.16b, v1.16b		\n"
-	"	aese	v4.16b, v1.16b		\n"
-	"	aese	v5.16b, v1.16b		\n"
 	"	eor	v2.16b, v2.16b, v0.16b	\n"
+	"	aese	v3.16b, v1.16b		\n"
 	"	eor	v3.16b, v3.16b, v0.16b	\n"
+	"	aese	v4.16b, v1.16b		\n"
 	"	eor	v4.16b, v4.16b, v0.16b	\n"
+	"	aese	v5.16b, v1.16b		\n"
 	"	eor	v5.16b, v5.16b, v0.16b	\n"
 	"3:					\n"
 	"	eor	v6.16b, v6.16b, v2.16b	\n"
@@ -481,6 +521,166 @@ void AES_ARM8_Encrypt4_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, cons
 	//printf("%i rounds left, %li rounds\n", Nr, (rkeys-rk)/16);
 	return;
 }
+
+#ifndef NO_ASM_CTR
+/* TODO: Full assembly CTR loop */
+int  AES_ARM8_CTR_Crypt(const uchar* rkeys, uint rounds, uchar *ctr, uint pad,
+			const uchar *input, uchar *output, ssize_t len, ssize_t *olen)
+{
+	*olen = len;
+	asm volatile(
+	"	subs	%[len], %[len], #64	\n"
+	"	//prfm	PLDL1STRM, [%[pt]]	\n"
+	"	ld1	{v10.16b}, [%[iv]]	\n"
+	"	rev64	v10.16b, v10.16b	\n"
+	"	ld1	{v11.2d-v14.2d}, [%[inc]]	\n"
+	"	b.mi	9f			\n"
+	"//.align 4				\n"
+	"0:					\n"
+	"	mov	x8, %[rk]		\n"
+	"	mov	w9, %w[nr]		\n"
+	"	ld1	{v0.4s, v1.4s}, [x8], #32	\n"
+	"	subs	w9, w9, #2		\n"
+	"	rev64	v2.16b, v10.16b		\n"
+	"	add	v3.2d, v10.2d, v11.2d	\n"
+	"	rev64	v3.16b, v3.16b		\n"
+	"	add	v4.2d, v10.2d, v12.2d	\n"
+	"	rev64	v4.16b, v4.16b		\n"
+	"	add	v5.2d, v10.2d, v13.2d	\n"
+	"	rev64	v5.16b, v5.16b		\n"
+	"	ld1	{v6.16b-v9.16b}, [%[pt]], #64	\n"
+	"	add	v10.2d, v10.2d, v14.2d	\n"
+	"	//prfm	PLDL1STRM, [%[pt]]	\n"
+	"	//prfm	PLDL1STRM, [%[pt],#64]	\n"
+	".align 4				\n"
+	"1:					\n"
+	"	aese	v2.16b, v0.16b		\n"
+	"	aesmc	v2.16b, v2.16b		\n"
+	"	aese	v3.16b, v0.16b		\n"
+	"	aesmc	v3.16b, v3.16b		\n"
+	"	aese	v4.16b, v0.16b		\n"
+	"	aesmc	v4.16b, v4.16b		\n"
+	"	aese	v5.16b, v0.16b		\n"
+	"	aesmc	v5.16b, v5.16b		\n"
+	"	ld1	{v0.4s}, [x8], #16	\n"
+	"	b.eq	2f			\n"
+	"	subs	w9, w9, #2		\n"
+	"	aese	v2.16b, v1.16b		\n"
+	"	aesmc	v2.16b, v2.16b		\n"
+	"	aese	v3.16b, v1.16b		\n"
+	"	aesmc	v3.16b, v3.16b		\n"
+	"	aese	v4.16b, v1.16b		\n"
+	"	aesmc	v4.16b, v4.16b		\n"
+	"	aese	v5.16b, v1.16b		\n"
+	"	aesmc	v5.16b, v5.16b		\n"
+	"	ld1	{v1.4s}, [x8], #16	\n"
+	"	b.pl	1b			\n"
+	"					\n"
+	"	aese	v2.16b, v0.16b		\n"
+	"	eor	v2.16b, v2.16b, v1.16b	\n"
+	"	aese	v3.16b, v0.16b		\n"
+	"	eor	v3.16b, v3.16b, v1.16b	\n"
+	"	aese	v4.16b, v0.16b		\n"
+	"	eor	v4.16b, v4.16b, v1.16b	\n"
+	"	aese	v5.16b, v0.16b		\n"
+	"	eor	v5.16b, v5.16b, v1.16b	\n"
+	"	b	3f			\n"
+	"2:					\n"
+	"	aese	v2.16b, v1.16b		\n"
+	"	eor	v2.16b, v2.16b, v0.16b	\n"
+	"	aese	v3.16b, v1.16b		\n"
+	"	eor	v3.16b, v3.16b, v0.16b	\n"
+	"	aese	v4.16b, v1.16b		\n"
+	"	eor	v4.16b, v4.16b, v0.16b	\n"
+	"	aese	v5.16b, v1.16b		\n"
+	"	eor	v5.16b, v5.16b, v0.16b	\n"
+	"3:					\n"
+	"	subs	%[len], %[len], #64	\n"
+	"	eor	v6.16b, v6.16b, v2.16b	\n"
+	"	eor	v7.16b, v7.16b, v3.16b	\n"
+	"	eor	v8.16b, v8.16b, v4.16b	\n"
+	"	eor	v9.16b, v9.16b, v5.16b	\n"
+	"	st1	{v6.16b-v9.16b}, [%[ct]], #64	\n"
+	"	b.pl	0b			\n"
+	"9:					\n"
+	"	add	%[len], %[len], #80	\n"
+	"	subs	%[len], %[len], #16	\n"
+	"10:					\n"
+	"	b.ls	30f			\n"
+	"	mov	x8, %[rk]		\n"
+	"	mov	w9, %w[nr]		\n"
+	"	ld1	{v0.4s, v1.4s}, [x8], #32	\n"
+	"	subs	w9, w9, #2		\n"
+	"	rev64	v2.16b, v10.16b		\n"
+	"	add	v10.2d, v10.2d, v11.2d	\n"
+	"	ld1	{v6.16b}, [%[pt]], #16	\n"
+	"11:					\n"
+	"	aese	v2.16b, v0.16b		\n"
+	"	aesmc	v2.16b, v2.16b		\n"
+	"	ld1	{v0.4s}, [x8], #16	\n"
+	"	b.eq	12f			\n"
+	"	subs	w9, w9, #2		\n"
+	"	aese	v2.16b, v1.16b		\n"
+	"	aesmc	v2.16b, v2.16b		\n"
+	"	ld1	{v1.4s}, [x8], #16	\n"
+	"	b.pl	11b			\n"
+	"					\n"
+	"	aese	v2.16b, v0.16b		\n"
+	"	eor	v2.16b, v2.16b, v1.16b	\n"
+	"	b	13f			\n"
+	"12:					\n"
+	"	aese	v2.16b, v1.16b		\n"
+	"	eor	v2.16b, v2.16b, v0.16b	\n"
+	"13:					\n"
+	"	subs	%[len], %[len], #16	\n"
+	"	eor	v6.16b, v6.16b, v2.16b	\n"
+	"	b.mi	20f			\n"
+	"	st1	{v6.16b}, [%[ct]], #16	\n"
+	"	b.eq	30f			\n"
+	"	b	10b			\n"
+	"20:					\n"
+	"	add	%[len], %[len], #16	\n"
+	"	cmp	%[len], #8		\n"
+	"	b.mi	21f			\n"
+	"	st1	{v6.d}[0], [%[ct]], #8	\n"
+	"	sub	%[len], %[len], #8	\n"
+	"	ext	v6.16b, v6.16b, v6.16b, #8 \n"
+	"21:					\n"
+	"	cmp	%[len], #4		\n"
+	"	b.mi	22f			\n"
+	"	st1	{v6.s}[0], [%[ct]], #4	\n"
+	"	sub	%[len], %[len], #4	\n"
+	"	ext	v6.16b, v6.16b, v6.16b, #4 \n"
+	"22:					\n"
+	"	cmp	%[len], #2		\n"
+	"	b.mi	23f			\n"
+	"	st1	{v6.h}[0], [%[ct]], #2	\n"
+	"	sub	%[len], %[len], #2	\n"
+	"	ext	v6.16b, v6.16b, v6.16b, #2 \n"
+	"23:					\n"
+	"	cmp	%[len], #1		\n"
+	"	b.mi	30f			\n"
+	"	st1	{v6.b}[0], [%[ct]], #1 \n"
+	"//	sub	%[len], %[len], #1	\n"
+	"//	ext	v6.16b, v6.16b, v6.16b, #1 \n"
+	"30:					\n"
+	"	rev64	v10.16b, v10.16b	\n"
+	"	st1	{v10.16b}, [%[iv]]	\n"
+	: [len] "=r" (len), [pt] "=r" (input), [ct] "=r" (output),
+	  "=m" (*(char(*)[16])ctr), "=m" (*(char(*)[len])output)
+	: "0" (len), "1" (input), "2" (output), [rk] "r" (rkeys),
+	  [nr] "r" (rounds), [iv] "r" (ctr), [inc] "r" (inc1234),
+	  "m" (*(const char(*)[16*(rounds+1)])rkeys), "m" (*(const char(*)[len])input)
+	: "v0", "v1", "v2", "v3", "v4", "v5", "v6", "x8", "w9", "cc",
+	  "v7", "v8", "v9", "v10", "v11", "v12", "v13", "v14"
+	);
+	//printf("%i rounds left, %li rounds\n", Nr, (rkeys-rk)/16);
+	CLR_NEON10;
+	CLR_NEON10_14;
+	//return r;
+	return 0;
+}
+#endif
 
 void AES_ARM8_EncryptX2_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 pt[16], u8 ct[16], u8 iv[16])
 {
@@ -546,13 +746,13 @@ void AES_ARM8_Encrypt4X2_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, co
 	"	//prfm	PLDL1STRM, [%[pt]]	\n"
 	"	subs	%w[nr], %w[nr], #2	\n"
 	"	add	v9.2d, v5.2d, v9.2d	\n"
+	"	rev64	v9.16b, v9.16b		\n"
 	"	add	v3.2d, v5.2d, v6.2d	\n"
+	"	rev64	v3.16b, v3.16b		\n"
 	"	add	v4.2d, v5.2d, v7.2d	\n"
+	"	rev64	v4.16b, v4.16b		\n"
 	"	add	v5.2d, v5.2d, v8.2d	\n"
 	"	mov	w7, %w[nr]		\n"
-	"	rev64	v9.16b, v9.16b		\n"
-	"	rev64	v3.16b, v3.16b		\n"
-	"	rev64	v4.16b, v4.16b		\n"
 	"	rev64	v5.16b, v5.16b		\n"
 	"	st1	{v9.16b}, [%[iv]]	\n"
 	"	//prfm	PLDL1STRM, [%[pt],#64]	\n"
@@ -560,44 +760,44 @@ void AES_ARM8_Encrypt4X2_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, co
 	".align 4				\n"
 	"1:					\n"
 	"	aese	v2.16b, v0.16b		\n"
-	"	aese	v3.16b, v0.16b		\n"
-	"	aese	v4.16b, v0.16b		\n"
-	"	aese	v5.16b, v0.16b		\n"
 	"	aesmc	v2.16b, v2.16b		\n"
+	"	aese	v3.16b, v0.16b		\n"
 	"	aesmc	v3.16b, v3.16b		\n"
+	"	aese	v4.16b, v0.16b		\n"
 	"	aesmc	v4.16b, v4.16b		\n"
+	"	aese	v5.16b, v0.16b		\n"
 	"	aesmc	v5.16b, v5.16b		\n"
 	"	ld1	{v0.4s}, [%[rk]], #16	\n"
 	"	b.eq	2f			\n"
 	"	subs	%w[nr], %w[nr], #2	\n"
 	"	aese	v2.16b, v1.16b		\n"
-	"	aese	v3.16b, v1.16b		\n"
-	"	aese	v4.16b, v1.16b		\n"
-	"	aese	v5.16b, v1.16b		\n"
 	"	aesmc	v2.16b, v2.16b		\n"
+	"	aese	v3.16b, v1.16b		\n"
 	"	aesmc	v3.16b, v3.16b		\n"
+	"	aese	v4.16b, v1.16b		\n"
 	"	aesmc	v4.16b, v4.16b		\n"
+	"	aese	v5.16b, v1.16b		\n"
 	"	aesmc	v5.16b, v5.16b		\n"
 	"	ld1	{v1.4s}, [%[rk]], #16	\n"
 	"	b.pl	1b			\n"
 	"					\n"
 	"	aese	v2.16b, v0.16b		\n"
-	"	aese	v3.16b, v0.16b		\n"
-	"	aese	v4.16b, v0.16b		\n"
-	"	aese	v5.16b, v0.16b		\n"
 	"	eor	v2.16b, v2.16b, v1.16b	\n"
+	"	aese	v3.16b, v0.16b		\n"
 	"	eor	v3.16b, v3.16b, v1.16b	\n"
+	"	aese	v4.16b, v0.16b		\n"
 	"	eor	v4.16b, v4.16b, v1.16b	\n"
+	"	aese	v5.16b, v0.16b		\n"
 	"	eor	v5.16b, v5.16b, v1.16b	\n"
 	"	b	3f			\n"
 	"2:					\n"
 	"	aese	v2.16b, v1.16b		\n"
-	"	aese	v3.16b, v1.16b		\n"
-	"	aese	v4.16b, v1.16b		\n"
-	"	aese	v5.16b, v1.16b		\n"
 	"	eor	v2.16b, v2.16b, v0.16b	\n"
+	"	aese	v3.16b, v1.16b		\n"
 	"	eor	v3.16b, v3.16b, v0.16b	\n"
+	"	aese	v4.16b, v1.16b		\n"
 	"	eor	v4.16b, v4.16b, v0.16b	\n"
+	"	aese	v5.16b, v1.16b		\n"
 	"	eor	v5.16b, v5.16b, v0.16b	\n"
 	"3:					\n"
 	"	cmp	w7, #0			\n"
@@ -646,37 +846,6 @@ DECL_KEYSETUP(Dec, 256);
 #define AES_ARM8_Encrypt_4Blk_CTR AES_ARM8_Encrypt4_CTR
 #define AES_ARM8_Encrypt_BlkX2_CTR  AES_ARM8_EncryptX2_CTR
 #define AES_ARM8_Encrypt_4BlkX2_CTR AES_ARM8_Encrypt4X2_CTR
-
-#define CLR_NEON3				\
-	asm volatile(				\
-	" movi	v0.16b, #0	\n"	\
-	" movi	v1.16b, #0	\n"	\
-	" movi	v2.16b, #0	\n"	\
-	::: "v0", "v1", "v2")
-
-#define CLR_NEON6				\
-	asm volatile(				\
-	" movi	v0.16b, #0	\n"	\
-	" movi	v1.16b, #0	\n"	\
-	" movi	v2.16b, #0	\n"	\
-	" movi	v3.16b, #0	\n"	\
-	" movi	v4.16b, #0	\n"	\
-	" movi	v5.16b, #0	\n"	\
-	::: "v0", "v1", "v2", "v3", "v4", "v5")
-
-#define CLR_NEON10				\
-	asm volatile(				\
-	" movi	v0.16b, #0	\n"	\
-	" movi	v1.16b, #0	\n"	\
-	" movi	v2.16b, #0	\n"	\
-	" movi	v3.16b, #0	\n"	\
-	" movi	v4.16b, #0	\n"	\
-	" movi	v5.16b, #0	\n"	\
-	" movi	v6.16b, #0	\n"	\
-	" movi	v7.16b, #0	\n"	\
-	" movi	v8.16b, #0	\n"	\
-	" movi	v9.16b, #0	\n"	\
-	::: "v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9")
 
 int  AES_ARM8_ECB_Encrypt(const uchar* rkeys, uint rounds, uchar *iv, uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen)
 {
@@ -785,16 +954,127 @@ int  AES_ARM8_CBC_Encrypt(const uchar* rkeys, uint rounds,
 }
 #endif
 
+#ifndef NO_CBC_DEC4X
+int  AES_ARM8_CBC_Decrypt(const uchar* rkeys, uint rounds, uchar *iv, uint pad,
+		          const uchar *input, uchar *output, ssize_t len, ssize_t *olen)
+{
+	*olen = len;
+	asm volatile(
+	"	subs	%[len], %[len], #64	\n"
+	"	//prfm	PLDL1STRM, [%[ct]]	\n"
+	"	ld1	{v2.16b}, [%[iv]]	\n"
+	"	b.mi	10f			\n"
+	"//.align 4				\n"
+	"0:					\n"
+	"	mov	x8, %[rk]		\n"
+	"	ld1	{v3.16b-v6.16b}, [%[ct]], #64\n"
+	"	//prfm	PLDL1STRM, [%[ct],#64]	\n"
+	"	mov	w9, %w[nr]		\n"
+	"	ld1	{v0.4s, v1.4s}, [x8], #32	\n"
+	"	subs	w9, w9, #2		\n"
+	"	mov	v7.16b, v3.16b		\n"
+	"	mov	v8.16b, v4.16b		\n"
+	"	mov	v9.16b, v5.16b		\n"
+	"	mov	v10.16b, v6.16b		\n"
+	".align 4				\n"
+	"1:					\n"
+	"	aesd	v3.16b, v0.16b		\n"
+	"	aesimc	v3.16b, v3.16b		\n"
+	"	aesd	v4.16b, v0.16b		\n"
+	"	aesimc	v4.16b, v4.16b		\n"
+	"	aesd	v5.16b, v0.16b		\n"
+	"	aesimc	v5.16b, v5.16b		\n"
+	"	aesd	v6.16b, v0.16b		\n"
+	"	aesimc	v6.16b, v6.16b		\n"
+	"	ld1	{v0.4s}, [x8], #16	\n"
+	"	b.eq	2f			\n"
+	"	subs	w9, w9, #2		\n"
+	"	aesd	v3.16b, v1.16b		\n"
+	"	aesimc	v3.16b, v3.16b		\n"
+	"	aesd	v4.16b, v1.16b		\n"
+	"	aesimc	v4.16b, v4.16b		\n"
+	"	aesd	v5.16b, v1.16b		\n"
+	"	aesimc	v5.16b, v5.16b		\n"
+	"	aesd	v6.16b, v1.16b		\n"
+	"	aesimc	v6.16b, v6.16b		\n"
+	"	ld1	{v1.4s}, [x8], #16	\n"
+	"	b.pl	1b			\n"
+	"					\n"
+	"	aesd	v3.16b, v0.16b		\n"
+	"	eor	v3.16b, v3.16b, v1.16b	\n"
+	"	aesd	v4.16b, v0.16b		\n"
+	"	eor	v4.16b, v4.16b, v1.16b	\n"
+	"	aesd	v5.16b, v0.16b		\n"
+	"	eor	v5.16b, v5.16b, v1.16b	\n"
+	"	aesd	v6.16b, v0.16b		\n"
+	"	eor	v6.16b, v6.16b, v1.16b	\n"
+	"	b	3f			\n"
+	"2:					\n"
+	"	aesd	v3.16b, v1.16b		\n"
+	"	eor	v3.16b, v3.16b, v0.16b	\n"
+	"	aesd	v4.16b, v1.16b		\n"
+	"	eor	v4.16b, v4.16b, v0.16b	\n"
+	"	aesd	v5.16b, v1.16b		\n"
+	"	eor	v5.16b, v5.16b, v0.16b	\n"
+	"	aesd	v6.16b, v1.16b		\n"
+	"	eor	v6.16b, v6.16b, v0.16b	\n"
+	"3:					\n"
+	"	subs	%[len], %[len], #64	\n"
+	"	eor	v3.16b, v3.16b, v2.16b	\n"
+	"	eor	v4.16b, v4.16b, v7.16b	\n"
+	"	eor	v5.16b, v5.16b, v8.16b	\n"
+	"	eor	v6.16b, v6.16b, v9.16b	\n"
+	"	mov	v2.16b, v10.16b		\n"
+	"	st1	{v3.16b-v6.16b}, [%[pt]], #64	\n"
+	"	b.pl	0b			\n"
+	"10:					\n"
+	"	st1	{v2.16b}, [%[iv]]	\n"
+	"	add	%[len], %[len], #64	\n"
+	"	//movi	v6.16b, #0		\n"
+	"	movi	v10.16b, #0		\n"
+	: [len] "=r" (len), [ct] "=r" (input), [pt] "=r" (output),
+	  "=m" (*(char(*)[16])iv), "=m" (*(char(*)[len])output)
+	: "0" (len), "1" (input), "2" (output), [rk] "r" (rkeys),
+	  [nr] "r" (rounds), [iv] "r" (iv),
+	  "m" (*(const char(*)[16*(rounds+1)])rkeys), "m" (*(const char(*)[len])input)
+	: "v0", "v1", "v2", "v3", "v4", "v5", "v6", "x8", "w9", "cc",
+	  "v7", "v8", "v9", "v10"
+	);
+	//printf("%li bytes left, %li done\n", len, *olen);
+	while (len > 0) {
+		uchar *ebf = crypto->blkbuf2;
+		AES_ARM8_Decrypt_Blk(rkeys, rounds, input, ebf);
+		XOR16(iv, ebf, output);
+		/* Update last IV */
+		memcpy(iv, input, 16);
+		//memset(in, 0, 16);
+		//LFENCE;
+		len -= 16; input += 16; output += 16;
+	}
+	CLR_NEON10;
+	if (pad)
+		return dec_fix_olen_pad(olen, pad, output);
+	else
+		return 0;
+	//return (pad == PAD_ALWAYS || (len&15))? 16-(len&15): 0;
+}
+
+
+#else
 // TODO: Create optimized version
-int  AES_ARM8_CBC_Decrypt(const uchar* rkeys, uint rounds, uchar *iv, uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen)
+int  AES_ARM8_CBC_Decrypt(const uchar* rkeys, uint rounds, uchar *iv, uint pad,
+			  const uchar *in, uchar *out, ssize_t len, ssize_t *olen)
 {
 	int r = AES_Gen_CBC_Dec4(AES_ARM8_Decrypt_4Blk, AES_ARM8_Decrypt_Blk, 
 				rkeys, rounds, iv, pad, in, out, len, olen);
 	CLR_NEON6;
 	return r;
 }
+#endif
 
-int  AES_ARM8_CTR_Crypt(const uchar* rkeys, uint rounds, uchar *ctr, uint pad, const uchar *in, uchar *out, ssize_t len, ssize_t *olen)
+#ifdef NO_ASM_CTR
+int  AES_ARM8_CTR_Crypt(const uchar* rkeys, uint rounds, uchar *ctr, uint pad,
+			const uchar *in, uchar *out, ssize_t len, ssize_t *olen)
 {
 	*olen = len;
 	int r = AES_Gen_CTR_Crypt_Opt(AES_ARM8_Encrypt_4Blk_CTR, AES_ARM8_Encrypt_Blk_CTR, 
@@ -802,6 +1082,7 @@ int  AES_ARM8_CTR_Crypt(const uchar* rkeys, uint rounds, uchar *ctr, uint pad, c
 	CLR_NEON10;
 	return r;
 }
+#endif
 
 /* Double de/encryption methods */
 

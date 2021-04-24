@@ -92,6 +92,7 @@ HAVE_SSE42 := $(shell echo "" | $(CC) -msse4.2 -xc - 2>&1 | grep unrecognized ||
 HAVE_AES := $(shell echo "" | $(CC) -maes -xc - 2>&1 | grep unrecognized || echo 1)
 HAVE_AVX2 := $(shell echo "" | $(CC) -mavx2 -xc - 2>&1 | grep unrecognized || echo 1)
 HAVE_RDRND := $(shell echo "" | $(CC) -mrdrnd -xc - 2>&1 | grep unrecognized || echo 1)
+HAVE_VAES := $(shell echo "" | $(CC) -mvaes -xc - 2>&1 | grep unrecognized || echo 1)
 endif
 
 ifneq ($(HAVE_RDRND),1)
@@ -99,6 +100,9 @@ ifneq ($(HAVE_RDRND),1)
 endif
 ifneq ($(HAVE_AES),1)
 	HAVE_AES = 0
+endif
+ifneq ($(HAVE_VAES),1)
+	HAVE_VAES = 0
 endif
 
 
@@ -134,6 +138,13 @@ ifeq ($(HAVE_AVX2),1)
 	ARCHFLAGS +=  -mavx2
 else
 	CFLAGS += -DNO_AVX2
+endif
+ifeq ($(HAVE_VAES),1)
+	#OBJECTS2 += rdrand.o
+	#POBJECTS2 += rdrand.po
+	ARCHFLAGS +=  -mvaes
+else
+	CFLAGS += -DNO_VAES
 endif
 ifeq ($(HAVE_RDRND),1)
 	#OBJECTS2 += rdrand.o
@@ -309,6 +320,13 @@ ffs_sse42.o: $(SRCDIR)/ffs_sse42.c
 ffs_sse42.po: $(SRCDIR)/ffs_sse42.c
 	$(CC) $(CFLAGS_OPT) $(PIC) -msse4.2 -o $@ -c $<
 
+ifeq ($(HAVE_VAES),1)
+rdrand.o: $(SRCDIR)/rdrand.c
+	$(CC) $(CFLAGS) $(PIE) -mrdrnd -maes -mavx2 -mvaes -c $<
+
+rdrand.po: $(SRCDIR)/rdrand.c
+	$(CC) $(CFLAGS) $(PIC) -mrdrnd -maes -mavx2 -mvaes -o $@ -c $<
+else
 ifeq ($(HAVE_RDRND),1)
 rdrand.o: $(SRCDIR)/rdrand.c
 	$(CC) $(CFLAGS) $(PIE) -mrdrnd -maes -c $<
@@ -321,6 +339,7 @@ rdrand.o: $(SRCDIR)/rdrand.c
 
 rdrand.po: $(SRCDIR)/rdrand.c
 	$(CC) $(CFLAGS) $(PIC) -maes -o $@ -c $<
+endif
 endif
 
 # TODO: Build binaries from .o file, so we can save some special rules ...
@@ -399,12 +418,19 @@ test_aes: $(SRCDIR)/test_aes.c $(AESNI_O) $(AES_ARM64_O) aes_c.o secmem.o sha256
 	$(CC) $(CFLAGS) $(PIE) $(LDPIE) $(DEF) -o $@ $< $(AESNI_O) $(AES_ARM64_O) aes_c.o secmem.o sha256.o $(AES_OSSL_O) aes.o find_nonzero.o $(OBJECTS2) $(CRYPTOLIB)
 
 # Special optimized versions
+ifeq ($(HAVE_VAES),1)
+aesni.o: $(SRCDIR)/aesni.c
+	$(CC) $(CFLAGS) $(PIE) -O3 -maes -mavx2 -mvaes -c $<
+
+aesni.po: $(SRCDIR)/aesni.c
+	$(CC) $(CFLAGS) $(PIC) -O3 -maes -mavx2 -mvaes -c $< -o $@
+else
 aesni.o: $(SRCDIR)/aesni.c
 	$(CC) $(CFLAGS) $(PIE) -O3 -maes -msse4.1 -c $<
 
 aesni.po: $(SRCDIR)/aesni.c
 	$(CC) $(CFLAGS) $(PIC) -O3 -maes -msse4.1 -c $< -o $@
-
+endif
 aes_arm64.o: $(SRCDIR)/aes_arm64.c
 	$(CC) $(CFLAGS) $(PIE) -O3 -march=armv8-a+crypto -c $<
 

@@ -29,6 +29,7 @@ void probe_sse2();
 #define have_sse42 0
 #define have_rdrand 0
 #define have_aesni 0
+#define have_vaes 0
 #define ARCH_DETECT do {} while (0)
 #define ARCH_DECLS ARCH_DECL_386
 
@@ -40,6 +41,7 @@ void probe_sse42();
 #define have_avx2 0
 #define have_rdrand 0
 #define have_aesni 0
+#define have_vaes 0
 #define ARCH_DECLS char have_sse42; ARCH_DECL_386
 #define ARCH_DETECT have_sse42 = detect("sse4.2", probe_sse42) ARCH_DETECT_386
 
@@ -50,6 +52,7 @@ void probe_aesni();
 #ifdef NO_AVX2	/* compiler does not support -mavx2 */
 #define have_avx2 0
 #define have_rdrand 0
+#define have_vaes 0
 #define ARCH_DECLS char have_sse42; char have_aesni; ARCH_DECL_386
 #define ARCH_DETECT have_aesni = detect2("aes", probe_aesni); have_sse42 = detect("sse4.2", probe_sse42) \
 		    ARCH_DETECT_386
@@ -60,6 +63,7 @@ void probe_avx2();
 
 #ifdef NO_RDRND	/* SSE42 and AESNI and AVX2 but no rdrand */
 #define have_rdrand 0
+#define have_vaes 0
 #define ARCH_DECLS char have_avx2; char have_aesni; char have_sse42; ARCH_DECL_386
 #define ARCH_DETECT have_avx2 = detect("avx2", probe_avx2); have_aesni = detect2("aes", probe_aesni); \
 		    have_sse42 = detect("sse4.2", probe_sse42) ARCH_DETECT_386
@@ -67,10 +71,21 @@ void probe_avx2();
 #else /* Probe everything */
 extern char have_rdrand;
 void probe_rdrand();
+#ifdef NO_VAES	/* Disabled VAES */
+#define have_vaes 0
 #define ARCH_DECLS char have_rdrand; char have_avx2; char have_aesni; char have_sse42; ARCH_DECL_386
 #define ARCH_DETECT have_rdrand = detect2("rdrand", probe_rdrand); have_avx2 = detect("avx2", probe_avx2); \
 		    have_aesni = detect2("aes", probe_aesni); have_sse42 = detect("sse4.2", probe_sse42) \
 		    ARCH_DETECT_386
+#else
+extern char have_vaes;
+void probe_vaes();
+#define ARCH_DECLS char have_rdrand; char have_vaes; char have_avx2; char have_aesni; char have_sse42; ARCH_DECL_386
+#define ARCH_DETECT have_vaes = detect2("vaes", probe_vaes); \
+		    have_rdrand = detect2("rdrand", probe_rdrand); have_avx2 = detect("avx2", probe_avx2); \
+		    have_aesni = detect2("aes", probe_aesni); have_sse42 = detect("sse4.2", probe_sse42) \
+		    ARCH_DETECT_386
+#endif	/* VAES */
 #endif	/* RDRND */
 #endif	/* AVX2 */
 #endif	/* AESNI */
@@ -87,6 +102,7 @@ void probe_rdrand();
 #define have_sse2 0
 #define have_sse42 0
 #define have_aesni 0
+#define have_vaes 0
 extern char have_arm8crypto;
 void probe_arm8crypto_32();
 #define ARCH_DECLS char have_arm8crypto;
@@ -102,6 +118,7 @@ void probe_arm8crypto_32();
 #define have_sse2 0
 #define have_sse42 0
 #define have_aesni 0
+#define have_vaes 0
 extern char have_arm8crypto;
 void probe_arm8crypto();
 #define ARCH_DECLS char have_arm8crypto;
@@ -116,6 +133,7 @@ void probe_arm8crypto();
 #define have_sse2 0
 #define have_sse42 0
 #define have_aesni 0
+#define have_vaes 0
 #define have_arm8crypto 0
 #define FIND_NONZERO_OPT(x,y) find_nonzero_c(x,y)
 #define ARCH_DECLS
