@@ -71,7 +71,9 @@ void probe_vaes()
 	_mm256_storeu_si256((__m256i*)_aes_probe_res, x);
 }
 #else
-# warning please compile rdrand with -mvaes
+# ifndef NO_VAES
+#  warning please compile rdrand with -mvaes
+# endif
 #endif
 #else
 # warning please compile rdrand with -maes
