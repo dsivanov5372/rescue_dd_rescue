@@ -613,6 +613,7 @@ int  AES_ARM8_CTR_Crypt(const uchar* rkeys, uint rounds, uchar *ctr, uint pad,
 	"	rev64	v2.16b, v10.16b		\n"
 	"	add	v10.2d, v10.2d, v11.2d	\n"
 	"	ld1	{v6.16b}, [%[pt]], #16	\n"
+	"//.align 4				\n"
 	"11:					\n"
 	"	aese	v2.16b, v0.16b		\n"
 	"	aesmc	v2.16b, v2.16b		\n"
