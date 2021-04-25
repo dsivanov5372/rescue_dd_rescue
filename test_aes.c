@@ -77,7 +77,7 @@ unsigned int DEF_LN = 432;
 /* TIMING */
 #define BENCH(_routine, _rep, _ln)	\
 	fflush(stdout);			\
-	_routine; /* warmup */		\
+	/*_routine; */ /* warmup */	\
 	gettimeofday(&t1, NULL);	\
 	for (i = 0; i < (_rep); ++i) {	\
 		_routine; 		\
@@ -139,6 +139,28 @@ int last_eres, last_dres;
 uchar *last_ct;
 
 #define BLKSZ (alg->blocksize)
+
+#ifndef HAVE_ALIGNED_ALLOC
+void* aligned_alloc(size_t align, size_t len)
+{
+#ifdef HAVE_POSIX_MEMALIGN
+#warning Emulating aligned_alloc with posix_memalign
+	void* ptr;
+	int err = posix_memalign(&ptr, align, len);
+	if (err)
+		return 0;
+	else
+		return ptr;
+#else
+#warning Emulating aligned_alloc with plain alloc
+	void *ptr = malloc(len+align);
+	if (!ptr)
+		return 0;
+	else
+		return ((unsigned long)ptr%align? ptr+align-(unsigned long)ptr%align: ptr);
+#endif
+}
+#endif
 
 int test_alg(const char* prefix, ciph_desc_t *alg, uchar *key, uchar *in, ssize_t ln, int epad, int dpad, int rep)
 {
