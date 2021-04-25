@@ -55,7 +55,13 @@ echo "#We will eat a lot of entropy ... hopefully you have some left afterwards!
 # MAIN TEST
 if test -e test_aes; then
   LOG=test_aes.log
-  for ALG in $TESTALGS; do echo $VG ./test_aes $ALG 10000; $VG ./test_aes $ALG 10000 >$LOG 2>&1; if test $? != 0; then cat $LOG; echo "ERROR"; exit 1; fi; done
+  #for ALG in $TESTALGS; do echo $VG ./test_aes $ALG 10000; $VG ./test_aes $ALG 10000 >$LOG 2>&1; if test $? != 0; then cat $LOG; echo "ERROR"; exit 1; fi; done
+  #rm $LOG
+  echo $VG test_aes AES128-CTR 10000 0 16400
+  $VG ./test_aes AES128-CTR 10000 0 16400
+  for len in $(seq 0 130); do
+    for ALG in $TESTALGS; do echo $VG ./test_aes $ALG 100 0 $len; $VG ./test_aes $ALG 100 0 $len >$LOG 2>&1; if test $? != 0; then cat $LOG; echo "ERROR"; exit 1; fi; done
+  done
   rm $LOG
 fi
 # Reverse (CTR, ECB)
