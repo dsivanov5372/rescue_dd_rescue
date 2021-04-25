@@ -1066,25 +1066,25 @@ int AESNI_CTR_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt,
 	const __m128i BSWAP_EPI64 = _mm_setr_epi8(7,6,5,4,3,2,1,0,15,14,13,12,11,10,9,8);
 	const __m128i ONE = _mm_set_epi32(0, 1, 0, 0);
 	cblk = _mm_shuffle_epi8(cblk, BSWAP_EPI64);
-	const __m128i TWO = _mm_set_epi32(0, 2, 0, 0);
+	//const __m128i TWO = _mm_set_epi32(0, 2, 0, 0);
 	while (len >= 8*SIZE128) {
 		/* Prepare CTR (IV) values */
 		__m128i tmp0 = _mm_shuffle_epi8(cblk, BSWAP_EPI64);
-		__m128i tmp1 = _mm_add_epi64(cblk, ONE);
-		cblk = _mm_add_epi64(cblk, TWO);
-		tmp1 = _mm_shuffle_epi8(tmp1, BSWAP_EPI64);
+		cblk = _mm_add_epi64(cblk, ONE);
+		__m128i tmp1 = _mm_shuffle_epi8(cblk, BSWAP_EPI64);
+		cblk = _mm_add_epi64(cblk, ONE);
 		__m128i tmp2 = _mm_shuffle_epi8(cblk, BSWAP_EPI64);
-		__m128i tmp3 = _mm_add_epi64(cblk, ONE);
-		cblk = _mm_add_epi64(cblk, TWO);
-		tmp3 = _mm_shuffle_epi8(tmp3, BSWAP_EPI64);
+		cblk = _mm_add_epi64(cblk, ONE);
+		__m128i tmp3 = _mm_shuffle_epi8(cblk, BSWAP_EPI64);
+		cblk = _mm_add_epi64(cblk, ONE);
 		__m128i tmp4 = _mm_shuffle_epi8(cblk, BSWAP_EPI64);
-		__m128i tmp5 = _mm_add_epi64(cblk, ONE);
-		cblk = _mm_add_epi64(cblk, TWO);
-		tmp5 = _mm_shuffle_epi8(tmp5, BSWAP_EPI64);
+		cblk = _mm_add_epi64(cblk, ONE);
+		__m128i tmp5 = _mm_shuffle_epi8(cblk, BSWAP_EPI64);
+		cblk = _mm_add_epi64(cblk, ONE);
 		__m128i tmp6 = _mm_shuffle_epi8(cblk, BSWAP_EPI64);
-		__m128i tmp7 = _mm_add_epi64(cblk, ONE);
-		cblk = _mm_add_epi64(cblk, TWO);
-		tmp7 = _mm_shuffle_epi8(tmp7, BSWAP_EPI64);
+		cblk = _mm_add_epi64(cblk, ONE);
+		__m128i tmp7 = _mm_shuffle_epi8(cblk, BSWAP_EPI64);
+		cblk = _mm_add_epi64(cblk, ONE);
 		/* Encrypt 8 IVs */
 		crypt8(&tmp0, &tmp1, &tmp2, &tmp3, &tmp4, &tmp5, &tmp6, &tmp7, key, rounds);
 		tmp0 = _mm_xor_si128(tmp0, _mm_loadu_si128((__m128i*)in));
