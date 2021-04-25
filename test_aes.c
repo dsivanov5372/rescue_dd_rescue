@@ -326,12 +326,14 @@ int main(int argc, char *argv[])
 		secmem_release(crypto);
 		return ret;
 	}
+	if((long)DEF_LN-SHIFT >= 0) {
 	printf("===> AES tests/benchmark (%i) PAD_ZERO <===\n", DEF_LN-SHIFT);
 	TEST_ENGINES(DEF_LN-SHIFT, PAD_ZERO, PAD_ZERO);
 	if (ret) {
 		fprintf(stderr, " ************* %i inconsistencies found\n", ret);
 		secmem_release(crypto);
 		return ret;
+	}
 	}
 	printf("\n===> AES tests/benchmark (%i) PAD_ALWAYS <===\n", DEF_LN);
 	TEST_ENGINES(DEF_LN, PAD_ALWAYS, PAD_ALWAYS);
@@ -340,6 +342,7 @@ int main(int argc, char *argv[])
 		secmem_release(crypto);
 		return ret;
 	}
+	if((long)DEF_LN-SHIFT >= 0) {
 	printf("===> AES tests/benchmark (%i) PAD_ALWAYS <===\n", DEF_LN-SHIFT);
 	TEST_ENGINES(DEF_LN-SHIFT, PAD_ALWAYS, PAD_ALWAYS);
 	if (ret) {
@@ -347,13 +350,21 @@ int main(int argc, char *argv[])
 		secmem_release(crypto);
 		return ret;
 	}
+	}
 	printf("\n===> AES tests/benchmark (%i) PAD_ASNEEDED <===\n", DEF_LN);
 	TEST_ENGINES(DEF_LN, PAD_ASNEEDED, PAD_ASNEEDED);
+	if (ret) {
+		fprintf(stderr, " ************* %i inconsistencies found\n", ret);
+		secmem_release(crypto);
+		return ret;
+	}
+	if((long)DEF_LN-SHIFT >= 0) {
 	printf("===> AES tests/benchmark (%i) PAD_ASNEEDED <===\n", DEF_LN-SHIFT);
 	TEST_ENGINES(DEF_LN-SHIFT, PAD_ASNEEDED, PAD_ASNEEDED);
 	if (ret) {
 		fprintf(stderr, " ************* PAD_ASNEEDED: %i inconsistencies found. (Ignore!) ************* \n", ret);
 		ret = 0;
+	}
 	}
 
 	printf("\n");
