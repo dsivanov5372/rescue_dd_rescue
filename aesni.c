@@ -58,8 +58,8 @@ static int probe_aes_ni()
 		:					\
 		: "xmm4", "xmm3", "xmm2", "xmm1", "xmm0")
 
-#define MMCLEAR9					\
-	asm volatile("	pxor %%xmm8, %%xmm8	\n"	\
+#define MMCLEAR8					\
+	asm volatile(					\
 		"	pxor %%xmm7, %%xmm7	\n"	\
 		"	pxor %%xmm6, %%xmm6	\n"	\
 		"	pxor %%xmm5, %%xmm5	\n"	\
@@ -70,7 +70,7 @@ static int probe_aes_ni()
 		"	pxor %%xmm0, %%xmm0	\n"	\
 		:					\
 		:					\
-		: "xmm8", "xmm7", "xmm6", "xmm5", "xmm4", "xmm3", "xmm2", "xmm1", "xmm0")
+		: "xmm7", "xmm6", "xmm5", "xmm4", "xmm3", "xmm2", "xmm1", "xmm0")
 
 #define MM256CLEAR5					\
 	asm volatile("	vpxor %%ymm4, %%ymm4, %%ymm4	\n"	\
@@ -673,7 +673,7 @@ int  AESNI_ECB_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt, int enc,
 		in  += SIZE128;
 		out += SIZE128;
 	}
-	MMCLEAR9;
+	MMCLEAR8;
 	if (enc)
 		return (pad == PAD_ALWAYS || (len&15))? 16-(len&15): 0;
 	if (pad)
@@ -1135,7 +1135,7 @@ int AESNI_CTR_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt,
 	/* Change back to initial byte order */
 	register __m128i tmp = _mm_shuffle_epi8(cblk, BSWAP_EPI64);
 	_mm_storeu_si128((__m128i*)ctr, tmp);
-	MMCLEAR9;
+	MMCLEAR8;
 	return 0;
 }
 
