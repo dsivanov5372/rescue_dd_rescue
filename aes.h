@@ -80,8 +80,11 @@ typedef struct _ciph_desc {
 
 
 #define XORN(in1,in2,out,len)	\
-	for (uint _i = 0; _i < len/sizeof(ulong); ++_i)	\
-		*((ulong*)(out)+_i) = *((ulong*)(in1)+_i) ^ *((ulong*)(in2)+_i)
+do {				\
+	uint _i;		\
+	for (_i = 0; _i < len/sizeof(ulong); ++_i)	\
+		*((ulong*)(out)+_i) = *((ulong*)(in1)+_i) ^ *((ulong*)(in2)+_i);	\
+} while(0)
 
 /* Generic functions */
 int  AES_Gen_ECB_Enc(AES_Crypt_Blk_fn *cryptfn,

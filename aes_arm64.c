@@ -859,8 +859,12 @@ int  AES_ARM8_CBC_Encrypt(const uchar* rkeys, uint rounds, uchar *iv, uint pad, 
 #else
 
 #define XOR16(x1, x2, xout)	\
-	for (uint _i = 0; _i < 16; _i+=sizeof(ulong))			\
-		*(ulong*)(xout+_i) = *(ulong*)(x1+_i) ^ *(ulong*)(x2+_i);
+do {				\
+	uint _i;		\
+	for (_i = 0; _i < 16; _i+=sizeof(ulong))				\
+		*(ulong*)(xout+_i) = *(ulong*)(x1+_i) ^ *(ulong*)(x2+_i);	\
+} while(0)
+
 #define FILL_BLK(in, bf, len, pad) 	\
 do {					\
 	uint i;				\
