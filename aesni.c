@@ -1169,7 +1169,7 @@ int AESNI_CTR_Crypt_Tmpl2(crypt_4x2blks_fn *crypt4, crypt_blk_fn *crypt,
 	cblk = _mm256_add_epi64(cblk, INIT);
 	//__builtin_prefetch(in, 0, 3);
 	while (len >= 4*SIZE256) {
-		static const __m256i TWO = _mm256_set_epi32(0, 2, 0, 0, 0, 2, 0, 0);
+		const __m256i TWO = _mm256_set_epi32(0, 2, 0, 0, 0, 2, 0, 0);
 		/* Prepare CTR (IV) values */
 		__m256i tmp0 = _mm256_shuffle_epi8(cblk, BSWAP_BOTH);
 		cblk = _mm256_add_epi64(cblk, TWO);
