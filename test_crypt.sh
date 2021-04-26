@@ -1,7 +1,7 @@
 #!/bin/bash
 # Script to test crypt module
 
-enc_dec_compare()
+enc_dec_compare_noxit()
 {
 	file=$1; alg=$2; keyargs=$3
 	if test -n "$4"; then othargs=":$4"; else unset othargs; fi
@@ -10,10 +10,23 @@ enc_dec_compare()
 	echo "#Validating enc/decryption $eng $alg $othargs"
 	cp -p $file.enc $file.enc.old 2>/dev/null
 	echo $VG ./dd_rescue $opt -L ./libddr_crypt.so=enc$eng:weakrnd:alg=$alg:$keyargs$othargs $file $file.enc 
-	$VG ./dd_rescue $opt -L ./libddr_crypt.so=enc$eng:weakrnd:alg=$alg:$keyargs$othargs $file $file.enc || exit 1
+	$VG ./dd_rescue $opt -L ./libddr_crypt.so=enc$eng:weakrnd:alg=$alg:$keyargs$othargs $file $file.enc || return 1
 	echo $VG ./dd_rescue $opt -L ./libddr_crypt.so=dec$eng:weakrnd:alg=$alg$othargs $file.enc $file.cmp 
-	$VG ./dd_rescue $opt -L ./libddr_crypt.so=dec$eng:weakrnd:alg=$alg$othargs $file.enc $file.cmp || exit 2
-	cmp $file $file.cmp || exit 3
+	$VG ./dd_rescue $opt -L ./libddr_crypt.so=dec$eng:weakrnd:alg=$alg$othargs $file.enc $file.cmp || return 2
+	cmp $file $file.cmp || return 3
+}
+
+enc_dec_compare()
+{
+	enc_dec_compare_noxit "$@"
+	RC=$?
+	if test $RC = 0; then return; fi
+	echo "*** ERROR $RC ***"
+	ls -l KEYS* IVS* dd_rescue.*
+	cat KEYS* IVS*
+	VG=strace enc_dec_compare_noxit "$@"
+	RC=$?
+	if test $RC != 0; then exit $RC; fi
 }
 
 enc_dec_compare_keys()

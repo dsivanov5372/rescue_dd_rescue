@@ -233,10 +233,19 @@ md5.po: $(SRCDIR)/md5.c
 sha256.po: $(SRCDIR)/sha256.c
 	$(CC) $(CFLAGS_OPT) $(PIC) -o $@ -c $<
 
+sha256.o: $(SRCDIR)/sha256.c
+	$(CC) $(CFLAGS_OPT) $(PIE) -c $<
+
 sha512.po: $(SRCDIR)/sha512.c
 	$(CC) $(CFLAGS_OPT) $(PIC) -o $@ -c $<
 
+sha512.o: $(SRCDIR)/sha512.c
+	$(CC) $(CFLAGS_OPT) $(PIE) -c $<
+
 sha1.po: $(SRCDIR)/sha1.c
+	$(CC) $(CFLAGS_OPT) $(PIC) -o $@ -c $<
+
+aes_c.po: $(SRCDIR)/aes_c.c
 	$(CC) $(CFLAGS_OPT) $(PIC) -o $@ -c $<
 
 # Default rules

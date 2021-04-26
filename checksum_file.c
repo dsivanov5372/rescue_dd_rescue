@@ -130,6 +130,7 @@ int get_chks(const char* cnm, const char* nm, char* chks, int wantedln)
 /* update chksum */
 int upd_chks(const char* cnm, const char *nm, const char *chks, int acc)
 {
+	errno = 0;
 	FILE *f = fopen_chks(cnm, "r+", 0);
 	int err = 0;
 	char oldchks[MAXHASHSLN+2];
@@ -139,15 +140,17 @@ int upd_chks(const char* cnm, const char *nm, const char *chks, int acc)
 		f = fopen_chks(cnm, "w", acc);
 		if (!f)
 			return -errno;
-		fprintf(f, "%s *%s\n", chks, bnm);
-		err = -errno;
+		if (fprintf(f, "%s *%s\n", chks, bnm) <= 0)
+			err = -errno;
 	} else {
 		off_t pos = find_chks(f, nm, oldchks, strlen(chks));
 		if (pos == -ENOENT || strlen(chks) != strlen(oldchks)) {
 			fclose(f);
 			f = fopen_chks(cnm, "a", 0);
-			fprintf(f, "%s *%s\n", chks, bnm);
-			err = -errno;
+			if (!f)
+				return -errno;
+			if (fprintf(f, "%s *%s\n", chks, bnm) <= 0)
+				err = -errno;
 		} else {
 			if (strcmp(chks, oldchks)) {
 				if (pwrite(fileno(f), chks, strlen(chks), pos) <= 0)
