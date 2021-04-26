@@ -57,8 +57,8 @@ if test -e test_aes; then
   LOG=test_aes.log
   #for ALG in $TESTALGS; do echo $VG ./test_aes $ALG 10000; $VG ./test_aes $ALG 10000 >$LOG 2>&1; if test $? != 0; then cat $LOG; echo "ERROR"; exit 1; fi; done
   #rm $LOG
-  echo $VG test_aes AES128-CTR 10000 0 15392
-  $VG ./test_aes AES128-CTR 10000 0 15392
+  echo $VG test_aes -s AES128-CTR 10000 0 15392
+  $VG ./test_aes -s AES128-CTR 10000 0 15392
   for len in $(seq 0 130); do
     for ALG in $TESTALGS; do echo $VG ./test_aes $ALG 10 0 $len; $VG ./test_aes $ALG 10 0 $len >$LOG 2>&1; if test $? != 0; then cat $LOG; echo "ERROR"; exit 1; fi; done
   done
