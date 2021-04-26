@@ -14,26 +14,17 @@
 
 const char* stypes[] = { "ECB", "CBC", "CTR" };
 
+/*
 void xor16(const uchar x1[16], const uchar x2[16], uchar xout[16])
 {
 	uint i;
 	for (i = 0; i < 16; i+=sizeof(ulong))
 		*(ulong*)(xout+i) = *(ulong*)(x1+i) ^ *(ulong*)(x2+i);
 }
-
-void xor48(const uchar x1[48], const uchar x2[48], uchar xout[48])
-{
-	uint i;
-	for (i = 0; i < 48; i+=sizeof(ulong))
-		*(ulong*)(xout+i) = *(ulong*)(x1+i) ^ *(ulong*)(x2+i);
-}
-
-void xor64(const uchar x1[64], const uchar x2[64], uchar xout[64])
-{
-	uint i;
-	for (i = 0; i < 64; i+=sizeof(ulong))
-		*(ulong*)(xout+i) = *(ulong*)(x1+i) ^ *(ulong*)(x2+i);
-}
+*/
+#define XOR16(x1,x2,xo) XORN(x1,x2,xo,16)
+#define XOR48(x1,x2,xo) XORN(x1,x2,xo,48)
+#define XOR64(x1,x2,xo) XORN(x1,x2,xo,64)
 
 /* PKCS padding */
 void fill_blk(const uchar *in, uchar bf[16], ssize_t len, uint pad)
@@ -182,7 +173,7 @@ int  AES_Gen_CBC_Enc(AES_Crypt_Blk_fn *cryptfn,
 {
 	*olen = len;
 	while (len >= 16) {
-		xor16(iv, input, iv);
+		XOR16(iv, input, iv);
 		cryptfn(rkeys, rounds, iv, iv);
 		memcpy(output, iv, 16);
 		len -= 16; input += 16; output += 16;
@@ -190,9 +181,10 @@ int  AES_Gen_CBC_Enc(AES_Crypt_Blk_fn *cryptfn,
 	if (len || pad == PAD_ALWAYS) {
 		uchar *in = crypto->blkbuf1;
 		fill_blk(input, in, len, pad);
-		xor16(iv, in, iv);
+		XOR16(iv, in, iv);
 		cryptfn(rkeys, rounds, iv, output);
-		//memcpy(iv, output, 16);
+		/* Store last IV */
+		memcpy(iv, output, 16);
 		*olen += 16-(len&15);
 		//memset(in, 0, 16);
 		//LFENCE;
@@ -210,7 +202,7 @@ int  AES_Gen_CBC_Dec(AES_Crypt_Blk_fn *cryptfn,
 	*olen = len;
 	while (len > 0) {
 		cryptfn(rkeys, rounds, input, ebf);
-		xor16(iv, ebf, output);
+		XOR16(iv, ebf, output);
 		memcpy(iv, input, 16);
 		len -= 16; input += 16; output += 16;
 	}
@@ -233,14 +225,14 @@ int  AES_Gen_CBC_Dec4(AES_Crypt_Blk_fn *cryptfn4,
 	*olen = len;
 	while (len >= 64) {
 		cryptfn4(rkeys, rounds, input, ebf);
-		xor16(iv, ebf, output);
-		xor48(input, ebf+16, output+16);
+		XOR16(iv, ebf, output);
+		XOR48(input, ebf+16, output+16);
 		memcpy(iv, input+48, 16);
 		len -= 64; input += 64; output += 64;
 	}
 	while (len > 0) {
 		cryptfn(rkeys, rounds, input, ebf);
-		xor16(iv, ebf, output);
+		XOR16(iv, ebf, output);
 		memcpy(iv, input, 16);
 		len -= 16; input += 16; output += 16;
 	}
@@ -309,8 +301,8 @@ int  AES_Gen_CTR_Crypt(AES_Crypt_Blk_fn *cryptfn,
 	uchar *eblk = crypto->blkbuf2;
 	while (len >= 16) {
 		cryptfn(rkeys, rounds, ctr, eblk);
-		be_inc(ctr+8);	
-		xor16(eblk, input, output);
+		be_inc(ctr+8);
+		XOR16(eblk, input, output);
 		len -= 16;
 		input += 16; output += 16;
 	}
@@ -318,8 +310,9 @@ int  AES_Gen_CTR_Crypt(AES_Crypt_Blk_fn *cryptfn,
 		uchar *in = crypto->blkbuf1;
 		fill_blk(input, in, len, 0 /*pad*/);
 		cryptfn(rkeys, rounds, ctr, eblk);
-		//be_inc(ctr+8);	
-		xor16(eblk, in, in);
+		/* We do increase the last blk */
+		be_inc(ctr+8);
+		XOR16(eblk, in, in);
 		memcpy(output, in, len&15);
 		//memset(in, 0, 16);
 	}
@@ -389,14 +382,14 @@ int  AES_Gen_CTR_Crypt4(AES_Crypt_Blk_fn *cryptfn4,
 	while (len >= 128) {
 		cryptfn4(rkeys, rounds, cblk, eblk);
 		be4_inc4(cblk);
-		xor64(eblk, input, output);
+		XOR64(eblk, input, output);
 		len -= 64;
 		input += 64; output += 64;
 	}
 	if (len >= 64) {
 		cryptfn4(rkeys, rounds, cblk, eblk);
 		be_inc4(cblk+8);
-		xor64(eblk, input, output);
+		XOR64(eblk, input, output);
 		memcpy(ctr+8, cblk+8, 8);
 		len -= 64;
 		input += 64; output += 64;
@@ -418,15 +411,15 @@ int  AES_Gen_CTR_Crypt4(AES_Crypt_Blk_fn *cryptfn4,
 		memcpy(cblk+56, ctr+8, 8);
 		cryptfn4(rkeys, rounds, cblk, eblk);
 		be_inc(ctr+8);
-		xor64(eblk, input, output);
+		XOR64(eblk, input, output);
 		len -= 64;
 		input += 64; output += 64;
 	}
 #endif	
 	while (len >= 16) {
 		cryptfn(rkeys, rounds, ctr, eblk);
-		be_inc(ctr+8);	
-		xor16(eblk, input, output);
+		be_inc(ctr+8);
+		XOR16(eblk, input, output);
 		len -= 16;
 		input += 16; output += 16;
 	}
@@ -434,8 +427,9 @@ int  AES_Gen_CTR_Crypt4(AES_Crypt_Blk_fn *cryptfn4,
 		uchar *in = crypto->blkbuf1;
 		fill_blk(input, in, len, 0 /*pad*/);
 		cryptfn(rkeys, rounds, ctr, eblk);
-		//be_inc(ctr+8);	
-		xor16(eblk, in, in);
+		/* We do count the last block */
+		be_inc(ctr+8);
+		XOR16(eblk, in, in);
 		memcpy(output, in, len&15);
 	}
 	//memset(eblk, 0, 16);

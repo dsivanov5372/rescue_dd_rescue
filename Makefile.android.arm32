@@ -8,7 +8,7 @@ PLAT = $(ASDK)/platforms/android-9/arch-arm/usr
 INCD = $(PLAT)/include
 LIBD = $(PLAT)/lib
 
-CFLG = -I $(INCD) -D__WORDSIZE=32 -L$(LIBD)
+CFLG = -I $(INCD) -D__WORDSIZE=32 -std=gnu99 -L$(LIBD)
 ATTR = $(shell ls $(LIBD)/libattr.a)
 
 DEPS = $(wildcard *.c *.h)
