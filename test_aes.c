@@ -88,7 +88,7 @@ int shift = -1;
 		LFENCE;			\
 	}				\
 	gettimeofday(&t2, NULL);	\
-	tdiff = t2.tv_sec-t1.tv_sec + 0.000001*(t2.tv_usec-t1.tv_usec);	\
+	tdiff = t2.tv_sec-t1.tv_sec + 0.000001*(t2.tv_usec-t1.tv_usec) + 0.00000001;	\
 	printf("%6.3fs (%6.0fMB/s) ", tdiff, (double)(_rep)*(_ln)/(1e6*tdiff))
 
 
