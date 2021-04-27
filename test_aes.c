@@ -82,8 +82,9 @@ int warmup = 0;
 /* TIMING */
 #define BENCH(_routine, _rep, _ln)	\
 	fflush(stdout);			\
-	if (warmup)			\
+	if (warmup) {			\
 		_routine;		\
+	}				\
 	gettimeofday(&t1, NULL);	\
 	for (i = 0; i < (_rep); ++i) {	\
 		_routine; 		\
@@ -188,10 +189,10 @@ int test_alg(const char* prefix, ciph_desc_t *alg, uchar *key, uchar *in, ssize_
 	printf("* %s %s (%i, %i, %i) pad %i/%i", prefix, alg->name, alg->keylen, alg->rounds, alg->ctx_size, epad, dpad);
 	printf("\nEKey setup: ");
 	uchar *rkeys = (uchar*)crypto->ekeys;	//malloc(alg->ctx_size);
-	BENCH(alg->enc_key_setup(key, rkeys, alg->rounds); if (alg->release) alg->release(rkeys, alg->rounds), rep, 16*(1+alg->rounds));
+	BENCH(alg->enc_key_setup(key, rkeys, alg->rounds); if (alg->release) alg->release(rkeys, alg->rounds), rep*2, 16*(1+alg->rounds));
 	alg->enc_key_setup(key, rkeys, alg->rounds);
 	printf("\nEncrypt   : ");
-	BENCH(setup_iv(alg->stream, iv, BLKSZ); eerr = alg->encrypt(rkeys, alg->rounds, iv, epad, in, ctxt, ln, &eln); if (alg->recycle) alg->recycle(rkeys), rep/2+1, ln);
+	BENCH(setup_iv(alg->stream, iv, BLKSZ); eerr = alg->encrypt(rkeys, alg->rounds, iv, epad, in, ctxt, ln, &eln); if (alg->recycle) alg->recycle(rkeys), (rep+1)/2, ln);
 	memcpy(&ivhash, iv, 4); memcpy((uchar*)(&ivhash)+4, iv+12, 4);
 	printf("%zi->%zi: %i %016llx ", ln, eln, eerr, ivhash);
 	if (eerr < 0)
@@ -206,11 +207,11 @@ int test_alg(const char* prefix, ciph_desc_t *alg, uchar *key, uchar *in, ssize_
 		alg->release(rkeys, alg->rounds);
 	//if (err) printf("%i ", err);
 	printf("\nDKey setup: ");
-	BENCH(alg->dec_key_setup(key, rkeys, alg->rounds); if (alg->release) alg->release(rkeys, alg->rounds), rep, 16*(1+alg->rounds));
+	BENCH(alg->dec_key_setup(key, rkeys, alg->rounds); if (alg->release) alg->release(rkeys, alg->rounds), rep*2, 16*(1+alg->rounds));
 	alg->dec_key_setup(key, rkeys, alg->rounds);
 	printf("\nDecrypt   : ");
 	memset(vfy, 0xff, DEF_LN+32);
-	BENCH(setup_iv(alg->stream, iv, BLKSZ); derr = alg->decrypt(rkeys, alg->rounds, iv, dpad, ctxt, vfy, eln, &dln); if (alg->recycle) alg->recycle(rkeys), rep/2+1, eln);
+	BENCH(setup_iv(alg->stream, iv, BLKSZ); derr = alg->decrypt(rkeys, alg->rounds, iv, dpad, ctxt, vfy, eln, &dln); if (alg->recycle) alg->recycle(rkeys), (rep+1)/2, eln);
 	memcpy(&divhash, iv, 4); memcpy((uchar*)(&divhash)+4, iv+12, 4);
 	printf("%zi->%zi: %i %016llx ", eln, dln, derr, divhash);
 	if (derr < 0)
@@ -329,6 +330,7 @@ int main(int argc, char *argv[])
 		srand(time(NULL));
 	if (argc > 4)
 		DEF_LN = atol(argv[4]);
+
 	unsigned char *in = aligned_alloc(64, DEF_LN+16);
 	last_ct = aligned_alloc(64, DEF_LN+32);
 	if (argc > 5)
