@@ -52,27 +52,7 @@ static int probe_aes_ni()
 		"	pxor %%xmm0, %%xmm0	\n"	\
 		: : : "xmm4", "xmm3", "xmm2", "xmm1", "xmm0")
 
-#ifdef __x86_64__
-#define MMCLEARALL_MAN					\
-	asm volatile("	pxor %%xmm15, %%xmm15	\n"	\
-		"	pxor %%xmm14, %%xmm14	\n"	\
-		"	pxor %%xmm13, %%xmm13	\n"	\
-		"	pxor %%xmm12, %%xmm12	\n"	\
-		"	pxor %%xmm11, %%xmm11	\n"	\
-		"	pxor %%xmm10, %%xmm10	\n"	\
-		"	pxor %%xmm9, %%xmm9	\n"	\
-		"	pxor %%xmm8, %%xmm8	\n"	\
-		"	pxor %%xmm7, %%xmm7	\n"	\
-		"	pxor %%xmm6, %%xmm6	\n"	\
-		"	pxor %%xmm5, %%xmm5	\n"	\
-		"	pxor %%xmm4, %%xmm4	\n"	\
-		"	pxor %%xmm3, %%xmm3	\n"	\
-		"	pxor %%xmm2, %%xmm2	\n"	\
-		"	pxor %%xmm1, %%xmm1	\n"	\
-		"	pxor %%xmm0, %%xmm0	\n"	\
-		: : : "xmm15", "xmm14", "xmm13", "xmm12", "xmm11", "xmm10", "xmm9", "xmm8",	\
-		      "xmm7",  "xmm6",  "xmm5",  "xmm4",  "xmm3",  "xmm2",  "xmm1", "xmm0")
-#else
+
 #define MMCLEARALL_MAN					\
 	asm volatile("	pxor %%xmm7, %%xmm7	\n"	\
 		"	pxor %%xmm6, %%xmm6	\n"	\
@@ -83,7 +63,22 @@ static int probe_aes_ni()
 		"	pxor %%xmm1, %%xmm1	\n"	\
 		"	pxor %%xmm0, %%xmm0	\n"	\
 		: : : "xmm7", "xmm6", "xmm5", "xmm4", "xmm3", "xmm2", "xmm1", "xmm0")
+
+#if defined(__x86_64__)
+#define MMCLEARALL_MAN2					\
+	asm volatile("	pxor %%xmm15, %%xmm15	\n"	\
+		"	pxor %%xmm14, %%xmm14	\n"	\
+		"	pxor %%xmm13, %%xmm13	\n"	\
+		"	pxor %%xmm12, %%xmm12	\n"	\
+		"	pxor %%xmm11, %%xmm11	\n"	\
+		"	pxor %%xmm10, %%xmm10	\n"	\
+		"	pxor %%xmm9, %%xmm9	\n"	\
+		"	pxor %%xmm8, %%xmm8	\n"	\
+		: : : "xmm15", "xmm14", "xmm13", "xmm12", "xmm11", "xmm10", "xmm9", "xmm8");
+#else
+#define MMCLEARALL_MAN2 do {} while(0)
 #endif
+
 #ifdef __avx__
 #include <immintrin.h>
 #define MMCLEARALL 					\
@@ -91,9 +86,10 @@ static int probe_aes_ni()
 		_mm256_zeroall();			\
 	else { 						\
 		MMCLEARALL_MAN;				\
+		MMCLEARALL_MAN2;			\
 	}
 #else
-#define MMCLEARALL MMCLEARALL_MAN
+#define MMCLEARALL do { MMCLEARALL_MAN; MMCLEARALL_MAN2; } while(0)
 #endif
 
 #define MM256CLEAR5						\
