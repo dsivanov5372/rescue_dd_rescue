@@ -86,7 +86,12 @@ static int probe_aes_ni()
 #endif
 #ifdef __avx__
 #include <immintrin.h>
-#define MMCLEARALL if (have_avx2) _mm256_zeroall() else MMCLEARALL_MAN
+#define MMCLEARALL 					\
+	if (have_avx2)					\
+		_mm256_zeroall();			\
+	else { 						\
+		MMCLEARALL_MAN;				\
+	}
 #else
 #define MMCLEARALL MMCLEARALL_MAN
 #endif
