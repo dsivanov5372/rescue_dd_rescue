@@ -102,6 +102,7 @@ void probe_vaes();
 #define have_sse2 0
 #define have_sse42 0
 #define have_aesni 0
+#define have_rdrand 0
 #define have_vaes 0
 extern char have_arm8crypto;
 void probe_arm8crypto_32();
@@ -118,6 +119,7 @@ void probe_arm8crypto_32();
 #define have_sse2 0
 #define have_sse42 0
 #define have_aesni 0
+#define have_rdrand 0
 #define have_vaes 0
 extern char have_arm8crypto;
 void probe_arm8crypto();
@@ -133,6 +135,7 @@ void probe_arm8crypto();
 #define have_sse2 0
 #define have_sse42 0
 #define have_aesni 0
+#define have_rdrand 0
 #define have_vaes 0
 #define have_arm8crypto 0
 #define FIND_NONZERO_OPT(x,y) find_nonzero_c(x,y)

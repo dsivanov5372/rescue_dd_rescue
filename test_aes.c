@@ -300,6 +300,13 @@ int main(int argc, char *argv[])
 	//int dbg = 0;
 	char* testalg;
 	ARCH_DETECT;
+#if defined(__i386__) || defined(__x86_64__)
+	printf("CPU Features: SSE2 %i SSE4.2 %i AES %i RDRAND %i AVX2 %i VAES %i\n",
+		have_sse2, have_sse42, have_aesni, have_rdrand, have_avx2, have_vaes);
+#elif defined(__arm__) || defined(__aarch64__)
+	printf("CPU Features: AES Arm8 %i\n",
+		have_arm8crypto);
+#endif
 	crypto = secmem_init();
 	/*
 	if (argc > 1 && !strcmp("-d", argv[1])) {
