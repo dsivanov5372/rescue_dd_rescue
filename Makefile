@@ -126,9 +126,9 @@ else
 endif
 ifeq ($(HAVE_AVX),1)
 	ARCHFLAGS += -mavx
-	AESFLAGS = "-maes -mavx"
+	AESFLAGS = -maes -mavx
 else
-	AESFLAGS = "-maes -msse4.1"
+	AESFLAGS = -maes -msse4.1
 endif
 ifeq ($(HAVE_AES),1)
 	AESNI_O = aesni.o
