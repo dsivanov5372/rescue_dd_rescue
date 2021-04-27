@@ -521,7 +521,6 @@ void AES_ARM8_Encrypt4_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, cons
 }
 
 #ifndef NO_ASM_CTR
-/* TODO: Full assembly CTR loop */
 int  AES_ARM8_CTR_Crypt(const uchar* rkeys, uint rounds, uchar *ctr, uint pad,
 			const uchar *input, uchar *output, ssize_t len, ssize_t *olen)
 {
@@ -1050,7 +1049,6 @@ int  AES_ARM8_CBC_Decrypt(const uchar* rkeys, uint rounds, uchar *iv, uint pad,
 
 
 #else
-// TODO: Create optimized version
 int  AES_ARM8_CBC_Decrypt(const uchar* rkeys, uint rounds, uchar *iv, uint pad,
 			  const uchar *in, uchar *out, ssize_t len, ssize_t *olen)
 {
