@@ -678,7 +678,11 @@ int  AESNI_ECB_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt, int enc,
 		out += 8*SIZE128;
 	}
 	while (len > 0 || (enc && len == 0 && pad == PAD_ALWAYS)) {
-		register __m128i blk = _mm_loadu_si128((const __m128i*)in);
+		register __m128i blk;
+		if (len)
+		       	blk = _mm_loadu_si128((const __m128i*)in);
+		else
+			blk = _mm_xor_si128(blk, blk);
 		if (enc && len < SIZE128) {
 			__m128i mask = _mkmask(len);
 			blk = _mm_and_si128(blk, mask);

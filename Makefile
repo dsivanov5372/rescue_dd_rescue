@@ -336,16 +336,16 @@ rdrand.po: $(SRCDIR)/rdrand.c
 else
 ifeq ($(HAVE_RDRND),1)
 rdrand.o: $(SRCDIR)/rdrand.c
-	$(CC) $(CFLAGS) $(PIE) -mrdrnd -maes -mavx -c $<
+	$(CC) $(CFLAGS) $(PIE) -mrdrnd -maes -msse4.1 -c $<
 
 rdrand.po: $(SRCDIR)/rdrand.c
-	$(CC) $(CFLAGS) $(PIC) -mrdrnd -maes -mavx -o $@ -c $<
+	$(CC) $(CFLAGS) $(PIC) -mrdrnd -maes -msse4.1 -o $@ -c $<
 else
 rdrand.o: $(SRCDIR)/rdrand.c
-	$(CC) $(CFLAGS) $(PIE) -maes -mavx -c $<
+	$(CC) $(CFLAGS) $(PIE) -maes -msse4.1 -c $<
 
 rdrand.po: $(SRCDIR)/rdrand.c
-	$(CC) $(CFLAGS) $(PIC) -maes -mavx -o $@ -c $<
+	$(CC) $(CFLAGS) $(PIC) -maes -msse4.1 -o $@ -c $<
 endif
 endif
 
