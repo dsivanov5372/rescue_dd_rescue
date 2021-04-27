@@ -12,7 +12,6 @@
 #include "secmem.h"
 #include <string.h>
 #include <wmmintrin.h>
-#include <immintrin.h>
 #include "archdep.h"
 
 static int probe_aes_ni()
@@ -36,18 +35,14 @@ static int probe_aes_ni()
 	asm volatile("	pxor %%xmm2, %%xmm2	\n"	\
 		"	pxor %%xmm1, %%xmm1	\n"	\
 		"	pxor %%xmm0, %%xmm0	\n"	\
-		:					\
-		:					\
-		: "xmm2", "xmm1", "xmm0")
+		: : : "xmm2", "xmm1", "xmm0")
 
 #define MMCLEAR4					\
 	asm volatile("	pxor %%xmm3, %%xmm3	\n"	\
 		"	pxor %%xmm2, %%xmm2	\n"	\
 		"	pxor %%xmm1, %%xmm1	\n"	\
 		"	pxor %%xmm0, %%xmm0	\n"	\
-		:					\
-		:					\
-		: "xmm3", "xmm2", "xmm1", "xmm0")
+		: : : "xmm3", "xmm2", "xmm1", "xmm0")
 
 #define MMCLEAR5					\
 	asm volatile("	pxor %%xmm4, %%xmm4	\n"	\
@@ -55,11 +50,45 @@ static int probe_aes_ni()
 		"	pxor %%xmm2, %%xmm2	\n"	\
 		"	pxor %%xmm1, %%xmm1	\n"	\
 		"	pxor %%xmm0, %%xmm0	\n"	\
-		:					\
-		:					\
-		: "xmm4", "xmm3", "xmm2", "xmm1", "xmm0")
+		: : : "xmm4", "xmm3", "xmm2", "xmm1", "xmm0")
 
+#ifdef __avx__
+#include <immintrin.h>
 #define MMCLEARALL	_mm256_zeroall()
+#else
+#ifdef __x86_64__
+#define MMCLEARALL					\
+	asm volatile("	pxor %%xmm15, %%xmm15	\n"	\
+		"	pxor %%xmm14, %%xmm14	\n"	\
+		"	pxor %%xmm13, %%xmm13	\n"	\
+		"	pxor %%xmm12, %%xmm12	\n"	\
+		"	pxor %%xmm11, %%xmm11	\n"	\
+		"	pxor %%xmm10, %%xmm10	\n"	\
+		"	pxor %%xmm9, %%xmm9	\n"	\
+		"	pxor %%xmm8, %%xmm8	\n"	\
+		"	pxor %%xmm7, %%xmm7	\n"	\
+		"	pxor %%xmm6, %%xmm6	\n"	\
+		"	pxor %%xmm5, %%xmm5	\n"	\
+		"	pxor %%xmm4, %%xmm4	\n"	\
+		"	pxor %%xmm3, %%xmm3	\n"	\
+		"	pxor %%xmm2, %%xmm2	\n"	\
+		"	pxor %%xmm1, %%xmm1	\n"	\
+		"	pxor %%xmm0, %%xmm0	\n"	\
+		: : : "xmm15", "xmm14", "xmm13", "xmm12", "xmm11", "xmm10", "xmm9", "xmm8",	\
+		      "xmm7",  "xmm6",  "xmm5",  "xmm4",  "xmm3",  "xmm2",  "xmm1", "xmm0")
+#else
+#define MMCLEARALL					\
+	asm volatile("	pxor %%xmm7, %%xmm7	\n"	\
+		"	pxor %%xmm6, %%xmm6	\n"	\
+		"	pxor %%xmm5, %%xmm5	\n"	\
+		"	pxor %%xmm4, %%xmm4	\n"	\
+		"	pxor %%xmm3, %%xmm3	\n"	\
+		"	pxor %%xmm2, %%xmm2	\n"	\
+		"	pxor %%xmm1, %%xmm1	\n"	\
+		"	pxor %%xmm0, %%xmm0	\n"	\
+		: : : "xmm7", "xmm6", "xmm5", "xmm4", "xmm3", "xmm2", "xmm1", "xmm0")
+#endif
+#endif
 
 #define MM256CLEAR5					\
 	asm volatile("	vpxor %%ymm4, %%ymm4, %%ymm4	\n"	\

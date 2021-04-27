@@ -90,6 +90,7 @@ endif
 ifeq ($(ISX86), 1)
 HAVE_SSE42 := $(shell echo "" | $(CC) -msse4.2 -xc - 2>&1 | grep unrecognized || echo 1)
 HAVE_AES := $(shell echo "" | $(CC) -maes -xc - 2>&1 | grep unrecognized || echo 1)
+HAVE_AVX := $(shell echo "" | $(CC) -mavx -xc - 2>&1 | grep unrecognized || echo 1)
 HAVE_AVX2 := $(shell echo "" | $(CC) -mavx2 -xc - 2>&1 | grep unrecognized || echo 1)
 HAVE_RDRND := $(shell echo "" | $(CC) -mrdrnd -xc - 2>&1 | grep unrecognized || echo 1)
 HAVE_VAES := $(shell echo "" | $(CC) -mvaes -xc - 2>&1 | grep unrecognized || echo 1)
@@ -123,13 +124,19 @@ ifeq ($(HAVE_SSE42),1)
 else
 	CFLAGS += -DNO_SSE42
 endif
+ifeq ($(HAVE_AVX),1)
+	ARCHFLAGS += -mavx
+	AESFLAGS = "-maes -mavx"
+else
+	AESFLAGS = "-maes -msse4.1"
+endif
 ifeq ($(HAVE_AES),1)
 	AESNI_O = aesni.o
         AESNI_PO = aesni.po
 	OBJECTS2 += rdrand.o
 	#POBJECTS2 += rdrand.po find_nonzero.po ffs_sse42.po
         CFLAGS += -DHAVE_AESNI
-	ARCHFLAGS += -maes -mavx
+	ARCHFLAGS += -maes
 else
 	CFLAGS += -DNO_AES
 endif
@@ -426,10 +433,10 @@ aesni.po: $(SRCDIR)/aesni.c
 	$(CC) $(CFLAGS) $(PIC) -O3 -maes -mavx2 -mvaes -c $< -o $@
 else
 aesni.o: $(SRCDIR)/aesni.c
-	$(CC) $(CFLAGS) $(PIE) -O3 -maes -mavx -msse4.1 -c $<
+	$(CC) $(CFLAGS) $(PIE) -O3 $(AESFLAGS) -c $<
 
 aesni.po: $(SRCDIR)/aesni.c
-	$(CC) $(CFLAGS) $(PIC) -O3 -maes -mavx -msse4.1 -c $< -o $@
+	$(CC) $(CFLAGS) $(PIC) -O3 $(AESFLAGS) -c $< -o $@
 endif
 aes_arm64.o: $(SRCDIR)/aes_arm64.c
 	$(CC) $(CFLAGS) $(PIE) -O3 -march=armv8-a+crypto -c $<
