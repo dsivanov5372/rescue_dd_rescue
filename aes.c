@@ -106,10 +106,10 @@ int dec_fix_olen_pad(ssize_t *olen, uint pad, const uchar *output)
 {
 	if (!pad || !*olen)
 		return 0;
-	uchar last = output[-1];
+	uchar last = *(output-1);
 	if (last > 0x10)
 		return (pad == PAD_ASNEEDED? ILLEGAL_PADDING: -ILLEGAL_PADDING);
-	uint i;
+	int i;
 	for (i = 1; i < last; ++i) {
 		if (*(output-1-i) != last) 
 			return (pad == PAD_ASNEEDED? INCONSISTENT_PADDING: -INCONSISTENT_PADDING);
