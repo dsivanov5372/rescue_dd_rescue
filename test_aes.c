@@ -18,7 +18,7 @@
 
 void usage()
 {
-	printf("Usage: test_aes [-s[-][N]] [ALG [REP [SEED [LEN [FILL]]]]]\n");
+	printf("Usage: test_aes [-s[-][N]] [-w] [ALG [REP [SEED [LEN [FILL]]]]]\n");
 	exit(0);
 }
 
@@ -77,11 +77,13 @@ void fillval(unsigned char* bf, ssize_t ln, unsigned int val)
 #define REP 3000000
 unsigned int DEF_LN = 432;
 int shift = -1;
+int warmup = 0;
 
 /* TIMING */
 #define BENCH(_routine, _rep, _ln)	\
 	fflush(stdout);			\
-	/*_routine; */ /* warmup */	\
+	if (warmup)			\
+		_routine;		\
 	gettimeofday(&t1, NULL);	\
 	for (i = 0; i < (_rep); ++i) {	\
 		_routine; 		\
@@ -309,7 +311,11 @@ int main(int argc, char *argv[])
 		do_shifted = 1;
 		if (strlen(argv[1]) > 2)
 			shift = atol(argv[1]+2);
-		argv++; argc--;
+		--argc; ++argv;
+	}
+	if (argc > 1 && !strcmp(argv[1], "-w")) {
+		warmup = 1;
+		--argc; ++argv;
 	}
 	if (argc > 1)
 		testalg = argv[1];
