@@ -12,6 +12,7 @@
 #include "secmem.h"
 #include <string.h>
 #include <wmmintrin.h>
+#include <immintrin.h>
 #include "archdep.h"
 
 static int probe_aes_ni()
@@ -58,19 +59,7 @@ static int probe_aes_ni()
 		:					\
 		: "xmm4", "xmm3", "xmm2", "xmm1", "xmm0")
 
-#define MMCLEAR8					\
-	asm volatile(					\
-		"	pxor %%xmm7, %%xmm7	\n"	\
-		"	pxor %%xmm6, %%xmm6	\n"	\
-		"	pxor %%xmm5, %%xmm5	\n"	\
-		"	pxor %%xmm4, %%xmm4	\n"	\
-		"	pxor %%xmm3, %%xmm3	\n"	\
-		"	pxor %%xmm2, %%xmm2	\n"	\
-		"	pxor %%xmm1, %%xmm1	\n"	\
-		"	pxor %%xmm0, %%xmm0	\n"	\
-		:					\
-		:					\
-		: "xmm7", "xmm6", "xmm5", "xmm4", "xmm3", "xmm2", "xmm1", "xmm0")
+#define MMCLEARALL	_mm256_zeroall()
 
 #define MM256CLEAR5					\
 	asm volatile("	vpxor %%ymm4, %%ymm4, %%ymm4	\n"	\
@@ -145,9 +134,8 @@ void AESNI_128_EKey_Expansion_r(const unsigned char *userkey,
 		temp1 = KEY_128_ASSIST(temp1, temp2);
 		Key_Schedule[12] = temp1;
 	}
-	//MMCLEAR(temp2);
-	//MMCLEAR(temp1);
-	MMCLEAR3;
+	MMCLEAR(temp2);
+	MMCLEAR(temp1);
 }
 
 static inline void KEY_192_ASSIST(__m128i *temp1, __m128i *temp2, __m128i *temp3)
@@ -165,7 +153,7 @@ static inline void KEY_192_ASSIST(__m128i *temp1, __m128i *temp2, __m128i *temp3
 	 temp4 = _mm_slli_si128(*temp3, 0x04);
 	*temp3 = _mm_xor_si128(*temp3, temp4);
 	*temp3 = _mm_xor_si128(*temp3, *temp2);
-	//MMCLEAR(temp4);
+	MMCLEAR(temp4);
 } 
 
 void AESNI_192_EKey_Expansion_r(const unsigned char *userkey,
@@ -231,10 +219,10 @@ void AESNI_192_EKey_Expansion_r(const unsigned char *userkey,
 		KEY_192_ASSIST(&temp1, &temp2, &temp3);
 		Key_Schedule[15] = temp1;
 	}
-	//MMCLEAR(temp3);
-	//MMCLEAR(temp2);
-	//MMCLEAR(temp1);
-	MMCLEAR4;
+	MMCLEAR(temp3);
+	MMCLEAR(temp2);
+	MMCLEAR(temp1);
+	//MMCLEAR4;
 } 
 
 
@@ -327,7 +315,10 @@ void AESNI_256_EKey_Expansion_r(const unsigned char *userkey,
 			Key_Schedule[18] = temp1;
 		}
 	}
-	MMCLEAR5;
+	//MMCLEAR5;
+	MMCLEAR(temp3);
+	MMCLEAR(temp2);
+	MMCLEAR(temp1);
 } 
 
 inline void AESNI_EKey_DKey(const unsigned char* ekey,
@@ -471,7 +462,7 @@ void Decrypt_4Blocks(__m128i *i0, __m128i *i1, __m128i *i2, __m128i *i3,
 	*i1 = _mm_aesdeclast_si128(*i1, rk);
 	*i2 = _mm_aesdeclast_si128(*i2, rk);
 	*i3 = _mm_aesdeclast_si128(*i3, rk);
-	//MMCLEAR(rk);
+	MMCLEAR(rk);
 	//asm volatile("pxor %%xmm5, %%xmm5\n" :::"xmm5");
 }
 
@@ -673,7 +664,7 @@ int  AESNI_ECB_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt, int enc,
 		in  += SIZE128;
 		out += SIZE128;
 	}
-	MMCLEAR8;
+	MMCLEARALL;
 	if (enc)
 		return (pad == PAD_ALWAYS || (len&15))? 16-(len&15): 0;
 	if (pad)
@@ -809,6 +800,7 @@ int  AESNI_ECB_Crypt_Tmpl2(crypt_4x2blks_fn *crypt4x2, crypt_blk_fn *crypt, int 
 		in  += SIZE128;
 		out += SIZE128;
 	}
+	/* FIXME: Clear the right registers */
 	MM256CLEAR5;
 	if (enc)
 		return (pad == PAD_ALWAYS || (len&15))? 16-(len&15): 0;
@@ -930,6 +922,7 @@ int AESNI_CBC_Encrypt_Tmpl(crypt_blk_fn *encrypt,
 		*olen += 16-(*olen&15);
 	}
 	_mm_storeu_si128((__m128i*)iv, ivb);
+	/* FIXME: Clear the right registers */
 	MMCLEAR3;
 	return (pad == PAD_ALWAYS || (len&15))? 16-(len&15): 0;
 }
@@ -979,6 +972,7 @@ int  AESNI_CBC_Decrypt_Tmpl(crypt_4blks_fn *decrypt4, crypt_blk_fn *decrypt,
 		out += SIZE128;
 	}
 	_mm_storeu_si128((__m128i*)iv, ivb);
+	/* FIXME: Clear the right registers */
 	MMCLEAR5;
 	if (pad)
 		return dec_fix_olen_pad(olen, pad, out);
@@ -1135,7 +1129,7 @@ int AESNI_CTR_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt,
 	/* Change back to initial byte order */
 	register __m128i tmp = _mm_shuffle_epi8(cblk, BSWAP_EPI64);
 	_mm_storeu_si128((__m128i*)ctr, tmp);
-	MMCLEAR8;
+	MMCLEARALL;
 	return 0;
 }
 

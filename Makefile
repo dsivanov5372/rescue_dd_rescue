@@ -129,7 +129,7 @@ ifeq ($(HAVE_AES),1)
 	OBJECTS2 += rdrand.o
 	#POBJECTS2 += rdrand.po find_nonzero.po ffs_sse42.po
         CFLAGS += -DHAVE_AESNI
-	ARCHFLAGS += -maes
+	ARCHFLAGS += -maes -mavx
 else
 	CFLAGS += -DNO_AES
 endif
@@ -329,16 +329,16 @@ rdrand.po: $(SRCDIR)/rdrand.c
 else
 ifeq ($(HAVE_RDRND),1)
 rdrand.o: $(SRCDIR)/rdrand.c
-	$(CC) $(CFLAGS) $(PIE) -mrdrnd -maes -c $<
+	$(CC) $(CFLAGS) $(PIE) -mrdrnd -maes -mavx -c $<
 
 rdrand.po: $(SRCDIR)/rdrand.c
-	$(CC) $(CFLAGS) $(PIC) -mrdrnd -maes -o $@ -c $<
+	$(CC) $(CFLAGS) $(PIC) -mrdrnd -maes -mavx -o $@ -c $<
 else
 rdrand.o: $(SRCDIR)/rdrand.c
-	$(CC) $(CFLAGS) $(PIE) -maes -c $<
+	$(CC) $(CFLAGS) $(PIE) -maes -mavx -c $<
 
 rdrand.po: $(SRCDIR)/rdrand.c
-	$(CC) $(CFLAGS) $(PIC) -maes -o $@ -c $<
+	$(CC) $(CFLAGS) $(PIC) -maes -mavx -o $@ -c $<
 endif
 endif
 
@@ -426,10 +426,10 @@ aesni.po: $(SRCDIR)/aesni.c
 	$(CC) $(CFLAGS) $(PIC) -O3 -maes -mavx2 -mvaes -c $< -o $@
 else
 aesni.o: $(SRCDIR)/aesni.c
-	$(CC) $(CFLAGS) $(PIE) -O3 -maes -msse4.1 -c $<
+	$(CC) $(CFLAGS) $(PIE) -O3 -maes -mavx -msse4.1 -c $<
 
 aesni.po: $(SRCDIR)/aesni.c
-	$(CC) $(CFLAGS) $(PIC) -O3 -maes -msse4.1 -c $< -o $@
+	$(CC) $(CFLAGS) $(PIC) -O3 -maes -mavx -msse4.1 -c $< -o $@
 endif
 aes_arm64.o: $(SRCDIR)/aes_arm64.c
 	$(CC) $(CFLAGS) $(PIE) -O3 -march=armv8-a+crypto -c $<
