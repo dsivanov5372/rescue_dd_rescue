@@ -266,10 +266,26 @@ int test_alg(const char* prefix, ciph_desc_t *alg, uchar *key, uchar *in, ssize_
 #endif
 
 #ifdef HAVE_AESNI
+#ifndef NO_AVX2
+#define TEST_AESNI(LN, EPAD, DPAD)			\
+	do {						\
+	const char* label;				\
+	if (have_avx2) {				\
+		label = "VAES ";			\
+		alg = findalg(VAESNI_Methods, testalg, 1);	\
+	} else {					\
+		label = "AESNI";			\
+		alg = findalg(SAESNI_Methods, testalg, 1);	\
+	}						\
+	if (alg)					\
+		ret += test_alg(label, alg, key, in, LN, EPAD, DPAD, rep);	\
+	} while(0)
+#else
 #define TEST_AESNI(LN, EPAD, DPAD)			\
 	alg = findalg(AESNI_Methods, testalg, 1);	\
 	if (alg)					\
 		ret += test_alg("AESNI", alg, key, in, LN, EPAD, DPAD, rep)
+#endif
 #else
 #define TEST_AESNI(LN, EPAD, DPAD) do {} while(0)
 #endif

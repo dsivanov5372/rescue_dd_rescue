@@ -196,10 +196,23 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 	state->pad = PAD_ALWAYS;
 	state->saltlen = -1;
 #if defined(CC_FLAGS_AES) && (defined(__x86_64__) || defined(__i386__))
-	if (have_aesni) { 
-		state->engine = AESNI_Methods;
+	if (have_aesni) {
+#ifndef NO_AVX2
+		if (have_avx2) {
+			state->engine = VAESNI_Methods;
+			if (opt->verbose)
+				FPLOG(INFO, "Default to use AVX2 AESNI crypto extensions\n");
+		} else {
+#else
+		do {
+#endif
+		state->engine = SAESNI_Methods;
 		if (opt->verbose)
-			FPLOG(INFO, "Default to use AESNI crypto extensions\n");
+			FPLOG(INFO, "Default to use Std AESNI crypto extensions\n");
+		}
+#ifdef NO_AVX2
+		while(0);
+#endif
 	} else {
 #elif defined(HAVE_AES_ARM64)
 	if (have_arm8crypto) {
@@ -239,8 +252,16 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 				state->engine = AES_ARM8_Methods;
 #endif
 #ifdef HAVE_AESNI
+#ifndef NO_AVX2
+			else if (!strcasecmp(param+7, "aesni") && have_avx2)
+				state->engine = VAESNI_Methods;
+			else if (!strcasecmp(param+7, "vaesni"))
+				state->engine = VAESNI_Methods;
+#endif
+			else if (!strcasecmp(param+7, "saesni"))
+				state->engine = SAESNI_Methods;
 			else if (!strcasecmp(param+7, "aesni"))
-				state->engine = AESNI_Methods;
+				state->engine = SAESNI_Methods;
 #endif
 #ifdef HAVE_LIBCRYPTO
 			else if (!strcasecmp(param+7, "openssl"))

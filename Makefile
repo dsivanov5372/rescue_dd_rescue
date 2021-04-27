@@ -124,12 +124,6 @@ ifeq ($(HAVE_SSE42),1)
 else
 	CFLAGS += -DNO_SSE42
 endif
-ifeq ($(HAVE_AVX),1)
-	ARCHFLAGS += -mavx
-	AESFLAGS = -maes -mavx
-else
-	AESFLAGS = -maes -msse4.1
-endif
 ifeq ($(HAVE_AES),1)
 	AESNI_O = aesni.o
         AESNI_PO = aesni.po
@@ -143,14 +137,20 @@ endif
 ifeq ($(HAVE_AVX2),1)
 	OBJECTS2 += find_nonzero_avx.o
 	ARCHFLAGS +=  -mavx2
+ifeq ($(HAVE_AES),1)
+	AESNI_O += aesni_avx.o
+	AESNI_PO += aesni_avx.po
+endif
 else
 	CFLAGS += -DNO_AVX2
 endif
 ifeq ($(HAVE_VAES),1)
 	#OBJECTS2 += rdrand.o
 	#POBJECTS2 += rdrand.po
-	ARCHFLAGS +=  -mvaes
+	ARCHFLAGS += -mvaes -mavx2
+	VAESFLAGS = -mvaes -mavx2
 else
+	VAESFLAGS = -mavx2
 	CFLAGS += -DNO_VAES
 endif
 ifeq ($(HAVE_RDRND),1)
@@ -425,19 +425,19 @@ test_aes: $(SRCDIR)/test_aes.c $(AESNI_O) $(AES_ARM64_O) aes_c.o secmem.o sha256
 	$(CC) $(CFLAGS) $(PIE) $(LDPIE) $(DEF) -o $@ $< $(AESNI_O) $(AES_ARM64_O) aes_c.o secmem.o sha256.o $(AES_OSSL_O) aes.o find_nonzero.o $(OBJECTS2) $(CRYPTOLIB)
 
 # Special optimized versions
-ifeq ($(HAVE_VAES),1)
-aesni.o: $(SRCDIR)/aesni.c
-	$(CC) $(CFLAGS) $(PIE) -O3 -maes -mavx2 -mvaes -c $<
+ifeq ($(HAVE_AVX2),1)
+aesni_avx.o: $(SRCDIR)/aesni.c
+	$(CC) $(CFLAGS) $(PIE) -O3 -maes $(VAESFLAGS) -c $< -o $@
 
-aesni.po: $(SRCDIR)/aesni.c
-	$(CC) $(CFLAGS) $(PIC) -O3 -maes -mavx2 -mvaes -c $< -o $@
-else
-aesni.o: $(SRCDIR)/aesni.c
-	$(CC) $(CFLAGS) $(PIE) -O3 $(AESFLAGS) -c $<
-
-aesni.po: $(SRCDIR)/aesni.c
-	$(CC) $(CFLAGS) $(PIC) -O3 $(AESFLAGS) -c $< -o $@
+aesni_avx.po: $(SRCDIR)/aesni.c
+	$(CC) $(CFLAGS) $(PIC) -O3 -maes $(VAESFLAGS) -c $< -o $@
 endif
+aesni.o: $(SRCDIR)/aesni.c
+	$(CC) $(CFLAGS) $(PIE) -O3 -maes -msse4.1 -c $<
+
+aesni.po: $(SRCDIR)/aesni.c
+	$(CC) $(CFLAGS) $(PIC) -O3 -maes -msse4.1 -c $< -o $@
+
 aes_arm64.o: $(SRCDIR)/aes_arm64.c
 	$(CC) $(CFLAGS) $(PIE) -O3 -march=armv8-a+crypto -c $<
 
