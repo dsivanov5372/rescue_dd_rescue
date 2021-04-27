@@ -104,7 +104,7 @@ int  AES_Gen_ECB_Enc4(AES_Crypt_Blk_fn *cryptfn4, AES_Crypt_Blk_fn *cryptfn,
  */
 int dec_fix_olen_pad(ssize_t *olen, uint pad, const uchar *output)
 {
-	if (!pad)
+	if (!pad || !*olen)
 		return 0;
 	uchar last = output[-1];
 	if (last > 0x10)
