@@ -420,10 +420,16 @@ __m128i Encrypt_Block(const __m128i in, const unsigned char *ekey, unsigned int 
 {
 	uint r;
 	const __m128i *rkeys = (__m128i*)ekey;
-	register __m128i tmp = _mm_xor_si128(in, rkeys[0]);
-	for (r = 1; r < rounds; ++r)
-		tmp = _mm_aesenc_si128(tmp, rkeys[r]);
-	return _mm_aesenclast_si128(tmp, rkeys[rounds]);
+	register __m128i rk = _mm_loadu_si128(rkeys++);
+	register __m128i tmp = _mm_xor_si128(in, rk);
+	rk =  _mm_loadu_si128(rkeys++);
+	for (r = 1; r < rounds; ++r) {
+		tmp = _mm_aesenc_si128(tmp, rk);
+		rk =  _mm_loadu_si128(rkeys++);
+	}
+	tmp = _mm_aesenclast_si128(tmp, rk);
+	MMCLEAR(rk);
+	return tmp;
 }
 
 static inline
@@ -431,10 +437,16 @@ __m128i Decrypt_Block(const __m128i in, const unsigned char *dkey, unsigned int 
 {
 	uint r;
 	const __m128i *rkeys = (__m128i*)dkey;
-	register __m128i tmp = _mm_xor_si128(in, rkeys[0]);
-	for (r = 1; r < rounds; ++r)
-		tmp = _mm_aesdec_si128(tmp, rkeys[r]);
-	return _mm_aesdeclast_si128(tmp, rkeys[rounds]);
+	register __m128i rk = _mm_loadu_si128(rkeys++);
+	register __m128i tmp = _mm_xor_si128(in, rk);
+	rk =  _mm_loadu_si128(rkeys++);
+	for (r = 1; r < rounds; ++r) {
+		tmp = _mm_aesdec_si128(tmp, rk);
+		rk =  _mm_loadu_si128(rkeys++);
+	}
+	tmp = _mm_aesdeclast_si128(tmp, rk);
+	MMCLEAR(rk);
+	return tmp;
 }
 
 static inline
@@ -443,21 +455,20 @@ void Encrypt_4Blocks(__m128i *i0, __m128i *i1, __m128i *i2, __m128i *i3,
 {
 	uint r;
 	const __m128i *rkeys = (__m128i*)ekey;
-	register __m128i rk asm("xmm0") = _mm_loadu_si128(rkeys);
+	register __m128i rk asm("xmm0") = _mm_loadu_si128(rkeys++);
 	*i0 = _mm_xor_si128(*i0, rk);
 	*i1 = _mm_xor_si128(*i1, rk);
 	*i2 = _mm_xor_si128(*i2, rk);
 	*i3 = _mm_xor_si128(*i3, rk);
-	rk = _mm_loadu_si128(rkeys+1);
+	rk = _mm_loadu_si128(rkeys++);
 	for (r = 1; r < rounds; ++r) {
 		*i0 = _mm_aesenc_si128(*i0, rk);
 		*i1 = _mm_aesenc_si128(*i1, rk);
 		*i2 = _mm_aesenc_si128(*i2, rk);
 		*i3 = _mm_aesenc_si128(*i3, rk);
-		rk = _mm_loadu_si128(rkeys+1+r);
+		rk = _mm_loadu_si128(rkeys++);
 	}
 	/* Last round ... */
-	//rk = _mm_loadu_si128(rkeys+rounds);
 	*i0 = _mm_aesenclast_si128(*i0, rk);
 	*i1 = _mm_aesenclast_si128(*i1, rk);
 	*i2 = _mm_aesenclast_si128(*i2, rk);
@@ -472,21 +483,20 @@ void Decrypt_4Blocks(__m128i *i0, __m128i *i1, __m128i *i2, __m128i *i3,
 {
 	uint r;
 	const __m128i *rkeys = (__m128i*)dkey;
-	register __m128i rk asm("xmm0") = _mm_loadu_si128(rkeys);
+	register __m128i rk asm("xmm0") = _mm_loadu_si128(rkeys++);
 	*i0 = _mm_xor_si128(*i0, rk);
 	*i1 = _mm_xor_si128(*i1, rk);
 	*i2 = _mm_xor_si128(*i2, rk);
 	*i3 = _mm_xor_si128(*i3, rk);
-	rk = _mm_loadu_si128(rkeys+1);
+	rk = _mm_loadu_si128(rkeys++);
 	for (r = 1; r < rounds; ++r) {
 		*i0 = _mm_aesdec_si128(*i0, rk);
 		*i1 = _mm_aesdec_si128(*i1, rk);
 		*i2 = _mm_aesdec_si128(*i2, rk);
 		*i3 = _mm_aesdec_si128(*i3, rk);
-		rk = _mm_loadu_si128(rkeys+1+r);
+		rk = _mm_loadu_si128(rkeys++);
 	}
 	/* Last round ... */
-	//rk = _mm_loadu_si128(rkeys+rounds);
 	*i0 = _mm_aesdeclast_si128(*i0, rk);
 	*i1 = _mm_aesdeclast_si128(*i1, rk);
 	*i2 = _mm_aesdeclast_si128(*i2, rk);
@@ -788,11 +798,12 @@ int  AESNI_ECB_Crypt_Tmpl2(crypt_4x2blks_fn *crypt4x2, crypt_blk_fn *crypt, int 
 			  ssize_t len, ssize_t *olen)
 {
 	*olen = len;
+	__m256i blk0, blk1, blk2, blk3;
 	while (len >= 4*SIZE256) {
-		__m256i blk0 = _mm256_loadu_si256((const __m256i*)in);
-		__m256i blk1 = _mm256_loadu_si256((const __m256i*)(in+SIZE256));
-		__m256i blk2 = _mm256_loadu_si256((const __m256i*)(in+2*SIZE256));
-		__m256i blk3 = _mm256_loadu_si256((const __m256i*)(in+3*SIZE256));
+		blk0 = _mm256_loadu_si256((const __m256i*)in);
+		blk1 = _mm256_loadu_si256((const __m256i*)(in+SIZE256));
+		blk2 = _mm256_loadu_si256((const __m256i*)(in+2*SIZE256));
+		blk3 = _mm256_loadu_si256((const __m256i*)(in+3*SIZE256));
 		crypt4x2(&blk0, &blk1, &blk2, &blk3, key, rounds);
 		_mm256_storeu_si256((__m256i*)out, blk0);
 		_mm256_storeu_si256((__m256i*)(out+SIZE256), blk1);
@@ -802,8 +813,10 @@ int  AESNI_ECB_Crypt_Tmpl2(crypt_4x2blks_fn *crypt4x2, crypt_blk_fn *crypt, int 
 		in  += 4*SIZE256;
 		out += 4*SIZE256;
 	}
+	MM256CLEAR(blk0); MM256CLEAR(blk1); MM256CLEAR(blk2); MM256CLEAR(blk3);
+	__m128i blk;
 	while (len > 0 || (enc && len == 0 && pad == PAD_ALWAYS)) {
-		register __m128i blk = _mm_loadu_si128((const __m128i*)in);
+		blk = _mm_loadu_si128((const __m128i*)in);
 		if (enc && len < SIZE128) {
 			__m128i mask = _mkmask(len);
 			blk = _mm_and_si128(blk, mask);
@@ -829,8 +842,7 @@ int  AESNI_ECB_Crypt_Tmpl2(crypt_4x2blks_fn *crypt4x2, crypt_blk_fn *crypt, int 
 		in  += SIZE128;
 		out += SIZE128;
 	}
-	/* FIXME: Clear the right registers */
-	MM256CLEAR5;
+	MMCLEAR(blk);
 	if (enc)
 		return (pad == PAD_ALWAYS || (len&15))? 16-(len&15): 0;
 	if (pad)
@@ -923,9 +935,10 @@ int AESNI_CBC_Encrypt_Tmpl(crypt_blk_fn *encrypt,
 			ssize_t len, ssize_t *olen) 
 {
 	register __m128i ivb = _mm_loadu_si128((const __m128i*)iv);
+	register __m128i dat;
 	*olen = len;
 	while (len >= SIZE128) {
-		register __m128i dat = _mm_loadu_si128((const __m128i*)in);
+		dat = _mm_loadu_si128((const __m128i*)in);
 		ivb = _mm_xor_si128(ivb, dat);
 		ivb = encrypt(ivb, key, rounds);
 		_mm_storeu_si128((__m128i*)out, ivb);
@@ -935,7 +948,7 @@ int AESNI_CBC_Encrypt_Tmpl(crypt_blk_fn *encrypt,
 	}
 	//_mm_storeu_si128((__m128i*)iv, ivb);
 	if (len || pad == PAD_ALWAYS) {
-		register __m128i dat = _mm_loadu_si128((const __m128i*)in);
+		dat = _mm_loadu_si128((const __m128i*)in);
 		__m128i mask = _mkmask(len);
 		dat = _mm_and_si128(dat, mask);
 		if (pad) {
@@ -952,7 +965,7 @@ int AESNI_CBC_Encrypt_Tmpl(crypt_blk_fn *encrypt,
 	}
 	_mm_storeu_si128((__m128i*)iv, ivb);
 	/* FIXME: Clear the right registers */
-	MMCLEAR3;
+	MMCLEAR(dat); MMCLEAR(ivb);
 	return (pad == PAD_ALWAYS || (len&15))? 16-(len&15): 0;
 }
 
@@ -973,13 +986,14 @@ int  AESNI_CBC_Decrypt_Tmpl(crypt_4blks_fn *decrypt4, crypt_blk_fn *decrypt,
 {
 	register __m128i ivb = _mm_loadu_si128((const __m128i*)iv);
 	*olen = len;
+	__m128i dat0, dat1, dat2, dat3, b0, b1, b2, b3;
 	/* TODO: We could do 4 blocks in parallel for CBC decrypt (NOT: encrypt) */
 	while (len >= 4*SIZE128) {
-		__m128i dat0 = _mm_loadu_si128((const __m128i*)in);
-		__m128i dat1 = _mm_loadu_si128((const __m128i*)in+1);
-		__m128i dat2 = _mm_loadu_si128((const __m128i*)in+2);
-		__m128i dat3 = _mm_loadu_si128((const __m128i*)in+3);
-		__m128i b0 = dat0, b1= dat1, b2 = dat2, b3 = dat3;
+		dat0 = _mm_loadu_si128((const __m128i*)in);
+		dat1 = _mm_loadu_si128((const __m128i*)in+1);
+		dat2 = _mm_loadu_si128((const __m128i*)in+2);
+		dat3 = _mm_loadu_si128((const __m128i*)in+3);
+		b0 = dat0, b1= dat1, b2 = dat2, b3 = dat3;
 		decrypt4(&dat0, &dat1, &dat2, &dat3, key, rounds);
 		_mm_storeu_si128((__m128i*)out  , _mm_xor_si128(dat0, ivb));
 		_mm_storeu_si128((__m128i*)out+1, _mm_xor_si128(dat1, b0));
@@ -992,17 +1006,20 @@ int  AESNI_CBC_Decrypt_Tmpl(crypt_4blks_fn *decrypt4, crypt_blk_fn *decrypt,
 	}
 	//_mm_storeu_si128((__m128i*)iv, ivb);
 	while (len > 0) {
-		__m128i dat = _mm_loadu_si128((const __m128i*)in);
-		register __m128i blk = decrypt(dat, key, rounds);
-		_mm_storeu_si128((__m128i*)out, _mm_xor_si128(blk, ivb));
-		ivb = dat;
+		dat0 = _mm_loadu_si128((const __m128i*)in);
+		b0 = dat0;
+		dat0 = decrypt(dat0, key, rounds);
+		_mm_storeu_si128((__m128i*)out, _mm_xor_si128(dat0, ivb));
+		ivb = b0;
 		len -= SIZE128;
 		in  += SIZE128;
 		out += SIZE128;
 	}
 	_mm_storeu_si128((__m128i*)iv, ivb);
 	/* FIXME: Clear the right registers */
-	MMCLEAR5;
+	MMCLEAR(b3); MMCLEAR(b2); MMCLEAR(b1); MMCLEAR(b0);
+	MMCLEAR(dat3); MMCLEAR(dat2); MMCLEAR(dat1); MMCLEAR(dat0);
+	MMCLEAR(ivb);
 	if (pad)
 		return dec_fix_olen_pad(olen, pad, out);
 	else
@@ -1073,6 +1090,7 @@ void AESNI_CTR_Prep(const unsigned char* iv, unsigned char* ctr, unsigned long l
 		_debug_print(tmp);
 	}
 #endif
+	//MMCLEAR(tmp);
 }
 
 
@@ -1192,17 +1210,18 @@ int AESNI_CTR_Crypt_Tmpl2(crypt_4x2blks_fn *crypt4, crypt_blk_fn *crypt,
 	const __m256i INIT = _mm256_set_epi32(0, 1, 0, 0, 0, 0, 0, 0);
 	cblk = _mm256_shuffle_epi8(cblk, BSWAP_BOTH);
 	cblk = _mm256_add_epi64(cblk, INIT);
+	__m256i tmp0, tmp1, tmp2, tmp3;
 	//__builtin_prefetch(in, 0, 3);
 	while (len >= 4*SIZE256) {
 		const __m256i TWO = _mm256_set_epi32(0, 2, 0, 0, 0, 2, 0, 0);
 		/* Prepare CTR (IV) values */
-		__m256i tmp0 = _mm256_shuffle_epi8(cblk, BSWAP_BOTH);
+		tmp0 = _mm256_shuffle_epi8(cblk, BSWAP_BOTH);
 		cblk = _mm256_add_epi64(cblk, TWO);
-		__m256i tmp1 = _mm256_shuffle_epi8(cblk, BSWAP_BOTH);
+		tmp1 = _mm256_shuffle_epi8(cblk, BSWAP_BOTH);
 		cblk = _mm256_add_epi64(cblk, TWO);
-		__m256i tmp2 = _mm256_shuffle_epi8(cblk, BSWAP_BOTH);
+		tmp2 = _mm256_shuffle_epi8(cblk, BSWAP_BOTH);
 		cblk = _mm256_add_epi64(cblk, TWO);
-		__m256i tmp3 = _mm256_shuffle_epi8(cblk, BSWAP_BOTH);
+		tmp3 = _mm256_shuffle_epi8(cblk, BSWAP_BOTH);
 		/* Encrypt 4 Double IVs */
 		crypt4(&tmp0, &tmp1, &tmp2, &tmp3, key, rounds);
 		tmp0 = _mm256_xor_si256(tmp0, _mm256_loadu_si256((__m256i*)in));
@@ -1219,8 +1238,11 @@ int AESNI_CTR_Crypt_Tmpl2(crypt_4x2blks_fn *crypt4, crypt_blk_fn *crypt,
 		out += 4*SIZE256;
 	}
 	cblk128 = _mm256_extracti128_si256(cblk, 0);
+	MM256CLEAR(tmp0); MM256CLEAR(tmp1); MM256CLEAR(tmp2); MM256CLEAR(tmp3);
+	MM256CLEAR(cblk);
+	register __m128i tmp;
 	while (len > 0) {
-		register __m128i tmp = _mm_shuffle_epi8(cblk128, BSWAP_EPI64);
+		tmp = _mm_shuffle_epi8(cblk128, BSWAP_EPI64);
 		const __m128i ONE  = _mm_set_epi32(0, 1, 0, 0);
 		tmp = crypt(tmp, key, rounds);
 		if (len < SIZE128) {
@@ -1244,8 +1266,7 @@ int AESNI_CTR_Crypt_Tmpl2(crypt_4x2blks_fn *crypt4, crypt_blk_fn *crypt,
 	/* Change back to initial byte order */
 	cblk128 = _mm_shuffle_epi8(cblk128, BSWAP_EPI64);
 	_mm_storeu_si128((__m128i*)ctr, cblk128);
-	MM256CLEAR5;
-	//MMCLEAR5;
+	MMCLEAR(tmp); MMCLEAR(cblk128);
 	return 0;
 }
 
@@ -1377,29 +1398,50 @@ __m128i Encrypt_BlockX2(const __m128i in, const unsigned char *ekey, unsigned in
 {
 	uint r;
 	const __m128i *rkeys = (__m128i*)ekey;
-	register __m128i tmp = _mm_xor_si128(in, rkeys[0]);
-	for (r = 1; r < rounds/2; ++r)
-		tmp = _mm_aesenc_si128(tmp, rkeys[r]);
-	tmp = _mm_aesenclast_si128(tmp, rkeys[r]);
-	tmp = _mm_xor_si128(tmp, rkeys[++r]);
-	for (++r; r < rounds+1; ++r)
-		tmp = _mm_aesenc_si128(tmp, rkeys[r]);
-	return _mm_aesenclast_si128(tmp, rkeys[r]);
+	register __m128i rk = _mm_loadu_si128(rkeys++);
+	register __m128i tmp = _mm_xor_si128(in, rk);
+	rk = _mm_loadu_si128(rkeys++);
+	for (r = 1; r < rounds/2; ++r) {
+		tmp = _mm_aesenc_si128(tmp, rk);
+		rk = _mm_loadu_si128(rkeys++);
+	}
+	tmp = _mm_aesenclast_si128(tmp, rk);
+	rk = _mm_loadu_si128(rkeys++);
+	tmp = _mm_xor_si128(tmp, rk);
+	rk = _mm_loadu_si128(rkeys++);
+	for (r = 1; r < rounds/2; ++r) {
+		tmp = _mm_aesenc_si128(tmp, rk);
+		rk = _mm_loadu_si128(rkeys++);
+	}
+	tmp = _mm_aesenclast_si128(tmp, rk);
+	MMCLEAR(rk);
+	return tmp;
 }
 
 static inline
 __m128i Decrypt_BlockX2(const __m128i in, const unsigned char *dkey, unsigned int rounds)
 {
 	uint r;
-	const __m128i *rkeys = (__m128i*)dkey;
-	register __m128i tmp = _mm_xor_si128(in, rkeys[rounds/2+1]);
-	for (r = rounds/2+2; r < rounds+1; ++r)
-		tmp = _mm_aesdec_si128(tmp, rkeys[r]);
-	tmp = _mm_aesdeclast_si128(tmp, rkeys[r]);
-	tmp = _mm_xor_si128(tmp, rkeys[0]);
-	for (r = 1; r < rounds/2; ++r)
-		tmp = _mm_aesdec_si128(tmp, rkeys[r]);
-	return _mm_aesdeclast_si128(tmp, rkeys[r]);
+	const __m128i *rkeys = (__m128i*)dkey + rounds/2+1;
+	register __m128i rk = _mm_loadu_si128(rkeys++);
+	register __m128i tmp = _mm_xor_si128(in, rk);
+	rk = _mm_loadu_si128(rkeys++);
+	for (r = 1; r < rounds/2; ++r) {
+		tmp = _mm_aesdec_si128(tmp, rk);
+		rk = _mm_loadu_si128(rkeys++);
+	}
+	tmp = _mm_aesdeclast_si128(tmp, rk);
+	rkeys = (__m128i*)dkey;
+	rk = _mm_loadu_si128(rkeys++);
+	tmp = _mm_xor_si128(tmp, rk);
+	rk = _mm_loadu_si128(rkeys++);
+	for (r = 1; r < rounds/2; ++r) {
+		tmp = _mm_aesdec_si128(tmp, rk);
+		rk = _mm_loadu_si128(rkeys++);
+	}
+	tmp = _mm_aesdeclast_si128(tmp, rk);
+	MMCLEAR(rk);
+	return tmp;
 }
 
 /* TODO: VAES optimized versions */
@@ -1547,6 +1589,8 @@ void Decrypt_8BlocksX2(__m128i *i0, __m128i *i1, __m128i *i2, __m128i *i3,
 	//asm volatile("pxor %%xmm0, %%xmm0\n" :::"xmm0");
 }
 
+/* TODO: 256bit VAES version */
+
 static inline
 void Decrypt_4BlocksX2(__m128i *i0, __m128i *i1, __m128i *i2, __m128i *i3,
 		       const unsigned char *dkey, unsigned int rounds)
@@ -1625,6 +1669,7 @@ int  AESNI_CBC_DecryptX2(const uchar* rkeys, unsigned int rounds,
 	return AESNI_CBC_Decrypt_Tmpl(Decrypt_4BlocksX2, Decrypt_BlockX2, rkeys, rounds, 
 				iv, pad, in, out, len, olen);
 }
+/* TODO: Handtuned asm x2 version */
 int  AESNI_CTR_CryptX2(const uchar* rkeys, unsigned int rounds,
 			uchar *iv, uint pad, const uchar *in, uchar *out, 
 			ssize_t len, ssize_t *olen)
