@@ -331,16 +331,24 @@ int main(int argc, char *argv[])
 	*/
 	if (argc > 1 && !strcmp(argv[1], "-h"))
 		usage();
+	/* Repeat the run with a changed length */
 	if (argc > 1 && !memcmp(argv[1], "-s", 2)) {
 		do_shifted = 1;
 		if (strlen(argv[1]) > 2)
 			shift = atol(argv[1]+2);
 		--argc; ++argv;
 	}
+	/* Do a warmup run */
 	if (argc > 1 && !strcmp(argv[1], "-w")) {
 		warmup = 1;
 		--argc; ++argv;
 	}
+	/* Disable AVX override */
+	if (argc > 1 && !strcmp(argv[1], "-2")) {
+		have_avx2 = 0;
+		--argc; ++argv;
+	}
+	/* Positional parameters following */
 	if (argc > 1)
 		testalg = argv[1];
 	else
