@@ -284,12 +284,12 @@ int test_alg(const char* prefix, ciph_desc_t *alg, uchar *key, uchar *in, ssize_
 
 
 #define TEST_ENGINES(LN, EPAD, DPAD)			\
-	TEST_AESNI(LN, EPAD, DPAD);			\
-	TEST_AES_ARM64(LN, EPAD, DPAD);			\
 	alg = findalg(AES_C_Methods, testalg, 1);	\
 	if (alg) 					\
-		ret += test_alg("AES_C", alg, key, in, LN, EPAD, DPAD, rep);	\
-	TEST_OSSL(LN, EPAD, DPAD)
+		ret += test_alg("AES_C", alg, key, in, LN, EPAD, DPAD, (rep+3)/4);	\
+	TEST_OSSL(LN, EPAD, DPAD);			\
+	TEST_AESNI(LN, EPAD, DPAD);			\
+	TEST_AES_ARM64(LN, EPAD, DPAD);	
 
 int ret = 0;
 int main(int argc, char *argv[])
