@@ -79,12 +79,20 @@ sec_fields* secmem_init()
 #else
 #warning Cannot exclude memory from being included in core dump
 #endif
+	sec_fields *sf = (sec_fields*)ptr;
+	sf->canary = 0xbeefdead;
+	//fprintf(stderr, "secmem_init: Length=%zi\n", offsetof(sec_fields, canary));
 	return (sec_fields*)ptr;
 }
 
 void secmem_release(sec_fields* sf)
 {
 	unsigned char* ptr = (unsigned char*)sf;
+	if (sf->canary != 0xbeefdead) {
+		fprintf(stderr, "Corruption: Canary overwritten! %llx\n", sf->canary);
+		memset(sf, 0, offsetof(sec_fields, hashbuf1));
+		abort();
+	}
 	memset(ptr, 0, pagesize);
 	LFENCE;
 	munlock(ptr, pagesize);
