@@ -109,7 +109,7 @@ int AES_OSSL_##BITCHAIN##_Encrypt(const unsigned char* ctx, unsigned int rounds,
        	if (DOPAD && !pad && (len&15)) {			\
 		ores = EVP_EncryptUpdate(evpctx[0], out, &olen, in, len-(len&15));	\
 		assert(ores);					\
-		uchar ibf[16];					\
+		uchar *ibf = crypto->blkbuf2;			\
 		memcpy(ibf, in+olen, len&15);			\
 		memset(ibf+(len&15), 0, 16-(len&15));		\
 		ores = EVP_EncryptUpdate(evpctx[0], out+olen, &elen, ibf, 16);	\
@@ -151,7 +151,7 @@ int AES_OSSL_##BITCHAIN##_Decrypt(const unsigned char* ctx, unsigned int rounds,
 	if (!len && pad != PAD_ALWAYS) { *flen = 0; return 0; }	\
 	if (DOPAD && pad == PAD_ASNEEDED) {			\
 		int olen1;					\
-		uchar buf[16];					\
+		uchar *buf = crypto->blkbuf2;			\
 		ores = EVP_DecryptUpdate(evpctx[0], out, &olen, in, ilen-16);	\
 		assert(ores);					\
 		EVP_CIPHER_CTX *ctx2 = EVP_CIPHER_CTX_new();	\
@@ -322,7 +322,7 @@ int  AES_OSSL_##BITCHAIN##_EncryptX2(const unsigned char* ctx, unsigned int roun
        	if (!pad && (len&15)) {					\
 		ores = EVP_EncryptUpdate(evpctx[0], out, &olen, in, len-(len&15));	\
 		assert(ores);					\
-		uchar ibf[16];					\
+		uchar *ibf = crypto->blkbuf2;			\
 		memcpy(ibf, in+olen, len&15);			\
 		memset(ibf+(len&15), 0, 16-(len&15));		\
 		ores = EVP_EncryptUpdate(evpctx[0], out+olen, &elen, ibf, 16);		\
@@ -369,7 +369,7 @@ int  AES_OSSL_##BITCHAIN##_DecryptX2(const unsigned char* ctx, unsigned int roun
 	assert(ores);						\
 	if (pad == PAD_ASNEEDED) {				\
 		int ilen = olen, olen1;				\
-		uchar buf[16];					\
+		uchar *buf = crypto->blkbuf2;			\
 		ores = EVP_DecryptUpdate(evpctx[0], out, &olen, out, ilen-16);	\
 		assert(ores); assert(olen == ilen-16);		\
 		/* Save piece that gets overwritten */		\
@@ -446,7 +446,7 @@ void AES_OSSL_Blk_EncryptX2(const unsigned char *ctx, unsigned int rounds,
 {
 	EVP_CIPHER_CTX **evpctx = (EVP_CIPHER_CTX**)ctx;
 	int olen;
-	uchar blk[16];
+	uchar *blk = crypto->blkbuf1;
 	EVP_EncryptUpdate(evpctx[0], blk, &olen, in, 16);
 	EVP_EncryptUpdate(evpctx[1], out, &olen, blk, olen);
 	memset(blk, 0, 16);
@@ -457,7 +457,7 @@ void AES_OSSL_Blk_DecryptX2(const unsigned char *ctx, unsigned int rounds,
 {
 	EVP_CIPHER_CTX **evpctx = (EVP_CIPHER_CTX**)ctx;
 	int olen;
-	uchar blk[16];
+	uchar *blk = crypto->blkbuf1;
 	EVP_DecryptUpdate(evpctx[1], blk, &olen, in, 16);
 	EVP_DecryptUpdate(evpctx[0], out, &olen, blk, olen);
 	memset(blk, 0, 16);

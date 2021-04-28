@@ -49,7 +49,7 @@ int  AES_Gen_ECB_Enc(AES_Crypt_Blk_fn *cryptfn,
 		len -= 16; input += 16; output += 16;
 	}
 	if (len || pad == PAD_ALWAYS) {
-		uchar in[16];
+		uchar *in = crypto->blkbuf1;
 		fill_blk(input, in, len, pad);
 		cryptfn(rkeys, rounds, in, output);
 		*olen += 16-(len&15);
@@ -73,7 +73,7 @@ int  AES_Gen_ECB_Enc4(AES_Crypt_Blk_fn *cryptfn4, AES_Crypt_Blk_fn *cryptfn,
 		len -= 16; input += 16; output += 16;
 	}
 	if (len || pad == PAD_ALWAYS) {
-		uchar in[16];
+		uchar *in = crypto->blkbuf1;
 		fill_blk(input, in, len, pad);
 		cryptfn(rkeys, rounds, in, output);
 		*olen += 16-(len&15);
