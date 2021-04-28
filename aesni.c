@@ -447,6 +447,7 @@ __m128i Decrypt_Block(const __m128i in, const unsigned char *dkey, unsigned int 
 	return tmp;
 }
 
+#ifdef UNUSED
 static inline
 void Encrypt_4Blocks(__m128i *i0, __m128i *i1, __m128i *i2, __m128i *i3,
 		     const unsigned char *ekey, unsigned int rounds)
@@ -474,6 +475,7 @@ void Encrypt_4Blocks(__m128i *i0, __m128i *i1, __m128i *i2, __m128i *i3,
 	MMCLEAR(rk);
 	//asm volatile("pxor %%xmm5, %%xmm5\n" :::"xmm5");
 }
+#endif
 
 static inline
 void Decrypt_4Blocks(__m128i *i0, __m128i *i1, __m128i *i2, __m128i *i3,
@@ -679,7 +681,7 @@ int  AESNI_ECB_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt, int enc,
 		if (len)
 		       	blk = _mm_loadu_si128((const __m128i*)in);
 		else
-			blk = _mm_xor_si128(blk, blk);
+			MMCLEAR(blk);
 		if (enc && len < SIZE128) {
 			__m128i mask = _mkmask(len);
 			blk = _mm_and_si128(blk, mask);
