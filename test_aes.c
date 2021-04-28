@@ -191,6 +191,8 @@ int test_alg(const char* prefix, ciph_desc_t *alg, uchar *key, uchar *in, ssize_
 	uchar *rkeys = (uchar*)crypto->ekeys;	//malloc(alg->ctx_size);
 	BENCH(alg->enc_key_setup(key, rkeys, alg->rounds); if (alg->release) alg->release(rkeys, alg->rounds), rep*2, 16*(1+alg->rounds));
 	alg->enc_key_setup(key, rkeys, alg->rounds);
+	printf("%02x%02x%02x%02x%02x%02x%02x%02x ", rkeys[0], rkeys[16], rkeys[32], rkeys[64],
+			rkeys[16*(alg->rounds-3)], rkeys[16*(alg->rounds-2)], rkeys[16*(alg->rounds-1)], rkeys[16*alg->rounds]);
 	printf("\nEncrypt   : ");
 	BENCH(setup_iv(alg->stream, iv, BLKSZ); eerr = alg->encrypt(rkeys, alg->rounds, iv, epad, in, ctxt, ln, &eln); if (alg->recycle) alg->recycle(rkeys), (rep+1)/2, ln);
 	memcpy(&ivhash, iv, 4); memcpy((uchar*)(&ivhash)+4, iv+12, 4);
@@ -209,6 +211,8 @@ int test_alg(const char* prefix, ciph_desc_t *alg, uchar *key, uchar *in, ssize_
 	printf("\nDKey setup: ");
 	BENCH(alg->dec_key_setup(key, rkeys, alg->rounds); if (alg->release) alg->release(rkeys, alg->rounds), rep*2, 16*(1+alg->rounds));
 	alg->dec_key_setup(key, rkeys, alg->rounds);
+	printf("%02x%02x%02x%02x%02x%02x%02x%02x ", rkeys[0], rkeys[16], rkeys[32], rkeys[64],
+			rkeys[16*(alg->rounds-3)], rkeys[16*(alg->rounds-2)], rkeys[16*(alg->rounds-1)], rkeys[16*alg->rounds]);
 	printf("\nDecrypt   : ");
 	memset(vfy, 0xff, DEF_LN+32);
 	BENCH(setup_iv(alg->stream, iv, BLKSZ); derr = alg->decrypt(rkeys, alg->rounds, iv, dpad, ctxt, vfy, eln, &dln); if (alg->recycle) alg->recycle(rkeys), (rep+1)/2, eln);
@@ -333,6 +337,7 @@ int main(int argc, char *argv[])
 	printf("CPU Features: SSE2 %i SSE4.2 %i AES %i RDRAND %i AVX2 %i VAES %i\n",
 		have_sse2, have_sse42, have_aesni, have_rdrand, have_avx2, have_vaes);
 #elif defined(__arm__) || defined(__aarch64__)
+	//have_arm8crypto = 1;
 	printf("CPU Features: AES Arm8 %i\n",
 		have_arm8crypto);
 #endif
