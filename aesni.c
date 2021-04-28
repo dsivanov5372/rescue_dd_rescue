@@ -416,15 +416,15 @@ __m128i Encrypt_Block(const __m128i in, const unsigned char *ekey, unsigned int 
 {
 	uint r;
 	const __m128i *rkeys = (__m128i*)ekey;
-	register __m128i rk = _mm_loadu_si128(rkeys++);
-	register __m128i tmp = _mm_xor_si128(in, rk);
-	rk =  _mm_loadu_si128(rkeys++);
+	//register __m128i rk = _mm_loadu_si128(rkeys++);
+	register __m128i tmp = _mm_xor_si128(in, *rkeys++);
+	//rk =  _mm_loadu_si128(rkeys++);
 	for (r = 1; r < rounds; ++r) {
-		tmp = _mm_aesenc_si128(tmp, rk);
-		rk =  _mm_loadu_si128(rkeys++);
+		tmp = _mm_aesenc_si128(tmp, *rkeys++);
+		//rk =  _mm_loadu_si128(rkeys++);
 	}
-	tmp = _mm_aesenclast_si128(tmp, rk);
-	MMCLEAR(rk);
+	tmp = _mm_aesenclast_si128(tmp, *rkeys);
+	//MMCLEAR(rk);
 	return tmp;
 }
 
@@ -433,15 +433,15 @@ __m128i Decrypt_Block(const __m128i in, const unsigned char *dkey, unsigned int 
 {
 	uint r;
 	const __m128i *rkeys = (__m128i*)dkey;
-	register __m128i rk = _mm_loadu_si128(rkeys++);
-	register __m128i tmp = _mm_xor_si128(in, rk);
-	rk =  _mm_loadu_si128(rkeys++);
+	//register __m128i rk = _mm_loadu_si128(rkeys++);
+	register __m128i tmp = _mm_xor_si128(in, *rkeys++);
+	//rk =  _mm_loadu_si128(rkeys++);
 	for (r = 1; r < rounds; ++r) {
-		tmp = _mm_aesdec_si128(tmp, rk);
-		rk =  _mm_loadu_si128(rkeys++);
+		tmp = _mm_aesdec_si128(tmp, *rkeys++);
+		//rk =  _mm_loadu_si128(rkeys++);
 	}
-	tmp = _mm_aesdeclast_si128(tmp, rk);
-	MMCLEAR(rk);
+	tmp = _mm_aesdeclast_si128(tmp, *rkeys);
+	//MMCLEAR(rk);
 	return tmp;
 }
 
@@ -941,8 +941,8 @@ int AESNI_CBC_Encrypt_Tmpl(crypt_blk_fn *encrypt,
 	register __m128i dat;
 	*olen = len;
 	while (len >= SIZE128) {
-		dat = _mm_loadu_si128((const __m128i*)in);
-		ivb = _mm_xor_si128(ivb, dat);
+		//dat = _mm_loadu_si128((const __m128i*)in);
+		ivb = _mm_xor_si128(ivb, *(const __m128i*)in);
 		ivb = encrypt(ivb, key, rounds);
 		_mm_storeu_si128((__m128i*)out, ivb);
 		len -= SIZE128;
@@ -951,9 +951,9 @@ int AESNI_CBC_Encrypt_Tmpl(crypt_blk_fn *encrypt,
 	}
 	//_mm_storeu_si128((__m128i*)iv, ivb);
 	if (len || pad == PAD_ALWAYS) {
-		dat = _mm_loadu_si128((const __m128i*)in);
+		//dat = _mm_loadu_si128((const __m128i*)in);
 		__m128i mask = _mkmask(len);
-		dat = _mm_and_si128(dat, mask);
+		dat = _mm_and_si128(*(const __m128i*)in, mask);
 		if (pad) {
 			__m128i padv = _mkpad(len);
 			__m128i imask = _mm_set_epi64x(0xffffffffffffffffULL, 0xffffffffffffffffULL);
@@ -1139,18 +1139,26 @@ int AESNI_CTR_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt,
 		cblk = _mm_add_epi64(cblk, FOUR);
 		/* Encrypt 8 IVs */
 		crypt8(&tmp0, &tmp1, &tmp2, &tmp3, &tmp4, &tmp5, &tmp6, &tmp7, key, rounds);
-		tmp0 = _mm_xor_si128(tmp0, _mm_loadu_si128((__m128i*)in));
-		tmp1 = _mm_xor_si128(tmp1, _mm_loadu_si128((__m128i*)in+1));
-		tmp2 = _mm_xor_si128(tmp2, _mm_loadu_si128((__m128i*)in+2));
-		tmp3 = _mm_xor_si128(tmp3, _mm_loadu_si128((__m128i*)in+3));
+		//tmp0 = _mm_xor_si128(tmp0, _mm_loadu_si128((__m128i*)in));
+		//tmp1 = _mm_xor_si128(tmp1, _mm_loadu_si128((__m128i*)in+1));
+		//tmp2 = _mm_xor_si128(tmp2, _mm_loadu_si128((__m128i*)in+2));
+		//tmp3 = _mm_xor_si128(tmp3, _mm_loadu_si128((__m128i*)in+3));
+		tmp0 = _mm_xor_si128(tmp0, *((__m128i*)in));
+		tmp1 = _mm_xor_si128(tmp1, *((__m128i*)in+1));
+		tmp2 = _mm_xor_si128(tmp2, *((__m128i*)in+2));
+		tmp3 = _mm_xor_si128(tmp3, *((__m128i*)in+3));
 		_mm_storeu_si128((__m128i*)out  , tmp0);
 		_mm_storeu_si128((__m128i*)out+1, tmp1);
 		_mm_storeu_si128((__m128i*)out+2, tmp2);
 		_mm_storeu_si128((__m128i*)out+3, tmp3);
-		tmp4 = _mm_xor_si128(tmp4, _mm_loadu_si128((__m128i*)in+4));
-		tmp5 = _mm_xor_si128(tmp5, _mm_loadu_si128((__m128i*)in+5));
-		tmp6 = _mm_xor_si128(tmp6, _mm_loadu_si128((__m128i*)in+6));
-		tmp7 = _mm_xor_si128(tmp7, _mm_loadu_si128((__m128i*)in+7));
+		//tmp4 = _mm_xor_si128(tmp4, _mm_loadu_si128((__m128i*)in+4));
+		//tmp5 = _mm_xor_si128(tmp5, _mm_loadu_si128((__m128i*)in+5));
+		//tmp6 = _mm_xor_si128(tmp6, _mm_loadu_si128((__m128i*)in+6));
+		//tmp7 = _mm_xor_si128(tmp7, _mm_loadu_si128((__m128i*)in+7));
+		tmp4 = _mm_xor_si128(tmp4, *((__m128i*)in+4));
+		tmp5 = _mm_xor_si128(tmp5, *((__m128i*)in+5));
+		tmp6 = _mm_xor_si128(tmp6, *((__m128i*)in+6));
+		tmp7 = _mm_xor_si128(tmp7, *((__m128i*)in+7));
 		_mm_storeu_si128((__m128i*)out+4, tmp4);
 		_mm_storeu_si128((__m128i*)out+5, tmp5);
 		_mm_storeu_si128((__m128i*)out+6, tmp6);
@@ -1165,12 +1173,14 @@ int AESNI_CTR_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt,
 		if (len < SIZE128) {
 			uchar *obuf = crypto->blkbuf3;
 			__m128i mask = _mkmask(len);
-			mask = _mm_and_si128(mask, _mm_loadu_si128((__m128i*)in));
+			//mask = _mm_and_si128(mask, _mm_loadu_si128((__m128i*)in));
+			mask = _mm_and_si128(mask, *((__m128i*)in));
 			tmp = _mm_xor_si128(tmp, mask);
 			_mm_storeu_si128((__m128i*)obuf, tmp);
 			memcpy(out, obuf, len);
 		} else {
-			tmp = _mm_xor_si128(tmp, _mm_loadu_si128((__m128i*)in));
+			//tmp = _mm_xor_si128(tmp, _mm_loadu_si128((__m128i*)in));
+			tmp = _mm_xor_si128(tmp, *((__m128i*)in));
 			_mm_storeu_si128((__m128i*)out, tmp);
 		}
 		/* FIXME: We had only increased CTR for complete blocks before. Why? */
@@ -1220,6 +1230,12 @@ int AESNI_CTR_Crypt_Tmpl2(crypt_4x2blks_fn *crypt4, crypt_blk_fn *crypt,
 	//__builtin_prefetch(in, 0, 3);
 	while (len >= 4*SIZE256) {
 		const __m256i TWO = _mm256_set_epi32(0, 2, 0, 0, 0, 2, 0, 0);
+#ifdef AESNI_PREFETCH
+		__builtin_prefetch(out, 1, 3);
+		__builtin_prefetch(out+64, 1, 3);
+		__builtin_prefetch(in, 0, 1);
+		__builtin_prefetch(in+64, 0, 1);
+#endif
 		/* Prepare CTR (IV) values */
 		tmp0 = _mm256_shuffle_epi8(cblk, BSWAP_BOTH);
 		cblk = _mm256_add_epi64(cblk, TWO);
@@ -1230,10 +1246,14 @@ int AESNI_CTR_Crypt_Tmpl2(crypt_4x2blks_fn *crypt4, crypt_blk_fn *crypt,
 		tmp3 = _mm256_shuffle_epi8(cblk, BSWAP_BOTH);
 		/* Encrypt 4 Double IVs */
 		crypt4(&tmp0, &tmp1, &tmp2, &tmp3, key, rounds);
-		tmp0 = _mm256_xor_si256(tmp0, _mm256_loadu_si256((__m256i*)in));
-		tmp1 = _mm256_xor_si256(tmp1, _mm256_loadu_si256((__m256i*)in+1));
-		tmp2 = _mm256_xor_si256(tmp2, _mm256_loadu_si256((__m256i*)in+2));
-		tmp3 = _mm256_xor_si256(tmp3, _mm256_loadu_si256((__m256i*)in+3));
+		//tmp0 = _mm256_xor_si256(tmp0, _mm256_loadu_si256((__m256i*)in));
+		//tmp1 = _mm256_xor_si256(tmp1, _mm256_loadu_si256((__m256i*)in+1));
+		//tmp2 = _mm256_xor_si256(tmp2, _mm256_loadu_si256((__m256i*)in+2));
+		//tmp3 = _mm256_xor_si256(tmp3, _mm256_loadu_si256((__m256i*)in+3));
+		tmp0 = _mm256_xor_si256(tmp0, *((__m256i*)in));
+		tmp1 = _mm256_xor_si256(tmp1, *((__m256i*)in+1));
+		tmp2 = _mm256_xor_si256(tmp2, *((__m256i*)in+2));
+		tmp3 = _mm256_xor_si256(tmp3, *((__m256i*)in+3));
 		cblk = _mm256_add_epi64(cblk, TWO);
 		_mm256_storeu_si256((__m256i*)out  , tmp0);
 		_mm256_storeu_si256((__m256i*)out+1, tmp1);
@@ -1254,12 +1274,14 @@ int AESNI_CTR_Crypt_Tmpl2(crypt_4x2blks_fn *crypt4, crypt_blk_fn *crypt,
 		if (len < SIZE128) {
 			uchar *obuf = crypto->blkbuf3;
 			__m128i mask = _mkmask(len);
-			mask = _mm_and_si128(mask, _mm_loadu_si128((__m128i*)in));
+			//mask = _mm_and_si128(mask, _mm_loadu_si128((__m128i*)in));
+			mask = _mm_and_si128(mask, *((__m128i*)in));
 			tmp = _mm_xor_si128(tmp, mask);
 			_mm_storeu_si128((__m128i*)obuf, tmp);
 			memcpy(out, obuf, len);
 		} else {
-			tmp = _mm_xor_si128(tmp, _mm_loadu_si128((__m128i*)in));
+			//tmp = _mm_xor_si128(tmp, _mm_loadu_si128((__m128i*)in));
+			tmp = _mm_xor_si128(tmp, *((__m128i*)in));
 			_mm_storeu_si128((__m128i*)out, tmp);
 		}
 		/* FIXME: We had only increased CTR for complete blocks before. Why? */
@@ -1407,23 +1429,23 @@ __m128i Encrypt_BlockX2(const __m128i in, const unsigned char *ekey, unsigned in
 {
 	uint r;
 	const __m128i *rkeys = (__m128i*)ekey;
-	register __m128i rk = _mm_loadu_si128(rkeys++);
-	register __m128i tmp = _mm_xor_si128(in, rk);
-	rk = _mm_loadu_si128(rkeys++);
+	//register __m128i rk = _mm_loadu_si128(rkeys++);
+	register __m128i tmp = _mm_xor_si128(in, *rkeys++);
+	//rk = _mm_loadu_si128(rkeys++);
 	for (r = 1; r < rounds/2; ++r) {
-		tmp = _mm_aesenc_si128(tmp, rk);
-		rk = _mm_loadu_si128(rkeys++);
+		tmp = _mm_aesenc_si128(tmp, *rkeys++);
+		//rk = _mm_loadu_si128(rkeys++);
 	}
-	tmp = _mm_aesenclast_si128(tmp, rk);
-	rk = _mm_loadu_si128(rkeys++);
-	tmp = _mm_xor_si128(tmp, rk);
-	rk = _mm_loadu_si128(rkeys++);
+	tmp = _mm_aesenclast_si128(tmp, *rkeys++);
+	//rk = _mm_loadu_si128(rkeys++);
+	tmp = _mm_xor_si128(tmp, *rkeys++);
+	//rk = _mm_loadu_si128(rkeys++);
 	for (r = 1; r < rounds/2; ++r) {
-		tmp = _mm_aesenc_si128(tmp, rk);
-		rk = _mm_loadu_si128(rkeys++);
+		tmp = _mm_aesenc_si128(tmp, *rkeys++);
+		//rk = _mm_loadu_si128(rkeys++);
 	}
-	tmp = _mm_aesenclast_si128(tmp, rk);
-	MMCLEAR(rk);
+	tmp = _mm_aesenclast_si128(tmp, *rkeys);
+	//MMCLEAR(rk);
 	return tmp;
 }
 
@@ -1432,24 +1454,24 @@ __m128i Decrypt_BlockX2(const __m128i in, const unsigned char *dkey, unsigned in
 {
 	uint r;
 	const __m128i *rkeys = (__m128i*)dkey + rounds/2+1;
-	register __m128i rk = _mm_loadu_si128(rkeys++);
-	register __m128i tmp = _mm_xor_si128(in, rk);
-	rk = _mm_loadu_si128(rkeys++);
+	//register __m128i rk = _mm_loadu_si128(rkeys++);
+	register __m128i tmp = _mm_xor_si128(in, *rkeys++);
+	//rk = _mm_loadu_si128(rkeys++);
 	for (r = 1; r < rounds/2; ++r) {
-		tmp = _mm_aesdec_si128(tmp, rk);
-		rk = _mm_loadu_si128(rkeys++);
+		tmp = _mm_aesdec_si128(tmp, *rkeys++);
+		//rk = _mm_loadu_si128(rkeys++);
 	}
-	tmp = _mm_aesdeclast_si128(tmp, rk);
+	tmp = _mm_aesdeclast_si128(tmp, *rkeys);
 	rkeys = (__m128i*)dkey;
-	rk = _mm_loadu_si128(rkeys++);
-	tmp = _mm_xor_si128(tmp, rk);
-	rk = _mm_loadu_si128(rkeys++);
+	//rk = _mm_loadu_si128(rkeys++);
+	tmp = _mm_xor_si128(tmp, *rkeys++);
+	//rk = _mm_loadu_si128(rkeys++);
 	for (r = 1; r < rounds/2; ++r) {
-		tmp = _mm_aesdec_si128(tmp, rk);
-		rk = _mm_loadu_si128(rkeys++);
+		tmp = _mm_aesdec_si128(tmp, *rkeys++);
+		//rk = _mm_loadu_si128(rkeys++);
 	}
-	tmp = _mm_aesdeclast_si128(tmp, rk);
-	MMCLEAR(rk);
+	tmp = _mm_aesdeclast_si128(tmp, *rkeys);
+	//MMCLEAR(rk);
 	return tmp;
 }
 
