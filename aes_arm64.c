@@ -87,21 +87,17 @@ int AES_ARM8_KeySetupEnc(u32 rk[/*4*(Nr + 1)*/], const u8 cipherKey[], int keyBi
 	const int keyln32 = keyBits/32;
 	int i;
 	memcpy(rk, cipherKey, keyBits/8);
-	switch (keyBits) {
-		case 128:
-			if (!rounds)
-				rounds = 10;
-			break;
-		case 192:
-			if (!rounds)
-				rounds = 12;
-			break;
-		case 256:
-			if (!rounds)
-				rounds = 14;
-			break;
-		default:
-			return 0;
+	if (!rounds) {
+		switch (keyBits) {
+			case 128:
+				rounds = 10; break;
+			case 192:
+				rounds = 12; break;
+			case 256:
+				rounds = 14; break;
+			default:
+				return 0;
+		}
 	}
 	for (i = 0; i < sizeof(rcon); ++i) {
 		const u32* rki = rk+i*keyln32;
@@ -132,9 +128,7 @@ int AES_ARM8_KeySetupEnc(u32 rk[/*4*(Nr + 1)*/], const u8 cipherKey[], int keyBi
 	return 0;
 }
 
-inline void AES_ARM8_EKey_DKey(const u32* ekey,
-			   u32* dkey,
-			   int rounds)
+inline void AES_ARM8_EKey_DKey(const u32* ekey, u32* dkey, int rounds)
 {
 	int i;
 	memcpy(dkey, ekey+rounds*4, 16);
@@ -149,6 +143,19 @@ inline void AES_ARM8_EKey_DKey(const u32* ekey,
 		);
 	}
 	memcpy(dkey+4*i, ekey, 16);
+}
+
+/**
+ * Expand the cipher key into the decryption key schedule.
+ *
+ * @return	the number of rounds for the given cipher key size.
+ */
+int AES_ARM8_KeySetupDec(u32 rk[/*4*(Nr + 1)*/], const u8 cipherKey[], int keyBits, int rounds)
+{
+	/* expand the cipher key: */
+	int Nr = AES_ARM8_KeySetupEnc(crypto->xkeys->data32, cipherKey, keyBits, rounds);
+	AES_ARM8_EKey_DKey(crypto->xkeys->data32, rk, Nr);
+	return Nr;
 }
 
 #define CLR_NEON3			\
@@ -191,18 +198,6 @@ inline void AES_ARM8_EKey_DKey(const u32* ekey,
 	" movi	v14.16b, #0	\n"	\
 	::: "v10", "v11", "v12", "v13", "v14")
 
-/**
- * Expand the cipher key into the decryption key schedule.
- *
- * @return	the number of rounds for the given cipher key size.
- */
-int AES_ARM8_KeySetupDec(u32 rk[/*4*(Nr + 1)*/], const u8 cipherKey[], int keyBits, int rounds)
-{
-	/* expand the cipher key: */
-	int Nr = AES_ARM8_KeySetupEnc(crypto->xkeys->data32, cipherKey, keyBits, rounds);
-	AES_ARM8_EKey_DKey(crypto->xkeys->data32, rk, Nr);
-	return Nr;
-}
 
 void AES_ARM8_Encrypt(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 pt[16], u8 ct[16])
 {

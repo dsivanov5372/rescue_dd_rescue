@@ -87,21 +87,17 @@ int AES_ARM8_KeySetupEnc(u32 rk[/*4*(Nr + 1)*/], const u8 cipherKey[], int keyBi
 	const int keyln32 = keyBits/32;
 	int i;
 	memcpy(rk, cipherKey, keyBits/8);
-	switch (keyBits) {
-		case 128:
-			if (!rounds)
-				rounds = 10;
-			break;
-		case 192:
-			if (!rounds)
-				rounds = 12;
-			break;
-		case 256:
-			if (!rounds)
-				rounds = 14;
-			break;
-		default:
-			return 0;
+	if (!rounds) {
+		switch (keyBits) {
+			case 128:
+				rounds = 10; break;
+			case 192:
+				rounds = 12; break;
+			case 256:
+				rounds = 14; break;
+			default:
+				return 0;
+		}
 	}
 	for (i = 0; i < sizeof(rcon); ++i) {
 		const u32* rki = rk+i*keyln32;
@@ -132,36 +128,37 @@ int AES_ARM8_KeySetupEnc(u32 rk[/*4*(Nr + 1)*/], const u8 cipherKey[], int keyBi
 	return 0;
 }
 
-inline void AES_ARM8_EKey_DKey(const u32* ekey,
-			   u32* dkey,
-			   int rounds)
+inline void AES_ARM8_EKey_DKey(const u32 *ekey, u32* dkey, int rounds)
 {
-	int i;
-	memcpy(dkey, ekey+rounds*4, 16);
-	for (i = 1, rounds--; rounds > 0; i++, rounds--) {
-		asm volatile(
-		"	.fpu crypto-neon-fp-armv8	\n"
-		"	vld1.8		{q0}, %1	\n"
+	asm volatile(
+		".fpu crypto-neon-fp-armv8		\n"
+		"	vld1.8		{q0}, [%1]	\n"
+		"	sub		%1, %1, #16	\n"
+		"	vst1.8		{q0}, [%0]!	\n"
+		"1:					\n"
+		"	vld1.8		{q0}, [%1]	\n"
 		"	aesimc.8	q1, q0		\n"
-		"	vst1.8		{q1}, %0	\n"
-		: "=Q"(dkey[i*4])
-		: "Q"(ekey[rounds*4])
-		: "q0", "q1"
-		);
-	}
-	memcpy(dkey+4*i, ekey, 16);
+		"	subs 		%2, %2, #1	\n"
+		"	sub		%1, %1, #16	\n"
+		"	vst1.8		{q1}, [%0]!	\n"
+		"	bpl		1b		\n"
+		"	vld1.8		{q0}, [%1]	\n"
+		"	vst1.8		{q0}, [%0]	\n"
+		: "=r"(dkey), "=r"(ekey), "=r"(rounds), "=m"(*(roundkey(*)[rounds+1])ekey)
+		: "0"(dkey), "1"(ekey+4*rounds), "2"(rounds-2), "m"(*(roundkey(*)[rounds+1])dkey)
+		: "q0", "q1");
 }
 
 /**
  * Expand the cipher key into the decryption key schedule.
- *
+d *
  * @return	the number of rounds for the given cipher key size.
  */
 int AES_ARM8_KeySetupDec(u32 rk[/*4*(Nr + 1)*/], const u8 cipherKey[], int keyBits, int rounds)
 {
 	/* expand the cipher key: */
-	int Nr = AES_ARM8_KeySetupEnc((u32*)crypto->xkeys, cipherKey, keyBits, rounds);
-	AES_ARM8_EKey_DKey((u32*)crypto->xkeys, rk, Nr);
+	int Nr = AES_ARM8_KeySetupEnc(crypto->xkeys->data32, cipherKey, keyBits, rounds);
+	AES_ARM8_EKey_DKey(crypto->xkeys->data32, rk, Nr);
 	return Nr;
 }
 
@@ -757,6 +754,7 @@ static inline
 void AES_ARM8_KeySetupX2_Bits_Enc(const uchar *usrkey, uchar *rkeys, uint rounds, uint bits)
 {
 	assert(0 == rounds%2);
+	assert(0 != rounds);
 	AES_ARM8_KeySetupEnc((u32*)rkeys, usrkey, bits, rounds/2);
 	/* Second half: Calc sha256 from usrkey and expand */
 	hash_t hv;
@@ -773,6 +771,7 @@ static inline
 void AES_ARM8_KeySetupX2_Bits_Dec(const uchar* usrkey, uchar *rkeys, uint rounds, uint bits)
 {
 	assert(0 == rounds%2);
+	assert(0 != rounds);
 	AES_ARM8_KeySetupDec((u32*)rkeys, usrkey, bits, rounds/2);
 	/* Second half: Calc sha256 from usrkey and expand */
 	hash_t hv;
@@ -808,12 +807,12 @@ void AES_ARM8_Decrypt_BlkX2(const uchar* rkeys, uint rounds, const uchar in[16],
 	AES_ARM8_Decrypt(rkeys+16+8*rounds, rounds/2, in, out);
 	AES_ARM8_Decrypt(rkeys, rounds/2, out, out);
 }
-void AES_ARM8_Encrypt_4BlkX2(const uchar* rkeys, uint rounds, const uchar in[16], uchar out[16])
+void AES_ARM8_Encrypt_4BlkX2(const uchar* rkeys, uint rounds, const uchar in[64], uchar out[64])
 {
 	AES_ARM8_Encrypt4(rkeys, rounds/2, in, out);
 	AES_ARM8_Encrypt4(rkeys+16+8*rounds, rounds/2, out, out);
 }
-void AES_ARM8_Decrypt_4BlkX2(const uchar* rkeys, uint rounds, const uchar in[16], uchar out[16])
+void AES_ARM8_Decrypt_4BlkX2(const uchar* rkeys, uint rounds, const uchar in[64], uchar out[64])
 {
 	AES_ARM8_Decrypt4(rkeys+16+8*rounds, rounds/2, in, out);
 	AES_ARM8_Decrypt4(rkeys, rounds/2, out, out);
