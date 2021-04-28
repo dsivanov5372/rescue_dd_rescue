@@ -282,7 +282,7 @@ int test_alg(const char* prefix, ciph_desc_t *alg, uchar *key, uchar *in, ssize_
 	} while(0)
 #else
 #define TEST_AESNI(LN, EPAD, DPAD)			\
-	alg = findalg(AESNI_Methods, testalg, 1);	\
+	alg = findalg(SAESNI_Methods, testalg, 1);	\
 	if (alg)					\
 		ret += test_alg("AESNI", alg, key, in, LN, EPAD, DPAD, rep)
 #endif
