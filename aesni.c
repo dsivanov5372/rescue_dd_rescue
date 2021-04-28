@@ -1113,12 +1113,14 @@ int AESNI_CTR_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt,
 	const __m128i TWO   = _mm_set_epi32(0, 2, 0, 0);
 	const __m128i THREE = _mm_set_epi32(0, 3, 0, 0);
 	const __m128i FOUR  = _mm_set_epi32(0, 4, 0, 0);
+	const __m128i* inptr = (const __m128i*)in;
+	__m128i* outptr = (__m128i*)out;
 	while (len >= 8*SIZE128) {
 #ifdef AESNI_PREFETCH
-		__builtin_prefetch(out, 1, 3);
-		__builtin_prefetch(out+64, 1, 3);
-		__builtin_prefetch(in, 0, 1);
-		__builtin_prefetch(in+64, 0, 1);
+		__builtin_prefetch(outptr, 1, 3);
+		__builtin_prefetch(outptr+4, 1, 3);
+		__builtin_prefetch(inptr, 0, 1);
+		__builtin_prefetch(inptr+4, 0, 1);
 #endif
 		/* Prepare CTR (IV) values */
 		__m128i tmp0 = _mm_shuffle_epi8(cblk, BSWAP_EPI64);
@@ -1136,36 +1138,18 @@ int AESNI_CTR_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt,
 		tmp5 = _mm_shuffle_epi8(tmp5, BSWAP_EPI64);
 		tmp6 = _mm_shuffle_epi8(tmp6, BSWAP_EPI64);
 		tmp7 = _mm_shuffle_epi8(tmp7, BSWAP_EPI64);
-		cblk = _mm_add_epi64(cblk, FOUR);
 		/* Encrypt 8 IVs */
 		crypt8(&tmp0, &tmp1, &tmp2, &tmp3, &tmp4, &tmp5, &tmp6, &tmp7, key, rounds);
-		//tmp0 = _mm_xor_si128(tmp0, _mm_loadu_si128((__m128i*)in));
-		//tmp1 = _mm_xor_si128(tmp1, _mm_loadu_si128((__m128i*)in+1));
-		//tmp2 = _mm_xor_si128(tmp2, _mm_loadu_si128((__m128i*)in+2));
-		//tmp3 = _mm_xor_si128(tmp3, _mm_loadu_si128((__m128i*)in+3));
-		tmp0 = _mm_xor_si128(tmp0, *((__m128i*)in));
-		tmp1 = _mm_xor_si128(tmp1, *((__m128i*)in+1));
-		tmp2 = _mm_xor_si128(tmp2, *((__m128i*)in+2));
-		tmp3 = _mm_xor_si128(tmp3, *((__m128i*)in+3));
-		_mm_storeu_si128((__m128i*)out  , tmp0);
-		_mm_storeu_si128((__m128i*)out+1, tmp1);
-		_mm_storeu_si128((__m128i*)out+2, tmp2);
-		_mm_storeu_si128((__m128i*)out+3, tmp3);
-		//tmp4 = _mm_xor_si128(tmp4, _mm_loadu_si128((__m128i*)in+4));
-		//tmp5 = _mm_xor_si128(tmp5, _mm_loadu_si128((__m128i*)in+5));
-		//tmp6 = _mm_xor_si128(tmp6, _mm_loadu_si128((__m128i*)in+6));
-		//tmp7 = _mm_xor_si128(tmp7, _mm_loadu_si128((__m128i*)in+7));
-		tmp4 = _mm_xor_si128(tmp4, *((__m128i*)in+4));
-		tmp5 = _mm_xor_si128(tmp5, *((__m128i*)in+5));
-		tmp6 = _mm_xor_si128(tmp6, *((__m128i*)in+6));
-		tmp7 = _mm_xor_si128(tmp7, *((__m128i*)in+7));
-		_mm_storeu_si128((__m128i*)out+4, tmp4);
-		_mm_storeu_si128((__m128i*)out+5, tmp5);
-		_mm_storeu_si128((__m128i*)out+6, tmp6);
-		_mm_storeu_si128((__m128i*)out+7, tmp7);
 		len -= 8*SIZE128;
-		in  += 8*SIZE128;
-		out += 8*SIZE128;
+		cblk = _mm_add_epi64(cblk, FOUR);
+		*outptr++ = _mm_xor_si128(tmp0, *inptr++);
+		*outptr++ = _mm_xor_si128(tmp1, *inptr++);
+		*outptr++ = _mm_xor_si128(tmp2, *inptr++);
+		*outptr++ = _mm_xor_si128(tmp3, *inptr++);
+		*outptr++ = _mm_xor_si128(tmp4, *inptr++);
+		*outptr++ = _mm_xor_si128(tmp5, *inptr++);
+		*outptr++ = _mm_xor_si128(tmp6, *inptr++);
+		*outptr++ = _mm_xor_si128(tmp7, *inptr++);
 	}
 	while (len > 0) {
 		register __m128i tmp = _mm_shuffle_epi8(cblk, BSWAP_EPI64);
@@ -1173,15 +1157,11 @@ int AESNI_CTR_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt,
 		if (len < SIZE128) {
 			uchar *obuf = crypto->blkbuf3;
 			__m128i mask = _mkmask(len);
-			//mask = _mm_and_si128(mask, _mm_loadu_si128((__m128i*)in));
-			mask = _mm_and_si128(mask, *((__m128i*)in));
-			tmp = _mm_xor_si128(tmp, mask);
-			_mm_storeu_si128((__m128i*)obuf, tmp);
-			memcpy(out, obuf, len);
+			mask = _mm_and_si128(mask, *inptr++);
+			*(__m128i*)obuf = _mm_xor_si128(tmp, mask);
+			memcpy(outptr, obuf, len);
 		} else {
-			//tmp = _mm_xor_si128(tmp, _mm_loadu_si128((__m128i*)in));
-			tmp = _mm_xor_si128(tmp, *((__m128i*)in));
-			_mm_storeu_si128((__m128i*)out, tmp);
+			*outptr++ = _mm_xor_si128(tmp, *inptr++);
 		}
 		/* FIXME: We had only increased CTR for complete blocks before. Why? */
 		/*if (len >= SIZE128)*/
@@ -1227,14 +1207,16 @@ int AESNI_CTR_Crypt_Tmpl2(crypt_4x2blks_fn *crypt4, crypt_blk_fn *crypt,
 	cblk = _mm256_shuffle_epi8(cblk, BSWAP_BOTH);
 	cblk = _mm256_add_epi64(cblk, INIT);
 	__m256i tmp0, tmp1, tmp2, tmp3;
+	const __m256i* inptr = (const __m256i*)in;
+	__m256i* outptr = (__m256i*)out;
 	//__builtin_prefetch(in, 0, 3);
 	while (len >= 4*SIZE256) {
 		const __m256i TWO = _mm256_set_epi32(0, 2, 0, 0, 0, 2, 0, 0);
 #ifdef AESNI_PREFETCH
-		__builtin_prefetch(out, 1, 3);
-		__builtin_prefetch(out+64, 1, 3);
-		__builtin_prefetch(in, 0, 1);
-		__builtin_prefetch(in+64, 0, 1);
+		__builtin_prefetch(outptr, 1, 3);
+		__builtin_prefetch(outptr+2, 1, 3);
+		__builtin_prefetch(inptr, 0, 1);
+		__builtin_prefetch(inptr+2, 0, 1);
 #endif
 		/* Prepare CTR (IV) values */
 		tmp0 = _mm256_shuffle_epi8(cblk, BSWAP_BOTH);
@@ -1246,27 +1228,19 @@ int AESNI_CTR_Crypt_Tmpl2(crypt_4x2blks_fn *crypt4, crypt_blk_fn *crypt,
 		tmp3 = _mm256_shuffle_epi8(cblk, BSWAP_BOTH);
 		/* Encrypt 4 Double IVs */
 		crypt4(&tmp0, &tmp1, &tmp2, &tmp3, key, rounds);
-		//tmp0 = _mm256_xor_si256(tmp0, _mm256_loadu_si256((__m256i*)in));
-		//tmp1 = _mm256_xor_si256(tmp1, _mm256_loadu_si256((__m256i*)in+1));
-		//tmp2 = _mm256_xor_si256(tmp2, _mm256_loadu_si256((__m256i*)in+2));
-		//tmp3 = _mm256_xor_si256(tmp3, _mm256_loadu_si256((__m256i*)in+3));
-		tmp0 = _mm256_xor_si256(tmp0, *((__m256i*)in));
-		tmp1 = _mm256_xor_si256(tmp1, *((__m256i*)in+1));
-		tmp2 = _mm256_xor_si256(tmp2, *((__m256i*)in+2));
-		tmp3 = _mm256_xor_si256(tmp3, *((__m256i*)in+3));
-		cblk = _mm256_add_epi64(cblk, TWO);
-		_mm256_storeu_si256((__m256i*)out  , tmp0);
-		_mm256_storeu_si256((__m256i*)out+1, tmp1);
-		_mm256_storeu_si256((__m256i*)out+2, tmp2);
-		_mm256_storeu_si256((__m256i*)out+3, tmp3);
 		len -= 4*SIZE256;
-		in  += 4*SIZE256;
-		out += 4*SIZE256;
+		cblk = _mm256_add_epi64(cblk, TWO);
+		*outptr++ = _mm256_xor_si256(tmp0, *inptr++);
+		*outptr++ = _mm256_xor_si256(tmp1, *inptr++);
+		*outptr++ = _mm256_xor_si256(tmp2, *inptr++);
+		*outptr++ = _mm256_xor_si256(tmp3, *inptr++);
 	}
 	cblk128 = _mm256_extracti128_si256(cblk, 0);
 	MM256CLEAR(tmp0); MM256CLEAR(tmp1); MM256CLEAR(tmp2); MM256CLEAR(tmp3);
 	MM256CLEAR(cblk);
 	register __m128i tmp;
+	const __m128i* inptr2 = (const __m128i*)inptr;
+	__m128i* outptr2 = (__m128i*)outptr;
 	while (len > 0) {
 		tmp = _mm_shuffle_epi8(cblk128, BSWAP_EPI64);
 		const __m128i ONE  = _mm_set_epi32(0, 1, 0, 0);
@@ -1274,15 +1248,11 @@ int AESNI_CTR_Crypt_Tmpl2(crypt_4x2blks_fn *crypt4, crypt_blk_fn *crypt,
 		if (len < SIZE128) {
 			uchar *obuf = crypto->blkbuf3;
 			__m128i mask = _mkmask(len);
-			//mask = _mm_and_si128(mask, _mm_loadu_si128((__m128i*)in));
-			mask = _mm_and_si128(mask, *((__m128i*)in));
-			tmp = _mm_xor_si128(tmp, mask);
-			_mm_storeu_si128((__m128i*)obuf, tmp);
-			memcpy(out, obuf, len);
+			mask = _mm_and_si128(mask, *inptr2++);
+			*(__m128i*)obuf = _mm_xor_si128(tmp, mask);
+			memcpy(outptr2, obuf, len);
 		} else {
-			//tmp = _mm_xor_si128(tmp, _mm_loadu_si128((__m128i*)in));
-			tmp = _mm_xor_si128(tmp, *((__m128i*)in));
-			_mm_storeu_si128((__m128i*)out, tmp);
+			*outptr2++ = _mm_xor_si128(tmp, *inptr2++);
 		}
 		/* FIXME: We had only increased CTR for complete blocks before. Why? */
 		/*if (len >= SIZE128)*/
