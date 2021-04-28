@@ -28,7 +28,6 @@ static int probe_aes_ni()
 	return !have_aesni;
 }
 #endif
-
 /* Unaligned 128bit integer type, missing from gcc < 5 emmintrin.h */
 typedef long long __m128i_u __attribute__ ((__vector_size__ (16), __may_alias__, __aligned__ (1)));
 
@@ -1119,8 +1118,8 @@ int AESNI_CTR_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt,
 	const __m128i TWO   = _mm_set_epi32(0, 2, 0, 0);
 	const __m128i THREE = _mm_set_epi32(0, 3, 0, 0);
 	const __m128i FOUR  = _mm_set_epi32(0, 4, 0, 0);
-	const __m128i* inptr = (const __m128i*)in;
-	__m128i* outptr = (__m128i*)out;
+	const __m128i_u* inptr = (const __m128i_u*)in;
+	__m128i_u* outptr = (__m128i_u*)out;
 	while (len >= 8*SIZE128) {
 #ifdef AESNI_PREFETCH
 		__builtin_prefetch(outptr, 1, 3);
@@ -1213,8 +1212,8 @@ int AESNI_CTR_Crypt_Tmpl2(crypt_4x2blks_fn *crypt4, crypt_blk_fn *crypt,
 	cblk = _mm256_shuffle_epi8(cblk, BSWAP_BOTH);
 	cblk = _mm256_add_epi64(cblk, INIT);
 	__m256i tmp0, tmp1, tmp2, tmp3;
-	const __m256i* inptr = (const __m256i*)in;
-	__m256i* outptr = (__m256i*)out;
+	const __m256i_u* inptr = (const __m256i_u*)in;
+	__m256i_u* outptr = (__m256i_u*)out;
 	//__builtin_prefetch(in, 0, 3);
 	while (len >= 4*SIZE256) {
 		const __m256i TWO = _mm256_set_epi32(0, 2, 0, 0, 0, 2, 0, 0);
@@ -1245,8 +1244,8 @@ int AESNI_CTR_Crypt_Tmpl2(crypt_4x2blks_fn *crypt4, crypt_blk_fn *crypt,
 	MM256CLEAR(tmp0); MM256CLEAR(tmp1); MM256CLEAR(tmp2); MM256CLEAR(tmp3);
 	MM256CLEAR(cblk);
 	register __m128i tmp;
-	const __m128i* inptr2 = (const __m128i*)inptr;
-	__m128i* outptr2 = (__m128i*)outptr;
+	const __m128i_u* inptr2 = (const __m128i_u*)inptr;
+	__m128i_u* outptr2 = (__m128i_u*)outptr;
 	while (len > 0) {
 		tmp = _mm_shuffle_epi8(cblk128, BSWAP_EPI64);
 		const __m128i ONE  = _mm_set_epi32(0, 1, 0, 0);
