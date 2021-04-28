@@ -343,11 +343,13 @@ int main(int argc, char *argv[])
 		warmup = 1;
 		--argc; ++argv;
 	}
+#if !defined(NO_AVX2) && (defined(__i386__) || defined(__x86_64__))
 	/* Disable AVX override */
 	if (argc > 1 && !strcmp(argv[1], "-2")) {
 		have_avx2 = 0;
 		--argc; ++argv;
 	}
+#endif
 	/* Positional parameters following */
 	if (argc > 1)
 		testalg = argv[1];
