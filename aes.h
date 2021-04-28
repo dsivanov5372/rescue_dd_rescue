@@ -131,12 +131,6 @@ int  AES_Gen_CTR_Crypt(AES_Crypt_Blk_fn *cryptfn,
 			uchar *ctr, /* uint pad unused ,*/
 			const uchar *input, uchar *output,
 			ssize_t len/*, ssize_t *olen unused */);
-int  AES_Gen_CTR_Crypt4(AES_Crypt_Blk_fn *cryptfn4,
-			AES_Crypt_Blk_fn *cryptfn,
-			const uchar *rkeys, uint rounds,
-			uchar *ctr, /* uint pad unused ,*/
-			const uchar *input, uchar *output,
-			ssize_t len/*, ssize_t *olen unused */);
 int  AES_Gen_CTR_Crypt_Opt(AES_Crypt_CTR_Blk_fn *cryptfn4c,
 			AES_Crypt_CTR_Blk_fn *cryptfnc,
 			const uchar *rkeys, uint rounds,
