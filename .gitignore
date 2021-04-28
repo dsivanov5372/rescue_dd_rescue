@@ -1,0 +1,16 @@
+*.o
+*.po
+.dep
+config.h
+test_aes
+dd_rescue
+libddr_*.so
+*.log
+*.s
+*.i
+*.tar.gz
+*.tar.bz2
+*.asc
+*.rej
+*.orig
+*.diff
