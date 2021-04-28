@@ -52,7 +52,9 @@ typedef struct _sec_fields {
 	unsigned char blkbuf2[64];
 	/* @3648: four blocks (64B) - output buffer */
 	unsigned char blkbuf3[64];
-	/* @3712: canary */
+	/* @3712: four blocks (64B) - x2 long buffer */
+	unsigned char blkbuf4[64];
+	/* @3776 canary */
 	unsigned long long canary;
 	
 } sec_fields;
