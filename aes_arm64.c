@@ -928,7 +928,7 @@ int  AES_ARM8_CBC_Encrypt(const uchar* rkeys, uint rounds,
 	);
 	//printf("%li bytes left, %li done\n", len, *olen);
 	if (len || pad == PAD_ALWAYS) {
-		uchar *in = crypto->blkbuf1;
+		uchar *in = crypto->blkbuf2;
 		FILL_BLK(input, in, len, pad);
 		XOR16(iv, in, iv);
 		AES_ARM8_Encrypt_Blk(rkeys, rounds, iv, output);
@@ -1030,7 +1030,7 @@ int  AES_ARM8_CBC_Decrypt(const uchar* rkeys, uint rounds, uchar *iv, uint pad,
 	);
 	//printf("%li bytes left, %li done\n", len, *olen);
 	while (len > 0) {
-		uchar *ebf = crypto->blkbuf2;
+		uchar *ebf = crypto->blkbuf3;
 		AES_ARM8_Decrypt_Blk(rkeys, rounds, input, ebf);
 		XOR16(iv, ebf, output);
 		/* Update last IV */

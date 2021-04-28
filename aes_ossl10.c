@@ -107,7 +107,7 @@ int AES_OSSL_##BITCHAIN##_Decrypt(const unsigned char* ctx, unsigned int rounds,
 	if (!len && pad != PAD_ALWAYS) { *flen = 0; return 0; }	\
 	if (DOPAD && pad == PAD_ASNEEDED) {			\
 		int olen1;					\
-		uchar *buf = crypto->blkbuf2;			\
+		uchar *buf = crypto->blkbuf3;			\
 		ores = EVP_DecryptUpdate(evpctx, out, &olen, in, ilen-16);	\
 		assert(ores);					\
 		EVP_CIPHER_CTX ctx2;				\
@@ -311,7 +311,7 @@ int  AES_OSSL_##BITCHAIN##_DecryptX2(const unsigned char* ctx, unsigned int roun
 	assert(ores);						\
 	if (pad == PAD_ASNEEDED) {				\
 		int ilen = olen, olen1;				\
-		uchar *buf = crypto->blkbuf2;			\
+		uchar *buf = crypto->blkbuf3;			\
 		ores = EVP_DecryptUpdate(evpctx, out, &olen, out, ilen-16);	\
 		assert(ores); assert(olen == ilen-16);		\
 		/* Save piece that gets overwritten */		\

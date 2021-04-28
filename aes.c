@@ -49,7 +49,7 @@ int  AES_Gen_ECB_Enc(AES_Crypt_Blk_fn *cryptfn,
 		len -= 16; input += 16; output += 16;
 	}
 	if (len || pad == PAD_ALWAYS) {
-		uchar *in = crypto->blkbuf1;
+		uchar *in = crypto->blkbuf2;
 		fill_blk(input, in, len, pad);
 		cryptfn(rkeys, rounds, in, output);
 		*olen += 16-(len&15);
@@ -73,7 +73,7 @@ int  AES_Gen_ECB_Enc4(AES_Crypt_Blk_fn *cryptfn4, AES_Crypt_Blk_fn *cryptfn,
 		len -= 16; input += 16; output += 16;
 	}
 	if (len || pad == PAD_ALWAYS) {
-		uchar *in = crypto->blkbuf1;
+		uchar *in = crypto->blkbuf2;
 		fill_blk(input, in, len, pad);
 		cryptfn(rkeys, rounds, in, output);
 		*olen += 16-(len&15);
@@ -180,7 +180,7 @@ int  AES_Gen_CBC_Enc(AES_Crypt_Blk_fn *cryptfn,
 		len -= 16; input += 16; output += 16;
 	}
 	if (len || pad == PAD_ALWAYS) {
-		uchar *in = crypto->blkbuf1;
+		uchar *in = crypto->blkbuf2;
 		fill_blk(input, in, len, pad);
 		XOR16(iv, in, iv);
 		cryptfn(rkeys, rounds, iv, output);
@@ -199,7 +199,7 @@ int  AES_Gen_CBC_Dec(AES_Crypt_Blk_fn *cryptfn,
 		     const uchar *input, uchar *output,
 		     ssize_t len, ssize_t *olen)
 {
-	uchar *ebf = crypto->blkbuf1;
+	uchar *ebf = crypto->blkbuf3;
 	*olen = len;
 	while (len > 0) {
 		cryptfn(rkeys, rounds, input, ebf);
@@ -222,7 +222,7 @@ int  AES_Gen_CBC_Dec4(AES_Crypt_Blk_fn *cryptfn4,
 		     const uchar *input, uchar *output,
 		     ssize_t len, ssize_t *olen)
 {
-	uchar *ebf = crypto->blkbuf2;
+	uchar *ebf = crypto->blkbuf3;
 	*olen = len;
 	while (len >= 64) {
 		cryptfn4(rkeys, rounds, input, ebf);
@@ -299,7 +299,7 @@ int  AES_Gen_CTR_Crypt(AES_Crypt_Blk_fn *cryptfn,
 {
 	//assert(pad == 0);
 	//*olen = len;
-	uchar *eblk = crypto->blkbuf2;
+	uchar *eblk = crypto->blkbuf3;
 	while (len >= 16) {
 		cryptfn(rkeys, rounds, ctr, eblk);
 		be_inc(ctr+8);
@@ -308,7 +308,7 @@ int  AES_Gen_CTR_Crypt(AES_Crypt_Blk_fn *cryptfn,
 		input += 16; output += 16;
 	}
 	if (len) {
-		uchar *in = crypto->blkbuf1;
+		uchar *in = crypto->blkbuf2;
 		fill_blk(input, in, len, 0 /*pad*/);
 		cryptfn(rkeys, rounds, ctr, eblk);
 		/* We do increase the last blk */
@@ -342,8 +342,8 @@ int  AES_Gen_CTR_Crypt_Opt(AES_Crypt_CTR_Blk_fn *cryptfn4c,
 		input += 16; output += 16;
 	}
 	if (len) {
-		uchar *in = crypto->blkbuf1;
-		uchar *eblk = crypto->blkbuf2;
+		uchar *in = crypto->blkbuf2;
+		uchar *eblk = crypto->blkbuf3;
 		fill_blk(input, in, len, 0 /*pad*/);
 		cryptfnc(rkeys, rounds, in, eblk, ctr);
 		memcpy(output, eblk, len&15);

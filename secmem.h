@@ -42,15 +42,17 @@ typedef struct _sec_fields {
 	unsigned char passphr[128];
 	/* @2816: char buffer, enough for 512bit hash/key in hex */
 	char charbuf1[160];
-	/* @2976: two blocks */
+	/* @2976: two blocks - intermediate result for x2 cypto */
 	unsigned char blkbuf1[32];
-	/* @3008: data buffer for incomplete blocks */
+	/* @3008: data buffer for incomplete blocks (libcrypt) */
 	unsigned char databuf1[64];
 	/* @3072: buffer up to 512 bytes */
 	unsigned char databuf2[512];
-	/* @3584: four blocks (64B) */
+	/* @3584: four blocks (64B) - incomplete input block */
 	unsigned char blkbuf2[64];
-	/* @3648: canary */
+	/* @3648: four blocks (64B) - output buffer */
+	unsigned char blkbuf3[64];
+	/* @3712: canary */
 	unsigned long long canary;
 	
 } sec_fields;

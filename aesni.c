@@ -1163,7 +1163,7 @@ int AESNI_CTR_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt,
 		register __m128i tmp = _mm_shuffle_epi8(cblk, BSWAP_EPI64);
 		tmp = crypt(tmp, key, rounds);
 		if (len < SIZE128) {
-			uchar *obuf = crypto->blkbuf1;
+			uchar *obuf = crypto->blkbuf3;
 			__m128i mask = _mkmask(len);
 			mask = _mm_and_si128(mask, _mm_loadu_si128((__m128i*)in));
 			tmp = _mm_xor_si128(tmp, mask);
@@ -1252,7 +1252,7 @@ int AESNI_CTR_Crypt_Tmpl2(crypt_4x2blks_fn *crypt4, crypt_blk_fn *crypt,
 		const __m128i ONE  = _mm_set_epi32(0, 1, 0, 0);
 		tmp = crypt(tmp, key, rounds);
 		if (len < SIZE128) {
-			uchar *obuf = crypto->blkbuf1;
+			uchar *obuf = crypto->blkbuf3;
 			__m128i mask = _mkmask(len);
 			mask = _mm_and_si128(mask, _mm_loadu_si128((__m128i*)in));
 			tmp = _mm_xor_si128(tmp, mask);
