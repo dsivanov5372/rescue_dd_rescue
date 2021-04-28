@@ -26,9 +26,9 @@ static int probe_aes_ni()
 {
 	return !have_aesni;
 }
+#endif
 /* Unaligned 128bit integer type, missing from gcc < 5 emmintrin.h */
 typedef long long __m128i_u __attribute__ ((__vector_size__ (16), __may_alias__, __aligned__ (1)));
-#endif
 
 #define MMCLEAR(xmmreg) xmmreg = _mm_setzero_si128()
 #define MM256CLEAR(xmmreg) xmmreg = _mm256_setzero_si256()
