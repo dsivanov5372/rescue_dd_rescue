@@ -11,15 +11,17 @@
 #include "aesni.h"
 #include "secmem.h"
 #include <string.h>
-#include <immintrin.h>
+#include <wmmintrin.h>
 #include "archdep.h"
 
 #ifdef __AVX2__
+#include <immintrin.h>
 static int probe_aes_ni()
 {
 	return !have_aesni || !have_avx2;
 }
 #else
+#include <smmintrin.h>
 static int probe_aes_ni()
 {
 	return !have_aesni;
