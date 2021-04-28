@@ -166,7 +166,8 @@ void AES_ARM8_Encrypt(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 
 {
 	asm volatile(
 	"	.fpu crypto-neon-fp-armv8	\n"
-	"	vld1.8	{q0}, [%[pt]]!		\n"
+	"//	vld1.8	{q0}, [%[pt]]!		\n"
+	"	vld1.8	{q0}, [%[pt]]		\n"
 	"	vld1.8	{q1,q2}, [%[rk]]!	\n"
 	"//	veor	q0, q0, q3		\n"
 	"	subs	%r[nr], %r[nr], #2	\n"
@@ -189,7 +190,8 @@ void AES_ARM8_Encrypt(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 
 	"	aese.8	q0, q2			\n"
 	"	veor	q0, q0, q1		\n"
 	"3:					\n"
-	"	vst1.8	{q0}, [%[ct]]!		\n"
+	"//	vst1.8	{q0}, [%[ct]]!		\n"
+	"	vst1.8	{q0}, [%[ct]]		\n"
 	: [rk] "=r" (rkeys), [nr] "=r" (Nr), "=m" (*ct)
 	: "0" (rkeys), "1" (Nr), [pt] "r" (pt), [ct] "r" (ct),
 	  "m" (*(const char(*)[16*(Nr+1)])rkeys), "m" (*pt)
@@ -205,7 +207,8 @@ void AES_ARM8_Decrypt(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 
 {
 	asm volatile(
 	"	.fpu crypto-neon-fp-armv8	\n"
-	"	vld1.8	{q0}, [%[ct]]!		\n"
+	"//	vld1.8	{q0}, [%[ct]]!		\n"
+	"	vld1.8	{q0}, [%[ct]]		\n"
 	"	vld1.8	{q1,q2}, [%[rk]]!	\n"
 	"//	veor	q0, q0, q1		\n"
 	"	subs	%r[nr], %r[nr], #2	\n"
@@ -228,7 +231,8 @@ void AES_ARM8_Decrypt(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 
 	"	aesd.8	q0, q2			\n"
 	"	veor	q0, q0, q1		\n"
 	"3:					\n"
-	"	vst1.8	{q0}, [%[pt]]!		\n"
+	"//	vst1.8	{q0}, [%[pt]]!		\n"
+	"	vst1.8	{q0}, [%[pt]]		\n"
 	: [rk] "=r" (rkeys), [nr] "=r" (Nr), "=m" (*pt)
 	: "0" (rkeys), "1" (Nr), [ct] "r" (ct), [pt] "r" (pt),
 	  "m" (*(const char(*)[16*(Nr+1)])rkeys), "m" (*ct)
@@ -240,8 +244,10 @@ void AES_ARM8_Decrypt(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 
 
 void AES_ARM8_Encrypt4(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 pt[64], u8 ct[64])
 {
+	//assert(pt != ct);
 	asm volatile(
 	"	.fpu crypto-neon-fp-armv8	\n"
+	"	mov 	r7, %[ct]		\n"
 	"	vld1.8	{q2,q3}, [%[pt]]!	\n"
 	"	vld1.8	{q4,q5}, [%[pt]]!	\n"
 	"	vld1.8	{q0,q1}, [%[rk]]!	\n"
@@ -290,13 +296,13 @@ void AES_ARM8_Encrypt4(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8
 	"	aese.8	q5, q1			\n"
 	"	veor	q5, q5, q0		\n"
 	"3:					\n"
-	"	vst1.8	{q2,q3}, [%[ct]]!	\n"
-	"	vst1.8	{q4,q5}, [%[ct]]!	\n"
+	"	vst1.8	{q2,q3}, [r7]!		\n"
+	"	vst1.8	{q4,q5}, [r7]!		\n"
 	: [rk] "=r" (rkeys), [nr] "=r" (Nr), [pt] "=r" (pt), [ct] "=r" (ct),
 	  "=m" (*ct)
 	: "0" (rkeys), "1" (Nr), /*[pt]*/ "2" (pt), /*[ct]*/ "3" (ct),
 	  "m" (*(const char(*)[16*(Nr+1)])rkeys), "m" (*pt)
-	: "q0", "q1", "q2", "q3", "q4", "q5", "cc"
+	: "q0", "q1", "q2", "q3", "q4", "q5", "cc", "r7"
 	);
 	//printf("%i rounds left, %li rounds\n", Nr, (rkeys-rk)/16);
 	return;
@@ -304,8 +310,10 @@ void AES_ARM8_Encrypt4(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8
 
 void AES_ARM8_Decrypt4(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 ct[64], u8 pt[64])
 {
+	//assert(pt != ct);
 	asm volatile(
 	"	.fpu crypto-neon-fp-armv8	\n"
+	"	mov 	r7, %[pt]		\n"
 	"	vld1.8	{q2,q3}, [%[ct]]!	\n"
 	"	vld1.8	{q4,q5}, [%[ct]]!	\n"
 	"	vld1.8	{q0,q1}, [%[rk]]!	\n"
@@ -354,13 +362,13 @@ void AES_ARM8_Decrypt4(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8
 	"	aesd.8	q5, q1			\n"
 	"	veor	q5, q5, q0		\n"
 	"3:					\n"
-	"	vst1.8	{q2,q3}, [%[pt]]!	\n"
-	"	vst1.8	{q4,q5}, [%[pt]]!	\n"
+	"	vst1.8	{q2,q3}, [r7]!	\n"
+	"	vst1.8	{q4,q5}, [r7]!	\n"
 	: [rk] "=r" (rkeys), [nr] "=r" (Nr), [ct] "=r" (ct), [pt] "=r" (pt),
 	  "=m" (*pt)
 	: "0" (rkeys), "1" (Nr), /*[ct]*/ "2" (ct), /*[pt]*/ "3" (pt),
 	  "m" (*(const char(*)[16*(Nr+1)])rkeys), "m" (*ct)
-	: "q0", "q1", "q2", "q3", "q4", "q5", "cc"
+	: "q0", "q1", "q2", "q3", "q4", "q5", "cc", "r7"
 	);
 	//printf("%i rounds left, %li rounds\n", Nr, (rkeys-rk)/16);
 	return;
@@ -381,7 +389,8 @@ void AES_ARM8_Encrypt_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const
 	"	vadd.i64	q4, q3, q4	\n"
 	"	vld1.8	{q0, q1}, [%[rk]]!	\n"
 	"	vrev64.8	q4, q4		\n"
-	"	vld1.8	{q3}, [%[pt]]!		\n"
+	"//	vld1.8	{q3}, [%[pt]]!		\n"
+	"	vld1.8	{q3}, [%[pt]]		\n"
 	"	vst1.64	{q4}, [%[iv]]		\n"
 	".align 4				\n"
 	"1:					\n"
@@ -403,7 +412,8 @@ void AES_ARM8_Encrypt_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const
 	"	veor	q2, q2, q0		\n"
 	"3:					\n"
 	"	veor	q3, q3, q2		\n"
-	"	vst1.8	{q3}, [%[ct]]!		\n"
+	"//	vst1.8	{q3}, [%[ct]]!		\n"
+	"	vst1.8	{q3}, [%[ct]]		\n"
 	: [rk] "=r" (rkeys),
 	  "=m" (*ct), "=m" (*iv)
 	: "0" (rkeys), [nr] "r" (Nr), [pt] "r" (pt), [ct] "r" (ct),
@@ -417,6 +427,7 @@ void AES_ARM8_Encrypt_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const
 
 void AES_ARM8_Encrypt4_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 pt[64], u8 ct[64], u8 iv[16])
 {
+	//assert(pt != ct);
 	asm volatile(
 	"	.fpu crypto-neon-fp-armv8	\n"
 	"	vld1.64	{q2}, [%[iv]]		\n"
@@ -428,6 +439,7 @@ void AES_ARM8_Encrypt4_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, cons
 	"	vrev64.8	q5, q2		\n"
 	"	vld1.8	{q0, q1}, [%[rk]]!	\n"
 	"	subs	r7, r7, #2		\n"
+	"	mov	r8, %[ct]		\n"
 	"	//prfm	PLDL1STRM, [%[pt]]	\n"
 	"	vadd.i64	q9, q5, q9	\n"
 	"	vrev64.8	q9, q9		\n"
@@ -488,14 +500,14 @@ void AES_ARM8_Encrypt4_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, cons
 	"	veor	q7, q7, q3		\n"
 	"	veor	q8, q8, q4		\n"
 	"	veor	q9, q9, q5		\n"
-	"	vst1.8	{q6,q7}, [%[ct]]!	\n"
-	"	vst1.8	{q8,q9}, [%[ct]]!	\n"
+	"	vst1.8	{q6,q7}, [r8]!		\n"
+	"	vst1.8	{q8,q9}, [r8]!		\n"
 	: [rk] "=r" (rkeys), [nr] "=r" (Nr), [pt] "=r" (pt), [ct] "=r" (ct),
 	  "=m" (*ct), "=m" (*iv)
 	: "0" (rkeys), "1" (Nr), "2" (pt), "3" (ct), [iv] "r" (iv),
 	  [inc] "r" (inc1234), "m" (*inc1234),
 	  "m" (*(const char(*)[16*(Nr+1)])rkeys), "m" (*pt)
-	: "q0", "q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8", "q9", "r7", "cc"
+	: "q0", "q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8", "q9", "r7", "r8", "cc"
 	);
 	//printf("%i rounds left, %li rounds\n", Nr, (rkeys-rk)/16);
 	return;
@@ -516,7 +528,8 @@ void AES_ARM8_EncryptX2_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, con
 	"	subs	%[nr], %[nr], #2	\n"
 	"	vrev64.8	q4, q4		\n"
 	"	mov 	r7, %[nr]		\n"
-	"	vld1.8	{q3}, [%[pt]]!		\n"
+	"//	vld1.8	{q3}, [%[pt]]!		\n"
+	"	vld1.8	{q3}, [%[pt]]		\n"
 	"	vst1.64	{q4}, [%[iv]]		\n"
 	".align 4				\n"
 	"1:					\n"
@@ -545,7 +558,8 @@ void AES_ARM8_EncryptX2_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, con
 	"	b	1b			\n"
 	"4:					\n"
 	"	veor	q3, q3, q2		\n"
-	"	vst1.8	{q3}, [%[ct]]!		\n"
+	"//	vst1.8	{q3}, [%[ct]]!		\n"
+	"	vst1.8	{q3}, [%[ct]]		\n"
 	: [rk] "=r" (rkeys), [nr] "=r" (Nr),
 	  "=m" (*ct), "=m" (*iv)
 	: "0" (rkeys), "1" (halfnr), [pt] "r" (pt), [ct] "r" (ct), [iv] "r" (iv), [inc] "Q" (inc1),
@@ -558,6 +572,7 @@ void AES_ARM8_EncryptX2_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, con
 
 void AES_ARM8_Encrypt4X2_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 pt[64], u8 ct[64], u8 iv[16])
 {
+	//assert(pt != ct);
 	assert(Nr > 4 && !(Nr%2));
 	uint halfnr = Nr/2;
 	asm volatile(
@@ -569,6 +584,7 @@ void AES_ARM8_Encrypt4X2_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, co
 	"	vld1.64	{q8,q9}, [%[inc]]	\n"
 	"	vrev64.8	q5, q2		\n"
 	"	vld1.8	{q0,q1}, [%[rk]]!	\n"
+	"	mov	r8, %[ct]		\n"
 	"	//prfm	PLDL1STRM, [%[pt]]	\n"
 	"	subs	%[nr], %[nr], #2	\n"
 	"	vadd.i64	q9, q5, q9	\n"
@@ -638,14 +654,14 @@ void AES_ARM8_Encrypt4X2_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, co
 	"	veor	q7, q7, q3		\n"
 	"	veor	q8, q8, q4		\n"
 	"	veor	q9, q9, q5		\n"
-	"	vst1.8	{q6,q7}, [%[ct]]!	\n"
-	"	vst1.8	{q8,q9}, [%[ct]]!	\n"
+	"	vst1.8	{q6,q7}, [r8]!	\n"
+	"	vst1.8	{q8,q9}, [r8]!	\n"
 	: [rk] "=r" (rkeys), [nr] "=r" (Nr), [pt] "=r" (pt), [ct] "=r" (ct),
 	  "=m" (*ct), "=m" (*iv)
 	: "0" (rkeys), "1" (halfnr), "2" (pt), "3" (ct),
 	  [iv] "r" (iv), [inc] "r" (inc1234), "m" (*inc1234),
 	  "m" (*(const char(*)[16*(Nr+1)])rkeys), "m" (*pt)
-	: "q0", "q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8", "q9", "r7", "cc"
+	: "q0", "q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8", "q9", "r7", "r8", "cc"
 	);
 	//printf("%i rounds left, %li rounds\n", Nr, (rkeys-rk)/16);
 	return;
@@ -799,25 +815,23 @@ DECL_KEYSETUP2(Dec, 256);
 
 void AES_ARM8_Encrypt_BlkX2(const uchar* rkeys, uint rounds, const uchar in[16], uchar out[16])
 {
-	/* FIXME: Something is broken in when in and out are the same for 
-	 * AES_ARM8_Encrypt(4)/Decrypt(4), thus use intermediate buffer */
-	AES_ARM8_Encrypt(rkeys, rounds/2, in, crypto->blkbuf4);
-	AES_ARM8_Encrypt(rkeys+16+8*rounds, rounds/2, crypto->blkbuf4, out);
+	AES_ARM8_Encrypt(rkeys, rounds/2, in, out);
+	AES_ARM8_Encrypt(rkeys+16+8*rounds, rounds/2, out, out);
 }
 void AES_ARM8_Decrypt_BlkX2(const uchar* rkeys, uint rounds, const uchar in[16], uchar out[16])
 {
-	AES_ARM8_Decrypt(rkeys+16+8*rounds, rounds/2, in, crypto->blkbuf4);
-	AES_ARM8_Decrypt(rkeys, rounds/2, crypto->blkbuf4, out);
+	AES_ARM8_Decrypt(rkeys+16+8*rounds, rounds/2, in, out);
+	AES_ARM8_Decrypt(rkeys, rounds/2, out, out);
 }
 void AES_ARM8_Encrypt_4BlkX2(const uchar* rkeys, uint rounds, const uchar in[64], uchar out[64])
 {
-	AES_ARM8_Encrypt4(rkeys, rounds/2, in, crypto->blkbuf4);
-	AES_ARM8_Encrypt4(rkeys+16+8*rounds, rounds/2, crypto->blkbuf4, out);
+	AES_ARM8_Encrypt4(rkeys, rounds/2, in, out);
+	AES_ARM8_Encrypt4(rkeys+16+8*rounds, rounds/2, out, out);
 }
 void AES_ARM8_Decrypt_4BlkX2(const uchar* rkeys, uint rounds, const uchar in[64], uchar out[64])
 {
-	AES_ARM8_Decrypt4(rkeys+16+8*rounds, rounds/2, in, crypto->blkbuf4);
-	AES_ARM8_Decrypt4(rkeys, rounds/2, crypto->blkbuf4, out);
+	AES_ARM8_Decrypt4(rkeys+16+8*rounds, rounds/2, in, out);
+	AES_ARM8_Decrypt4(rkeys, rounds/2, out, out);
 }
 
 int  AES_ARM8_ECB_EncryptX2(const uchar* rkeys, uint rounds, uchar *iv, uint pad,

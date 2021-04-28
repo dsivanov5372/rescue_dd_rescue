@@ -275,8 +275,8 @@ void AES_ARM8_Decrypt(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 
 void AES_ARM8_Encrypt4(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 pt[64], u8 ct[64])
 {
 	asm volatile(
-	"	ld1	{v0.4s, v1.4s}, [%[rk]], #32	\n"
 	"	ld1	{v2.16b-v5.16b}, [%[pt]]	\n"
+	"	ld1	{v0.4s, v1.4s}, [%[rk]], #32	\n"
 	"//	prfm	PLDL1STRM, [%[pt],#64]	\n"
 	"	subs	%w[nr], %w[nr], #2	\n"
 	".align 4				\n"
@@ -334,8 +334,8 @@ void AES_ARM8_Encrypt4(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8
 void AES_ARM8_Decrypt4(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 ct[64], u8 pt[64])
 {
 	asm volatile(
-	"	ld1	{v0.4s, v1.4s}, [%[rk]], #32	\n"
 	"	ld1	{v2.16b-v5.16b}, [%[ct]]	\n"
+	"	ld1	{v0.4s, v1.4s}, [%[rk]], #32	\n"
 	"//	prfm	PLDL1STRM, [%[ct],#64]	\n"
 	"	subs	%w[nr], %w[nr], #2	\n"
 	".align 4				\n"
