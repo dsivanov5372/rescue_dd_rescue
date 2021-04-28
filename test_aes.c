@@ -174,8 +174,8 @@ int test_alg(const char* prefix, ciph_desc_t *alg, uchar *key, uchar *in, ssize_
 {
 	//uchar ctxt[DEF_LN+32], vfy[DEF_LN+2*32];	/* OpenSSL may need +2*16, sigh */
 	//uchar iv[32];
-	uchar *ctxt = aligned_alloc(64, DEF_LN+32);
-	uchar *vfy  = aligned_alloc(64, DEF_LN+2*32);
+	uchar *ctxt = aligned_alloc(64, ln+32);
+	uchar *vfy  = aligned_alloc(64, ln+2*32);
 	uchar *iv   = aligned_alloc(64, 32);
         struct timeval t1, t2;
 	double tdiff; 
@@ -254,6 +254,19 @@ int test_alg(const char* prefix, ciph_desc_t *alg, uchar *key, uchar *in, ssize_
 	//free(rkeys);
 	free(iv); free(vfy); free(ctxt);
 	return err;
+}
+
+int test_memcpy(uchar *in, ssize_t ln, int rep)
+{
+	uchar *ctxt = aligned_alloc(64, ln+32);
+        struct timeval t1, t2;
+	double tdiff;
+	int i;
+	printf("\nMemcpy    : ");
+	BENCH(memcpy(ctxt, in, ln), rep, ln);
+	printf("\n");
+	free(ctxt);
+	return 0;
 }
 
 #ifdef HAVE_LIBCRYPTO
@@ -373,6 +386,7 @@ int main(int argc, char *argv[])
 
 	ciph_desc_t *alg = NULL;
 	//OPENSSL_init();
+	test_memcpy(in, DEF_LN, rep*4);
 	printf("===> AES tests/benchmark (%i) PAD_ZERO <===\n", DEF_LN);
 	TEST_ENGINES(DEF_LN, PAD_ZERO, PAD_ZERO);
 	if (ret) {
