@@ -187,7 +187,7 @@ int AES_OSSL_##BITCHAIN##_Decrypt(const unsigned char* ctx, unsigned int rounds,
 	if (IV)							\
 		memcpy(iv, EVP_CIPHER_CTX_iv(evpctx[0]), 16);	\
 	if (DOPAD && pad == PAD_ASNEEDED)			\
-		return (elen? 16-elen: 1);			\
+		return (elen? 16-elen: ILLEGAL_PADDING);	\
 	return ores - 1;					\
 }
 
@@ -403,7 +403,7 @@ int  AES_OSSL_##BITCHAIN##_DecryptX2(const unsigned char* ctx, unsigned int roun
 	if (IV)							\
 		memcpy(iv, EVP_CIPHER_CTX_iv(evpctx[0]), 16);	\
 	if (pad == PAD_ASNEEDED)				\
-		return (elen? 16-elen: 1);			\
+		return (elen? 16-elen: ILLEGAL_PADDING);	\
 	return ores - 1;					\
 }
 
