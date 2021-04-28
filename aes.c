@@ -116,6 +116,7 @@ int dec_fix_olen_pad(ssize_t *olen, uint pad, const uchar *output)
 	}
 	int err = 0;
 	if (pad != PAD_ALWAYS) {
+		// Only report risk if larger than 2^-64
 		if (last < 8)
 			err = last;
 	}
