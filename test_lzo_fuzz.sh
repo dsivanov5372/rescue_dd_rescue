@@ -22,7 +22,11 @@ test_fuzz()
 	./dd_rescue -tL ./libddr_lzo.so$PAR dd_rescue.lzo dd_rescue.cmp
 	RC=$?
 	if test $RC -lt $ERC -o $RC -gt $ERCM; then echo "Unexpected exit value $RC (exp: $ERC-$ERCM)"; exit 2; fi
-	echo "Exit code $RC, good"
+	if test $RC -ge 128; then
+		echo "Exit code $RC, acceptable (BUT WARNING >= 128)"
+	else
+		echo "Exit code $RC, good"
+	fi
 	echo -n "# of differences: "
        	DIFF=`cmp -l dd_rescue dd_rescue.cmp | wc -l`
 	echo $DIFF
@@ -41,7 +45,7 @@ test_fuzz 1 1 "=nodiscard" 0 -U2
 test_fuzz 1 1 "=nodiscard" 0 -C2
 test_fuzz 1 5 "" 16384 -x1:0x6fe=0x1a
 test_fuzz 1 6 "=nodiscard" 16384 -x1:0x6fe=0x1a
-test_fuzz 1 3 "" 16384 -u2=8192
+test_fuzz 1 131 "" 16384 -u2=8192
 test_fuzz 1 131 "" 100000 -c1=8192
 # TODO: A lot more tests, with and without nodiscard
 # TODO: Do tests with -T, with good preexisting data and check whether nothing gets destroyed
