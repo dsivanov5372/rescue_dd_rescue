@@ -245,6 +245,15 @@ void AES_ARM8_Decrypt(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 
 void AES_ARM8_Encrypt4(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 pt[64], u8 ct[64])
 {
 	//assert(pt != ct);
+	/* The compiler might prove that pt == ct and thus uses the same register for 
+	 * input / output. We thus copy ct into r7, so we don't increment the pointers
+	 * twice. I believe this is a compiler bug, as we also used to output both pt and ct,
+	 * and as we were using volatile, the compiler had to assume those were used and
+	 * different from each other. 
+	 * constraints were : 
+	 * : [rk] "=r" (rkeys), [nr] "=r" (Nr), [pt] "=r" (pt), [ct] "=r" (ct), "=m" (*ct)
+	 * :  "0" (rkeys), "1" (Nr), "2" (pt),  "3" (ct), ...
+	 */
 	asm volatile(
 	"	.fpu crypto-neon-fp-armv8	\n"
 	"	mov 	r7, %[ct]		\n"
@@ -298,7 +307,7 @@ void AES_ARM8_Encrypt4(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8
 	"3:					\n"
 	"	vst1.8	{q2,q3}, [r7]!		\n"
 	"	vst1.8	{q4,q5}, [r7]!		\n"
-	: [rk] "=r" (rkeys), [nr] "=r" (Nr), [pt] "=r" (pt)
+	: [rk] "=r" (rkeys), [nr] "=r" (Nr), [pt] "=r" (pt),
 	  "=m" (*ct)
 	: "0" (rkeys), "1" (Nr), /*[pt]*/ "2" (pt), [ct] "r" (ct),
 	  "m" (*(const char(*)[16*(Nr+1)])rkeys), "m" (*pt)
@@ -364,9 +373,9 @@ void AES_ARM8_Decrypt4(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8
 	"3:					\n"
 	"	vst1.8	{q2,q3}, [r7]!	\n"
 	"	vst1.8	{q4,q5}, [r7]!	\n"
-	: [rk] "=r" (rkeys), [nr] "=r" (Nr), [ct] "=r" (ct), [pt] "=r" (pt),
+	: [rk] "=r" (rkeys), [nr] "=r" (Nr), [ct] "=r" (ct),
 	  "=m" (*pt)
-	: "0" (rkeys), "1" (Nr), /*[ct]*/ "2" (ct), /*[pt]*/ "3" (pt),
+	: "0" (rkeys), "1" (Nr), /*[ct]*/ "2" (ct), [pt] "r" (pt),
 	  "m" (*(const char(*)[16*(Nr+1)])rkeys), "m" (*ct)
 	: "q0", "q1", "q2", "q3", "q4", "q5", "cc", "r7"
 	);
@@ -502,9 +511,9 @@ void AES_ARM8_Encrypt4_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, cons
 	"	veor	q9, q9, q5		\n"
 	"	vst1.8	{q6,q7}, [r8]!		\n"
 	"	vst1.8	{q8,q9}, [r8]!		\n"
-	: [rk] "=r" (rkeys), [nr] "=r" (Nr), [pt] "=r" (pt), [ct] "=r" (ct),
+	: [rk] "=r" (rkeys), [nr] "=r" (Nr), [pt] "=r" (pt),
 	  "=m" (*ct), "=m" (*iv)
-	: "0" (rkeys), "1" (Nr), "2" (pt), "3" (ct), [iv] "r" (iv),
+	: "0" (rkeys), "1" (Nr), "2" (pt), [ct] "r" (ct), [iv] "r" (iv),
 	  [inc] "r" (inc1234), "m" (*inc1234),
 	  "m" (*(const char(*)[16*(Nr+1)])rkeys), "m" (*pt)
 	: "q0", "q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8", "q9", "r7", "r8", "cc"
@@ -656,9 +665,9 @@ void AES_ARM8_Encrypt4X2_CTR(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, co
 	"	veor	q9, q9, q5		\n"
 	"	vst1.8	{q6,q7}, [r8]!	\n"
 	"	vst1.8	{q8,q9}, [r8]!	\n"
-	: [rk] "=r" (rkeys), [nr] "=r" (Nr), [pt] "=r" (pt), [ct] "=r" (ct),
+	: [rk] "=r" (rkeys), [nr] "=r" (Nr), [pt] "=r" (pt),
 	  "=m" (*ct), "=m" (*iv)
-	: "0" (rkeys), "1" (halfnr), "2" (pt), "3" (ct),
+	: "0" (rkeys), "1" (halfnr), "2" (pt), [ct] "r" (ct),
 	  [iv] "r" (iv), [inc] "r" (inc1234), "m" (*inc1234),
 	  "m" (*(const char(*)[16*(Nr+1)])rkeys), "m" (*pt)
 	: "q0", "q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8", "q9", "r7", "r8", "cc"
