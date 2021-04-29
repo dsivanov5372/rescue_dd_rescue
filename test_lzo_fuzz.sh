@@ -10,7 +10,14 @@ test_fuzz()
 	EDIFF=$4
 	shift 4
 	echo ./fuzz_lzo $* dd_rescue dd_rescue.lzo
-	./fuzz_lzo $* dd_rescue dd_rescue.lzo || exit 1
+	if ! ./fuzz_lzo $* dd_rescue dd_rescue.lzo; then
+		if test "$1" == "-C2"; then
+			echo ./fuzz_lzo -C3 dd_rescue dd_rescue.lzo
+			./fuzz_lzo -C3 dd_rescue dd_rescue.lzo || exit 1
+		else
+			exit 1
+		fi
+	fi
 	echo ./dd_rescue -tL ./libddr_lzo.so$PAR dd_rescue.lzo dd_rescue.cmp
 	./dd_rescue -tL ./libddr_lzo.so$PAR dd_rescue.lzo dd_rescue.cmp
 	RC=$?
