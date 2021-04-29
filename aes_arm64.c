@@ -128,22 +128,27 @@ int AES_ARM8_KeySetupEnc(u32 rk[/*4*(Nr + 1)*/], const u8 cipherKey[], int keyBi
 	return 0;
 }
 
-inline void AES_ARM8_EKey_DKey(const u32* ekey, u32* dkey, int rounds)
+inline void AES_ARM8_EKey_DKey(const u32 *ekey, u32* dkey, int rounds)
 {
-	int i;
-	memcpy(dkey, ekey+rounds*4, 16);
-	for (i = 1, rounds--; rounds > 0; i++, rounds--) {
-		asm volatile(
-		"	ld1	{v0.16b}, %1	\n"
-		"	aesimc	v1.16b, v0.16b	\n"
-		"	st1	{v1.16b}, %0	\n"
-		: "=Q"(dkey[i*4])
-		: "Q"(ekey[rounds*4])
-		: "v0", "v1"
-		);
-	}
-	memcpy(dkey+4*i, ekey, 16);
+	asm volatile(
+		"	ld1	{v0.16b}, [%1]		\n"
+		"	sub	%1, %1, #16		\n"
+		"	st1	{v0.16b}, [%0], #16	\n"
+		"1:					\n"
+		"	ld1	{v0.16b}, [%1]		\n"
+		"	aesimc	v1.16b, v0.16b		\n"
+		"	sub	%1, %1, #16		\n"
+		"	subs 	%2, %2, #1		\n"
+		"	st1	{v1.16b}, [%0], #16	\n"
+		"	b.pl	1b			\n"
+		"	ld1	{v0.16b}, [%1]		\n"
+		"//	sub	%1, %1, #16		\n"
+		"	st1	{v0.16b}, [%0], #16	\n"
+		: "=r"(dkey), "=r"(ekey), "=r"(rounds), "=m"(*(roundkey(*)[rounds+1])ekey)
+		: "0"(dkey), "1"(ekey+4*rounds), "2"(rounds-2), "m"(*(roundkey(*)[rounds+1])dkey)
+		: "v0", "r1");
 }
+
 
 /**
  * Expand the cipher key into the decryption key schedule.
