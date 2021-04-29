@@ -136,17 +136,17 @@ inline void AES_ARM8_EKey_DKey(const u32 *ekey, u32* dkey, int rounds)
 		"	st1	{v0.16b}, [%0], #16	\n"
 		"1:					\n"
 		"	ld1	{v0.16b}, [%1]		\n"
-		"	aesimc	v1.16b, v0.16b		\n"
+		"	aesimc	v0.16b, v0.16b		\n"
 		"	sub	%1, %1, #16		\n"
 		"	subs 	%2, %2, #1		\n"
-		"	st1	{v1.16b}, [%0], #16	\n"
+		"	st1	{v0.16b}, [%0], #16	\n"
 		"	b.pl	1b			\n"
 		"	ld1	{v0.16b}, [%1]		\n"
 		"//	sub	%1, %1, #16		\n"
 		"	st1	{v0.16b}, [%0], #16	\n"
 		: "=r"(dkey), "=r"(ekey), "=r"(rounds), "=m"(*(roundkey(*)[rounds+1])ekey)
 		: "0"(dkey), "1"(ekey+4*rounds), "2"(rounds-2), "m"(*(roundkey(*)[rounds+1])dkey)
-		: "v0", "r1");
+		: "v0");
 }
 
 
@@ -279,6 +279,8 @@ void AES_ARM8_Decrypt(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 
 
 void AES_ARM8_Encrypt4(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8 pt[64], u8 ct[64])
 {
+	/* FIXME: We might need to ensure that pt and ct are not pointing to
+	 * the same register -- we saw this on arm32 (armhf/armv7) */
 	asm volatile(
 	"	ld1	{v2.16b-v5.16b}, [%[pt]]	\n"
 	"	ld1	{v0.4s, v1.4s}, [%[rk]], #32	\n"

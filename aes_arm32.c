@@ -137,16 +137,16 @@ inline void AES_ARM8_EKey_DKey(const u32 *ekey, u32* dkey, int rounds)
 		"	vst1.8		{q0}, [%0]!	\n"
 		"1:					\n"
 		"	vld1.8		{q0}, [%1]	\n"
-		"	aesimc.8	q1, q0		\n"
+		"	aesimc.8	q0, q0		\n"
 		"	subs 		%2, %2, #1	\n"
 		"	sub		%1, %1, #16	\n"
-		"	vst1.8		{q1}, [%0]!	\n"
+		"	vst1.8		{q0}, [%0]!	\n"
 		"	bpl		1b		\n"
 		"	vld1.8		{q0}, [%1]	\n"
 		"	vst1.8		{q0}, [%0]	\n"
 		: "=r"(dkey), "=r"(ekey), "=r"(rounds), "=m"(*(roundkey(*)[rounds+1])ekey)
 		: "0"(dkey), "1"(ekey+4*rounds), "2"(rounds-2), "m"(*(roundkey(*)[rounds+1])dkey)
-		: "q0", "q1");
+		: "q0");
 }
 
 /**
@@ -298,9 +298,9 @@ void AES_ARM8_Encrypt4(const u8 *rkeys /*u32 rk[4*(Nr + 1)]*/, uint Nr, const u8
 	"3:					\n"
 	"	vst1.8	{q2,q3}, [r7]!		\n"
 	"	vst1.8	{q4,q5}, [r7]!		\n"
-	: [rk] "=r" (rkeys), [nr] "=r" (Nr), [pt] "=r" (pt), [ct] "=r" (ct),
+	: [rk] "=r" (rkeys), [nr] "=r" (Nr), [pt] "=r" (pt)
 	  "=m" (*ct)
-	: "0" (rkeys), "1" (Nr), /*[pt]*/ "2" (pt), /*[ct]*/ "3" (ct),
+	: "0" (rkeys), "1" (Nr), /*[pt]*/ "2" (pt), [ct] "r" (ct),
 	  "m" (*(const char(*)[16*(Nr+1)])rkeys), "m" (*pt)
 	: "q0", "q1", "q2", "q3", "q4", "q5", "cc", "r7"
 	);
