@@ -36,7 +36,7 @@ void usage()
 			" The option -! toggles fixing for subsequent distortions, starting with on\n");
 	fprintf(stderr, "Options:\n");
 	fprintf(stderr, " -h\t\tThis help\n");
-	fprintf(stderr, " -d\t\tENable debug mode\n");
+	fprintf(stderr, " -d\t\tEnable debug mode\n");
 	fprintf(stderr, " -b BLKSZ\tBlocksize while compressing\n");
 	fprintf(stderr, " -v/V XXX\tSet version/version to extract to hex XXX\n");
 	fprintf(stderr, " -m/l YYY\tSet method/level to YYY\n");
@@ -50,6 +50,7 @@ void usage()
 	exit(1);
 }
 
+int errors = 0;
 char debug = 0;
 
 enum disttype { NONE = 0, ULEN, CLEN, BYTE, UCKS, CCKS };
@@ -221,7 +222,10 @@ int compress(int ifd, int ofd, unsigned int blksz, LISTTYPE(blk_dist_t)*dists)
 		int err = lzo1x_1_compress(dbuf, rd, cbuf, &cln, wmem);
 		if (err)
 			abort();
+		/* Copy plain block if compressed block is larger */
 		if (cln >= (unsigned)rd) {
+			if (debug)
+				fprintf(stderr, "Blk %i: Using plain copy (%lu >= %zu)\n", blk, cln, rd);	
 			memcpy(cbuf, dbuf, rd);
 			cln = rd;
 		}
@@ -239,6 +243,10 @@ int compress(int ifd, int ofd, unsigned int blksz, LISTTYPE(blk_dist_t)*dists)
 		/* Change ucksum+ccksum */
 		APPLY_DIST(UCKS, -1, uadl, ^=);
 		APPLY_DIST(CCKS, -1, cadl, ^=);
+		if (dist && cln == (unsigned)rd) {
+			fprintf(stderr, "Blk %i: Tweaking compressed cksum not applied as block not compressed\n", blk);
+			++errors;
+		}
 		/* Write blk header */
 		uint32_t dum = ADLER32_INIT_VALUE;
 		write32(ofd, ulen, &dum);
@@ -402,6 +410,6 @@ int main(int argc, char* argv[])
 
 	LISTTREEDEL(blk_dists, blk_dist_t);
 
-	return 0;
+	return errors;
 }
 
