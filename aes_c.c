@@ -444,11 +444,11 @@ static const u32 rcon[] = { 0x01000000, 0x02000000, 0x04000000, 0x08000000, 0x10
 #define GETU64(p) *((u64*)(p))
 #define PUTU64(ct, st) *((u64*)(ct)) = (st)
 #else	/* BIG_ENDIAN */
-#ifdef __GNUC__
-#define GETU32(p) __bswap_32(*((u32*)(p)))
-#define PUTU32(ct, st) *((u32*)(ct)) = __bswap_32((st))
-#define GETU64(p) __bswap_64(*((u64*)(p)))
-#define PUTU64(ct, st) *((u64*)(ct)) = __bswap_64((st))
+#ifdef HAVE_LINUX_SWAB_
+#define GETU32(p) __swab32(*((u32*)(p)))
+#define PUTU32(ct, st) *((u32*)(ct)) = __swap32((st))
+#define GETU64(p) __swapb64(*((u64*)(p)))
+#define PUTU64(ct, st) *((u64*)(ct)) = __swab64((st))
 #else	/* __GNUC__ */
 #include <netinet/in.h>
 #define GETU32(p) htonl(*((u32*)(p)))
