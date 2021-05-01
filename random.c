@@ -23,6 +23,10 @@ typedef unsigned int __u32;
 #include <linux/random.h>
 #endif
 #ifdef HAVE_SYS_RANDOM_H
+#ifdef __ANDROID_MIN_SDK_VERSION__
+#undef __ANDROID_MIN_SDK_VERSION__
+#define __ANDROID_MIN_SDK_VERSION__ 28
+#endif
 #include <sys/random.h>
 #endif
 

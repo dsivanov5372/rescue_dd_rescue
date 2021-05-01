@@ -84,5 +84,37 @@ AC_RUN_IFELSE([AC_LANG_SOURCE([[
 	AC_MSG_RESULT(no -- cross compiling)
 ])
 
+dnl Check for bionic aligned_alloc failure
+AC_MSG_CHECKING(whether aligned_alloc works)
+AC_RUN_IFELSE([AC_LANG_SOURCE([[
+	#ifdef __ANDROID_MIN_SDK_VERSION__
+	#undef __ANDROID_MIN_SDK_VERSION__
+	#define __ANDROID_MIN_SDK_VERSION__ 28
+	#endif
+	#include <stdlib.h>
+	#include <stdio.h>
+	int main() {
+	    char *ptr1 = aligned_alloc(64,448);
+	    char *ptr2 = aligned_alloc(64,464);
+	    volatile unsigned long p1 = (unsigned long)ptr1; 
+	    volatile unsigned long p2 = (unsigned long)ptr2; 
+	    if (ptr1 && ptr2 && !((unsigned long)ptr1%64) && !((unsigned long)ptr2%64)) {
+		free(ptr2);
+		free(ptr1);
+		return 0;
+	    } else {
+		if (ptr1)
+			free(ptr1);
+		return 1;
+	    }
+	}
+]])],[
+	AC_DEFINE_UNQUOTED([ALIGNED_ALLOC_WORKS], 1,
+		[check whether aligned_alloc works])
+	AC_MSG_RESULT(yes)
+],[
+	AC_MSG_RESULT(no)
+],[])
+
 AC_OUTPUT
 dnl link (if needed) Makefile configure.ac test_crypt.sh test_lzo_fuzz.sh

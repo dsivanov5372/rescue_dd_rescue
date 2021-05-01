@@ -8,6 +8,10 @@
 #include "aes.h"
 
 //ARCH_DECLS
+#ifdef __ANDROID_MIN_SDK_VERSION__
+#undef __ANDROID_MIN_SDK_VERSION__
+#define __ANDROID_MIN_SDK_VERSION__ 28
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -148,7 +152,7 @@ uchar do_shifted = 0;
 
 #define BLKSZ (alg->blocksize)
 
-#ifndef HAVE_ALIGNED_ALLOC
+#if !defined(HAVE_ALIGNED_ALLOC) || !defined(ALIGNED_ALLOC_WORKS)
 void* aligned_alloc(size_t align, size_t len)
 {
 #ifdef HAVE_POSIX_MEMALIGN
@@ -188,6 +192,7 @@ int test_alg(const char* prefix, ciph_desc_t *alg, uchar *key, uchar *in, ssize_
 	++tested;
 	printf("* %s %s (%i, %i, %i) pad %i/%i", prefix, alg->name, alg->keylen, alg->rounds, alg->ctx_size, epad, dpad);
 	printf("\nEKey setup: ");
+	assert(ctxt); assert(vfy); assert(iv);
 	uchar *rkeys = (uchar*)crypto->ekeys;	//malloc(alg->ctx_size);
 	BENCH(alg->enc_key_setup(key, rkeys, alg->rounds); if (alg->release) alg->release(rkeys, alg->rounds), rep*2, 16*(1+alg->rounds));
 	alg->enc_key_setup(key, rkeys, alg->rounds);
@@ -384,6 +389,7 @@ int main(int argc, char *argv[])
 
 	unsigned char *in = aligned_alloc(64, DEF_LN+16);
 	last_ct = aligned_alloc(64, DEF_LN+32);
+	assert(in); assert(last_ct);
 	if (argc > 5)
 		fillval(in, DEF_LN, atol(argv[5]));
 	else
