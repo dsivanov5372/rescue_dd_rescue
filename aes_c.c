@@ -32,14 +32,13 @@
 
 #include <string.h>
 #include <assert.h>
-
-#define MAXKC (256 / 32)
-#define MAXKB (256 / 8)
-#define MAXNR 14
+#include <byteswap.h>
+#include <endian.h>
 
 typedef unsigned char u8;
 typedef unsigned short u16;
 typedef unsigned int u32;
+typedef unsigned long long u64;
 
 int rijndaelKeySetupEnc(u32 rk[/*4*(Nr + 1)*/], const u8 cipherKey[], int keyBits, int rounds);
 int rijndaelKeySetupDec(u32 rk[/*4*(Nr + 1)*/], const u8 cipherKey[], int keyBits, int rounds);
@@ -438,7 +437,27 @@ static const u32 rcon[] = { 0x01000000, 0x02000000, 0x04000000, 0x08000000, 0x10
 	{								\
 		*((u32 *)(ct)) = SWAP((st));				\
 	}
-#else
+#else	/* _MSC_VER */
+# if __BYTE_ORDER == __BIG_ENDIAN
+#define GETU32(p) *((u32*)(p))
+#define PUTU32(ct, st) *((u32*)(ct)) = (st)
+#define GETU64(p) *((u64*)(p))
+#define PUTU64(ct, st) *((u64*)(ct)) = (st)
+#else	/* BIG_ENDIAN */
+#ifdef __GNUC__
+#define GETU32(p) __bswap_32(*((u32*)(p)))
+#define PUTU32(ct, st) *((u32*)(ct)) = __bswap_32((st))
+#define GETU64(p) __bswap_64(*((u64*)(p)))
+#define PUTU64(ct, st) *((u64*)(ct)) = __bswap_64((st))
+#else	/* __GNUC__ */
+#include <netinet/in.h>
+#define GETU32(p) htonl(*((u32*)(p)))
+#define PUTU32(ct, st) *((u32*)(ct)) = ntohl((st))
+#endif	/* __GNUC__ */
+#endif	/* BIG_ENDIAN */
+#endif	/*_MSC_VER */
+
+#if 0
 #define GETU32(pt) (((u32)(pt)[0] << 24) ^ ((u32)(pt)[1] << 16) ^ ((u32)(pt)[2] << 8) ^ ((u32)(pt)[3]))
 #define PUTU32(ct, st)			                          	\
 	{								\
