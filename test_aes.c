@@ -152,7 +152,7 @@ uchar do_shifted = 0;
 
 #define BLKSZ (alg->blocksize)
 
-#ifndef HAVE_ALIGNED_ALLOC
+#if !defined(HAVE_ALIGNED_ALLOC) || !defined(ALIGNED_ALLOC_WORKS)
 void* aligned_alloc(size_t align, size_t len)
 {
 #ifdef HAVE_POSIX_MEMALIGN
