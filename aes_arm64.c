@@ -138,7 +138,7 @@ inline void AES_ARM8_EKey_DKey(const u32 *ekey, u32* dkey, int rounds)
 		"	ld1	{v0.16b}, [%1]		\n"
 		"	aesimc	v0.16b, v0.16b		\n"
 		"	sub	%1, %1, #16		\n"
-		"	subs 	%2, %2, #1		\n"
+		"	subs 	%w2, %w2, #1		\n"
 		"	st1	{v0.16b}, [%0], #16	\n"
 		"	b.pl	1b			\n"
 		"	ld1	{v0.16b}, [%1]		\n"
