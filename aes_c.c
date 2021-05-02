@@ -441,18 +441,14 @@ static const u32 rcon[] = { 0x01000000, 0x02000000, 0x04000000, 0x08000000, 0x10
 # if __BYTE_ORDER == __BIG_ENDIAN
 #define GETU32(p) *((u32*)(p))
 #define PUTU32(ct, st) *((u32*)(ct)) = (st)
-#define GETU64(p) *((u64*)(p))
-#define PUTU64(ct, st) *((u64*)(ct)) = (st)
 #else	/* BIG_ENDIAN */
-#ifdef HAVE_LINUX_SWAB_
+#if 0 //def HAVE_LINUX_SWAB_H
 #define GETU32(p) __swab32(*((u32*)(p)))
-#define PUTU32(ct, st) *((u32*)(ct)) = __swap32((st))
-#define GETU64(p) __swapb64(*((u64*)(p)))
-#define PUTU64(ct, st) *((u64*)(ct)) = __swab64((st))
+#define PUTU32(ct, st) *((u32*)(ct)) = __swab32((st))
 #else	/* __GNUC__ */
 #include <netinet/in.h>
-#define GETU32(p) htonl(*((u32*)(p)))
-#define PUTU32(ct, st) *((u32*)(ct)) = ntohl((st))
+#define GETU32(p) ntohl(*((u32*)(p)))
+#define PUTU32(ct, st) *((u32*)(ct)) = htonl((st))
 #endif	/* __GNUC__ */
 #endif	/* BIG_ENDIAN */
 #endif	/*_MSC_VER */
