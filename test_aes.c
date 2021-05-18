@@ -110,10 +110,12 @@ void setup_iv(stream_dsc_t *strm, uchar *iv /*[16]*/, uint ln)
 int compare(uchar* p1, uchar* p2, size_t ln, const char* msg)
 {
 	uint i;
-	for (i = 0; i < ln; ++i) 
-		if (p1[i] != p2[i]) {
-			printf("Miscompare (%s) @ %i: %02x <-> %02x ",
-				msg, i, p1[i], p2[i]);
+	uint *pp1 = (uint*)p1, *pp2 = (uint*)p2;
+	for (i = 0; i < ln/sizeof(uint); ++i)
+		if (pp1[i] != pp2[i]) {
+			p1 = (uchar*)(pp1+i); p2 = (uchar*)(pp2+i);
+			printf("Miscompare (%s) @ %i: %02x %02x %02x %02x <-> %02x %02x %02x %02x",
+				msg, i*(uint)sizeof(uint), p1[0], p1[1], p1[2], p1[3], p2[0], p2[1], p2[2], p2[3]);
 			return 1;
 		}
 	return 0;
