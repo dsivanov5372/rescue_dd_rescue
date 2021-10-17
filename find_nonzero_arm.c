@@ -95,7 +95,8 @@ void probe_arm8crypto_32()
 	"	.fpu crypto-neon-fp-armv8	\n"
 	"	veor	q0, q0, q0		\n"
 	"	veor 	q1, q1, q1		\n"
-	"	aese.8	q1, q0			\n"
+	"	//aese.8	q1, q0		\n"
+	"	.word 0xf3b02300		\n"
 	:
 	:
 	: "q0", "q1");
