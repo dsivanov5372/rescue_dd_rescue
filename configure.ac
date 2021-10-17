@@ -116,5 +116,24 @@ AC_RUN_IFELSE([AC_LANG_SOURCE([[
 	AC_MSG_RESULT(no)
 ],[])
 
+dnl Check for valloc decl
+CFLAGS="$CFLAGS -Werror"
+AC_MSG_CHECKING(whether valloc has been declared)
+AC_RUN_IFELSE([AC_LANG_SOURCE([[
+	#include <stdlib.h>
+	int main() {
+	void *ptr = valloc(1024);
+	free(ptr);
+	return (ptr != (void*)0);;
+	}
+]])],[
+	AC_MSG_RESULT(yes)
+	AC_DEFINE_UNQUOTED([HAVE_VALLOC_DECL], 1,
+		[check whether valloc has been declared])
+],[
+	AC_MSG_RESULT(no)
+],[])
+
+
 AC_OUTPUT
 dnl link (if needed) Makefile configure.ac test_crypt.sh test_lzo_fuzz.sh

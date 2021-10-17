@@ -2673,6 +2673,9 @@ unsigned char* zalloc_aligned_buf(unsigned int bs, unsigned char**obuf)
 	unsigned char *ptr = 0;
 //#if defined (__DragonFly__) || defined(__NetBSD__) || defined(__BIONIC__)
 #ifdef HAVE_VALLOC
+#ifndef HAVE_VALLOC_DECL
+	void* valloc(size_t sz);
+#endif
 	ptr = plug_max_slack_pre%pagesize? 0: (unsigned char*)valloc(bs + plug_max_slack_pre + plug_max_slack_post);
 #elif defined(HAVE_POSIX_MEMALIGN)
 	void *mp;
