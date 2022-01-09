@@ -15,7 +15,7 @@
 #include "archdep.h"
 
 
-#ifdef __AVX2__
+#if defined(__AVX2__) && !defined(NO_AVX2)
 #include <immintrin.h>
 static int probe_aes_ni()
 {
@@ -85,7 +85,7 @@ typedef long long __m128i_u __attribute__ ((__vector_size__ (16), __may_alias__,
 #define MMCLEARALL_MAN2 do {} while(0)
 #endif
 
-#ifdef __AVX2__
+#if defined(__AVX2__) && !defined(NO_AVX2)
 #define MMCLEARALL _mm256_zeroall()
 #define MM256CLEAR5						\
 	asm volatile("	vpxor %%ymm4, %%ymm4, %%ymm4	\n"	\
@@ -717,7 +717,7 @@ int  AESNI_ECB_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt, int enc,
 		return 0;
 }
 
-#if defined(__AVX2__) && defined(__VAES__)
+#if defined(__AVX2__) && !defined(NO_AVX2) && defined(__VAES__)
 #ifdef __GNUC__
 #define ALWAYS_INLINE __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
 #else
@@ -1182,7 +1182,7 @@ int AESNI_CTR_Crypt_Tmpl(crypt_8blks_fn *crypt8, crypt_blk_fn *crypt,
 	return 0;
 }
 
-#if !defined(__AVX2__) || !defined(__VAES__)
+#if !defined(__AVX2__) || !defined(__VAES__) || defined(NO_AVX2)
 static
 int AESNI_CTR_Crypt(const unsigned char* key, unsigned int rounds,
 		     unsigned char* ctr, unsigned int pad,
@@ -1690,7 +1690,7 @@ int  AESNI_CTR_CryptX2(const uchar* rkeys, unsigned int rounds,
 				    rkeys, rounds, iv, in, out, len);
 }
 
-#ifdef __AVX2__
+#if defined(__AVX2__) && !defined(NO_AVX2)
 #define AESNI_METHODS VAESNI_Methods
 #else
 #define AESNI_METHODS SAESNI_Methods

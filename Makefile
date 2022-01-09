@@ -434,10 +434,10 @@ aesni_avx.po: $(SRCDIR)/aesni.c
 	$(CC) $(CFLAGS) $(PIC) -O3 -maes $(VAESFLAGS) -c $< -o $@
 endif
 aesni.o: $(SRCDIR)/aesni.c
-	$(CC) $(CFLAGS) $(PIE) -O3 -maes -msse4.1 -c $<
+	$(CC) $(CFLAGS) $(PIE) -O3 -maes -msse4.1 -DNO_AVX2 -c $<
 
 aesni.po: $(SRCDIR)/aesni.c
-	$(CC) $(CFLAGS) $(PIC) -O3 -maes -msse4.1 -c $< -o $@
+	$(CC) $(CFLAGS) $(PIC) -O3 -maes -msse4.1 -DNO_AVX2 -c $< -o $@
 
 aes_arm64.o: $(SRCDIR)/aes_arm64.c
 	$(CC) $(CFLAGS) $(PIE) -O3 -march=armv8-a+crypto -c $<
