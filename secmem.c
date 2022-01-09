@@ -31,6 +31,9 @@ sec_fields* secmem_init()
 	unsigned char *ptr = 0;
 #ifdef HAVE_VALLOC
 //#if defined (__DragonFly__) || defined(__NetBSD__) || defined(__BIONIC__)
+#ifndef HAVE_VALLOC_DECL
+	void* valloc(size_t sz);
+#endif
 	ptr = (unsigned char*)valloc(pagesize);
 #elif defined(HAVE_POSIX_MEMALIGN)
 	void *mp;
