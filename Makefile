@@ -207,7 +207,7 @@ all: $(TARGETS) $(OTHTARGETS)
 #	test -e Makefile || ln -s $(SRCDIR)/Makefile .
 
 config.h: $(SRCDIR)/configure $(SRCDIR)/config.h.in
-	$(SRCDIR)/configure
+	$(SRCDIR)/configure && touch config.h
 	test -e test_crypt.sh || ln -s $(SRCDIR)/test_crypt.sh .
 	test -e test_lzo_fuzz.sh || ln -s $(SRCDIR)/test_lzo_fuzz.sh .
 	test -e calchmac.py || ln -s $(SRCDIR)/calchmac.py .
@@ -216,7 +216,7 @@ $(SRCDIR)/configure: $(SRCDIR)/configure.ac
 	cd $(SRCDIR) && autoconf
 
 $(SRCDIR)/config.h.in: $(SRCDIR)/configure.ac
-	cd $(SRCDIR) && autoheader
+	cd $(SRCDIR) && autoheader && touch config.h.in
 
 # The headers for x86 intrinsics cause breakage while preprocessing 
 # for dependency generation :-( Workaround ...
