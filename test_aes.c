@@ -8,9 +8,8 @@
 #include "aes.h"
 
 //ARCH_DECLS
-#ifdef __ANDROID_MIN_SDK_VERSION__
-#undef __ANDROID_MIN_SDK_VERSION__
-#define __ANDROID_MIN_SDK_VERSION__ 28
+#if defined(__ANDROID_MIN_SDK_VERSION__) && __ANDROID_MIN_SDK_VERSION__ < 28
+#warning Compile with -target linux-aarch64-android28
 #endif
 
 #include <stdio.h>
@@ -155,7 +154,7 @@ uchar do_shifted = 0;
 #define BLKSZ (alg->blocksize)
 
 #if !defined(HAVE_ALIGNED_ALLOC) || !defined(ALIGNED_ALLOC_WORKS)
-void* aligned_alloc(size_t align, size_t len)
+void* ALIGNED_ALLOC(size_t align, size_t len)
 {
 #ifdef HAVE_POSIX_MEMALIGN
 #warning Emulating aligned_alloc with posix_memalign
@@ -174,15 +173,18 @@ void* aligned_alloc(size_t align, size_t len)
 		return ((unsigned long)ptr%align? ptr+align-(unsigned long)ptr%align: ptr);
 #endif
 }
+#else
+/* C11 requires size to be a multiple of alignment, which is enforced by Bionic */
+#define ALIGNED_ALLOC(al,sz) aligned_alloc(al, (sz+al-1)-(sz+al-1)%al)
 #endif
 
 int test_alg(const char* prefix, ciph_desc_t *alg, uchar *key, uchar *in, ssize_t ln, int epad, int dpad, int rep)
 {
 	//uchar ctxt[DEF_LN+32], vfy[DEF_LN+2*32];	/* OpenSSL may need +2*16, sigh */
 	//uchar iv[32];
-	uchar *ctxt = aligned_alloc(64, ln+32);
-	uchar *vfy  = aligned_alloc(64, ln+2*32);
-	uchar *iv   = aligned_alloc(64, 32);
+	uchar *ctxt = ALIGNED_ALLOC(64, ln+32);
+	uchar *vfy  = ALIGNED_ALLOC(64, ln+2*32);
+	uchar *iv   = ALIGNED_ALLOC(64, 32);
         struct timeval t1, t2;
 	double tdiff; 
 	int i;
@@ -269,7 +271,7 @@ int test_alg(const char* prefix, ciph_desc_t *alg, uchar *key, uchar *in, ssize_
 
 int test_memcpy(uchar *in, ssize_t ln, int rep)
 {
-	uchar *ctxt = aligned_alloc(64, ln+32);
+	uchar *ctxt = ALIGNED_ALLOC(64, ln+32);
         struct timeval t1, t2;
 	double tdiff;
 	int i;
@@ -389,8 +391,8 @@ int main(int argc, char *argv[])
 	if (argc > 4)
 		DEF_LN = atol(argv[4]);
 
-	unsigned char *in = aligned_alloc(64, DEF_LN+16);
-	last_ct = aligned_alloc(64, DEF_LN+32);
+	unsigned char *in = ALIGNED_ALLOC(64, DEF_LN+16);
+	last_ct = ALIGNED_ALLOC(64, DEF_LN+32);
 	assert(in); assert(last_ct);
 	if (argc > 5)
 		fillval(in, DEF_LN, atol(argv[5]));

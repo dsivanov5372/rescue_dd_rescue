@@ -87,15 +87,14 @@ AC_RUN_IFELSE([AC_LANG_SOURCE([[
 dnl Check for bionic aligned_alloc failure
 AC_MSG_CHECKING(whether aligned_alloc works)
 AC_RUN_IFELSE([AC_LANG_SOURCE([[
-	#ifdef __ANDROID_MIN_SDK_VERSION__
-	#undef __ANDROID_MIN_SDK_VERSION__
-	#define __ANDROID_MIN_SDK_VERSION__ 28
+	#if defined(__ANDROID_MIN_SDK_VERSION__) && __ANDROID_MIN_SDK_VERSION__ < 28
+	#warning Compile with -target linux-aarch64-android28
 	#endif
 	#include <stdlib.h>
 	#include <stdio.h>
 	int main() {
 	    char *ptr1 = aligned_alloc(64,448);
-	    char *ptr2 = aligned_alloc(64,464);
+	    char *ptr2 = aligned_alloc(64,320);
 	    volatile unsigned long p1 = (unsigned long)ptr1; 
 	    volatile unsigned long p2 = (unsigned long)ptr2; 
 	    if (ptr1 && ptr2 && !((unsigned long)ptr1%64) && !((unsigned long)ptr2%64)) {
@@ -103,6 +102,8 @@ AC_RUN_IFELSE([AC_LANG_SOURCE([[
 		free(ptr1);
 		return 0;
 	    } else {
+		if (ptr2)
+			free(ptr2);
 		if (ptr1)
 			free(ptr1);
 		return 1;
