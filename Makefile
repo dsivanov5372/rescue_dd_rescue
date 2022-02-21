@@ -5,7 +5,7 @@
 VERSION = 1.99.11
 
 DESTDIR = 
-SRCDIR = .
+SRCDIR ?= .
 
 CC = gcc
 SHELL = /bin/bash
