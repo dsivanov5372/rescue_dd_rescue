@@ -282,7 +282,7 @@ int test_memcpy(uchar *in, ssize_t ln, int rep)
 	return 0;
 }
 
-#ifdef HAVE_LIBCRYPTO
+#if defined(HAVE_LIBCRYPTO) && !defined(NO_OSSL)
 #define TEST_OSSL(LN, EPAD, DPAD)			\
 	alg = findalg(AES_OSSL_Methods, testalg, 1);	\
 	if (alg)					\
