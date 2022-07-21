@@ -6,6 +6,8 @@
 
 #include "find_nonzero.h"
 
+#if defined(__x86_64__) || defined(__i386__) || defined(__i486__) || defined(__i586__) || defined(__i686__)
+
 #if defined(__SSE2__)
 #include <emmintrin.h>
 //#ifdef TEST
@@ -86,4 +88,5 @@ void probe_sse2()
 #else
 # warning pointless exercise compiling find_nonzero_sse2 with -msse2 ...
 #endif	/* __SSE2__ */
+#endif
 

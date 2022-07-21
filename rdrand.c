@@ -15,6 +15,8 @@
 # define have_rdrand 1
 #endif
 
+#if defined(__x86_64__) || defined(__i386__) || defined(__i486__) || defined(__i586__) || defined(__i686__)
+
 #ifdef __RDRND__
 #include <immintrin.h>
 #define BSWAP32(x) ((x<<24) | ((x<<8)&0x00ff0000) | ((x>>8)&0x0000ff00) | (x>>24))
@@ -87,6 +89,7 @@ unsigned int rdrand32()
 	val = BSWAP32(val);
 	return val;
 }
+#endif
 #endif
 
 #ifdef RDRAND_MAIN
