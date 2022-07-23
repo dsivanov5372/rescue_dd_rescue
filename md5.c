@@ -67,13 +67,13 @@ static inline void to_bytes(uint32_t val, uint8_t *bytes)
 	bytes[3] = (uint8_t)(val >> 24);
 }
 
+#endif
 /* Read val from little-endian array */
 static inline uint32_t to_int32(const uint8_t *bytes)
 {
 	return (uint32_t)bytes[0] | ((uint32_t)bytes[1] << 8) |
 	       ((uint32_t)bytes[2] << 16) | ((uint32_t)bytes[3] << 24);
 }
-#endif
 
 // Implicit: temp, i, f, g, k[], w[]
 #define MD5_SWAP(a,b,c,d)		\
@@ -87,19 +87,29 @@ static inline uint32_t to_int32(const uint8_t *bytes)
 void md5_64(const uint8_t *ptr, hash_t *ctx)
 {
 	uint32_t _a, _b, _c, _d;
+	uint32_t ww[16];
 	unsigned int i;
 
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 	uint32_t *w = (uint32_t *)ptr;
+	// Avoid misaligned 32bit reads (ARM)
+	// FIXME: This should be tested by a config test
+#if defined(__arm__)
+	if ((unsigned long)ptr % 4) {
+		w = ww;
+		for (i = 0; i < 16; ++i)
+			ww[i] = to_int32(ptr + i * 4);
+	}
+#endif
 #ifdef HAVE___BUILTIN_PREFETCH
 	__builtin_prefetch(ptr, 0, 3);
 //__builtin_prefetch(ptr+32, 0, 3);
 #endif
 #else /* BIG ENDIAN */
-	uint32_t w[16];
+	uint32_t *w = ww;
 	// break chunk into sixteen 32-bit words w[j], 0 ≤ j ≤ 15
 	for (i = 0; i < 16; ++i)
-		w[i] = to_int32(ptr + i * 4);
+		ww[i] = to_int32(ptr + i * 4);
 #endif
 
 	// Initialize hash value for this chunk:
