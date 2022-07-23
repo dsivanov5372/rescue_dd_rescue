@@ -115,11 +115,11 @@ typedef struct
 } __attribute__((packed)) header_t;
 
 typedef struct {
-    uint32_t uncmpr_len;   
-    uint32_t cmpr_len;   
+    uint32_t uncmpr_len;
+    uint32_t cmpr_len;
     uint32_t uncmpr_chksum;
     uint32_t cmpr_chksum;
-} blockhdr_t;
+} __attribute__((packed)) blockhdr_t;
 
 #define ADLER32_INIT_VALUE 1
 #define CRC32_INIT_VALUE 0
