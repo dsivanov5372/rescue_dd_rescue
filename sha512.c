@@ -84,6 +84,16 @@ uint64_t k[] ={ 0x428a2f98d728ae22ULL, 0x7137449123ef65cdULL, 0xb5c0fbcfec4d3b2f
 		0x4cc5d4becb3e42b6ULL, 0x597f299cfc657e2aULL, 0x5fcb6fab3ad6faecULL, 0x6c44198c4a475817ULL
 };
 
+#if !defined(HAVE_UNALIGNED_HANDLING)
+/* Read val from little-endian array */
+static inline uint64_t to_int64_be(const uint8_t *bytes)
+{
+	return ((uint64_t)bytes[0] << 56) | ((uint64_t)bytes[1] << 48) |
+	       ((uint64_t)bytes[2] << 40) | ((uint64_t)bytes[3] << 32) |
+	       ((uint64_t)bytes[4] << 24) | ((uint64_t)bytes[5] << 16) |
+	       ((uint64_t)bytes[6] << 8)  |  (uint64_t)bytes[7];
+}
+#endif
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 static inline uint64_t htonll(const uint64_t x)
 {
@@ -116,8 +126,13 @@ void sha512_128(const uint8_t* msg, hash_t* ctx)
 #if 0
 	memcpy(w, msg, 64);
 #else
+#if defined(HAVE_UNALIGNED_HANDLING)
 	for (i = 0; i < 16; ++i)
 		w[i] = htonll(*(uint64_t*)(msg+8*i));
+#else
+	for (i = 0; i < 16; ++i)
+		w[i] = to_int64_be(msg+8*i);
+#endif
 #endif
 	/* Extend the first 16 words into the remaining 48 words w[16..63] of the message schedule array: */
 	for (i = 16; i < 80;  ++i) {

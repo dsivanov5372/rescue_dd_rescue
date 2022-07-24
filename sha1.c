@@ -33,6 +33,15 @@ void sha1_init(hash_t *ctx)
 	ctx->sha1_h[4] = 0xc3d2e1f0;
 }
 
+#if !defined(HAVE_UNALIGNED_HANDLING)
+/* Read val from little-endian array */
+static inline uint32_t to_int32_be(const uint8_t *bytes)
+{
+	return ((uint32_t)bytes[0] << 24) | ((uint32_t)bytes[1] << 16) |
+	       ((uint32_t)bytes[2] << 8) | (uint32_t)bytes[3];
+}
+#endif
+
 /* 
  * Initialize array of round constants (each used 20x)
  */
@@ -63,8 +72,13 @@ void sha1_64(const uint8_t* msg, hash_t* ctx)
 #if 0
 	memcpy(w, msg, 64);
 #else
+#if defined(HAVE_UNALIGNED_HANDLING)
 	for (i = 0; i < 16; ++i)
 		w[i] = htonl(*(uint32_t*)(msg+4*i));
+#else
+	for (i = 0; i < 16; ++i)
+		w[i] = to_int32_be(msg+4*i);
+#endif
 #endif
 	/* Extend the first 16 words into the remaining 48 words w[16..63] of the message schedule array: */
 	for (i = 16; i < 32;  ++i)
