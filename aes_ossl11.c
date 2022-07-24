@@ -58,8 +58,9 @@ void AES_OSSL_Recycle(unsigned char* ctx)
 #if 0
 	assert(ectx->oiv == EVP_CIPHER_CTX_original_iv(*evpctx));
 #else
+	// We probably need to reinitialize the IV
 	if (ectx->oiv != EVP_CIPHER_CTX_original_iv(*evpctx) && !warn++)
-		fprintf(stderr, "ASSERT FAIL: ectx->oiv %p != EVP_CIPHER_CTX_original_iv(*evpctx) %p\n",
+		fprintf(stderr, "ASSERT FAIL: ectx->oiv %p != EVP_CIPHER_CTX_original_iv(*evpctx) %p, expect breakage\n",
 			ectx->oiv, EVP_CIPHER_CTX_original_iv(*evpctx));
 #endif
 	assert(ectx->cipher_data == EVP_CIPHER_CTX_get_cipher_data(*evpctx));
