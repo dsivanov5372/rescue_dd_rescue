@@ -117,20 +117,61 @@ AC_RUN_IFELSE([AC_LANG_SOURCE([[
 	AC_MSG_RESULT(no)
 ],[])
 
+dnl ***************************************************************************
 dnl Check for valloc decl
 CFLAGS="$CFLAGS -Werror"
 AC_MSG_CHECKING(whether valloc has been declared)
 AC_RUN_IFELSE([AC_LANG_SOURCE([[
 	#include <stdlib.h>
 	int main() {
-	void *ptr = valloc(1024);
-	free(ptr);
-	return (ptr != (void*)0);;
+	 void *ptr = valloc(1024);
+	 free(ptr);
+	 return (ptr != (void*)0);;
 	}
 ]])],[
 	AC_MSG_RESULT(yes)
 	AC_DEFINE_UNQUOTED([HAVE_VALLOC_DECL], 1,
 		[check whether valloc has been declared])
+],[
+	AC_MSG_RESULT(no)
+],[])
+
+dnl ***************************************************************************
+dnl Check for alignement needs
+AC_MSG_CHECKING(whether unaligned int reads are handled)
+AC_RUN_IFELSE([AC_LANG_SOURCE([[
+	#include <stdio.h>
+	#include <stdlib.h>
+	char bytes[19], b2[16];
+	union intu {
+	 char bytes[8];
+	 int  intvals[2];
+	};
+	void copy(int *dst, const int *src, size_t sz)
+	{
+	 union intu *iptr;
+	 for (size_t i = 0; i < sz; i+=2) {
+		*dst = ((union intu*)src)->intvals[0];
+		*(dst+1) = ((union intu*)src)->intvals[1];
+		src += 2; dst += 2;
+	 }
+	}
+	int main(int argc, char* argv[])
+	{
+	 int off = 1;
+	 memset(bytes, 0, 19);
+	 if (argc > 1)
+		off = atol(argv[1])%4;
+	 char* ptr = bytes+off;
+	 fprintf(stderr, "Debug: Off %i, Ptr %08lx\n", off, (unsigned long)ptr);
+	 copy((int*)b2, (const int*)ptr, 4);
+	 fprintf(stderr, "Ints: %08x %08x %08x %08x\n", *(int*)b2, *(int*)(b2+4), *(int*)(b2+8), *(int*)(b2+12));
+	 return 0;
+	}
+]])],[
+	AC_MSG_RESULT(yes)
+	AC_DEFINE_UNQUOTED([HAVE_UNALIGNED_HANDLING], 1,
+		[check whether unaligned int reads are handled])
 ],[
 	AC_MSG_RESULT(no)
 ],[])
