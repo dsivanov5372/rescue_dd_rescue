@@ -24,7 +24,7 @@ typedef unsigned int __u32;
 #endif
 #ifdef HAVE_SYS_RANDOM_H
 #if defined(__ANDROID_MIN_SDK_VERSION__) && __ANDROID_MIN_SDK_VERSION__ < 28
-#warning Compile with -target linux-aarch64-android28
+#warning Compile with -target linux-aarch64-android28 or -target linux-arm-android28
 #endif
 #include <sys/random.h>
 #endif

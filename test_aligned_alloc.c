@@ -6,7 +6,7 @@
  */
 
 #if defined(__ANDROID_MIN_SDK_VERSION__) && __ANDROID_MIN_SDK_VERSION__ < 28
-#warning Compile with -target linux-aarch64-android28
+#warning Compile with -target linux-aarch64-android28 or -target linux-arm-android28
 #endif
 
 #include <stdlib.h>
