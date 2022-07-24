@@ -52,9 +52,16 @@ struct _evp_cipher_ctx_st {
 /* An awful hack to directly access fields in EVP_CIPHER_CTX */
 void AES_OSSL_Recycle(unsigned char* ctx)
 {
+	static int warn = 0;
 	EVP_CIPHER_CTX **evpctx = (EVP_CIPHER_CTX**)ctx;
 	struct _evp_cipher_ctx_st *ectx = (struct _evp_cipher_ctx_st*)*evpctx;
+#if 0
 	assert(ectx->oiv == EVP_CIPHER_CTX_original_iv(*evpctx));
+#else
+	if (ectx->oiv != EVP_CIPHER_CTX_original_iv(*evpctx) && !warn++)
+		fprintf(stderr, "ASSERT FAIL: ectx->oiv %p != EVP_CIPHER_CTX_original_iv(*evpctx) %p\n",
+			ectx->oiv, EVP_CIPHER_CTX_original_iv(*evpctx));
+#endif
 	assert(ectx->cipher_data == EVP_CIPHER_CTX_get_cipher_data(*evpctx));
 	ectx->buf_len = 0;
 	ectx->num = 0;
