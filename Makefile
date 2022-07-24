@@ -2,7 +2,7 @@
 # (c) garloff@suse.de, 99/10/09, GNU GPL
 # (c) kurt@garloff.de, 2010 -- 2021, GNU GPL v2 or v3
 
-VERSION = 1.99.11
+VERSION = 1.99.12
 
 DESTDIR = 
 SRCDIR ?= .
