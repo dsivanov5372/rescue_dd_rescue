@@ -670,7 +670,8 @@ check_lzo: $(TARGETS)
 	$(VG) ./dd_rescue -aL ./libddr_lzo.so,./libddr_MD5.so=output test.lzo test.cmp > MD5
 	md5sum -c MD5
 	cmp test test.cmp
-	rm -f MD5 test test.lzo test.cmp
+	for hash in md5 sha1 sha224 sha256 sha384 sha512; do $(VG) ./dd_rescue -b16k -TL ./libddr_lzo.so=compress,./libddr_hash.so=$$hash:outfd=1 dd_rescue dd_rescue.lzo > ddr.hash || exit 1; $${hash}sum -c ddr.hash || exit 2; done
+	rm -f MD5 test test.lzo test.cmp ddr.hash dd_rescue.lzo
 	
 check_lzo_algos: $(TARGETS)
 	for alg in lzo1x_1 lzo1x_1_11 lzo1x_1_12 lzo1x_1_15 lzo1x_999 lzo1y_1 lzo1y_999 lzo1f_1 lzo1f_999 lzo1b_1 lzo1b_2 lzo1b_3 lzo1b_4 lzo1b_5 lzo1b_6 lzo1b_7 lzo1b_8 lzo1b_9 lzo1b_99 lzo1b_999 lzo2a_999; do ./dd_rescue -qATL ./libddr_lzo.so=algo=$$alg:benchmark dd_rescue dd_rescue.lzo || exit 1; $(LZOP) -lt dd_rescue.lzo; ./dd_rescue -qATL ./libddr_lzo.so=benchmark dd_rescue.lzo dd_rescue.cmp || exit 2; cmp dd_rescue dd_rescue.cmp || exit 3; done
