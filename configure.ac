@@ -142,6 +142,7 @@ AC_MSG_CHECKING(whether unaligned int reads are handled)
 AC_RUN_IFELSE([AC_LANG_SOURCE([[
 	#include <stdio.h>
 	#include <stdlib.h>
+	#include <string.h>
 	char bytes[19], b2[16];
 	union intu {
 	 char bytes[8];
