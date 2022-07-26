@@ -451,6 +451,8 @@ int main(int argc, char *argv[])
 	}
 
 	printf("\n");
+	if (!tested)
+		fprintf(stderr, "No tests performed; invalid alg \"%s\".\n", testalg);
 	secmem_release(crypto);
 	free(last_ct); free(in);
 	return (tested? ret: -1);
