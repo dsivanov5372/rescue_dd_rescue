@@ -160,7 +160,7 @@ rm -f urandom urandom.enc urandom.enc.old urandom.cmp
 
 echo "# *** OpenSSL compatibility ***"
 OPENSSLMAJ=$(openssl version | head -n 1 | sed 's/^OpenSSL \([0-9]\).*/\1/')
-if test "$OPENSSLMAJ"; then NOSALTHDR=:nosalthdr; fi
+if test "$OPENSSLMAJ" = "3"; then NOSALTHDR=:nosalthdr; fi
 echo "openssl enc -aes-192-ctr -K 4d20e517cd98ff130ac160dcb4177ef1ab4e8f9501bc6e1d -iv f61059ec2d87a410853b8f1500dead00 -in dd_rescue -out dd_rescue.enc.o"
 if openssl enc -aes-192-ctr -K 4d20e517cd98ff130ac160dcb4177ef1ab4e8f9501bc6e1d -iv f61059ec2d87a410853b8f1500dead00 -in dd_rescue -out dd_rescue.enc.o; then
   enc_dec_compare dd_rescue AES192-CTR "" keyhex=4d20e517cd98ff130ac160dcb4177ef1ab4e8f9501bc6e1d:ivhex=f61059ec2d87a410853b8f1500dead00
