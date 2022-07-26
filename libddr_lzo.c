@@ -27,12 +27,14 @@
 #include <netinet/in.h>
 #include <sys/stat.h>
 #include <signal.h>
+#ifdef HAVE_LZO_LZO1X_H
 #include <lzo/lzo1x.h>
 #include <lzo/lzo1y.h>
 #include <lzo/lzo1f.h>
 #include <lzo/lzo1b.h>
 #include <lzo/lzo1c.h>
 #include <lzo/lzo2a.h>
+#endif
 #include <time.h>
 #ifdef HAVE_ENDIAN_H
 #include <endian.h>

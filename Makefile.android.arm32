@@ -19,10 +19,10 @@ PATH = $(shell echo $$PATH)
 #.PHONY: dd_rescue find_nonzero fmt_no fiemap file_zblock
 
 default: config.h crtbegin_so.o $(DEPS) 
-	$(MAKE) $(MAKEFLAGS) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=armv6 EXTRA_LDFLAGS="$(ATTR)" LDPIE="" $@
+	$(MAKE) $(MAKEFLAGS) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=armv6 EXTRA_LDFLAGS="$(ATTR)" LDPIE="" NO_ALIGNED_ALLOC=1 $@
 
 all test check strip lib static libfalloc test_aes find_nonzero sha512 sha256 sha1 md5 fiemap file_zblock: config.h crtbegin_so.o $(DEPS)
-	$(MAKE) $(MAKEFLAGS) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=armv6 EXTRA_LDFLAGS="$(ATTR)" LDPIE="" $@
+	$(MAKE) $(MAKEFLAGS) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=armv6 EXTRA_LDFLAGS="$(ATTR)" LDPIE="" NO_ALIGNED_ALLOC=1 $@
 
 crtbegin_so.o: $(LIBD)/crtbegin_so.o
 	ln -sf $(LIBD)/crtbegin_dynamic.o .

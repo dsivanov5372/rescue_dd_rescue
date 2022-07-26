@@ -107,6 +107,7 @@ typedef struct _crypt_state {
 	char outkeyiv;
 	char ctrbug198;
 	char opbkdf11;
+	char nosalthdr;
 } crypt_state;
 
 /* aes modules rely on avail of global crypto symbol to point to sec_fields ... */
@@ -126,12 +127,9 @@ const char *crypt_help = "The crypt plugin for dd_rescue de/encrypts data copied
 #ifdef HAVE_XATTR
 		":saltxattr[=xattr_name]:sxfallback"
 #endif
-		"\n\t:pbkdf2[=INT]:opbkdf[11]:debug:bench[mark]:skiphole:weakrnd:outkeyiv:ctrbug198\n"
+		"\n\t:pbkdf2[=INT]:opbkdf[11]:debug:bench[mark]:skiphole:weakrnd:outkeyiv\n"
+		"\t:nosalthdr:ctrbug198\n"
 		" Use algorithm=help to get a list of supported crypt algorithms\n";
-
-/* TODO: 
- * openssl compatibility (Salted__ <SALT> header)
- */
 
 int parse_hex(unsigned char*, const char*, uint maxlen);
 int parse_hex_u32(unsigned int*, const char*, uint maxlen);
@@ -406,6 +404,8 @@ int crypt_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			state->opbkdf = 1; state->opbkdf11 = 1;
 		} else if (!strcmp(param, "skiphole"))
 			state->skiphole = 1;
+		else if (!strcmp(param, "nosalthdr"))
+			state->nosalthdr = 1;
 		else if (!strcmp(param, "weakrnd"))
 			state->weakrnd = 1;
 		else if (!strcmp(param, "outkeyiv"))
@@ -978,16 +978,18 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 		}
 
 		/* 5b: Decoding with openssl salt: Try reading */
-		if (state->opbkdf && !state->enc) {
+		if (state->opbkdf && !state->enc && !state->nosalthdr) {
 			char buf[16];
 			int fd = open(opt->iname, O_RDONLY);
-			if (fd > 0 && read(fd, buf, 16) == 16)
+			if (fd > 0 && read(fd, buf, 16) == 16) {
 				if (!memcmp(buf, "Salted__", 8)) {
 					memcpy(state->sec->salt, buf+8, 8);
 					state->sset = 1;
 					((opt_t*)opt)->init_ipos += 16; 
 					((fstate_t*)fst)->ipos += 16;
-				}
+				} else
+					state->nosalthdr = 1;
+			}
 			if (fd > 0)
 				close(fd);
 		}
@@ -1233,7 +1235,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 		FPLOG(DEBUG, " IV: %s\n", state->sec->charbuf1);
 	}
 	/* Write Salted__ header */
-	if (state->opbkdf && state->enc) {
+	if (state->opbkdf && state->enc && !state->nosalthdr) {
 		char buf[16];
 		strcpy(buf, "Salted__");
 		memcpy(buf+8, state->sec->salt, 8);
@@ -1258,7 +1260,7 @@ int crypt_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	/* IV */
 	if (state->alg->stream->iv_prep)
 		state->alg->stream->iv_prep(state->sec->nonce1, state->sec->iv1.data,
-					    state->lastpos/BLKSZ-state->opbkdf);
+					    state->lastpos/BLKSZ-(state->opbkdf & !state->nosalthdr));
 	else
 		memcpy(state->sec->iv1.data, state->sec->nonce1, BLKSZ);
 

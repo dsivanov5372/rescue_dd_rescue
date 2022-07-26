@@ -10,7 +10,7 @@
 #include "config.h"
 #endif
 
-#if defined(__x86_64__) || defined(__i386__)
+#if defined(__x86_64__) || defined(__i386__) || defined(__i486__) || defined(__i586__) || defined(__i686__)
 #define HAVE_OPT
 
 #ifdef __i386__

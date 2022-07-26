@@ -115,7 +115,9 @@ AC_RUN_IFELSE([AC_LANG_SOURCE([[
 	AC_MSG_RESULT(yes)
 ],[
 	AC_MSG_RESULT(no)
-],[])
+],[
+	AC_MSG_RESULT(no -- cross-compiling)
+])
 
 dnl ***************************************************************************
 dnl Check for valloc decl
@@ -134,7 +136,9 @@ AC_RUN_IFELSE([AC_LANG_SOURCE([[
 		[check whether valloc has been declared])
 ],[
 	AC_MSG_RESULT(no)
-],[])
+],[
+	AC_MSG_RESULT(no -- cross-compiling)
+])
 
 dnl ***************************************************************************
 dnl Check for alignement needs
@@ -142,6 +146,7 @@ AC_MSG_CHECKING(whether unaligned int reads are handled)
 AC_RUN_IFELSE([AC_LANG_SOURCE([[
 	#include <stdio.h>
 	#include <stdlib.h>
+	#include <string.h>
 	char bytes[19], b2[16];
 	union intu {
 	 char bytes[8];
@@ -174,7 +179,9 @@ AC_RUN_IFELSE([AC_LANG_SOURCE([[
 		[check whether unaligned int reads are handled])
 ],[
 	AC_MSG_RESULT(no)
-],[])
+],[
+	AC_MSG_RESULT(no -- cross-compiling)
+])
 
 
 AC_OUTPUT

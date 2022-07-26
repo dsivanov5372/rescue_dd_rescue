@@ -84,13 +84,15 @@ static inline uint32_t to_int32(const uint8_t *bytes)
 void md5_64(const uint8_t *ptr, hash_t *ctx)
 {
 	uint32_t _a, _b, _c, _d;
+#if !defined(HAVE_UNALIGNED_HANDLING) || __BYTE_ORDER != __LITTLE_ENDIAN
 	uint32_t ww[16];
+#endif
 	unsigned int i;
 
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 	uint32_t *w = (uint32_t *)ptr;
 	// Avoid misaligned 32bit reads (ARMv7)
-#if !defined(HAVE_UNALIGNED_HAMNDLING)
+#if !defined(HAVE_UNALIGNED_HANDLING)
 	if ((unsigned long)ptr % 4) {
 		w = ww;
 		for (i = 0; i < 16; ++i)

@@ -12,6 +12,7 @@
 #include "secmem.h"
 #include <string.h>
 
+#include "archdep.h"
 
 #if defined(__x86_64__) || defined(__i386__) || defined(__i486__) || defined(__i586__) || defined(__i686__)
 #include <wmmintrin.h>
@@ -21,15 +22,14 @@ static int probe_aes_ni()
 {
 	return !have_aesni || !have_avx2;
 }
-#else
+#else	/* AVX2 */
 #include <smmintrin.h>
 static int probe_aes_ni()
 {
 	return !have_aesni;
 }
-#endif
-#endif
-#include "archdep.h"
+#endif	/* AVX2 */
+#endif	/* x86 */
 
 /* Unaligned 128bit integer type, missing from gcc < 5 emmintrin.h */
 typedef long long __m128i_u __attribute__ ((__vector_size__ (16), __may_alias__, __aligned__ (1)));
