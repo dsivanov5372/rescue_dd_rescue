@@ -41,10 +41,10 @@ config:
 	$(MAKE) -f Makefile.android.arm64abi28 config.h
 
 dd_rescue libfalloc libfalloc-static libfalloc-dl nolib nocolor static strip all test_aes find_nonzero check: config.h $(DEPS)
-	$(MAKE) $(MAKEFLAGS) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=aarch64 EXTRA_LDFLAGS="$(ATTR)" $@
+	$(MAKE) $(MAKEFLAGS) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=armv7 EXTRA_LDFLAGS="$(ATTR)" $@
 
 clean:
-	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=aarch64 $@
+	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=armv7 $@
 	rm -f config.h crtbegin_dynamic.o crtbegin_static.o crtend_android.o crtend_so.o crtbegin_so.o
 
 TGT = dd_rescue libddr_null.so libddr_lzo.so libddr_hash.so libddr_crypt.so
