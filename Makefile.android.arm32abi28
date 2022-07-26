@@ -53,7 +53,7 @@ TGT_EXTRA = test_aes find_nonzero file_zblock fiemap fuzz_lzo fmt_no md5 sha1 sh
 move: all
 	# Well, we can strip foreign binaries, luckily
 	strip -S $(TGT) $(TGT_EXTRA)
-	mkdir -p android.arm64
-	mv $(TGT) android.arm64/
-	mv $(TGT_EXTRA) android.arm64/
+	mkdir -p android.arm32abi28
+	mv $(TGT) android.arm32abi28/
+	mv $(TGT_EXTRA) android.arm32abi28/
 
