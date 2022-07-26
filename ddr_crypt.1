@@ -299,6 +299,11 @@ compatible KDF with sha256 by specifying
 One round of sha256 can of course still be very efficiently
 brute-forced, so use high-entropy passwords if you really
 need to use this.
+.B nosalthdr .
+Openssl starting with version 3.0 does no longer write a Salted__
+header if the salt is passed explicitly. For compatibility with 3.0+,
+this option allows to no longer write this header (on encryption)
+nor to look for it (on decryption).
 .P
 The salt can be derived automatically from the name (and length)
 of the encrypted file; this allows to work with just one password
