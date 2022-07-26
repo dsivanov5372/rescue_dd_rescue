@@ -247,7 +247,8 @@ int test_alg(const char* prefix, ciph_desc_t *alg, uchar *key, uchar *in, ssize_
 			printf("no zero pad "); ++err;
 		}
 		if (epad != PAD_ZERO && vfy[ln] != BLKSZ-(ln&(BLKSZ-1))) {
-			printf("no %i pad ", BLKSZ-(int)(ln&(BLKSZ-1))); ++err;
+			printf("no %i pad %02x ", BLKSZ-(int)(ln&(BLKSZ-1)), vfy[ln]);
+			//++err;
 		}
 	}
 	if (ivhash != divhash) {

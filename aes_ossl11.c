@@ -194,12 +194,14 @@ int AES_OSSL_##BITCHAIN##_Decrypt(const unsigned char* ctx, unsigned int rounds,
 			ores = EVP_DecryptFinal(evpctx[0], out+olen, &elen);	\
 			assert(ores);				\
 		}						\
+		/* if (elen) *(out+olen+elen) = 16-elen; */	\
 		EVP_CIPHER_CTX_free(ctx2);			\
 		LFENCE;						\
 	} else {						\
 		ores = EVP_DecryptUpdate(evpctx[0], out, &olen, in, ilen);	\
 		assert(ores);					\
 		ores = EVP_DecryptFinal(evpctx[0], out+olen, &elen);	\
+		/* if (elen) *(out+olen+elen) = 16-elen; */	\
 	}							\
 	if (DOPAD && pad) {					\
 		*flen = olen + elen;				\
@@ -406,12 +408,14 @@ int  AES_OSSL_##BITCHAIN##_DecryptX2(const unsigned char* ctx, unsigned int roun
 			ores = EVP_DecryptFinal(evpctx[0], out+olen, &elen);	\
 			assert(ores);				\
 		}						\
+		/* if (elen) *(out+olen+elen) = 16-elen; */	\
 		EVP_CIPHER_CTX_free(ctx2);			\
 		LFENCE;						\
 	} else {						\
 		ores = EVP_DecryptUpdate(evpctx[0], out, &olen, out, olen+elen);\
 		assert(ores);					\
 		ores = EVP_DecryptFinal(evpctx[0], out+olen, &elen);	\
+		/* if (elen) *(out+olen+elen) = 16-elen; */	\
 	}							\
 	if (pad)						\
 		*flen = olen+elen;				\
