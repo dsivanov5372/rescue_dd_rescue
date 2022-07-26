@@ -5,12 +5,14 @@ make_and()
 {
 	mkdir -p $2
 	make clean
-	make -f $1 config && make -f $1 all -j4 || exit
+	make -f $1 config && make -f $1 all -j8 || exit
 	for name in $FILES; do mv $name $2/; done
 }
 
 make_and Makefile.android.arm32 android.arm32
 make_and Makefile.android.arm32pie android.arm32pie
+make_and Makefile.android.arm32abi28 android.arm32abi28
 make_and Makefile.android.arm64 android.arm64
+make_and Makefile.android.arm64abi28 android.arm64abi28
 make clean
 

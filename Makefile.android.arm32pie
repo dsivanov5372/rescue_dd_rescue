@@ -18,7 +18,7 @@ PATH = $(shell echo $$PATH)
 .PHONY: config libfalloc libfalloc-static libfalloc-dl nolib nocolor static strip all clean check test
 
 default: config.h $(DEPS)
-	$(MAKE) $(MAKEFLAGS) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=armv7 EXTRA_LDFLAGS="$(ATTR)" $@
+	$(MAKE) $(MAKEFLAGS) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=armv7 EXTRA_LDFLAGS="$(ATTR)" NO_ALIGNED_ALLOC=1 $@
 
 config.h: crtbegin_so.o config.h.in configure
 	PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" ./configure --host x86-64-linux-gnu
@@ -41,7 +41,7 @@ config:
 	$(MAKE) -f Makefile.android.arm32pie config.h
 
 dd_rescue libfalloc libfalloc-static libfalloc-dl nolib nocolor static strip check test find_nonzero test_aes all: config.h $(DEPS)
-	$(MAKE) $(MAKEFLAGS) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=armv7 EXTRA_LDFLAGS="$(ATTR)" $@
+	$(MAKE) $(MAKEFLAGS) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=armv7 EXTRA_LDFLAGS="$(ATTR)" NO_ALIGNED_ALLOC=1 $@
 
 clean:
 	$(MAKE) -f Makefile PATH=$(CBIN):$(PATH) CC="$(CC) $(CFLG)" LD="$(CC) -L $(LIBD)" MACH=armv7 $@
