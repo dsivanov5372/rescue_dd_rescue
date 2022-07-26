@@ -1,3 +1,6 @@
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
 #ifdef HAVE_OPENSSL_EVP_H
 #include <openssl/evp.h>
 #include <openssl/sha.h>

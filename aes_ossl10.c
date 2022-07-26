@@ -7,12 +7,12 @@
  * License: GPLv2 or v3 or BSD (3-clause)
  */
 
+#include "aes.h"
+#include "aes_ossl.h"
 #ifdef HAVE_OPENSSL_EVP_H
 #include <openssl/evp.h>
 #endif
 #include <assert.h>
-#include "aes.h"
-#include "aes_ossl.h"
 #include "secmem.h"
 #include <string.h>
 
