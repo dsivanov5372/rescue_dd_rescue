@@ -20,7 +20,11 @@
 #include <assert.h>
 
 #if defined(__GNUC__) //&& !defined(__clang__)
-# define FPU_NEON_AES "	.fpu crypto-neon-fp-armv8 \n .arch armv8-a \n .arch_extension crypto \n"
+# if __GNUC__ < 5
+#  define FPU_NEON_AES "	.fpu crypto-neon-fp-armv8 \n"
+# else
+#  define FPU_NEON_AES "	.fpu crypto-neon-fp-armv8 \n .arch armv8-a \n .arch_extension crypto \n"
+# endif
 #else
 # define FPU_NEON_AES "	\n"
 #endif

@@ -9,7 +9,9 @@
  */
 
 #define OPENSSL_API_COMPAT 0x10100000L
+#ifdef HAVE_OPENSSL_EVP_H
 #include <openssl/evp.h>
+#endif
 #include <assert.h>
 #include "aes.h"
 #include "aes_ossl.h"
