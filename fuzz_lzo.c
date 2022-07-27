@@ -49,6 +49,7 @@ void usage()
 	fprintf(stderr, " -x BLK:OFF=VAL\tSet byte at offset OFF in block BLK to VAL\n");
 	fprintf(stderr, " -U BLK\tBreaks the uncompressed cksum for block BLK\n");
 	fprintf(stderr, " -C BLK\tBreaks the   compressed cksum for block BLK\n");
+	fprintf(stderr, " When tweaks u/c/x happen to do no change, they invert the result\n");
 	exit(1);
 }
 
@@ -199,7 +200,12 @@ blk_dist_t* find_dist(LISTTYPE(blk_dist_t)* dlist, int blkno, enum disttype type
 	if (dist) {				\
 		fprintf(stderr, "Blk %i: " #VAR "(%x) " #APPL " %x\n",	\
 			blk, dist->offset, dist->val);	\
+		uint32_t old = VAR;		\
 		VAR APPL dist->val;		\
+		if (VAR == old) {		\
+			fprintf(stderr, " new value == old value %08x, inverting\n", old);	\
+			VAR ^= 0xffffffffUL;	\
+		}				\
 	}
 
 
