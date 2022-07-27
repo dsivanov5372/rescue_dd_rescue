@@ -23,6 +23,8 @@
 #include <stdint.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <sys/stat.h>
+#include <utime.h>
 #include <string.h>
 #include <netinet/in.h>
 //#include <sys/mman.h>
@@ -39,6 +41,7 @@ void usage()
 	fprintf(stderr, "Options:\n");
 	fprintf(stderr, " -h\t\tThis help\n");
 	fprintf(stderr, " -d\t\tEnable debug mode\n");
+	fprintf(stderr, " -p\t\tCopy ownership, permissions, timestamps\n");
 	fprintf(stderr, " -b BLKSZ\tBlocksize while compressing\n");
 	fprintf(stderr, " -v/V XXX\tSet version/version to extract to hex XXX\n");
 	fprintf(stderr, " -m/l YYY\tSet method/level to YYY\n");
@@ -54,7 +57,9 @@ void usage()
 }
 
 int errors = 0;
+int applied = 0;
 char debug = 0;
+char copystamp = 0;
 
 enum disttype { NONE = 0, ULEN, CLEN, BYTE, UCKS, CCKS };
 
@@ -204,6 +209,7 @@ LISTTYPE(blk_dist_t)* filter_dist(LISTTYPE(blk_dist_t)* dlist, int blkno, enum d
 			blk, dist->offset, dist->val);			\
 		uint32_t old = VAR;		\
 		VAR APPL dist->val;		\
+		++applied;			\
 		if (VAR == old) {		\
 			fprintf(stderr, " new value == old value %08x, inverting\n", old);	\
 			VAR ^= 0xffffffffUL;	\
@@ -309,6 +315,37 @@ void dump_blkdists(LISTTYPE(blk_dist_t) *dlist)
 	
 }
 
+/** Copy ownership and permissions */
+int copyperm(int ifd, int ofd)
+{
+	int err;
+	mode_t fmode;
+	struct stat stbuf;
+	err = fstat(ifd, &stbuf);
+	if (err)
+		return err;
+	fmode = stbuf.st_mode & (S_IRWXU | S_IRWXG | S_IRWXO | S_ISUID | S_ISGID | S_ISVTX);
+	err = fchown(ofd, stbuf.st_uid, stbuf.st_gid);
+	if (err)
+		fmode &= ~(S_ISUID | S_ISGID);
+	err += fchmod(ofd, fmode);
+	return err;
+}
+
+/** File time copy */
+int copytimes(const char* inm, const char* onm)
+{
+	int err;
+	struct stat stbuf;
+	struct utimbuf utbuf;
+	err = stat(inm, &stbuf);
+	if (err)
+		return err;
+	utbuf.actime  = stbuf.st_atime;
+	utbuf.modtime = stbuf.st_mtime;
+	err = utime(onm, &utbuf);
+	return err;
+}
 /* TODO: MULTIPART and sparse ... */
 int main(int argc, char* argv[])
 {
@@ -322,7 +359,7 @@ int main(int argc, char* argv[])
 	char levl = 5;
 	unsigned int flags = 0x03000003UL;	/* UNIX | ADLER32_C | ADLER32_D */
 	int c;
-        while ((c = getopt(argc, argv, "hdb:v:V:m:l:n:f:u:c:x:U:C:!")) != -1) {
+        while ((c = getopt(argc, argv, "hdpb:v:V:m:l:n:f:u:c:x:U:C:!")) != -1) {
 		switch (c) {
 			case 'h':
 				usage();
@@ -332,6 +369,9 @@ int main(int argc, char* argv[])
 				break;
 			case 'd':
 				debug = 1;
+				break;
+			case 'p':
+				copystamp = 1;
 				break;
 			case 'b':
 				blksize = atoi(optarg);
@@ -415,12 +455,23 @@ int main(int argc, char* argv[])
 	write_header(ofd, hname, hversion, extrvers, meth, levl, flags, hdr_fixup);
 	compress(ifd, ofd, blksize, blk_dists);
 
+	if (copystamp)
+		copyperm(ifd, ofd);
+
 	close(ofd);
 	close(ifd);
 	
+	if (copystamp)
+		copytimes(iname, oname);
+
 	if (debug)
 		dump_blkdists(blk_dists);
 
+	if (applied != LISTSIZE(blk_dists, blk_dist_t)) {
+		++errors;
+		fprintf(stderr, "WARNING: Applied %i of %i tweaks\n",
+			applied, LISTSIZE(blk_dists, blk_dist_t));
+	}
 	LISTTREEDEL(blk_dists, blk_dist_t);
 
 	return errors;
