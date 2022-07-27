@@ -43,8 +43,8 @@ test_fuzz 0 0 "" 0 -m3
 test_fuzz 1 1 "" 16384 -U2
 test_fuzz 1 1 "=nodiscard" 0 -U2
 test_fuzz 1 1 "=nodiscard" 0 -C2
-test_fuzz 1 5 "" 16384 -x1:0x6fe=0x1a
-test_fuzz 1 6 "=nodiscard" 16384 -x1:0x6fe=0x1a
+test_fuzz 1 5 "" 16384 -x1:0x6fe=0x1a -x1:0x720=0xfe
+test_fuzz 1 6 "=nodiscard" 16384 -x1:0x6fe=0x1a -x1:0x720=0xfe
 test_fuzz 1 131 "" 16384 -u2=8192
 test_fuzz 1 131 "" 100000 -c1=8192
 # TODO: A lot more tests, with and without nodiscard

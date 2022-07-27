@@ -183,30 +183,33 @@ void error(const char* txt)
 	abort();
 }
 		
-blk_dist_t* find_dist(LISTTYPE(blk_dist_t)* dlist, int blkno, enum disttype type, signed char fix)
+LISTTYPE(blk_dist_t)* filter_dist(LISTTYPE(blk_dist_t)* dlist, int blkno, enum disttype type, signed char fix)
 {
+	LISTTYPE(blk_dist_t) *dist_matches = NULL;
 	LISTTYPE(blk_dist_t) *dist;
 	LISTFOREACH(dlist, dist) {
 		blk_dist_t *dst = &LISTDATA(dist);
 		if ((unsigned)blkno == dst->blkno && type == dst->dist && 
 			(fix == -1 || fix == dst->fixup))
-			return dst;
+			LISTAPPEND(dist_matches, *dst, blk_dist_t);
 	}
-	return NULL;
+	return dist_matches;
 }
 
 #define APPLY_DIST(TP, FIX, VAR, APPL) \
-	dist = find_dist(dists, blk, TP, FIX);	\
-	if (dist) {				\
+	match_dists = filter_dist(dists, blk, TP, FIX);			\
+	LISTFOREACH(match_dists, dt) {					\
+		/*blk_dist_t **/dist = &LISTDATA(dt);			\
 		fprintf(stderr, "Blk %i: " #VAR "(%x) " #APPL " %x\n",	\
-			blk, dist->offset, dist->val);	\
+			blk, dist->offset, dist->val);			\
 		uint32_t old = VAR;		\
 		VAR APPL dist->val;		\
 		if (VAR == old) {		\
 			fprintf(stderr, " new value == old value %08x, inverting\n", old);	\
 			VAR ^= 0xffffffffUL;	\
 		}				\
-	}
+	}					\
+	LISTTREEDEL(match_dists, blk_dist_t)
 
 
 
@@ -238,6 +241,7 @@ int compress(int ifd, int ofd, unsigned int blksz, LISTTYPE(blk_dist_t)*dists)
 			cln = rd;
 		}
 		blk_dist_t *dist;
+		LISTTYPE(blk_dist_t) *match_dists, *dt;
 		/* Change bytes with fixing cmpr cksum */
 		APPLY_DIST(BYTE, 1, cbuf[dist->offset], =);
 		uint32_t cadl = lzo_adler32(ADLER32_INIT_VALUE, cbuf, cln);
@@ -250,6 +254,7 @@ int compress(int ifd, int ofd, unsigned int blksz, LISTTYPE(blk_dist_t)*dists)
 		APPLY_DIST(CLEN, -1, clen, =);
 		/* Change ucksum+ccksum */
 		APPLY_DIST(UCKS, -1, uadl, ^=);
+		dist = NULL;
 		APPLY_DIST(CCKS, -1, cadl, ^=);
 		if (dist && cln == (unsigned)rd) {
 			fprintf(stderr, "Blk %i: Tweaking compressed cksum not applied as block not compressed\n", blk);
