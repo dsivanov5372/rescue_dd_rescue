@@ -46,6 +46,7 @@ PIE = -fPIE
 LDPIE = -pie
 RDYNAMIC = -rdynamic
 MAKE := $(MAKE) -f $(SRCDIR)/Makefile
+STRIP ?= strip
 
 LZOP = $(shell type -p lzop || type -P true)
 HAVE_SHA256SUM = $(shell type -p sha256sum >/dev/null && echo 1 || echo 0)
@@ -401,10 +402,10 @@ static: $(SRCDIR)/dd_rescue.c $(DDR_HEADERS) $(OBJECTS)
 
 # Special pseudo targets
 strip: $(TARGETS) $(LIBTARGETS)
-	strip -S $^
+	$(STRIP) -S $^
 
 strip-all: $(OTHTARGETS)
-	strip -S $^
+	$(STRIP) -S $^
 
 clean:
 	rm -f $(TARGETS) $(OTHTARGETS) $(OBJECTS) $(OBJECTS2) core test log *.o *.po *.cmp *.enc *.enc.old CHECKSUMS.* SALTS.* KEYS.* IVS.* .dep
