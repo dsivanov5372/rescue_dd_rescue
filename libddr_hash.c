@@ -214,6 +214,7 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 			state->alg = get_hashalg(state, param+10);
 		else if (!memcmp(param, "hmacpwd=", 8)) {
 			state->hmacpwd = (unsigned char*)malloc(MAX_HMACPWDLN);
+			assert(state->hmacpwd);
 			state->hmacpln = strlen(param+8);
 			if (state->hmacpln >= MAX_HMACPWDLN)
 				state->hmacpln = MAX_HMACPWDLN-1;
@@ -223,6 +224,7 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 		else if (!memcmp(param, "hmacpwdfd=", 10)) {
 			int hfd = atol(param+10);
 			state->hmacpwd = (unsigned char*)malloc(MAX_HMACPWDLN);
+			assert(state->hmacpwd);
 			state->hmacpwd[MAX_HMACPWDLN-1] = 0;
 			if (hfd == 0 && isatty(hfd)) {
 				FPLOG(INPUT, "%s", "Enter HMAC password: ");
@@ -243,6 +245,7 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 				continue;
 			}
 			state->hmacpwd = (unsigned char*)malloc(MAX_HMACPWDLN);
+			assert(state->hmacpwd);
 			state->hmacpwd[MAX_HMACPWDLN-1] = 0;
 			state->hmacpln = fread(state->hmacpwd, 1, MAX_HMACPWDLN-1, f);
 			if (state->hmacpln <= 0) {
@@ -273,6 +276,7 @@ int hash_plug_init(void **stat, char* param, int seq, const opt_t *opt)
 #ifdef HAVE_XATTR
 	if ((state->chk_xattr || state->set_xattr) && !state->xattr_name) {
 		state->xattr_name = (char*)malloc(32);
+		assert(state->xattr_name);
 		state->xnmalloc = 1;
 		if (state->hmacpwd)
 			snprintf(state->xattr_name, 32, "user.hmac.%s", state->alg->name);
