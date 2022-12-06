@@ -101,9 +101,12 @@ FILE* fopen_chks(const char* fnm, const char* mode, int acc)
 {
 	if (!fnm)
 		return NULL;
-	if (!strcmp("-", fnm))
-		return stdin;
-	else {
+	if (!strcmp("-", fnm)) {
+		if (!strcmp(mode, "w"))
+			return stdout;
+		else
+			return stdin;
+	} else {
 		if (acc) {
 			int fd;
 			if (strcmp(mode, "w"))
@@ -118,11 +121,18 @@ FILE* fopen_chks(const char* fnm, const char* mode, int acc)
 /* get chksum */
 int get_chks(const char* cnm, const char* nm, char* chks, int wantedln)
 {
-	FILE *f = fopen_chks(cnm, "r", 0);
+	FILE *f;
+	char is_stdin = 0;
+       	if (strcmp(cnm, "-"))
+		f = fopen_chks(cnm, "r", 0);
+	else {
+		f = stdin;
+		is_stdin = 1;
+	}
 	if (!f)
 		return -1;
 	off_t err = find_chks(f, nm, chks, wantedln);
-	if (f != stdin)
+	if (!is_stdin)
 		fclose(f);
 	return err < 0? err: 0;
 }
@@ -159,6 +169,7 @@ int upd_chks(const char* cnm, const char *nm, const char *chks, int acc)
 			}
 		}
 	}
+	// FIXME: We might risk closing stdin or stdout here
 	fclose(f);
 	return err;
 }
