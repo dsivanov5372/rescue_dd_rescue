@@ -47,7 +47,7 @@ unsigned long rdrand64()
 volatile unsigned int _rdrand_res;
 void probe_rdrand()
 {
-	unsigned int val;
+	unsigned int val = 0;
 	_rdrand32_step(&val);
 	_rdrand_res = val;
 }
