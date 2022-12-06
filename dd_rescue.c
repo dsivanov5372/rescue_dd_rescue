@@ -1309,11 +1309,13 @@ int copyxattr(const char* inm, const char* onm)
 	}
 	int offs;
 	unsigned char* extrabuf = (unsigned char*)malloc(4096);
+	assert(extrabuf);
 	int ebufall = 4096;
 	for (offs = 0; offs < aln; offs += 1+strlen(attrs+offs)) {
 		ssize_t itln = getxattr(inm, attrs+offs, NULL, 0);
 		if (ebufall && itln > ebufall) {
 			extrabuf = (unsigned char*)realloc(extrabuf, itln);
+			assert(extrabuf);
 			ebufall = itln;
 		}
 		itln = getxattr(inm, attrs+offs, extrabuf, itln);
