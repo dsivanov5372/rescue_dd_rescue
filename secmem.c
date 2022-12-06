@@ -85,6 +85,7 @@ sec_fields* secmem_init()
 	sec_fields *sf = (sec_fields*)ptr;
 	sf->canary = 0xbeefdead;
 	//fprintf(stderr, "secmem_init: Length=%zi\n", offsetof(sec_fields, canary));
+	/* -fanalzyer considers this a mem leak, although we are supposed to return malloced mem */
 	return (sec_fields*)ptr;
 }
 

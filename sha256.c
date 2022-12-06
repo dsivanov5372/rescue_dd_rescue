@@ -92,6 +92,10 @@ void sha256_64(const uint8_t* msg, hash_t* ctx)
 	int i;
  	/* for each chunk create a 64-entry message schedule array w[0..63] of 32-bit words */
 	uint32_t w[64];
+#ifdef __ANALYZER__
+	/* -fanalyzer is not clever enough to see that initializing the first 16 ints is enough */
+	memset(w, 0, sizeof(w));
+#endif
  	/* copy chunk into first 16 words w[0..15] of the message schedule array */
 #if 0
 	memcpy(w, msg, 64);
