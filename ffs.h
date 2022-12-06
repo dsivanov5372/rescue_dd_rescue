@@ -116,9 +116,9 @@ static int myflsl(unsigned long val)
 		res -= 32;
 		vhi = vlo;
 	}
-#else
+#else	/* 32bit*/
 	unsigned int vhi = val;
-#endif
+#endif	/* __WORDSIZE */
 	unsigned int mask = 0xffff0000;
 	unsigned int shift = 16;
 	while (shift > 0) {
@@ -130,12 +130,14 @@ static int myflsl(unsigned long val)
 		mask <<= shift;
 	}
 	return res;
-#endif
+#endif	/* ARM */
 }
+#endif	/* __BIG_ENDIAN */
+
+#if defined(__i386__) || defined(__x86_64__)
 int myffs_sse42(unsigned long);
 int myffsl_sse42(unsigned long);
-#endif
-
 void probe_sse42();
+#endif
 
 #endif /* _FFS_H */
