@@ -18,6 +18,7 @@
 #include <string.h>
 #include <asm/errno.h>
 #include <unistd.h>
+//#include <assert.h>
 
 #ifdef HAVE_CONFIG_H
 # include "config.h"
@@ -119,8 +120,10 @@ void* frandom_init(unsigned char* seedbf)
 	struct frandom_state *state;
 
 	state = (struct frandom_state *)malloc(sizeof(struct frandom_state));
+	//assert(state);
 	if (!state)
-		return NULL;
+		abort();
+		//return NULL;
 
 	init_rand_state(state, seedbf);
 	if (!int_random_state)
@@ -193,6 +196,7 @@ ssize_t _frandom_bytes(void *rstate, u8 *buf, size_t count)
 		state = int_random_state;
 	if (!state)
 		state = (struct frandom_state *)frandom_init_lrand(0);
+	//assert(state);
   
 	i = state->i;
 	j = state->j;
