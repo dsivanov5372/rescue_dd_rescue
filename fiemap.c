@@ -372,7 +372,9 @@ int main(int argc, char *argv[])
 			++errs;
 			continue;
 		}
+		assert(ext);
 		char* dnm = devname(st.st_dev);
+		assert(dnm);
 		if (*dnm) {
 			fd2 = open/*64*/(dnm, O_RDONLY);
 			if (fd2 < 0)
