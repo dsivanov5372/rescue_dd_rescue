@@ -626,6 +626,7 @@ check_sha2: $(TARGETS) sha224 sha384
 	$(VG) ./sha256 /dev/null | sha256sum -c
 	$(VG) ./sha384 /dev/null | sha384sum -c
 	$(VG) ./sha512 /dev/null | sha512sum -c
+	$(VG) ./dd_rescue -q -c0 -a -b16k -t -L ./libddr_hash.so=sha256:outnm=- TEST2 /dev/null | $(VG) ./dd_rescue -c0 -a -b16k -t -L ./libddr_hash.so=sha256:chknm=- TEST2 /dev/null
 	rm -f HASH.TEST CHECKSUMS.sha256 CHECKSUMS.sha512 TEST2
 
 check_lzo: $(TARGETS)
