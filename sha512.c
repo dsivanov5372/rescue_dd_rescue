@@ -119,40 +119,43 @@ static inline uint64_t htonll(const uint64_t x)
  */
 void sha512_128(const uint8_t* msg, hash_t* ctx)
 {
-	int i;
  	/* for each chunk create a 80-entry message schedule array w[0..79] of 64-bit words */
 	uint64_t w[80];
+#ifdef __ANALYZER__
+	/* -fanalyzer is not clever enough to see that initializing the first 16 ints is enough */
+	memset(w, 0, sizeof(w));
+#endif
  	/* copy chunk into first 16 words w[0..15] of the message schedule array */
 #if 0
 	memcpy(w, msg, 64);
 #else
 #if defined(HAVE_UNALIGNED_HANDLING)
-	for (i = 0; i < 16; ++i)
+	for (int i = 0; i < 16; ++i)
 		w[i] = htonll(*(uint64_t*)(msg+8*i));
 #else
-	for (i = 0; i < 16; ++i)
+	for (int i = 0; i < 16; ++i)
 		w[i] = to_int64_be(msg+8*i);
 #endif
 #endif
 	/* Extend the first 16 words into the remaining 48 words w[16..63] of the message schedule array: */
-	for (i = 16; i < 80;  ++i) {
-		uint64_t s0 = RIGHTROTATE(w[i-15], 1) ^ RIGHTROTATE(w[i-15], 8) ^ (w[i-15] >> 7);
-		uint64_t s1 = RIGHTROTATE(w[i-2], 19) ^ RIGHTROTATE(w[i-2] ,61) ^ (w[i-2]  >> 6);
+	for (int i = 16; i < 80;  ++i) {
+		const uint64_t s0 = RIGHTROTATE(w[i-15], 1) ^ RIGHTROTATE(w[i-15], 8) ^ (w[i-15] >> 7);
+		const uint64_t s1 = RIGHTROTATE(w[i-2], 19) ^ RIGHTROTATE(w[i-2] ,61) ^ (w[i-2]  >> 6);
 		w[i] = w[i-16] + s0 + w[i-7] + s1;
 	}
 	/* Initialize working variables to current hash value:*/
 	uint64_t a = ctx->sha512_h[0], b = ctx->sha512_h[1], c = ctx->sha512_h[2], d = ctx->sha512_h[3];
 	uint64_t e = ctx->sha512_h[4], f = ctx->sha512_h[5], g = ctx->sha512_h[6], h = ctx->sha512_h[7];
 	/* Compression function main loop: */
-	for (i = 0; i < 80; ++i) {
-		uint64_t S1 = RIGHTROTATE(e, 14) ^ RIGHTROTATE(e, 18) ^ RIGHTROTATE(e, 41);
-		//uint64_t ch = (e & f) ^ ((~e) & g);
-		uint64_t ch = g ^ (e & (f ^ g));
-		uint64_t temp1 = h + S1 + ch + k[i] + w[i];
-		uint64_t S0 = RIGHTROTATE(a, 28) ^ RIGHTROTATE(a, 34) ^ RIGHTROTATE(a, 39);
-		//uint64_t maj = (a & b) ^ (a & c) ^ (b & c);
-		uint64_t maj = (a & b) | (c & (a | b));
-		uint64_t temp2 = S0 + maj;
+	for (int i = 0; i < 80; ++i) {
+		const uint64_t S1 = RIGHTROTATE(e, 14) ^ RIGHTROTATE(e, 18) ^ RIGHTROTATE(e, 41);
+		//const uint64_t ch = (e & f) ^ ((~e) & g);
+		const uint64_t ch = g ^ (e & (f ^ g));
+		const uint64_t temp1 = h + S1 + ch + k[i] + w[i];
+		const uint64_t S0 = RIGHTROTATE(a, 28) ^ RIGHTROTATE(a, 34) ^ RIGHTROTATE(a, 39);
+		//const uint64_t maj = (a & b) ^ (a & c) ^ (b & c);
+		const uint64_t maj = (a & b) | (c & (a | b));
+		const uint64_t temp2 = S0 + maj;
 
 		h = g; g = f; f = e;
 		e = d + temp1;
@@ -204,8 +207,7 @@ static inline
 unsigned char* sha5xx_beout(unsigned char *buf, const hash_t *ctx, int wd)
 {
 	assert(buf);
-	int i;
-	for (i = 0; i < wd; ++i) 
+	for (int i = 0; i < wd; ++i)
 		*((uint64_t*)buf+i) = htonll(ctx->sha512_h[i]);
 	return buf;
 }

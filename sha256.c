@@ -89,7 +89,6 @@ uint32_t k[] = { 0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x5
  */
 void sha256_64(const uint8_t* msg, hash_t* ctx)
 {
-	int i;
  	/* for each chunk create a 64-entry message schedule array w[0..63] of 32-bit words */
 	uint32_t w[64];
 #ifdef __ANALYZER__
@@ -101,32 +100,32 @@ void sha256_64(const uint8_t* msg, hash_t* ctx)
 	memcpy(w, msg, 64);
 #else
 #if defined(HAVE_UNALIGNED_HANDLING)
-	for (i = 0; i < 16; ++i)
+	for (int i = 0; i < 16; ++i)
 		w[i] = htonl(*(uint32_t*)(msg+4*i));
 #else
-	for (i = 0; i < 16; ++i)
+	for (int i = 0; i < 16; ++i)
 		w[i] = to_int32_be(msg+4*i);
 #endif
 #endif
 	/* Extend the first 16 words into the remaining 48 words w[16..63] of the message schedule array: */
-	for (i = 16; i < 64;  ++i) {
-		uint32_t s0 = RIGHTROTATE(w[i-15], 7) ^ RIGHTROTATE(w[i-15], 18) ^ (w[i-15] >> 3);
-		uint32_t s1 = RIGHTROTATE(w[i-2], 17) ^ RIGHTROTATE(w[i-2] , 19) ^ (w[i-2] >> 10);
+	for (int i = 16; i < 64;  ++i) {
+		const uint32_t s0 = RIGHTROTATE(w[i-15], 7) ^ RIGHTROTATE(w[i-15], 18) ^ (w[i-15] >> 3);
+		const uint32_t s1 = RIGHTROTATE(w[i-2], 17) ^ RIGHTROTATE(w[i-2] , 19) ^ (w[i-2] >> 10);
 		w[i] = w[i-16] + s0 + w[i-7] + s1;
 	}
 	/* Initialize working variables to current hash value:*/
 	uint32_t a = ctx->sha256_h[0], b = ctx->sha256_h[1], c = ctx->sha256_h[2], d = ctx->sha256_h[3];
 	uint32_t e = ctx->sha256_h[4], f = ctx->sha256_h[5], g = ctx->sha256_h[6], h = ctx->sha256_h[7];
 	/* Compression function main loop: */
-	for (i = 0; i < 64; ++i) {
-		uint32_t S1 = RIGHTROTATE(e, 6) ^ RIGHTROTATE(e, 11) ^ RIGHTROTATE(e, 25);
-		//uint32_t ch = (e & f) ^ ((~e) & g);
-		uint32_t ch = g ^ (e & (f ^ g));
-		uint32_t temp1 = h + S1 + ch + k[i] + w[i];
-		uint32_t S0 = RIGHTROTATE(a, 2) ^ RIGHTROTATE(a, 13) ^ RIGHTROTATE(a, 22);
-		//uint32_t maj = (a & b) ^ (a & c) ^ (b & c);
-		uint32_t maj = (a & b) | (c & (a | b));
-		uint32_t temp2 = S0 + maj;
+	for (int i = 0; i < 64; ++i) {
+		const uint32_t S1 = RIGHTROTATE(e, 6) ^ RIGHTROTATE(e, 11) ^ RIGHTROTATE(e, 25);
+		//const uint32_t ch = (e & f) ^ ((~e) & g);
+		const uint32_t ch = g ^ (e & (f ^ g));
+		const uint32_t temp1 = h + S1 + ch + k[i] + w[i];
+		const uint32_t S0 = RIGHTROTATE(a, 2) ^ RIGHTROTATE(a, 13) ^ RIGHTROTATE(a, 22);
+		//const uint32_t maj = (a & b) ^ (a & c) ^ (b & c);
+		const uint32_t maj = (a & b) | (c & (a | b));
+		const uint32_t temp2 = S0 + maj;
 
 		h = g; g = f; f = e;
 		e = d + temp1;
