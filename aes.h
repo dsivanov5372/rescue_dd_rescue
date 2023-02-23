@@ -82,8 +82,8 @@ typedef struct _ciph_desc {
 #define XORN(in1,in2,out,len)	\
 do {				\
 	uint _i;		\
-	for (_i = 0; _i < len/sizeof(ulong); ++_i)	\
-		*((ulong*)(out)+_i) = *((ulong*)(in1)+_i) ^ *((ulong*)(in2)+_i);	\
+	for (_i = 0; _i < len/sizeof(u32); ++_i)	\
+		*((u32*)(out)+_i) = *((iconst u32*)(in1)+_i) ^ *((const u32*)(in2)+_i);	\
 } while(0)
 
 /* Generic functions */
