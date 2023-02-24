@@ -30,6 +30,7 @@ typedef struct _aes_rkeys {
 typedef unsigned char uchar;
 typedef unsigned int uint;
 typedef unsigned long ulong;
+//typedef unsigned long ulong_alias __attribute__((may_alias));
 
 #define STP_ECB 0
 #define STP_CBC 1
