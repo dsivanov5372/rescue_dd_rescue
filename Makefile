@@ -271,6 +271,9 @@ sha1.po: $(SRCDIR)/sha1.c
 aes_c.po: $(SRCDIR)/aes_c.c
 	$(CC) $(CFLAGS_OPT) $(PIC) -o $@ -c $<
 
+aes.po: $(SRCDIR)/aes.c
+	$(CC) $(CFLAGS) -O2 $(PIC) -o $@ -c $<
+
 # Default rules
 %.o: $(SRCDIR)/%.c config.h
 	$(CC) $(CFLAGS) $(DEFINES) $(PIE) -c $<
@@ -457,6 +460,9 @@ aes_arm32.po: $(SRCDIR)/aes_arm32.c
 
 aes_c.o: $(SRCDIR)/aes_c.c
 	$(CC) $(CFLAGS) $(PIE) $(FULL_UNROLL) -O3 -c $<
+
+aes.o: $(SRCDIR)/aes.c
+	$(CC) $(CFLAGS) $(PIE) -O2 -c $<
 
 aes_ossl.o: $(SRCDIR)/aes_ossl.c $(SRCDIR)/aes_ossl10.c $(SRCDIR)/aes_ossl11.c
 	$(CC) $(CFLAGS) $(PIE) -O3 -c $<
