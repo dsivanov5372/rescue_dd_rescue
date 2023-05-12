@@ -95,19 +95,19 @@ typedef struct _ddr_plugin {
 	/* Alignment need */
 	unsigned int needs_align;
 	/* Handles sparse */
-	char handles_sparse:1;
+	unsigned char handles_sparse:1;
 	/* Transforms to unsparse */
-	char makes_unsparse:1;
+	unsigned char makes_unsparse:1;
 	/* Transforms output */
-	char changes_output:1;
+	unsigned char changes_output:1;
 	/* Output transformation changes length -- breaks sparse detection on subsequent plugins */
-	char changes_output_len:1;
+	unsigned char changes_output_len:1;
 	/* Support random access / reverse */
-	char supports_seek:1;
+	unsigned char supports_seek:1;
 	/* Don't use first non-option arg as input */
-	char replaces_input:1;
+	unsigned char replaces_input:1;
 	/* Don't use second non-option arg as output */
-	char replaces_output:1;
+	unsigned char replaces_output:1;
 	/* Internal individual state of plugin */
 	void* state;
 	/* Will be called after loading the plugin */
