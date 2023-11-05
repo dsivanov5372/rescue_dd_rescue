@@ -24,7 +24,7 @@ MANDIR = $(prefix)/share/man
 MYDIR = dd_rescue
 TMPDIR ?= /tmp
 BINTARGETS = dd_rescue 
-LIBTARGETS = libddr_hash.so libddr_MD5.so libddr_null.so libddr_crypt.so
+LIBTARGETS = libddr_hash.so libddr_MD5.so libddr_null.so libddr_crypt.so libddr_lzma.so
 #TARGETS = libfalloc-dl
 OTHTARGETS = find_nonzero fiemap file_zblock fmt_no md5 sha256 sha512 sha224 sha384 sha1 test_aes # test_aligned_alloc
 ifneq ($(NO_ALIGNED_ALLOC),1)
@@ -303,6 +303,10 @@ libddr_null.so: libddr_null.po
 
 libddr_crypt.so: libddr_crypt.po aes.po aes_c.po $(AESNI_PO) $(AES_ARM64_PO) $(AES_OSSL_PO) pbkdf2.po sha256.po pbkdf_ossl.po md5.po checksum_file.po secmem.po random.po $(POBJECTS2)
 	$(CC) -shared -o $@ $^ $(CRYPTOLIB) $(EXTRA_LDFLAGS)
+
+libddr_lzma.so:
+	$(CC) -c -fPIC libddr_lzma.c -o libddr_lzma.o
+	$(CC) -shared -o libddr_lzma.so libddr_lzma.o -llzma
 
 # More special compiler flags
 find_nonzero.o: $(SRCDIR)/find_nonzero.c

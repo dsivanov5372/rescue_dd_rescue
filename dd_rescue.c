@@ -623,6 +623,7 @@ void load_plugins(char* plugs, opt_t *op)
 		if (*plugs != '/') {
 			char path[256];
 			snprintf(path, 255, "libddr_%s.so", plugs);
+			printf("%s\n", path);
 			hdl = dlopen(path, RTLD_NOW);
 		}
 		/* Allow full name (with absolute path if wanted) */
