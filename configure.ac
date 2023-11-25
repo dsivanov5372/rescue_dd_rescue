@@ -14,8 +14,9 @@ AC_C_INLINE
 AC_CHECK_HEADERS([lzma.h fallocate.h dlfcn.h unistd.h sys/xattr.h attr/xattr.h sys/acl.h sys/ioctl.h endian.h linux/fs.h linux/fiemap.h stdint.h lzo/lzo1x.h openssl/evp.h linux/random.h sys/random.h malloc.h sched.h sys/statvfs.h sys/resource.h sys/endian.h linux/swab.h])
 AC_CHECK_FUNCS([ffs ffsl basename fallocate64 splice getopt_long open64 pread pread64 lseek64 stat64 posix_fadvise posix_fadvise64 __builtin_prefetch htonl htobe64 feof_unlocked getline getentropy getrandom posix_memalign valloc sched_yield fstatvfs __builtin_cpu_supports getrlimit aligned_alloc])
 AC_CHECK_LIB(dl,dlsym)
+AC_CHECK_LIB(lzma,lzma_easy_encoder,lzma_auto_decoder,init_lzma_stream,lzma_code,lzma_end)
 AC_CHECK_LIB(fallocate,linux_fallocate64)
-AC_CHECK_LIB(llzma,lzo2,lzo1x_1_compress)
+AC_CHECK_LIB(lzo2,lzo1x_1_compress)
 AC_CHECK_LIB(crypto,EVP_aes_192_ctr)
 
 dnl @synopsis CC_FLAGS_CHECK [compiler flags] 

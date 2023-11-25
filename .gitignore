@@ -1,9 +1,10 @@
 *.o
 .vscode
-/autom4te.cache
 *.po
 .dep
-config.h
+config.*
+configure
+configure~
 test_aes
 dd_rescue
 libddr_*.so
