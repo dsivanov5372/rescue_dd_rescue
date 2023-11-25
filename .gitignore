@@ -1,4 +1,6 @@
 *.o
+.vscode
+/autom4te.cache
 *.po
 .dep
 config.h
