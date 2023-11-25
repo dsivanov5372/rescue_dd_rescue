@@ -198,8 +198,8 @@ m4trace:configure.ac:5: -1- AH_OUTPUT([inline], [/* Define to `__inline__\' or `
 #ifndef __cplusplus
 #undef inline
 #endif])
-m4trace:configure.ac:14: -1- AH_OUTPUT([HAVE_FALLOCATE_H], [/* Define to 1 if you have the <fallocate.h> header file. */
-@%:@undef HAVE_FALLOCATE_H])
+m4trace:configure.ac:14: -1- AH_OUTPUT([HAVE_LMZA_H], [/* Define to 1 if you have the <lmza.h> header file. */
+@%:@undef HAVE_LMZA_H])
 m4trace:configure.ac:14: -1- AH_OUTPUT([HAVE_STDIO_H], [/* Define to 1 if you have the <stdio.h> header file. */
 @%:@undef HAVE_STDIO_H])
 m4trace:configure.ac:14: -1- AH_OUTPUT([HAVE_STDLIB_H], [/* Define to 1 if you have the <stdlib.h> header file. */
@@ -224,6 +224,10 @@ m4trace:configure.ac:14: -1- AH_OUTPUT([STDC_HEADERS], [/* Define to 1 if all of
    required in a freestanding environment). This macro is provided for
    backward compatibility; new code need not use it. */
 @%:@undef STDC_HEADERS])
+m4trace:configure.ac:14: -1- AC_DEFINE_TRACE_LITERAL([HAVE_LMZA_H])
+m4trace:configure.ac:14: -1- m4_pattern_allow([^HAVE_LMZA_H$])
+m4trace:configure.ac:14: -1- AH_OUTPUT([HAVE_FALLOCATE_H], [/* Define to 1 if you have the <fallocate.h> header file. */
+@%:@undef HAVE_FALLOCATE_H])
 m4trace:configure.ac:14: -1- AC_DEFINE_TRACE_LITERAL([HAVE_FALLOCATE_H])
 m4trace:configure.ac:14: -1- m4_pattern_allow([^HAVE_FALLOCATE_H$])
 m4trace:configure.ac:14: -1- AH_OUTPUT([HAVE_DLFCN_H], [/* Define to 1 if you have the <dlfcn.h> header file. */
@@ -422,10 +426,6 @@ m4trace:configure.ac:17: -1- AH_OUTPUT([HAVE_LIBFALLOCATE], [/* Define to 1 if y
 @%:@undef HAVE_LIBFALLOCATE])
 m4trace:configure.ac:17: -1- AC_DEFINE_TRACE_LITERAL([HAVE_LIBFALLOCATE])
 m4trace:configure.ac:17: -1- m4_pattern_allow([^HAVE_LIBFALLOCATE$])
-m4trace:configure.ac:18: -1- AH_OUTPUT([HAVE_LIBLZO2], [/* Define to 1 if you have the `lzo2\' library (-llzo2). */
-@%:@undef HAVE_LIBLZO2])
-m4trace:configure.ac:18: -1- AC_DEFINE_TRACE_LITERAL([HAVE_LIBLZO2])
-m4trace:configure.ac:18: -1- m4_pattern_allow([^HAVE_LIBLZO2$])
 m4trace:configure.ac:19: -1- AH_OUTPUT([HAVE_LIBCRYPTO], [/* Define to 1 if you have the `crypto\' library (-lcrypto). */
 @%:@undef HAVE_LIBCRYPTO])
 m4trace:configure.ac:19: -1- AC_DEFINE_TRACE_LITERAL([HAVE_LIBCRYPTO])

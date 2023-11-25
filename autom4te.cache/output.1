@@ -3477,6 +3477,12 @@ then :
 printf "%s\n" "@%:@define STDC_HEADERS 1" >>confdefs.h
 
 fi
+ac_fn_c_check_header_compile "$LINENO" "lmza.h" "ac_cv_header_lmza_h" "$ac_includes_default"
+if test "x$ac_cv_header_lmza_h" = xyes
+then :
+  printf "%s\n" "@%:@define HAVE_LMZA_H 1" >>confdefs.h
+
+fi
 ac_fn_c_check_header_compile "$LINENO" "fallocate.h" "ac_cv_header_fallocate_h" "$ac_includes_default"
 if test "x$ac_cv_header_fallocate_h" = xyes
 then :
@@ -3853,47 +3859,44 @@ then :
 
 fi
 
-{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for lzo1x_1_compress in -llzo2" >&5
-printf %s "checking for lzo1x_1_compress in -llzo2... " >&6; }
-if test ${ac_cv_lib_lzo2_lzo1x_1_compress+y}
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for lzo2 in -lllzma" >&5
+printf %s "checking for lzo2 in -lllzma... " >&6; }
+if test ${ac_cv_lib_llzma_lzo2+y}
 then :
   printf %s "(cached) " >&6
 else $as_nop
   ac_check_lib_save_LIBS=$LIBS
-LIBS="-llzo2  $LIBS"
+LIBS="-lllzma  $LIBS"
 cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
 
 /* Override any GCC internal prototype to avoid an error.
    Use char because int might match the return type of a GCC
    builtin and then its argument prototype would still apply.  */
-char lzo1x_1_compress ();
+char lzo2 ();
 int
 main (void)
 {
-return lzo1x_1_compress ();
+return lzo2 ();
   ;
   return 0;
 }
 _ACEOF
 if ac_fn_c_try_link "$LINENO"
 then :
-  ac_cv_lib_lzo2_lzo1x_1_compress=yes
+  ac_cv_lib_llzma_lzo2=yes
 else $as_nop
-  ac_cv_lib_lzo2_lzo1x_1_compress=no
+  ac_cv_lib_llzma_lzo2=no
 fi
 rm -f core conftest.err conftest.$ac_objext conftest.beam \
     conftest$ac_exeext conftest.$ac_ext
 LIBS=$ac_check_lib_save_LIBS
 fi
-{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_lzo2_lzo1x_1_compress" >&5
-printf "%s\n" "$ac_cv_lib_lzo2_lzo1x_1_compress" >&6; }
-if test "x$ac_cv_lib_lzo2_lzo1x_1_compress" = xyes
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_llzma_lzo2" >&5
+printf "%s\n" "$ac_cv_lib_llzma_lzo2" >&6; }
+if test "x$ac_cv_lib_llzma_lzo2" = xyes
 then :
-  printf "%s\n" "@%:@define HAVE_LIBLZO2 1" >>confdefs.h
-
-  LIBS="-llzo2 $LIBS"
-
+  lzo1x_1_compress
 fi
 
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for EVP_aes_192_ctr in -lcrypto" >&5
