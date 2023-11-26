@@ -26,11 +26,14 @@ enum compmode {
 };
 
 typedef struct _lzma_state {
+    uint8_t input_bf[CHUNK_SIZE + 1];
+    uint8_t output_bf[CHUNK_SIZE + 1];
+    size_t pos;
     enum compmode mode;
     unsigned char *output;
     size_t file_size;
     size_t buf_len;
-    size_t curr_pos;
+    size_t readed;
     lzma_stream strm;
     const opt_t *opts;
     bool do_bench;
@@ -114,6 +117,12 @@ int lzma_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
         FPLOG(FATAL, "failed to initialize lzma library!");
         return -1;
     }
+
+    if (state->file_size == 0) {
+        struct stat st;
+        fstat(fst->ides, &st);
+        state->file_size = st.st_size;
+    }
     return 0;
 }
 
@@ -125,63 +134,66 @@ int lzma_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 #error __WORDSIZE unknown
 #endif
 
-size_t read_bytes(uint8_t *input_buf, unsigned char *input, size_t len) {
-    size_t result_len = len < CHUNK_SIZE ? len : CHUNK_SIZE;
-    FPLOG(INFO, "result_len=%d, len=%d\n", result_len, len);
-    memcpy(input_buf, input, result_len);
-
+size_t read_bytes(uint8_t *input_buf, unsigned char *input, size_t len, size_t start_pos) {
+    size_t result_len = len < CHUNK_SIZE - start_pos ? len : CHUNK_SIZE - start_pos;
+    // FPLOG(INFO, "result_len=%d, len=%d\n", result_len, len);
+    memcpy(input_buf + start_pos, input, result_len);
     return result_len;
 }
 
-void write_bytes(uint8_t *output_buf, lzma_state *state, size_t start_pos)
+void write_bytes(lzma_state *state, size_t start_pos)
 {
     if (state->buf_len - CHUNK_SIZE - 1 < start_pos) {
         state->buf_len *= 2;
         state->output = (unsigned char *)realloc(state->output, state->buf_len);
     }
 
-    memcpy(state->output + start_pos, output_buf, CHUNK_SIZE);
+    memcpy(state->output + start_pos, state->output_bf, CHUNK_SIZE);
 }
 
 unsigned char* lzma_algo(unsigned char *bf, lzma_state *state, int eof, fstate_t *fst, int *towr)
 {
-    if (state->file_size == 0) {
-        struct stat st;
-        fstat(fst->ides, &st);
-        state->file_size = st.st_size;
-    }
-    size_t bf_len = malloc_usable_size(bf);
-    size_t real_len = (state->file_size - state->curr_pos) > bf_len ?
-            bf_len : (state->file_size - state->curr_pos);
+    size_t bf_len = malloc_usable_size(bf) - 1;
+    size_t to_read = (state->file_size - state->readed) > bf_len ?
+            bf_len : (state->file_size - state->readed);
 
-    if (state->output == NULL) {
-        state->buf_len = (bf_len > CHUNK_SIZE ? bf_len * 2 : CHUNK_SIZE * 2) + 1;
-        state->output = (unsigned char *)malloc(state->buf_len);
-        state->curr_pos = 0;
+    if (state->output != NULL) {
+        free(state->output);
     }
-    size_t curr_pos = state->curr_pos;
+    state->buf_len = (bf_len > CHUNK_SIZE ? bf_len * 2 : CHUNK_SIZE * 2) + 1;
+    state->output = (unsigned char *)malloc(state->buf_len);
+    size_t curr_pos = 0;
 
-    uint8_t input_buf[CHUNK_SIZE + 1] = {0};
-    uint8_t output_buf[CHUNK_SIZE + 1] = {0};
+    if (state->readed == state->file_size) {
+        state->is_finished = true;
+    }
 
     if (!eof) {
         while (!state->is_finished) {
-            memset(input_buf, CHUNK_SIZE, 0);
-            size_t readed = read_bytes(input_buf, bf, real_len);
-            if (readed < CHUNK_SIZE) {
+            memset(state->input_bf, CHUNK_SIZE, 0);
+            size_t readed = read_bytes(state->input_bf, bf, to_read, state->pos);
+            state->readed += readed;
+
+            if ((state->pos == 0 && readed < CHUNK_SIZE) || state->readed == state->file_size) {
                 state->is_finished = true;
+            }
+            state->pos = 0;
+
+            if (state->is_finished && state->readed != state->file_size) {
+                state->pos = readed;
+                break;
             }
 
             bf = bf + readed;
-            real_len = real_len - readed;
+            to_read = to_read - readed;
 
-            state->strm.next_in = input_buf;
+            state->strm.next_in = state->input_bf;
             state->strm.avail_in = readed;
 
-            lzma_action action = state->is_finished ? LZMA_FINISH : LZMA_RUN;
+            lzma_action action = state->is_finished && state->readed == state->file_size ? LZMA_FINISH : LZMA_RUN;
 
             do {
-                state->strm.next_out = output_buf;
+                state->strm.next_out = state->output_bf;
                 state->strm.avail_out = CHUNK_SIZE;
 
                 int ret_xz = lzma_code(&(state->strm), action);
@@ -189,15 +201,18 @@ unsigned char* lzma_algo(unsigned char *bf, lzma_state *state, int eof, fstate_t
                 if (ret_xz != LZMA_OK && ret_xz != LZMA_STREAM_END) {
                     exit(-1);
                 } else {
-                    write_bytes(output_buf, state, state->curr_pos);
-                    state->curr_pos += CHUNK_SIZE - state->strm.avail_out;
+                    write_bytes(state, curr_pos);
+                    curr_pos += CHUNK_SIZE - state->strm.avail_out;
                 }
             } while (state->strm.avail_out == 0);
         }
+    } else {
+        FPLOG(INFO, "filesize=%d, readed=%d\n", state->file_size, state->readed);
     }
 
-    *towr = state->curr_pos - curr_pos;
-    return state->output + curr_pos;
+    state->is_finished = false;
+    *towr = curr_pos;
+    return state->output;
 }
 
 unsigned char* lzma_compress(fstate_t *fst, unsigned char *bf, 
@@ -249,8 +264,6 @@ int lzma_close(loff_t ooff, void **stat)
 
 ddr_plugin_t ddr_plug = {
     .name = "lzma",
-    .needs_align = 0,
-    .handles_sparse = 1,
     .init_callback  = lzma_plug_init,
     .open_callback  = lzma_open,
     .block_callback = lzma_blk_cb,

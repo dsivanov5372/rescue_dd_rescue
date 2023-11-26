@@ -769,4 +769,12 @@ make_check_crypt: check_crypt
 	# Cleanup
 	rm -f dd_rescue2 dd_rescue.dec dd_rescue.enc
 
-
+check_lzma: $(TARGETS)
+	@echo "make check ... Pass VG=\"valgrind --options\" to use with valgrind"
+	$(VG) ./dd_rescue -L ./libddr_lzma.so dd_rescue dd_rescue.xz
+	$(VG) ./dd_rescue -L ./libddr_lzma.so dd_rescue.xz dd_rescue_d
+	cmp dd_rescue dd_rescue_d
+	$(VG) ./dd_rescue -L ./libddr_lzma.so Makefile Makefile.xz
+	$(VG) ./dd_rescue -L ./libddr_lzma.so Makefile.xz Makefile_d
+	cmp Makefile Makefile_d
+	rm -f dd_rescue_d Makefile_d
