@@ -153,7 +153,7 @@ void write_bytes(lzma_state *state, size_t start_pos)
 
 unsigned char* lzma_algo(unsigned char *bf, lzma_state *state, int eof, fstate_t *fst, int *towr)
 {
-    size_t bf_len = malloc_usable_size(bf) - 1;
+    size_t bf_len = malloc_usable_size(bf) - CHUNK_SIZE;
     size_t to_read = (state->file_size - state->readed) > bf_len ?
             bf_len : (state->file_size - state->readed);
 
