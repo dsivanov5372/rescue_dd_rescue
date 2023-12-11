@@ -74,6 +74,8 @@ int lzma_plug_init(void **stat, char* param, int seq, const opt_t *opt)
             state->mode = COMPRESS;
         } else if (!strcmp(param, "d")) {
             state->mode = DECOMPRESS;
+        } else if (!strcmp(param, "bench")) {
+            state->do_bench = true;
         } else {
             FPLOG(FATAL, "plugin doesn't understand param %s\n", param);
             return 1;
