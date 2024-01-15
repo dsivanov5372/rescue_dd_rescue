@@ -21,6 +21,7 @@ extern ddr_plugin_t ddr_plug;
 
 enum compmode {
     AUTO=0,
+    TEST,
     COMPRESS,
     DECOMPRESS
 };
@@ -48,6 +49,7 @@ typedef struct _lzma_state {
     const opt_t *opts;
     bool do_bench;
     bool is_finished;
+    bool is_mt;
     clock_t cpu;
     int seq;
 } lzma_state;
@@ -55,7 +57,14 @@ typedef struct _lzma_state {
 #define FPLOG(lvl, fmt, args...) \
 	plug_log(ddr_plug.logger, stderr, lvl, fmt, ##args)
 
-const char* lzma_help = "LZMA plugin which is doing compression/decompression for xz archives.\n";
+const char* lzma_help = "LZMA plugin which is doing compression/decompression for xz archives.\n"
+                        " Parameters:\n"
+                        " z - compress input file,\n"
+                        " d - decompress input file,\n"
+                        " test - check archive integrity,\n"
+                        " preset=0...9 - compression preset, default is 6,\n"
+                        " check=CRC32/CRC64/SHA256/NONE - select checksum to calculate when compression, CRC32 by default,\n"
+                        " bench - calculate time spent on (de)compression.\n";
 
 lzma_check get_lzma_check_flag(enum check_type type)
 {
@@ -76,18 +85,39 @@ lzma_bool is_check_supported(enum check_type type)
     return lzma_check_is_supported(get_lzma_check_flag(type));
 }
 
-lzma_ret init_lzma_stream(lzma_state* state)
-{
+lzma_ret init_lzma_stream(lzma_state* state) {
     if (!is_check_supported(state->type)) {
-        FPLOG(FATAL, "This type of integrity check is not supported by liblzma yet!\n");
+        FPLOG(FATAL, "This type of integrity check is not supported by llzma yet!\n");
         return LZMA_UNSUPPORTED_CHECK;
     }
 
     if (state->mode == COMPRESS) {
+        // if (state->is_mt) {
+        //     lzma_mt options = {
+        //         .threads=2,
+        //         .block_size=0,
+        //         .timeout=300,
+        //         .preset=state->preset,
+        //         .filters=NULL,
+        //         .check=state->type
+        //     };
+        //     return lzma_stream_encoder_mt(&(state->strm), &options);
+        // }
         return lzma_easy_encoder(&(state->strm), state->preset, get_lzma_check_flag(state->type));
     }
-    uint32_t flags = LZMA_CONCATENATED | LZMA_TELL_UNSUPPORTED_CHECK | LZMA_TELL_ANY_CHECK;
+
+    uint32_t flags = LZMA_CONCATENATED | LZMA_TELL_UNSUPPORTED_CHECK;
     // disable limits
+    // if (state->is_mt) {
+    //     lzma_mt options = {
+    //         .flags = flags,
+    //         .threads=2,
+    //         .timeout=300,
+    //         .filters=NULL,
+    //         .memlimit_threading=UINT64_MAX
+    //     };
+    //     return lzma_stream_decoder_mt(&(state->strm), &options);
+    // }
     return lzma_auto_decoder(&(state->strm), UINT64_MAX, flags);
 }
 
@@ -118,6 +148,7 @@ int lzma_plug_init(void **stat, char* param, int seq, const opt_t *opt)
     state->type = CRC32;
     state->strm = strm;
     state->seq = seq;
+    state->is_mt = false;
 
     while (param) {
         char* next = strchr(param, ':');
@@ -132,20 +163,24 @@ int lzma_plug_init(void **stat, char* param, int seq, const opt_t *opt)
             state->mode = COMPRESS;
         } else if (!strcmp(param, "d")) {
             state->mode = DECOMPRESS;
+        } else if (!strcmp(param, "mt")) {
+            state->is_mt = true;
         } else if (!strcmp(param, "bench")) {
             state->do_bench = true;
-        } else if (length > 6 && !memcmp(param, "check=", 6)) {
-            state->type = get_check_type(param + 6);
-
-            if (state->type == UNDEFINED) {
-                FPLOG(FATAL, "plugin doesn't understand integrity check type!\n");
-                return 1;
-            }
+        } else if (!strcmp(param, "test")) {
+            state->mode = TEST;
         } else if (length == 8 && !memcmp(param, "preset=", 7)){
             state->preset = param[7] - '0';
 
             if (state->preset < 0 || state->preset > 9) {
                 FPLOG(FATAL, "plugin doesn't understand encoding preset %d\n", state->preset);
+                return 1;
+            }
+        } else if (length > 6 && !memcmp(param, "check=", 6)) {
+            state->type = get_check_type(param + 6);
+
+            if (state->type == UNDEFINED) {
+                FPLOG(FATAL, "plugin doesn't understand integrity check type!\n");
                 return 1;
             }
         } else {
@@ -175,8 +210,10 @@ int lzma_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 {
     lzma_state *state = (lzma_state*)*stat;
     state->opts = opt;
-    if (state->opts->softbs % 4 != 0) {
-        FPLOG(FATAL, "softbs should be divisible by 4!\n");
+
+    if (state->mode == TEST && strcmp(opt->iname + strlen(opt->iname) - 2, "xz") != 0) {
+        FPLOG(FATAL, "integrity check can be provided only for xz archives!\n");
+        return -1;
     }
 
     if (state->mode == AUTO) {
@@ -275,7 +312,7 @@ unsigned char* lzma_algo(unsigned char *bf, lzma_state *state, int eof, fstate_t
                 int ret_xz = lzma_code(&(state->strm), action);
 
                 if (ret_xz != LZMA_OK && ret_xz != LZMA_STREAM_END) {
-                    FPLOG(FATAL, "Error while encoding or decoding the file is occured!\n");
+                    FPLOG(FATAL, "data is corrupted, (de)compression failed with code = %d\n", ret_xz);
                     exit(-1);
                 } else {
                     write_bytes(state, curr_pos);
@@ -288,7 +325,11 @@ unsigned char* lzma_algo(unsigned char *bf, lzma_state *state, int eof, fstate_t
     }
 
     state->is_finished = false;
-    *towr = curr_pos;
+    if (state->mode == TEST) {
+        *towr = 0;
+    } else {
+        *towr = curr_pos;
+    }
     return state->output;
 }
 
