@@ -774,19 +774,19 @@ check_lzma: $(TARGETS)
 	$(VG) ./dd_rescue -L ./libddr_lzma.so dd_rescue dd_rescue.xz
 	$(VG) ./dd_rescue -L ./libddr_lzma.so dd_rescue.xz dd_rescue_d
 	cmp dd_rescue dd_rescue_d
-	$(VG) ./dd_rescue -L ./libddr_lzma.so Makefile Makefile.xz
-	$(VG) ./dd_rescue -L ./libddr_lzma.so Makefile.xz Makefile_d
-	cmp Makefile Makefile_d
 	dd if=/dev/random of=first_test.txt bs=1M count=16
 	$(VG) ./dd_rescue -L ./libddr_lzma.so first_test.txt first_test.txt.xz
 	$(VG) ./dd_rescue -L ./libddr_lzma.so first_test.txt.xz first_test_d.txt
 	cmp first_test.txt first_test_d.txt
-	dd if=/dev/random of=second_test.txt bs=1M count=128
+	dd if=/dev/random of=second_test.txt bs=1M count=256
 	$(VG) ./dd_rescue -L ./libddr_lzma.so second_test.txt second_test.txt.xz
 	$(VG) ./dd_rescue -L ./libddr_lzma.so second_test.txt.xz second_test_d.txt
 	cmp second_test.txt second_test_d.txt
-	dd if=/dev/random of=third_test.txt bs=1M count=256
-	$(VG) ./dd_rescue -L ./libddr_lzma.so third_test.txt third_test.txt.xz
-	$(VG) ./dd_rescue -L ./libddr_lzma.so third_test.txt.xz third_test_d.txt
-	cmp third_test.txt third_test_d.txt
-	rm -f dd_rescue_d dd_rescue.xz Makefile_d Makefile.xz *_test.txt* *_test_d.txt
+	rm -f dd_rescue_d dd_rescue.xz *_test.txt.xz *_test_d.txt
+	$(VG) ./dd_rescue -L ./libddr_lzma.so=mt first_test.txt first_test.txt.xz
+	$(VG) ./dd_rescue -L ./libddr_lzma.so=mt first_test.txt.xz first_test_d.txt
+	cmp first_test.txt first_test_d.txt
+	$(VG) ./dd_rescue -L ./libddr_lzma.so=mt second_test.txt second_test.txt.xz
+	$(VG) ./dd_rescue -L ./libddr_lzma.so=mt second_test.txt.xz second_test_d.txt
+	cmp second_test.txt second_test_d.txt
+	rm -f *_test.* *_test_d.*

@@ -9,12 +9,13 @@
 #include "ddr_ctrl.h"
 #include <sys/stat.h>
 #include <string.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <time.h>
 #include <lzma.h>
 
-#define CHUNK_SIZE 4096
+#define CHUNK_SIZE 32768
 
 /* fwd decl */
 extern ddr_plugin_t ddr_plug;
@@ -91,34 +92,38 @@ lzma_ret init_lzma_stream(lzma_state* state) {
         return LZMA_UNSUPPORTED_CHECK;
     }
 
+    int threads = lzma_cputhreads();
+    if (threads == 0) {
+        threads = 1;
+    }
+
     if (state->mode == COMPRESS) {
-        // if (state->is_mt) {
-        //     lzma_mt options = {
-        //         .threads=2,
-        //         .block_size=0,
-        //         .timeout=300,
-        //         .preset=state->preset,
-        //         .filters=NULL,
-        //         .check=state->type
-        //     };
-        //     return lzma_stream_encoder_mt(&(state->strm), &options);
-        // }
+        if (state->is_mt) {
+            lzma_mt options = {
+                .threads=threads,
+                .block_size=0,
+                .timeout=0,
+                .preset=state->preset,
+                .filters=NULL,
+                .check=state->type
+            };
+            return lzma_stream_encoder_mt(&(state->strm), &options);
+        }
         return lzma_easy_encoder(&(state->strm), state->preset, get_lzma_check_flag(state->type));
     }
 
     uint32_t flags = LZMA_CONCATENATED | LZMA_TELL_UNSUPPORTED_CHECK;
-    // disable limits
-    // if (state->is_mt) {
-    //     lzma_mt options = {
-    //         .flags = flags,
-    //         .threads=2,
-    //         .timeout=300,
-    //         .filters=NULL,
-    //         .memlimit_threading=UINT64_MAX
-    //     };
-    //     return lzma_stream_decoder_mt(&(state->strm), &options);
-    // }
-    return lzma_auto_decoder(&(state->strm), UINT64_MAX, flags);
+    if (state->is_mt) {
+        lzma_mt options = {
+            .flags=flags,
+            .threads=threads,
+            .timeout=0,
+            .filters=NULL,
+            .memlimit_threading=lzma_physmem() / 4
+        };
+        return lzma_stream_decoder_mt(&(state->strm), &options);
+    }
+    return lzma_auto_decoder(&(state->strm), lzma_physmem() / 4, flags);
 }
 
 enum check_type get_check_type(char* param)
@@ -232,6 +237,7 @@ int lzma_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
         return -1;
     }
 
+    lzma_memlimit_set(&(state->strm), lzma_physmem() / 4);
     if (state->file_size == 0) {
         struct stat st;
         fstat(fst->ides, &st);
@@ -248,6 +254,15 @@ int lzma_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 #error __WORDSIZE unknown
 #endif
 
+void handle_error(lzma_state *state, const char *message) {
+    FPLOG(FATAL, message);
+
+    lzma_end(&(state->strm));
+    free(state);
+
+    exit(-1);
+}
+
 size_t read_bytes(uint8_t *input_buf, unsigned char *input, size_t len, size_t start_pos) {
     size_t result_len = len < CHUNK_SIZE - start_pos ? len : CHUNK_SIZE - start_pos;
     // FPLOG(INFO, "result_len=%d, len=%d\n", result_len, len);
@@ -263,6 +278,19 @@ void write_bytes(lzma_state *state, size_t start_pos)
     }
 
     memcpy(state->output + start_pos, state->output_bf, CHUNK_SIZE);
+}
+
+void increase_memlimit(lzma_state *state) {
+    uint64_t curr_memlimit = lzma_memlimit_get(&(state->strm));
+    uint64_t max_memlimit = lzma_physmem();
+
+    if (curr_memlimit == max_memlimit / 4) {
+        lzma_memlimit_set(&(state->strm), max_memlimit / 2);
+    } else if (curr_memlimit == max_memlimit / 2) {
+        lzma_memlimit_set(&(state->strm), max_memlimit);
+    } else {
+        handle_error(state, "lzma plugin exceeded memory limit!\n");
+    }
 }
 
 unsigned char* lzma_algo(unsigned char *bf, lzma_state *state, int eof, fstate_t *fst, int *towr)
@@ -305,20 +333,24 @@ unsigned char* lzma_algo(unsigned char *bf, lzma_state *state, int eof, fstate_t
 
             lzma_action action = state->is_finished && state->readed == state->file_size ? LZMA_FINISH : LZMA_RUN;
 
+            int ret_xz = 0;
             do {
                 state->strm.next_out = state->output_bf;
                 state->strm.avail_out = CHUNK_SIZE;
 
-                int ret_xz = lzma_code(&(state->strm), action);
+                ret_xz = lzma_code(&(state->strm), action);
 
-                if (ret_xz != LZMA_OK && ret_xz != LZMA_STREAM_END) {
-                    FPLOG(FATAL, "data is corrupted, (de)compression failed with code = %d\n", ret_xz);
-                    exit(-1);
+                if (ret_xz != LZMA_OK && ret_xz != LZMA_STREAM_END && ret_xz != LZMA_MEMLIMIT_ERROR) {
+                    char message[100] = {0};
+                    sprintf(message, "(de)compression failed with code: %d\n", ret_xz);
+                    handle_error(state, message);
+                } else if (ret_xz == LZMA_MEMLIMIT_ERROR) {
+                    increase_memlimit(state);
                 } else {
                     write_bytes(state, curr_pos);
                     curr_pos += CHUNK_SIZE - state->strm.avail_out;
                 }
-            } while (state->strm.avail_out == 0);
+            } while (state->strm.avail_out != CHUNK_SIZE && ret_xz != LZMA_STREAM_END);
         }
     } else {
         FPLOG(INFO, "filesize=%d, readed=%d\n", state->file_size, state->readed);
@@ -333,18 +365,6 @@ unsigned char* lzma_algo(unsigned char *bf, lzma_state *state, int eof, fstate_t
     return state->output;
 }
 
-unsigned char* lzma_compress(fstate_t *fst, unsigned char *bf, 
-			    int *towr, int eof, int *recall, lzma_state *state)
-{
-    return lzma_algo(bf, state, eof, fst, towr);
-}
-
-unsigned char* lzma_decompress(fstate_t *fst, unsigned char* bf, int *towr,
-			      int eof, int *recall, lzma_state *state)
-{
-    return lzma_algo(bf, state, eof, fst, towr);
-}
-
 unsigned char* lzma_blk_cb(fstate_t *fst, unsigned char* bf, 
 			   int *towr, int eof, int *recall, void **stat)
 {
@@ -356,11 +376,7 @@ unsigned char* lzma_blk_cb(fstate_t *fst, unsigned char* bf,
         t1 = clock();
     }
 
-    if (state->mode == COMPRESS) 
-        ptr = lzma_compress(fst, bf, towr, eof, recall, state);
-    else {
-        ptr = lzma_decompress(fst, bf, towr, eof, recall, state);
-    }
+    ptr = lzma_algo(bf, state, eof, fst, towr);
 
     if (state->do_bench) {
         state->cpu += clock() - t1;
