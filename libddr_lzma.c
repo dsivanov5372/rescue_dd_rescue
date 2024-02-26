@@ -101,7 +101,6 @@ int lzma_plug_init(void **stat, char* param, int seq, const opt_t *opt)
     lzma_state *state = (lzma_state *)malloc(sizeof(lzma_state));
     if (!state) {
         FPLOG(FATAL, "allocation of %zd bytes failed: %s\n", sizeof(lzma_state), strerror(errno));
-        raise(SIGQUIT);
         return -1;
     }
     *stat = (void *)state;
@@ -209,7 +208,8 @@ int lzma_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
         return -1;
     }
 
-    lzma_memlimit_set(&(state->strm), !state->memlimit ? lzma_physmem() / 4 : state->memlimit);
+    lzma_memlimit_set(&(state->strm),
+        !state->memlimit ? lzma_physmem() / 4 : state->memlimit);
 
     return 0;
 }
@@ -244,9 +244,9 @@ unsigned char* lzma_algo(unsigned char *bf, lzma_state *state, int eof, fstate_t
                 uint64_t curr_memlimit = lzma_memlimit_get(&(state->strm));
                 uint64_t max_memlimit = lzma_physmem();
 
-                if (curr_memlimit == max_memlimit / 4) {
+                if (!state->memlimit && curr_memlimit == max_memlimit / 4) {
                     lzma_memlimit_set(&(state->strm), max_memlimit / 2);
-                } else if (curr_memlimit == max_memlimit / 2) {
+                } else if (!state->memlimit && curr_memlimit == max_memlimit / 2) {
                     lzma_memlimit_set(&(state->strm), max_memlimit);
                 } else {
                     FPLOG(FATAL, "lzma plugin exceeded memory limit!\n");
