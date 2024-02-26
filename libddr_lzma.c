@@ -33,6 +33,7 @@ typedef struct _lzma_state {
     enum compmode mode;
     lzma_check type;
     uint32_t preset;
+    uint64_t memlimit;
     unsigned char *output;
     size_t buf_len;
     lzma_stream strm;
@@ -132,6 +133,13 @@ int lzma_plug_init(void **stat, char* param, int seq, const opt_t *opt)
             state->do_bench = true;
         } else if (!strcmp(param, "test")) {
             state->mode = TEST;
+        } else if (length > 9 && !memcmp(param, "memlimit=", 9)) {
+            state->memlimit = strtoull(param + 9, NULL, 10);
+
+            if (state->memlimit == UINT64_MAX && errno == ERANGE) {
+                FPLOG(FATAL, "plugin can't convert memlimit value to numerical value!\n");
+                return -1;
+            }
         } else if (length == 8 && !memcmp(param, "preset=", 7)){
             state->preset = param[7] - '0';
 
@@ -201,7 +209,7 @@ int lzma_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
         return -1;
     }
 
-    lzma_memlimit_set(&(state->strm), lzma_physmem() / 4);
+    lzma_memlimit_set(&(state->strm), !state->memlimit ? lzma_physmem() / 4 : state->memlimit);
 
     return 0;
 }
