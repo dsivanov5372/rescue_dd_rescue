@@ -495,8 +495,8 @@ install: $(TARGETS)
 	$(INSTALL) $(INSTALLFLAGS) $(INSTASROOT) -m 755 $(LIBTARGETS) $(INSTALLLIBDIR)
 	ln -sf libddr_hash.so $(INSTALLLIBDIR)/libddr_MD5.so
 	mkdir -p $(MANDIR)/man1
-	$(INSTALL) $(INSTASROOT) -m 644 dd_rescue.1 ddr_lzo.1 ddr_crypt.1 $(MANDIR)/man1/
-	gzip -9f $(MANDIR)/man1/dd_rescue.1 $(MANDIR)/man1/ddr_lzo.1 $(MANDIR)/man1/ddr_crypt.1
+	$(INSTALL) $(INSTASROOT) -m 644 dd_rescue.1 ddr_lzo.1 ddr_crypt.1 ddr_lzma.1 $(MANDIR)/man1/
+	gzip -9f $(MANDIR)/man1/dd_rescue.1 $(MANDIR)/man1/ddr_lzo.1 $(MANDIR)/man1/ddr_crypt.1 $(MANDIR)/man1/ddr_lzma.1
 
 check: $(TARGETS) find_nonzero md5 sha1 sha256 sha512 fmt_no
 	@echo "make check ... Pass VG=\"valgrind --options\" to use with valgrind"

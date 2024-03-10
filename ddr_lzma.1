@@ -1,0 +1,132 @@
+.TH ddr_lzma 1 "2024-03-10" "Dmitrii Ivanov" "XZ de/compression plugin for dd_rescue"
+.
+.SH NAME
+ddr_lzma \- Data de/compression plugin for dd_rescue
+.
+.SH SYNOPSIS
+.na
+.nh
+.B -L /path/to/libddr_lzma.so[=option[:option[:...]]]
+.
+.SH DESCRIPTION
+.SS About
+XZ is an archiving format that uses the LZMA2 compression algorithm,
+also known as Lempel-Ziv-Markov chain algorithm. LZMA2 is a improved
+version of LZMA algo which provides high compression ratios and is
+known for its high compression and decompression speeds. It strikes
+a balance between compression ratio and speed compared to algorithms
+like LZO.
+.PP
+This plugin has been written for 
+.B dd_rescue
+and uses the plugin interface from it. See the
+.BR dd_rescue(1)
+man page for more information on
+.B dd_rescue.
+.
+.SH OPTIONS
+Options are passed using
+.B dd_rescue
+option passing syntax: The name of the plugin (lzo) is optionally
+followed by an equal sign (=) and options are separated by a colon (:).
+the
+.B lzma
+plugin also allows most of common options from xz util with some additional ones.
+See the EXAMPLES section below.
+.
+.SS Compression or decompression
+The lzma dd_rescue plugin (subsequently referred to as just ddr_lzma which
+reflects the variable parts of the filename libddr_lzma.so) choses
+compression or decompression mode automatically
+if one of the input/output files has an [lt]xz suffix; otherwise
+you may specify 
+.B z
+or 
+.B d
+parameters on the command line for compression and decompression respectively.
+.br
+The parameter 
+.B mt
+will tell ddr_lzma to do de/compression in multithreding mode. This
+might speed up processing of data by using all cores of cpu.
+On error, while getting number of cores, will use only one.
+.P
+The plugin also supports the parameter 
+.B bench[mark]
+; if it's specified,
+it will output some information about CPU usage.
+.P
+If you only want to make integrity check of file, compressed in xz archive,
+you can use
+.B test
+; if data is corrupted, you will get message in a console about it.
+.
+The lzma plugin supports some options from xz util, for example:
+.B preset=X ,
+where X can be an integer from 1 to 9 inclusively. Use this param to
+select a compression preset level. The default value is 6.
+.
+Pass 
+.B check=XXX
+where XXX can be one of next integrity checksums: CRC32, CRC64, SHA256, NONE.
+If NONE is specified, integrity checksum will not be calculated while compressing
+By default CRC32 will be calculated by plugin.
+.
+Also if you want to limit memory usage when decoding, use next param:
+.B m=XXX
+, where XXX is memory limit for decoding in bytes,
+.
+.SH BUGS/LIMITATIONS
+.SS Maturity
+The plugin is new as of dd_rescue 1.99. Do not yet rely on data
+saved with ddr_lzma as the only backup for valuable data. Also
+expect some changes to ddr_lzma in the not too distant future.
+.P
+Compressed data is more sensitive to data corruption than plain data.
+Note that the checksums in the xz file format do NOT allow to correct
+for errors, because next bytes depends on previous ones. Checksums
+just allow a somewhat reliable detection of data corruption.
+.P
+While using multithreding mode, you can meet with different bugs. For example,
+missing decoder inializing function symbol, or that memlimit for decoder is always 1 byte
+(depends on the system which you use). Be carefull when using mt option.
+.
+.SH EXAMPLES
+.TP
+.BI dd_rescue\ -L\ libddr_lzma=z:preset=9\ infile\ outfile
+compresses data from
+.IR infile
+into
+.IR outfile
+with compression preset == 9.
+.TP
+.BI dd_rescue\ -L\ libddr_lzma=d:mt:memlimit=1234\ infile\ infile2
+will decompress
+.IR infile
+to
+.IR infile2
+in multithreding mode with memory limit equal to 1234 bytes.
+.TP
+.BI dd_rescue\ -L\ libddr_lzma\ infile.xz\ outfile
+will decompress infile.xz into outfile.
+.
+.SH SEE ALSO
+.BR dd_rescue (1)
+.BR liblzma\ documentation
+.
+.SH AUTHOR
+Dmitrii Ivanov <dsivanov_9@edu.hse.ru>
+.
+.SH CREDITS
+The liblzma library and algorithm has been written by
+The Tukaani Project
+.br
+https://xz.tukaani.org/xz-utils/
+.br
+. 
+.SH COPYRIGHT
+This plugin is under the same license as dd_rescue: The GNU General 
+Public License (GPL) v2 or v3 - at your option.
+.
+.SH HISTORY
+ddr_lzma plugin was first introduced with dd_rescue 1.99 (May 2024).
