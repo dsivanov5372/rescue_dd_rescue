@@ -304,9 +304,8 @@ libddr_null.so: libddr_null.po
 libddr_crypt.so: libddr_crypt.po aes.po aes_c.po $(AESNI_PO) $(AES_ARM64_PO) $(AES_OSSL_PO) pbkdf2.po sha256.po pbkdf_ossl.po md5.po checksum_file.po secmem.po random.po $(POBJECTS2)
 	$(CC) -shared -o $@ $^ $(CRYPTOLIB) $(EXTRA_LDFLAGS)
 
-libddr_lzma.so:
-	$(CC) -c -fPIC libddr_lzma.c -o libddr_lzma.o
-	$(CC) -shared -o libddr_lzma.so libddr_lzma.o -llzma
+libddr_lzma.so: libddr_lzma.po
+	$(CC) -shared -o $@ $^ -llzma
 
 # More special compiler flags
 find_nonzero.o: $(SRCDIR)/find_nonzero.c
