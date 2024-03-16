@@ -49,16 +49,17 @@ typedef struct _lzma_state {
 
 const char* lzma_help = "LZMA plugin which is doing compression/decompression for xz archives.\n"
                         " Parameters:\n"
-                        " z - compress input file,\n"
-                        " d - decompress input file,\n"
-                        " test - check archive integrity,\n"
-                        " preset=0...9 - compression preset, default is 6,\n"
-                        " check=CRC32/CRC64/SHA256/NONE - select checksum to calculate when compression, CRC32 by default,\n"
+                        " z - compress input file;\n"
+                        " d - decompress input file;\n"
+                        " test - check archive integrity;\n"
+                        " preset=0...9 - compression preset, default is 6;\n"
+                        " memlimit=XXX - memory limit for decoding (in MB), XXX - an integer from 0 to UINT64_MAX, use last one value for disabling limit;\n"
+                        " check=CRC32/CRC64/SHA256/NONE - select checksum to calculate when compression, CRC32 by default;\n"
                         " bench - calculate time spent on (de)compression.\n";
 
 lzma_ret init_lzma_stream(lzma_state* state) {
     if (!lzma_check_is_supported(state->type)) {
-        FPLOG(FATAL, "This type of integrity check is not supported by llzma yet!\n");
+        FPLOG(FATAL, "This type of integrity check is not supported by liblzma yet!\n");
         return LZMA_UNSUPPORTED_CHECK;
     }
 
@@ -132,13 +133,19 @@ int lzma_plug_init(void **stat, char* param, int seq, const opt_t *opt)
             state->do_bench = true;
         } else if (!strcmp(param, "test")) {
             state->mode = TEST;
-        } else if (length > 9 && !memcmp(param, "memlimit=", 9)) {
-            state->memlimit = strtoull(param + 9, NULL, 10);
+        } else if (length >= 9 && !memcmp(param, "memlimit=", 9)) {
+            char *nptr = param + 9;
+            char *endptr = NULL; 
+            state->memlimit = strtoull(nptr, &endptr, 10);
 
-            if (state->memlimit == UINT64_MAX && errno == ERANGE) {
-                FPLOG(FATAL, "plugin can't convert memlimit value to numerical value!\n");
+            if ((errno == ERANGE && (state->memlimit == UINT64_MAX || state->memlimit == 0)) ||
+                (errno != 0 && state->memlimit == 0) ||
+                (endptr == nptr)) {
+                FPLOG(FATAL, "Invalid memlimit param value: %s\n", param + 9);
                 return -1;
             }
+
+            state->memlimit *= 1024 * 1024;
         } else if (length == 8 && !memcmp(param, "preset=", 7)){
             state->preset = param[7] - '0';
 
@@ -147,13 +154,13 @@ int lzma_plug_init(void **stat, char* param, int seq, const opt_t *opt)
                 return -1;
             }
         } else if (length > 6 && !memcmp(param, "check=", 6)) {
-            if (!strcmp(param, "CRC32")) {
+            if (!strcmp(param + 6, "CRC32")) {
                 state->type = LZMA_CHECK_CRC32;
-            }else if (!strcmp(param, "CRC64")) {
+            }else if (!strcmp(param + 6, "CRC64")) {
                 state->type = LZMA_CHECK_CRC64;
-            } else if (!strcmp(param, "SHA256")) {
+            } else if (!strcmp(param + 6, "SHA256")) {
                 state->type = LZMA_CHECK_SHA256;
-            } else if (!strcmp(param, "NONE")) {
+            } else if (!strcmp(param + 6, "NONE")) {
                 state->type = LZMA_CHECK_NONE;
             } else {
                 FPLOG(FATAL, "plugin doesn't understand integrity check type!\n");
