@@ -37,7 +37,6 @@ typedef struct _lzma_state {
     unsigned char *output;
     size_t buf_len;
     lzma_stream strm;
-    const opt_t *opts;
     bool do_bench;
     bool is_mt;
     clock_t cpu;
@@ -156,7 +155,7 @@ int lzma_plug_init(void **stat, char* param, int seq, const opt_t *opt)
         } else if (length > 6 && !memcmp(param, "check=", 6)) {
             if (!strcmp(param + 6, "CRC32")) {
                 state->type = LZMA_CHECK_CRC32;
-            }else if (!strcmp(param + 6, "CRC64")) {
+            } else if (!strcmp(param + 6, "CRC64")) {
                 state->type = LZMA_CHECK_CRC64;
             } else if (!strcmp(param + 6, "SHA256")) {
                 state->type = LZMA_CHECK_SHA256;
@@ -192,7 +191,6 @@ int lzma_open(const opt_t *opt, int ilnchg, int olnchg, int ichg, int ochg,
 	      const fstate_t *fst, void **stat)
 {
     lzma_state *state = (lzma_state*)*stat;
-    state->opts = opt;
 
     if (state->mode == TEST && strcmp(opt->iname + strlen(opt->iname) - 2, "xz") != 0) {
         FPLOG(FATAL, "integrity check can be provided only for xz archives!\n");
@@ -287,6 +285,7 @@ unsigned char* lzma_algo(unsigned char *bf, lzma_state *state, int eof, fstate_t
     } else {
         *towr = curr_pos;
     }
+    state->next_ipos = fst->ipos;
     return state->output;
 }
 
