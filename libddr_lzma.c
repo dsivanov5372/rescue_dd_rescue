@@ -33,10 +33,12 @@ typedef struct _lzma_state {
     enum compmode mode;
     lzma_check type;
     uint32_t preset;
+    uint32_t threads;
     uint64_t memlimit;
     unsigned char *output;
     size_t buf_len;
     lzma_stream strm;
+    bool use_blocks;
     bool do_bench;
     bool is_mt;
     clock_t cpu;
@@ -52,6 +54,7 @@ const char* lzma_help = "LZMA plugin which is doing compression/decompression fo
                         " d - decompress input file;\n"
                         " test - check archive integrity;\n"
                         " preset=0...9 - compression preset, default is 6;\n"
+                        " mt=XXX - number of threads, using for (de)coding, an integer from 0 to UINT32_MAX;\n"
                         " memlimit=XXX - memory limit for decoding (in MB), XXX - an integer from 0 to UINT64_MAX, use last one value for disabling limit;\n"
                         " check=CRC32/CRC64/SHA256/NONE - select checksum to calculate when compression, CRC32 by default;\n"
                         " bench - calculate time spent on (de)compression.\n";
@@ -62,9 +65,9 @@ lzma_ret init_lzma_stream(lzma_state* state) {
         return LZMA_UNSUPPORTED_CHECK;
     }
 
-    int threads = lzma_cputhreads();
-    if (threads == 0) {
-        threads = 1;
+    int threads = lzma_cputhreads() ? lzma_cputhreads() : 1;
+    if (state->threads < 0 || state->threads > threads) {
+        return LZMA_OPTIONS_ERROR;
     }
 
     if (state->mode == COMPRESS) {
@@ -112,6 +115,7 @@ int lzma_plug_init(void **stat, char* param, int seq, const opt_t *opt)
     state->strm = strm;
     state->seq = seq;
     state->is_mt = false;
+    state->threads = 1;
 
     while (param) {
         char* next = strchr(param, ':');
@@ -126,8 +130,19 @@ int lzma_plug_init(void **stat, char* param, int seq, const opt_t *opt)
             state->mode = COMPRESS;
         } else if (!strcmp(param, "d")) {
             state->mode = DECOMPRESS;
-        } else if (!strcmp(param, "mt")) {
+        } else if (length > 3 && !memcmp(param, "mt=", 3)) {
             state->is_mt = true;
+
+            char *nptr = param + 3;
+            char *endptr = NULL;
+            state->threads = strtoul(nptr, &endptr, 10);
+
+            if ((errno == ERANGE && (state->threads == UINT32_MAX || state->threads == 0)) ||
+                (errno != 0 && state->threads == 0) ||
+                (endptr == nptr)) {
+                FPLOG(FATAL, "Invalid mt param value: %s\n", param + 9);
+                return -1;
+            }
         } else if (!strcmp(param, "bench")) {
             state->do_bench = true;
         } else if (!strcmp(param, "test")) {
@@ -285,7 +300,6 @@ unsigned char* lzma_algo(unsigned char *bf, lzma_state *state, int eof, fstate_t
     } else {
         *towr = curr_pos;
     }
-    state->next_ipos = fst->ipos;
     return state->output;
 }
 
